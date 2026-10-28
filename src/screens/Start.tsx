@@ -1,9 +1,12 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { startScan, type Household } from "../api";
-import { HeroScan } from "../components/HeroScan";
 import { AccountNav } from "../auth";
+import { Capture } from "../capture";
+import { HeroScan } from "../components/HeroScan";
 import { Logo } from "../components/Logo";
+import { SiteFooter } from "../marketing/parts";
+import { NAV, PATHS } from "../marketing/site";
 
 const CITIES: { id: string; label: string }[] = [
   { id: "waterloo-on", label: "Waterloo" },
@@ -31,6 +34,7 @@ export function Start() {
   const [municipality, setMunicipality] = useState("waterloo-on");
   const [address, setAddress] = useState("");
   const [upload, setUpload] = useState<{ progress: number; error: string | null } | null>(null);
+  const [filming, setFilming] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const begin = async (video: File) => {
@@ -48,9 +52,9 @@ export function Start() {
       <header className="nav">
         <Logo />
         <nav className="nav-links" aria-label="Main">
-          <a href="#how">How it works</a>
-          <a href="#become">What we check</a>
-          <a href="#features">Grants</a>
+          {NAV.filter((n) => n.path !== PATHS.about).map((n) => (
+            <a key={n.path} href={n.path}>{n.label}</a>
+          ))}
           <AccountNav />
         </nav>
       </header>
@@ -113,6 +117,18 @@ export function Start() {
         ))}
       </section>
 
+      <SiteFooter />
+
+      {filming && (
+        <Capture
+          onComplete={(file) => {
+            setFilming(false);
+            void begin(file);
+          }}
+          onCancel={() => setFilming(false)}
+        />
+      )}
+
       {asking && (
         <div className="sheet-backdrop" onClick={() => !upload && setAsking(false)}>
           <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" onClick={(e) => e.stopPropagation()}>
@@ -155,9 +171,10 @@ export function Start() {
               </div>
             ) : (
               <div className="sheet-actions">
-                <button className="btn btn-primary" onClick={() => fileRef.current?.click()}>
-                  Film or choose a video <span className="arrow" aria-hidden>→</span>
+                <button className="btn btn-primary" onClick={() => setFilming(true)}>
+                  Film it now <span className="arrow" aria-hidden>→</span>
                 </button>
+                <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>Upload a video</button>
                 <button className="link-quiet" onClick={() => setAsking(false)}>Not now</button>
               </div>
             )}

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { frameUrl, getScan, type Detection, type ScanResult } from "../api";
 import { AccountNav, SaveCta } from "../auth";
 import { Logo } from "../components/Logo";
+import { SiteFooter } from "../marketing/parts";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const two = (n: number) => String(n).padStart(2, "0");
@@ -166,6 +167,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
       {r.heldBack > 0 && (
         <p className="note">We held back {r.heldBack} claim{r.heldBack === 1 ? "" : "s"} the video couldn't prove.</p>
       )}
+      <SiteFooter />
     </main>
   );
 }
