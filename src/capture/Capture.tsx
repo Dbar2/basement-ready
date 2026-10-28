@@ -45,8 +45,9 @@ type Phase =
 
 type StopReason = "user" | "max" | "interrupted" | "discard" | "failed";
 
-// ~3.5 Mbps keeps a 2-minute 1080p take near 50 MB. The server samples it down to 1280 px at 5 fps anyway.
-const VIDEO_BITRATE = 3_500_000;
+// 10 Mbps H.264 is close to what the phone's own camera records (about 10 Mbps HEVC): fewer blocky,
+// smeared frames for SAM and the 3D. A 2-minute take is about 150 MB; the server takes up to 400 MB.
+const VIDEO_BITRATE = 10_000_000;
 const ORDER = CHECKLIST.map((c) => c.id);
 const MAX_ROOMS = 8;
 const MIN_ROOM_SEC = 5;

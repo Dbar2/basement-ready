@@ -35,6 +35,17 @@ const VIDEO: MediaTrackConstraints = {
 
 export type Camera = { stream: MediaStream; hasAudio: boolean };
 
+// Keep focus, exposure and white balance adjusting as you walk from room to room, where the browser
+// allows it (Chrome on Android). Safari manages this itself and ignores the request.
+async function tuneTrack(track: MediaStreamTrack | undefined) {
+  if (!track || typeof track.getCapabilities !== "function") return;
+  const caps = track.getCapabilities() as Record<string, unknown>;
+  const modes = ["focusMode", "exposureMode", "whiteBalanceMode"]
+    .filter((k) => Array.isArray(caps[k]) && (caps[k] as string[]).includes("continuous"))
+    .map((k) => ({ [k]: "continuous" }));
+  if (modes.length) await track.applyConstraints({ advanced: modes as unknown as MediaTrackConstraintSet[] }).catch(() => {});
+}
+
 export async function openCamera(): Promise<Camera> {
   if (!navigator.mediaDevices?.getUserMedia) {
     if (!window.isSecureContext) console.warn("[capture] getUserMedia needs HTTPS (or localhost). Falling back to upload.");
@@ -42,6 +53,7 @@ export async function openCamera(): Promise<Camera> {
   }
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: true });
+    await tuneTrack(stream.getVideoTracks()[0]);
     return { stream, hasAudio: stream.getAudioTracks().length > 0 };
   } catch (err) {
     // A laptop with no microphone still has a camera: film without sound rather than fail.
@@ -49,6 +61,7 @@ export async function openCamera(): Promise<Camera> {
       const stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO }).catch((e) => {
         throw toProblem(e);
       });
+      await tuneTrack(stream.getVideoTracks()[0]);
       return { stream, hasAudio: false };
     }
     throw toProblem(err);
