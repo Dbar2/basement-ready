@@ -59,6 +59,16 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
             <dt>Rough cost of the fixes</dt>
             <dd className="mono">{r.cost.pricedFixes ? `${money(r.cost.low)}–${money(r.cost.high)}` : "To be priced"}</dd>
           </div>
+          {r.measurements?.ceilingHeightM != null && (
+            <div>
+              <dt>Measured by the 3D scan</dt>
+              <dd className="mono">
+                {r.measurements.ceilingHeightM.toFixed(2)} m ceiling
+                {r.measurements.widthM != null && r.measurements.depthM != null && ` · ${r.measurements.widthM.toFixed(1)} × ${r.measurements.depthM.toFixed(1)} m`}
+                {r.measurements.trusted === false ? " (rough)" : r.measurements.scaleSource === "model" && " (est.)"}
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Things to fix</dt>
             <dd className="mono">{r.fixGroups.length}</dd>
@@ -105,7 +115,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
           <ul className="ruled questions">
             {questions.map((q) => (
               <li key={q.ruleId}>
-                <span className="tag-mono">{q.status === "needs_measurement" ? "Tape measure" : "Question"}</span>
+                <span className="tag-mono">{q.measured ? "Close call" : q.status === "needs_measurement" ? "Tape measure" : "Question"}</span>
                 <div>
                   <p className="q">{q.question}</p>
                   <p className="muted">{q.title}</p>
@@ -120,7 +130,12 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
         <section className="block">
           <h2>Already looks right</h2>
           <ul className="ruled">
-            {fine.map((f) => <li key={f.ruleId}><b>{f.title}</b> <span className="muted">{f.why}</span></li>)}
+            {fine.map((f) => (
+              <li key={f.ruleId}>
+                <b>{f.title}</b> <span className="muted">{f.why}</span>
+                {f.measured && <span className="tag-mono measured-tag">Measured in 3D</span>}
+              </li>
+            ))}
           </ul>
         </section>
       )}

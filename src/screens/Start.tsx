@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { startScan, type Household } from "../api";
+import { parseLength } from "../units";
 import { AccountNav } from "../auth";
 import { Capture } from "../capture";
 import { HeroScan } from "../components/HeroScan";
@@ -33,6 +34,8 @@ export function Start() {
   const [household, setHousehold] = useState<Household>("relative");
   const [municipality, setMunicipality] = useState("waterloo-on");
   const [address, setAddress] = useState("");
+  const [tape, setTape] = useState("");
+  const tapeM = parseLength(tape);
   const [upload, setUpload] = useState<{ progress: number; error: string | null } | null>(null);
   const [filming, setFilming] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,7 +43,9 @@ export function Start() {
   const begin = async (video: File) => {
     setUpload({ progress: 0, error: null });
     try {
-      const id = await startScan(video, { household, address, municipality }, (progress) => setUpload({ progress, error: null }));
+      const id = await startScan(video, { household, address, municipality, floorToJoistsM: tapeM }, (progress) =>
+        setUpload({ progress, error: null }),
+      );
       navigate({ to: "/scans/$scanId", params: { scanId: id } });
     } catch (err) {
       setUpload({ progress: 0, error: err instanceof Error ? err.message : "Upload failed." });
@@ -163,6 +168,25 @@ export function Start() {
                 onChange={(e) => setAddress(e.target.value)}
                 autoComplete="street-address"
               />
+            </div>
+            <div className="field">
+              <label htmlFor="tape">Floor to the underside of the joists (optional)</label>
+              <input
+                id="tape"
+                className="input"
+                inputMode="decimal"
+                placeholder="e.g. 2.10 m, 210 cm or 6' 11&quot;"
+                value={tape}
+                onChange={(e) => setTape(e.target.value)}
+                aria-describedby="tape-help"
+              />
+              <p id="tape-help" className="field-help">
+                {tape && tapeM === null
+                  ? "We couldn't read that. Try 2.10 m, 210 cm or 6' 11\"."
+                  : tapeM
+                    ? `Got it: ${tapeM.toFixed(2)} m. One tape number makes every size in the 3D scan real.`
+                    : "One tape number makes every size in the 3D scan real. Skip it and sizes are estimates."}
+              </p>
             </div>
             {upload && !upload.error ? (
               <div className="upload" role="status">

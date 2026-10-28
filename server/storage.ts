@@ -92,4 +92,5 @@ export const keys = {
   input: (scanId: string, ext: string) => `scans/${scanId}/input.${ext}`,
   analysis: (scanId: string) => `scans/${scanId}/analysis.mp4`,
   frame: (scanId: string, n: number) => `scans/${scanId}/frames/${String(n).padStart(4, "0")}.jpg`,
+  scan3d: (scanId: string, file: "scan.json" | "points.ply" | "depth.bin") => `scans/${scanId}/3d/${file}`,
 };

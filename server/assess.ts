@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { dataUrl, outputText, responses } from "./meta";
 import type { Detection } from "./pipeline";
+import type { Measurements } from "./scan3d";
 import { coreRules, grantsFor, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
 
 const run = promisify(execFile);
@@ -99,10 +100,34 @@ async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detecti
   throw lastErr;
 }
 
-export async function assess(ctx: AssessContext, detections: Detection[], transcript: string) {
+export async function assess(ctx: AssessContext, detections: Detection[], transcript: string, measurements?: Measurements | null) {
   const coverage = packFor(ctx.municipality);
   const { model, costUsd } = await askSpark(ctx, coverage.city, coreRules(coverage.pack), detections, transcript);
-  return { result: buildResult(ctx, coverage, model, detections), costUsd };
+  return { result: { ...buildResult(ctx, coverage, model, detections, measurements), measurements: measurements ?? null }, costUsd };
+}
+
+// 5/8" drywall under joists, ducts and beams: the finished height is this much lower than the scan.
+const FINISH_ALLOWANCE_M = 0.016;
+
+// Metrics the 3D scan can read directly.
+const MEASURED: Record<string, (m: Measurements) => number | null> = {
+  minFinishedCeilingHeightInSuite: (m) => (m.ceilingHeightM == null ? null : m.ceilingHeightM - FINISH_ALLOWANCE_M),
+  minClearHeightUnderBeamsAndDucts: (m) =>
+    m.clearances.length ? Math.min(...m.clearances.map((c) => c.clearanceM)) - FINISH_ALLOWANCE_M : null,
+};
+
+// Decides a rule from the scan only when the reading clears the limit by more than its error margin.
+export function measuredCheck(rule: Rule, m: Measurements | null | undefined) {
+  if (!m || !m.trusted || rule.check.operator !== ">=" || typeof rule.check.value !== "number" || rule.check.unit !== "m") return null;
+  const read = MEASURED[rule.check.metric]?.(m);
+  if (read == null) return null;
+  const margin = m.scaleSource === "user_measurement" ? 0.05 : (read * m.expectedErrorPct) / 100;
+  const limit = rule.check.value;
+  const status: Status = read - margin >= limit ? "likely_ok" : read + margin < limit ? "likely_fix" : "needs_measurement";
+  return {
+    status,
+    measured: { value: Math.round(read * 100) / 100, unit: "m", marginM: Math.round(margin * 100) / 100, limit, source: m.scaleSource },
+  };
 }
 
 // Pure: turns Spark's reading into the answer. The trust rule, grouping and money all live here.
@@ -111,6 +136,7 @@ export function buildResult(
   { pack, city, coverage }: Coverage,
   model: { route?: string; wants?: string; summary?: string; findings?: ModelFinding[] },
   detections: Pick<Detection, "id">[],
+  measurements?: Measurements | null,
 ) {
   const rules = coreRules(pack);
   const ids = new Set(detections.map((d) => d.id));
@@ -121,19 +147,30 @@ export function buildResult(
     const f = byRule.get(rule.id);
     let status: Status = f?.status ?? (rule.evidence.type === "ask_user" ? "needs_answer" : "needs_measurement");
     const evidence = (f?.evidence ?? []).filter((id) => ids.has(id));
+    if (measuredCheck(rule, measurements)) evidence.push("scan3d");
     // The trust rule, enforced in code: no proof in the video, no claim.
     if ((status === "likely_ok" || status === "likely_fix") && evidence.length === 0) {
       heldBack++;
       status = rule.evidence.type === "scan_measurement" || rule.evidence.type === "video_object" ? "needs_measurement" : "needs_answer";
     }
-    const question = status.startsWith("needs") ? f?.question || rule.evidence.question || null : null;
+    // The 3D scan overrides Spark where it measured the thing directly.
+    const m = measuredCheck(rule, measurements);
+    let why = f?.why ?? null;
+    if (m) {
+      status = m.status;
+      const reading = `The scan reads about ${m.measured.value.toFixed(2)} m finished (±${Math.round(m.measured.marginM * 100)} cm); the rule needs ${m.measured.limit} m.`;
+      why = reading;
+    }
+    const measuredQuestion = m?.status === "needs_measurement" ? `${why} Measure the lowest point with a tape to confirm.` : null;
+    const question = status.startsWith("needs") ? measuredQuestion || f?.question || rule.evidence.question || null : null;
     return {
+      measured: m?.measured ?? null,
       ruleId: rule.id,
       title: rule.title,
       plain: rule.plain,
       category: rule.category,
       status,
-      why: f?.why ?? null,
+      why,
       question,
       evidence,
       fix: status === "likely_fix" ? rule.fix : null,

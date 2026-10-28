@@ -11,6 +11,7 @@ import { db, schema } from "./db";
 import { samVideo, transcribe, uploadFile } from "./meta";
 import type { Household } from "./rules";
 import { bestFrame, parseSam } from "./sam";
+import { runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 
 const run = promisify(execFile);
@@ -43,7 +44,7 @@ export type Detection = {
   track: [number, number, number, number, number][];
 };
 
-export type ScanEventType = "log" | "find" | "stage" | "done" | "error";
+export type ScanEventType = "log" | "find" | "measure" | "stage" | "done" | "error";
 
 function emitter(scanId: string, started: number) {
   return async (type: ScanEventType, text: string, data?: unknown) => {
@@ -114,6 +115,21 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
           .catch(() => ({ transcript: "", turns: [] }))
       : Promise.resolve({ transcript: "", turns: [] });
 
+    // The 3D scan only needs the frames, so it runs alongside SAM.
+    const known = (scan.inputs ?? {}) as { floorToJoistsM?: number };
+    const scan3dP: Promise<Scan3d | null> = (await scan3dReady())
+      ? (async () => {
+          await emit("log", "Building your basement in 3D");
+          try {
+            return await runScan3d(work, frameCount, known);
+          } catch (err) {
+            console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
+            await emit("log", "3D scan unavailable this time; checking from the video instead");
+            return null;
+          }
+        })()
+      : Promise.resolve(null);
+
     await emit("stage", "find");
     const fileId = await uploadFile(analysis, "video/mp4", "basement.mp4");
 
@@ -148,6 +164,23 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       }),
     );
 
+    const s3 = await scan3dP;
+    let measurements: Measurements | null = null;
+    if (s3) {
+      measurements = summarize(s3, detections);
+      await Promise.all([
+        storage.put(keys.scan3d(scanId, "scan.json"), Buffer.from(JSON.stringify(s3.scan)), "application/json"),
+        storage.put(keys.scan3d(scanId, "points.ply"), Buffer.from(s3.ply), "application/octet-stream"),
+        storage.put(keys.scan3d(scanId, "depth.bin"), Buffer.from(s3.depth), "application/octet-stream"),
+      ]);
+      const room = [
+        measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,
+        measurements.widthM != null && measurements.depthM != null && `room ${measurements.widthM.toFixed(1)} × ${measurements.depthM.toFixed(1)} m`,
+      ].filter(Boolean);
+      const caveat = !measurements.trusted ? " (rough: re-film slowly for exact sizes)" : measurements.scaleSource === "model" ? " (estimated)" : "";
+      await emit("measure", `Measured ${room.join(" · ")}${caveat}`, measurements);
+    }
+
     const transcript = await transcriptP;
     await emit("stage", "assess");
     await emit("log", "Checking your city's second-unit rules");
@@ -155,11 +188,12 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       { dir: work, household: basement.household as Household, municipality: basement.municipality },
       detections,
       transcript.transcript,
+      measurements,
     );
     await uploads;
 
     const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-    const result = { id: scanId, household: basement.household, frameCount, detections, transcript: transcript.transcript, ...assessment.result };
+    const result = { id: scanId, household: basement.household, frameCount, detections, transcript: transcript.transcript, has3d: Boolean(s3), ...assessment.result };
     await db
       .update(schema.scans)
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })
