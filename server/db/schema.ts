@@ -23,6 +23,8 @@ export const basements = pgTable(
     address: text("address").notNull().default(""),
     municipality: text("municipality").notNull().default("waterloo-on"),
     household: text("household").notNull().default("unsure"), // relative | renter | unsure
+    // What public data says about the house (server/property.ts): zoning, lot, building, units.
+    property: jsonb("property"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

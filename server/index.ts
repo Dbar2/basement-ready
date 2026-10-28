@@ -14,13 +14,16 @@ import { db, migrateDb, schema, usingPglite } from "./db";
 import { enqueue, startWorker } from "./jobs";
 import { listModels } from "./meta";
 import { buildPlan } from "./plan";
-import { recheck, type Answers } from "./recheck";
+import { searchAddresses } from "./address";
+import { fetchAerial, lookupProperty } from "./property";
+import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { finishRooms, ANALYSIS_FPS } from "./pipeline";
-import { cleanRooms, mainRoom, MAX_ROOMS, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
+import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { runScan3d, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
-import { MUNICIPALITIES, type Household } from "./rules";
+import { grantsFor, moneyFor, MUNICIPALITIES, packFor, type Household } from "./rules";
+import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
 import { keys, storage } from "./storage";
 
@@ -68,6 +71,37 @@ app.get("/api/health", (c) =>
 
 app.get("/api/municipalities", (c) => c.json(MUNICIPALITIES));
 
+// ---- The house: address type-ahead, then what public data already says about it ----
+
+app.get("/api/address", (c) => c.json({ results: searchAddresses(String(c.req.query("q") ?? "").slice(0, 80)) }));
+
+// Only addresses from our own list: the client sends the text it picked, we find the point again.
+function resolveAddress(address: unknown, municipality: unknown) {
+  const text = String(address ?? "").slice(0, 120);
+  return searchAddresses(text, 10).find((a) => a.address.toLowerCase() === text.toLowerCase() && (!municipality || a.municipality === municipality)) ?? null;
+}
+
+app.get("/api/property", async (c) => {
+  const a = resolveAddress(c.req.query("address"), c.req.query("municipality"));
+  if (!a) return c.json({ error: "We couldn't find that address in Waterloo Region." }, 404);
+  return c.json({ property: await lookupProperty(a) });
+});
+
+// The house from above (Region of Waterloo, 2026). Cached, since the photo doesn't change.
+app.get("/api/aerial", async (c) => {
+  const a = resolveAddress(c.req.query("address"), c.req.query("municipality"));
+  if (!a) return c.body(null, 404);
+  const key = `aerial/${a.municipality}/${a.address.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.jpg`;
+  if (!(await storage.get(key))) {
+    try {
+      await storage.put(key, await fetchAerial(a.lon, a.lat), "image/jpeg");
+    } catch {
+      return c.body(null, 502);
+    }
+  }
+  return sendStored(key, "image/jpeg");
+});
+
 // Create a basement + scan from an uploaded video, then queue the work.
 app.post("/api/scans", async (c) => {
   const ip = clientIp(c);
@@ -85,20 +119,27 @@ app.post("/api/scans", async (c) => {
   if (!(video instanceof File)) return c.json({ error: "Please attach a video." }, 400);
   if (video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 2 minutes." }, 413);
   const household = (["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : "unsure") as Household;
-  const municipality = String(body.municipality ?? "waterloo-on");
+  // A picked address sets the city and brings its public facts; otherwise the chosen city's rules.
+  const picked = resolveAddress(body.address, body.addressMunicipality);
+  const property = picked ? await lookupProperty(picked).catch(() => null) : null;
+  const municipality = picked ? (picked.city ?? "ontario") : String(body.municipality ?? "waterloo-on");
 
   const claimToken = randomBytes(24).toString("base64url");
   const [basement] = await db
     .insert(schema.basements)
-    .values({ claimToken, household, municipality, address: String(body.address ?? "").slice(0, 200) })
+    .values({ claimToken, household, municipality, address: (picked?.address ?? String(body.address ?? "")).slice(0, 200), property })
     .returning();
   // Optional tape measurement, floor to the underside of the joists, in metres.
   const tape = Number(body.floorToJoistsM);
   // Where each room starts in the take, when it was filmed room by room.
   const rooms = cleanRooms(body.rooms);
+  const ideas = cleanIdeas(body.ideas);
+  const spoken = cleanSpoken(body.spoken);
   const inputs = {
     ...(Number.isFinite(tape) && tape >= 1 && tape <= 4 ? { floorToJoistsM: tape } : {}),
     ...(rooms ? { rooms } : {}),
+    ...(ideas ? { ideas } : {}),
+    ...(spoken ? { spoken } : {}),
   };
   const [scan] = await db
     .insert(schema.scans)
@@ -235,8 +276,8 @@ app.get("/api/live/3d", (c) => {
 
 // ---- Answers: the homeowner confirms what the video couldn't show, and the verdict re-checks ----
 
-function cleanAnswer(v: unknown): number | boolean | null {
-  if (typeof v === "boolean") return v;
+function cleanAnswer(v: unknown): number | boolean | "unsure" | null {
+  if (typeof v === "boolean" || v === "unsure") return v;
   if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 1e6) return v;
   return null;
 }
@@ -248,9 +289,18 @@ app.post("/api/scans/:id/answers", async (c) => {
   const ruleId = String(body.ruleId ?? "");
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
   const result = scan?.result as any;
-  if (!scan || !result) return c.json({ error: "This scan isn't ready yet." }, 404);
-  if (!result.findings?.some((f: any) => f.ruleId === ruleId)) return c.json({ error: "Unknown question." }, 400);
+  if (!scan) return c.json({ error: "Not found" }, 404);
   const value = cleanAnswer(body.value);
+  // Answered while the scan runs: keep it, and the scan applies it when it finishes.
+  if (!result) {
+    if (!(ruleId in TRIAGE) || value === null) return c.json({ error: "Unknown question." }, 400);
+    await db
+      .insert(schema.answers)
+      .values({ basementId: scan.basementId, ruleId, value })
+      .onConflictDoUpdate({ target: [schema.answers.basementId, schema.answers.ruleId], set: { value, updatedAt: new Date() } });
+    return c.json({ saved: true });
+  }
+  if (!result.findings?.some((f: any) => f.ruleId === ruleId)) return c.json({ error: "Unknown question." }, 400);
   if (value === null) {
     await db.delete(schema.answers).where(and(eq(schema.answers.basementId, scan.basementId), eq(schema.answers.ruleId, ruleId)));
   } else {
@@ -260,8 +310,29 @@ app.post("/api/scans/:id/answers", async (c) => {
       .onConflictDoUpdate({ target: [schema.answers.basementId, schema.answers.ruleId], set: { value, updatedAt: new Date() } });
   }
   const rows = await db.select().from(schema.answers).where(eq(schema.answers.basementId, scan.basementId));
-  const answers: Answers = Object.fromEntries(rows.map((r) => [r.ruleId, r.value as number | boolean]));
+  const answers: Answers = Object.fromEntries(rows.map((r) => [r.ruleId, r.value as AnswerValue]));
   const updated = recheck(result, answers);
+  await db.update(schema.scans).set({ result: updated }).where(eq(schema.scans.id, id));
+  return c.json({ result: updated });
+});
+
+// Who the suite is for, answered while the scan runs or afterwards. It changes which money fits.
+app.post("/api/scans/:id/household", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const household = String(body.household ?? "");
+  if (!["relative", "renter", "unsure"].includes(household)) return c.json({ error: "Pick who it's for." }, 400);
+  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
+  if (!scan) return c.json({ error: "Not found" }, 404);
+  await db.update(schema.basements).set({ household }).where(eq(schema.basements.id, scan.basementId));
+  const result = scan.result as any;
+  if (!result) return c.json({ saved: true });
+  const { pack } = packFor(result.municipality ?? "waterloo-on");
+  const grants = grantsFor(pack, household as Household);
+  // Re-check with the saved answers, so the plan's money step follows the new grants.
+  const rows = await db.select().from(schema.answers).where(eq(schema.answers.basementId, scan.basementId));
+  const updated = recheck({ ...result, household, grants, money: moneyFor(grants) }, Object.fromEntries(rows.map((r) => [r.ruleId, r.value as AnswerValue])));
   await db.update(schema.scans).set({ result: updated }).where(eq(schema.scans.id, id));
   return c.json({ result: updated });
 });

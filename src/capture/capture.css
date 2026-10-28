@@ -172,6 +172,12 @@
 .cap-h2 { margin-top: var(--space-3); font-family: var(--font-display); font-weight: 800; font-size: 20px; letter-spacing: -0.02em; line-height: 1.1; }
 .cap-num { font-family: var(--font-mono); font-size: 13px; color: var(--color-ink-muted); padding-top: 3px; }
 
+.cap-how { display: grid; gap: 4px; border-top: 1px solid var(--color-ink); }
+.cap-how li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
+.cap-how svg { width: 40px; height: 40px; padding: 6px; border-radius: var(--cap-r); background: var(--color-mint); color: var(--color-mint-ink); }
+.cap-how b { display: block; font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; line-height: 1.15; }
+.cap-how .cap-muted { display: block; margin-top: 2px; font-size: 15px; line-height: 1.35; }
+.cap-fine--left { text-align: left; font-family: var(--font-mono); font-size: 12px; }
 .cap-shotlist { border-top: 1px solid var(--color-ink); }
 .cap-shotlist li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
 .cap-shotlist b { display: block; font-weight: 600; }
@@ -206,34 +212,11 @@
 /* ---------- live camera ---------- */
 .cap--live {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas: "bar" "stage";
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "stage";
   background: var(--color-ink);
 }
 
-.cap-bar {
-  grid-area: bar;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 6px var(--cap-gutter);
-  padding-top: max(6px, env(safe-area-inset-top));
-  background: var(--color-bg);
-  border-bottom: 1px solid var(--color-ink);
-}
-.cap-bar > .cap-icon-btn { justify-self: start; }
-.cap-status { display: flex; align-items: baseline; justify-content: center; gap: 8px; font-family: var(--font-mono); white-space: nowrap; }
-.cap-status-label { font-family: var(--font-body); font-weight: 600; font-size: 15px; }
-.cap-rec { display: inline-flex; align-items: center; gap: 5px; align-self: center; color: var(--color-stop); font-size: 12px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
-.cap-rec svg { width: 10px; height: 10px; }
-.cap-time { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.cap-of { font-size: 13px; color: var(--color-ink-muted); }
-.cap-left { font-size: 13px; font-weight: 500; color: var(--color-fix); }
-
-.cap-mic { justify-self: end; display: flex; align-items: center; gap: 8px; min-height: 44px; }
-.cap-mic-label { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
-.cap-mic[data-off="true"] .cap-mic-label { color: var(--color-fix); }
 .cap-mic-bars { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
 .cap-mic-bars i { width: 4px; border-radius: 1px; background: var(--color-border); }
 .cap-mic-bars i:nth-child(1) { height: 25%; }
@@ -374,21 +357,21 @@
   }
 }
 
-/* ---------- filming: the picture full-bleed, one line of coaching on top, the record ring below ---------- */
+/* this room in 3D, opened from the little room drawing */
+/* the full view covers everything else on the picture, and takes drags to orbit */
+.cap-frame:has(.cap-3d-full) :is(.guide-top, .guide-bottom, .guide-turn) { display: none; }
+.cap-3d-full { position: fixed; inset: 0; z-index: 20; pointer-events: auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: color-mix(in srgb, var(--color-ink) 92%, var(--color-mint) 8%); /* a scan reads best on dark */ }
+.cap-3d-full-bar { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 12px max(12px, env(safe-area-inset-bottom)); background: var(--color-card); border-top: 1px solid var(--color-ink); }
+.cap-3d-full-bar p { margin: 0; font-size: 14px; line-height: 1.35; }
 
-/* the ring's size sets where everything else sits */
-.cap-stage { --ring: min(58vw, 232px, 36cqh); --dock-pad: max(14px, env(safe-area-inset-bottom)); }
+@media (prefers-reduced-motion: reduce) {
+  .cap-flash, .guide-voice p, .guide-task, .guide-turn, .guide-notice { animation-duration: 1ms !important; }
+  .guide-bars i { animation: none !important; }
+}
 
-.cap-top { position: absolute; z-index: 4; top: 14px; left: 0; right: 0; display: grid; justify-items: center; gap: 8px; padding: 0 16px; pointer-events: none; }
-.cap-room { padding: 5px 10px; border-radius: var(--cap-r-sm); background: var(--color-card); color: var(--color-ink); font-family: var(--font-mono); font-size: 12px; line-height: 1.2; }
-.cap-coach { max-width: min(38ch, 100%); padding: 9px 15px; border-radius: var(--cap-r); background: color-mix(in srgb, var(--color-ink) 64%, transparent); color: var(--color-card); font-weight: 600; font-size: 16px; line-height: 1.3; text-align: center; animation: cap-coach-in var(--dur-2) var(--ease-out) both; }
-/* problems swap to the light card, so they read as different from guidance */
-.cap-coach[data-kind="dark"], .cap-coach[data-kind="fast"], .cap-coach[data-kind="min"] { background: var(--color-card); color: var(--color-ink); }
-.cap-coach[data-kind="hold"] { background: var(--color-mint); color: var(--color-mint-ink); }
-.cap-tips { padding: 4px 10px; border-radius: var(--cap-r-sm); background: color-mix(in srgb, var(--color-ink) 50%, transparent); color: var(--color-card); font-family: var(--font-mono); font-size: 12px; }
-@keyframes cap-coach-in { from { opacity: 0; translate: 0 -6px; } to { opacity: 1; translate: 0 0; } }
+/* ---------- filming with the guide (brand/explorations/M1-filming-guides.png) ---------- */
 
-/* a find, outlined on the live picture for a moment: mint corner ticks and a forest label */
+/* the find outline: mint corner ticks and a label */
 .cap-flash { position: absolute; z-index: 3; pointer-events: none; border: 1.5px solid color-mix(in srgb, var(--color-mint) 70%, transparent); animation: cap-flash 1600ms var(--ease-out) both; }
 .cap-flash i { position: absolute; width: 14px; height: 14px; border-color: var(--color-mint); border-style: solid; border-width: 0; }
 .cap-flash i[data-c="tl"] { left: -3px; top: -3px; border-left-width: 3px; border-top-width: 3px; }
@@ -396,102 +379,84 @@
 .cap-flash i[data-c="bl"] { left: -3px; bottom: -3px; border-left-width: 3px; border-bottom-width: 3px; }
 .cap-flash i[data-c="br"] { right: -3px; bottom: -3px; border-right-width: 3px; border-bottom-width: 3px; }
 .cap-flash-label { position: absolute; left: -2px; top: calc(100% + 6px); padding: 4px 8px; border-radius: var(--cap-r-sm); background: var(--color-card); color: var(--color-ink); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
-@keyframes cap-flash {
-  0% { opacity: 0; scale: 1.08; }
-  12% { opacity: 1; scale: 1; }
-  80% { opacity: 1; }
-  100% { opacity: 0; }
-}
+@keyframes cap-flash { 0% { opacity: 0; scale: 1.08; } 12% { opacity: 1; scale: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
 
-/* the dock: next room on the left, the ring in the middle, this room's 3D on the right */
-.cap-dock { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 4px; padding: 0 10px var(--dock-pad); pointer-events: none; }
-.cap-dock button { pointer-events: auto; }
-.cap-dock-side { display: flex; align-items: flex-end; justify-content: flex-start; min-width: 0; padding-bottom: 8px; }
-.cap-dock-side--end { justify-content: flex-end; }
-.cap-pill-btn { min-height: 44px; padding: 10px 12px; border: 0; border-radius: var(--radius-pill); background: var(--color-card); color: var(--color-ink); font-weight: 700; font-size: 14px; white-space: nowrap; box-shadow: var(--shadow-card); }
-.cap-pill-btn:active { transform: scale(0.97); }
-/* once the room is mapped, moving on is the next step */
-.cap-pill-btn[data-ready="true"] { background: var(--color-mint); color: var(--color-mint-ink); }
+/* top: close, the clock, Done; then the guide's voice line */
+.guide-top { position: absolute; z-index: 5; top: 0; left: 0; right: 0; display: grid; gap: 10px; padding: max(10px, env(safe-area-inset-top)) 12px 0; pointer-events: none; }
+.guide-top > * { pointer-events: auto; }
+.guide-bar { display: flex; align-items: center; gap: 8px; }
+.guide-icon-btn { display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--color-ink) 55%, transparent); color: var(--color-card); }
+.guide-rec { display: inline-flex; align-items: center; gap: 7px; margin-right: auto; padding: 7px 12px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--color-ink) 55%, transparent); color: var(--color-card); font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.guide-rec > i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-stop); animation: guide-blink 1.6s steps(2, jump-none) infinite; }
+.guide-rec b { font-weight: 500; color: var(--color-mint); }
+.guide-rec--ready { font-family: var(--font-body); font-size: 13px; font-weight: 600; }
+.guide-rec .cap-mic-bars i { background: color-mix(in srgb, var(--color-card) 35%, transparent); }
+.guide-rec .cap-mic-bars i[data-on="true"] { background: var(--color-mint); }
+.guide-done { min-height: 40px; padding: 8px 16px; border: 0; border-radius: var(--radius-pill); background: var(--color-mint); color: var(--color-mint-ink); font-weight: 800; font-size: 15px; }
+.guide-done[data-waiting="true"] { background: color-mix(in srgb, var(--color-ink) 55%, transparent); color: var(--color-card); font-weight: 600; font-size: 13px; }
+@keyframes guide-blink { 50% { opacity: 0.25; } }
 
-/* the record ring */
-.ring { position: relative; width: var(--ring); aspect-ratio: 1; pointer-events: none; }
-.ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.ring-back { fill: color-mix(in srgb, var(--color-ink) 40%, transparent); }
-.ring-seg {
-  fill: color-mix(in srgb, var(--color-card) 92%, transparent);
-  stroke: color-mix(in srgb, var(--color-card) 92%, transparent);
-  stroke-width: 6;
-  stroke-linejoin: round;
-  transform-box: view-box;
-  transform-origin: 120px 120px;
-  transition: fill var(--dur-3) var(--ease-out), stroke var(--dur-3) var(--ease-out);
-}
-.ring-seg[data-done="true"] { fill: var(--color-mint); stroke: var(--color-mint); animation: ring-pop 560ms var(--ease-out); }
-@keyframes ring-pop { 0% { scale: 1; } 35% { scale: 1.05; } 100% { scale: 1; } }
+.guide-voice { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--color-ink) 92%, transparent); color: var(--color-card); }
+.guide-voice p { font-weight: 600; font-size: 17px; line-height: 1.3; animation: guide-in var(--dur-2) var(--ease-out) both; }
+.guide-voice-icon { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-mint); }
+.guide-voice-icon svg { width: 22px; height: 22px; }
+.guide-bars { display: flex; align-items: center; gap: 3px; height: 22px; }
+.guide-bars i { width: 3px; height: 30%; border-radius: 2px; background: var(--color-mint); }
+.guide-voice[data-speaking="true"] .guide-bars i { animation: guide-bar 0.9s ease-in-out infinite; }
+.guide-bars i:nth-child(2) { animation-delay: -0.6s !important; }
+.guide-bars i:nth-child(3) { animation-delay: -0.3s !important; }
+.guide-bars i:nth-child(4) { animation-delay: -0.75s !important; }
+.guide-bars i:nth-child(5) { animation-delay: -0.15s !important; }
+@keyframes guide-bar { 0%, 100% { height: 25%; } 50% { height: 100%; } }
+@keyframes guide-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
 
-.ring-track { fill: none; stroke: color-mix(in srgb, var(--color-card) 32%, transparent); stroke-width: 4; transition: stroke var(--dur-2) var(--ease-out); }
-.ring-track[data-on="true"] { stroke: var(--color-mint); }
-.ring-track-plain { fill: none; stroke: color-mix(in srgb, var(--color-card) 32%, transparent); stroke-width: 1.5; }
-.ring-heading { fill: var(--color-card); stroke: var(--color-ink); stroke-width: 1.5; }
-.ring-time-base { fill: none; stroke: color-mix(in srgb, var(--color-card) 28%, transparent); stroke-width: 1.5; }
-.ring-time { fill: none; stroke: var(--color-mint); stroke-width: 3; stroke-linecap: round; }
-.ring-time-min { stroke: var(--color-card); stroke-width: 2; }
-.ring-time-min[data-past="true"] { stroke: var(--color-mint); }
+/* which way to turn for the wall that isn't filmed yet */
+.guide-turn { position: absolute; z-index: 4; top: 46%; display: grid; justify-items: center; gap: 4px; color: var(--color-mint); filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--color-ink) 50%, transparent)); animation: guide-in var(--dur-2) var(--ease-out) both; pointer-events: none; }
+.guide-turn svg { width: 72px; height: 72px; animation: guide-nudge 1.4s var(--ease-out) infinite; }
+.guide-turn span { padding: 3px 9px; border-radius: var(--radius-pill); background: var(--color-ink); color: var(--color-card); font-weight: 700; font-size: 13px; }
+.guide-turn[data-dir="left"] { left: 14px; }
+.guide-turn[data-dir="right"] { right: 14px; }
+.guide-turn[data-dir="right"] svg { scale: -1 1; }
+.guide-turn[data-dir="around"] { left: 50%; translate: -50% 0; }
+@keyframes guide-nudge { 0%, 100% { translate: 0 0; } 50% { translate: -8px 0; } }
+.guide-turn[data-dir="right"] svg { animation-name: guide-nudge-r; }
+@keyframes guide-nudge-r { 0%, 100% { translate: 0 0; } 50% { translate: 8px 0; } }
 
-.ring-icon { position: absolute; display: grid; place-items: center; width: 19%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-ink); translate: -50% -50%; transition: color var(--dur-2) var(--ease-out); }
-.ring-icon:disabled { cursor: default; }
-.ring-icon svg { width: 56%; height: 56%; }
-.ring-count { position: absolute; top: 2%; right: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--color-ink); color: var(--color-mint); font-family: var(--font-mono); font-size: 10px; line-height: 17px; }
+/* bottom: the little room, then the one task */
+.guide-bottom { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; justify-items: start; gap: 10px; padding: 0 12px max(12px, env(safe-area-inset-bottom)); }
+.guide-room { position: relative; width: 132px; padding: 6px 6px 22px; border: 0; border-radius: 10px; background: color-mix(in srgb, var(--color-ink) 90%, transparent); }
+.guide-room svg { display: block; width: 100%; height: auto; overflow: visible; }
+.guide-floor { fill: color-mix(in srgb, var(--color-mint) 10%, transparent); stroke: color-mix(in srgb, var(--color-mint) 40%, transparent); stroke-width: 0.8; }
+.guide-wall { fill: transparent; stroke: color-mix(in srgb, var(--color-card) 55%, transparent); stroke-width: 1; stroke-dasharray: 3 2.5; transition: fill var(--dur-3) var(--ease-out), stroke var(--dur-3) var(--ease-out); }
+.guide-wall[data-filmed="true"] { fill: url(#guide-dots); stroke: var(--color-mint); stroke-dasharray: none; }
+.guide-wall[data-filmed="true"][data-near="true"] { fill-opacity: 0.55; }
+.guide-dot { fill: var(--color-mint); }
+.guide-cone { fill: color-mix(in srgb, var(--color-card) 85%, transparent); }
+.guide-room-label { position: absolute; left: 8px; right: 8px; bottom: 5px; color: var(--color-card); font-family: var(--font-mono); font-size: 11px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.ring-primary { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 33%; aspect-ratio: 1; padding: 0; border: 3px solid var(--color-card); border-radius: 50%; background: var(--color-ink); translate: -50% -50%; box-shadow: var(--shadow-card); transition: transform var(--dur-1) var(--ease-out); }
-.ring-primary:active:not(:disabled) { transform: scale(0.94); }
-.ring-primary:disabled { opacity: 0.55; cursor: default; }
-.ring-primary-mark { width: 46%; aspect-ratio: 1; border-radius: 50%; background: var(--color-stop); transition: width var(--dur-2) var(--ease-out), border-radius var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out); }
-.ring[data-recording="true"] .ring-primary-mark { width: 34%; border-radius: 4px; background: var(--color-card); }
-.ring-primary[data-waiting="true"] .ring-primary-mark { opacity: 0.55; }
+.guide-card { justify-self: stretch; display: grid; gap: 12px; padding: 16px 18px 14px; border-radius: 12px; background: var(--color-card); color: var(--color-ink); box-shadow: var(--shadow-card); }
+.guide-task { font-family: var(--font-display); font-weight: 800; font-size: 24px; letter-spacing: -0.025em; line-height: 1.08; animation: guide-in var(--dur-2) var(--ease-out) both; }
+.guide-progress { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.guide-dots { display: flex; gap: 8px; }
+.guide-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-border); transition: background-color var(--dur-2) var(--ease-out), scale var(--dur-2) var(--ease-out); }
+.guide-dots i[data-done="true"] { background: var(--color-mint-line); scale: 1.15; }
+.guide-count { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
+.guide-ideas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.guide-ideas button { min-height: 44px; padding: 8px 10px; border: 1px solid var(--color-ink); border-radius: var(--cap-r); background: var(--color-card); color: var(--color-ink); font-weight: 700; font-size: 14px; line-height: 1.15; }
+.guide-ideas button:active { background: var(--color-mint); }
+.guide-listening { grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
+.guide-notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 0; padding: 8px 10px; border-radius: var(--cap-r-sm); background: var(--color-mint); color: var(--color-mint-ink); font-size: 14px; animation: guide-in var(--dur-2) var(--ease-out) both; }
+.guide-notice button { padding: 4px 0; border: 0; background: none; font-weight: 700; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.guide-link { justify-self: start; padding: 2px 0; border: 0; background: none; color: var(--color-ink-muted); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.guide-nudge { font-size: 14px; color: var(--color-fix); }
+.guide-card--start { gap: 10px; }
+.guide-tips { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
+.guide-start { min-height: 56px; font-size: 18px; }
 
-/* "room mapped": the room drawn as a plan, then next room or done */
-.room-done {
-  position: absolute;
-  z-index: 6;
-  left: 50%;
-  bottom: calc(var(--ring) + var(--dock-pad) + 14px);
-  width: min(300px, calc(100% - 32px));
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border-radius: var(--cap-r);
-  background: var(--color-card);
-  color: var(--color-ink);
-  translate: -50% 0;
-  box-shadow: var(--shadow-card);
-  animation: room-done-in var(--dur-3) var(--ease-out) both;
-}
-.room-done-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.room-done-title b { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; }
-.room-done-keep { padding: 4px 0; border: 0; background: none; color: var(--color-ink-muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
-.room-done-plan { display: block; width: 100%; height: 84px; overflow: visible; }
-.room-done-plan rect { fill: color-mix(in srgb, var(--color-mint) 24%, transparent); stroke: var(--color-ink); stroke-width: 2; stroke-dasharray: 1; stroke-dashoffset: 1; animation: plan-draw 900ms var(--ease-out) 120ms forwards; }
-.room-done-dim { fill: none; stroke: var(--color-ink); stroke-width: 1; }
-.room-done-size { margin-top: -4px; font-family: var(--font-mono); font-size: 13px; text-align: center; }
-.room-done-size span { color: var(--color-ink-muted); }
-.room-done-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.room-done-actions:has(> :only-child) { grid-template-columns: 1fr; }
-.room-done-actions .cap-btn { min-height: 46px; padding: 10px 12px; font-size: 16px; }
-@keyframes room-done-in { from { opacity: 0; translate: -50% 12px; } to { opacity: 1; translate: -50% 0; } }
-@keyframes plan-draw { to { stroke-dashoffset: 0; } }
-
-/* this room in 3D: a small turning card in the dock; tap for the full view */
-.cap-3d { position: relative; flex: none; width: 68px; aspect-ratio: 1; padding: 0; border: 2px solid var(--color-card); border-radius: var(--cap-r); overflow: hidden; background: color-mix(in srgb, var(--color-ink) 70%, transparent); box-shadow: var(--shadow-card); cursor: pointer; }
-.cap-3d canvas { display: block; }
-.cap-3d-label { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 5px; white-space: nowrap; background: var(--color-card); color: var(--color-ink); font-family: var(--font-mono); font-size: 10px; text-align: left; }
-/* the full view covers everything else on the picture, and takes drags to orbit */
-.cap-frame:has(.cap-3d-full) :is(.room-done, .cap-top) { display: none; }
-.cap-3d-full { position: fixed; inset: 0; z-index: 20; pointer-events: auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: color-mix(in srgb, var(--color-ink) 92%, var(--color-mint) 8%); /* a scan reads best on dark */ }
-.cap-3d-full-bar { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 12px max(12px, env(safe-area-inset-bottom)); background: var(--color-card); border-top: 1px solid var(--color-ink); }
-.cap-3d-full-bar p { margin: 0; font-size: 14px; line-height: 1.35; }
-
-@media (prefers-reduced-motion: reduce) {
-  .cap-flash, .cap-coach, .ring-seg, .room-done { animation-duration: 1ms; }
-  .room-done-plan rect { animation: none; stroke-dashoffset: 0; }
+@media (min-width: 900px) {
+  .guide-bottom { justify-items: center; }
+  .guide-bottom > .guide-room { justify-self: start; }
+  .guide-card { justify-self: center; width: min(460px, 100%); }
+  .guide-top { justify-items: center; }
+  .guide-bar, .guide-voice { width: min(560px, 100%); }
 }

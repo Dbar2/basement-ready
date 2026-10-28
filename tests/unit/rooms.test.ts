@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanRooms, mainRoom, roomName, roomRanges, type Room } from "../../server/rooms";
+import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, roomName, roomRanges, withIdeas, withoutGuide, type Room } from "../../server/rooms";
 
 describe("cleanRooms", () => {
   it("reads the form field, sorts and starts at 0", () => {
@@ -71,5 +71,42 @@ describe("roomName", () => {
     expect(roomName(0, 0, 100, [150], named)).toBe("Room 1");
     expect(roomName(1, 100, 200, [150, 160], named)).toBe("Furnace room");
     expect(roomName(2, 200, 300, [250], named)).toBe("Room 3");
+  });
+});
+
+describe("the guide's voice and tapped ideas", () => {
+  it("cuts speech that overlaps the guide talking", () => {
+    const turns = [
+      { startMs: 1000, endMs: 3500, transcript: "Hi! I'll guide you." },
+      { startMs: 9000, endMs: 11000, transcript: "a bedroom for my mom here" },
+    ];
+    expect(withoutGuide(turns, [{ startMs: 900, endMs: 3600 }]).map((t) => t.transcript)).toEqual(["a bedroom for my mom here"]);
+    expect(withoutGuide(turns, null)).toHaveLength(2);
+  });
+
+  it("keeps only well-formed ideas and spans", () => {
+    expect(cleanIdeas(JSON.stringify([{ room: 1, idea: "Rental suite", sec: 40.2 }, { room: 99, idea: "x", sec: 1 }, { room: 0, idea: "", sec: 2 }]))).toEqual([
+      { room: 1, idea: "Rental suite", sec: 40.2 },
+    ]);
+    expect(cleanSpoken([{ startMs: 5, endMs: 2 }, { startMs: 100, endMs: 900 }])).toEqual([{ startMs: 100, endMs: 900 }]);
+    expect(cleanIdeas("nope")).toBeNull();
+  });
+});
+
+describe("tapped ideas in what you want", () => {
+  it("adds them to the room they were tapped in, skipping 'not sure' and repeats", () => {
+    const v = withIdeas(
+      { rooms: [{ room: "Kitchen", where: "by the stairs", atSeconds: 4, quote: "kitchen here" }], style: "", mustHaves: [], forWhom: "" },
+      [
+        { room: 1, idea: "Bedroom for a parent", sec: 30 },
+        { room: 1, idea: "Not sure yet", sec: 40 },
+        { room: 0, idea: "kitchen", sec: 5 },
+      ],
+      [{ index: 0, name: "Room 1" }, { index: 1, name: "Furnace room" }],
+    );
+    expect(v.rooms.map((r) => [r.room, r.where])).toEqual([
+      ["Kitchen", "by the stairs"],
+      ["Bedroom for a parent", "Furnace room"],
+    ]);
   });
 });

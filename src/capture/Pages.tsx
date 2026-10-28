@@ -1,7 +1,7 @@
 // The full-page states around the camera: the brief, camera blocked, and camera problems.
 import type { ReactNode } from "react";
-import { CHECKLIST, MAX_SEC, MIN_SEC, TIPS } from "./checklist";
-import { Dimension, Icon } from "./drawing";
+import { MAX_SEC, MIN_SEC, TIPS } from "./checklist";
+import { Icon } from "./drawing";
 import { detectPlatform, formatTime, type Platform, type ProblemKind } from "./media";
 
 function Page({ eyebrow, title, onClose, children, actions }: { eyebrow: string; title: string; onClose: () => void; children: ReactNode; actions: ReactNode }) {
@@ -26,12 +26,30 @@ function Page({ eyebrow, title, onClose, children, actions }: { eyebrow: string;
 
 type Common = { busy: boolean; onUpload: () => void; onClose: () => void };
 
+const HOW = [
+  {
+    title: "One room at a time",
+    body: "Walk slowly along the walls, about 2 m back, facing into the room.",
+    icon: <path d="M6 30V12h28v18M3 30h34M14 22l4 4 8-8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />,
+  },
+  {
+    title: "Tilt up once",
+    body: "Show the ceiling in each room. That's where we read its height.",
+    icon: <path d="M5 8h30M20 32V15M13 21l7-7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />,
+  },
+  {
+    title: "Say what you'd like",
+    body: "A voice guides you and asks as you go. Not sure yet? Tap an idea.",
+    icon: <path d="M6 9h28v16H17l-7 6v-6H6z" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />,
+  },
+];
+
 export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Common & { recordable: boolean; onStart: () => void }) {
   const ios = detectPlatform() === "ios-safari";
   return (
     <Page
-      eyebrow={`Scan · ${MIN_SEC} s to ${formatTime(MAX_SEC)}`}
-      title="Film your basement."
+      eyebrow={`About ${formatTime(MAX_SEC)} of filming`}
+      title="Film it with a guide."
       onClose={onClose}
       actions={
         recordable ? (
@@ -43,7 +61,7 @@ export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Comm
               Upload a video instead
             </button>
             <p className="cap-fine" aria-live="polite">
-              {busy ? "Tap Allow when your phone asks." : `Your phone will ask for the camera and microphone, so we can hear your plans.${ios ? " It may also ask about motion, so we know when you point up." : ""}`}
+              {busy ? "Tap Allow when your phone asks." : `Allow the camera and mic${ios ? ", and motion so we know when you tilt up" : ""}. Turn your sound on to hear the guide.`}
             </p>
           </>
         ) : (
@@ -56,34 +74,20 @@ export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Comm
         )
       }
     >
-      <p className="cap-lede">
-        One room at a time: walk along its walls about 2 m back, tilt up to the ceiling, then tap Next room. Talk as you go and tell
-        us what you'd like where.
-      </p>
-
-      <h2 className="cap-h2">What to show us</h2>
-      <ol className="cap-shotlist">
-        {CHECKLIST.map((c, i) => (
-          <li key={c.id}>
-            <span className="cap-num">{String(i + 1).padStart(2, "0")}</span>
+      <ol className="cap-how">
+        {HOW.map((h) => (
+          <li key={h.title}>
+            <svg viewBox="0 0 40 40" aria-hidden>
+              {h.icon}
+            </svg>
             <span>
-              <b>{c.label}</b>
-              <span className="cap-muted">{c.hint}</span>
+              <b>{h.title}</b>
+              <span className="cap-muted">{h.body}</span>
             </span>
           </li>
         ))}
       </ol>
-
-      <h2 className="cap-h2">Three tips</h2>
-      <ul className="cap-tiplist">
-        {TIPS.map((t) => (
-          <li key={t.label}>
-            <b>{t.label}</b>
-            <span className="cap-muted">{t.hint}</span>
-          </li>
-        ))}
-      </ul>
-      <Dimension className="cap-dim--length" label={`${MIN_SEC} s minimum · ${formatTime(MAX_SEC)} maximum`} />
+      <p className="cap-fine cap-fine--left">{TIPS.map((t) => t.label).join(" · ")} · at least {MIN_SEC} s</p>
     </Page>
   );
 }

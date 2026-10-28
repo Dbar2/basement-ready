@@ -1,20 +1,20 @@
 // Live guidance while filming: SAM finds, on-phone coaching and room coverage.
 // Everything here is best-effort: if a sensor or the network isn't there, recording still works.
 import { useEffect, useRef, useState, type RefObject } from "react";
-import type { ChecklistId } from "./checklist";
+import type { Need } from "./script";
 import { cameraLift } from "./media";
+import { lookOf, type Look } from "./rooms";
 
 // ---------- live finds (SAM 3.1 on one frame at a time) ----------
 
 export type FindKey = "stairs" | "window" | "furnace" | "panel" | "door" | "duct" | "beam";
 
 // Which checklist step each find ticks.
-export const FIND_TICKS: Partial<Record<FindKey, ChecklistId>> = {
+export const FIND_TICKS: Partial<Record<FindKey, Need>> = {
   stairs: "stairs",
   window: "windows",
   furnace: "furnace",
   panel: "furnace",
-  door: "door",
 };
 
 export type LiveBox = { x: number; y: number; w: number; h: number; c: number | null };
@@ -74,8 +74,12 @@ export function useLiveFinds(opts: {
   videoRef: RefObject<HTMLVideoElement | null>;
   headingRef: RefObject<number | null>;
   startedAt: number;
+  // Every frame sent, for spotting a walk into another room.
+  onFrame?: (f: { sec: number; look: Look; doorWidth: number }) => void;
 }) {
   const { active, session, videoRef, headingRef, startedAt } = opts;
+  const onFrameRef = useRef(opts.onFrame);
+  onFrameRef.current = opts.onFrame;
   const [finds, setFinds] = useState<LiveFind[]>([]);
   const [flash, setFlash] = useState<{ find: LiveFind; heading: number | null; seq: number } | null>(null);
   const [offline, setOffline] = useState(false);
@@ -96,16 +100,18 @@ export function useLiveFinds(opts: {
     let failures = 0;
     let seq = 0;
 
-    // Ask for what's still missing first, plus one of the extras each round.
+    // Doors every round (they mark the way into another room), then what's still missing, then an extra.
     const plan = (): FindKey[] => {
       const have = new Set(findsRef.current.map((f) => f.key));
-      const missing = (["stairs", "window", "furnace", "door", "panel"] as FindKey[]).filter((k) => !have.has(k));
+      const missing = (["stairs", "window", "furnace", "panel"] as FindKey[]).filter((k) => !have.has(k));
       // Beams are left to the full scan: live, they matched furniture in a finished basement.
-      const extras: FindKey[] = ["window", "duct", "panel"];
+      const extras: FindKey[] = ["window", "duct", "panel", "furnace"];
       const extra = extras[turn++ % extras.length];
-      const pick = [...missing.slice(0, 2), extra];
-      return [...new Set(pick)].slice(0, 3);
+      return [...new Set<FindKey>(["door", ...missing.slice(0, 1), extra, ...missing.slice(1)])].slice(0, 3);
     };
+    const tiny = document.createElement("canvas");
+    tiny.width = tiny.height = 16;
+    const tinyCtx = tiny.getContext("2d", { willReadFrequently: true })!;
 
     const tick = async () => {
       while (!stopped) {
@@ -130,6 +136,12 @@ export function useLiveFinds(opts: {
               } else if (res.ok) {
                 failures = 0;
                 const { finds: got } = (await res.json()) as { finds: { key: FindKey; label: string; boxes: LiveBox[] }[] };
+                tinyCtx.drawImage(frame, 0, 0, 16, 16);
+                onFrameRef.current?.({
+                  sec: (performance.now() - startedAt) / 1000,
+                  look: lookOf(tinyCtx.getImageData(0, 0, 16, 16).data),
+                  doorWidth: Math.max(0, ...got.filter((f) => f.key === "door").flatMap((f) => f.boxes.map((b) => b.w))),
+                });
                 const fresh: LiveFind[] = [];
                 for (const f of got) {
                   const box = [...f.boxes].sort((a, b) => b.w * b.h - a.w * a.h)[0];
@@ -174,7 +186,7 @@ export function useLiveFinds(opts: {
 
 // ---------- coaching that runs on the phone ----------
 
-export type Coach = { id: "dark" | "fast" | "min" | "start" | "hold" | "tilt" | "gap" | "next"; text: string } | null;
+export type Coach = { id: "dark" | "fast"; text: string } | null;
 
 const DARK_LUMA = 42;
 const FAST_DEG_PER_S = 75;
@@ -305,34 +317,6 @@ export function useRoomTilt(active: boolean, room: number) {
     return () => window.removeEventListener("deviceorientation", onOrient);
   }, [active, room]);
   return state;
-}
-
-// ---------- the one line of coaching ----------
-
-// Problems first, then what this room still needs, then the next thing to show. One line, never a list.
-export function coachLine(s: {
-  issue: Coach;
-  minLeft: number | null; // seconds to the minimum, when someone tried to stop early
-  room: number;
-  roomSec: number;
-  holdLeft: number | null; // seconds left holding the phone up for the ceiling
-  ceilingDone: boolean;
-  tilt: { sawUp: boolean; sensed: boolean };
-  coverage: { percent: number; supported: boolean };
-  mapped: boolean; // this room has been filmed all the way round
-  sheet: boolean; // the "room mapped" sheet is up, and says it all
-  next: string | null;
-}): Coach {
-  if (s.minLeft != null) return { id: "min", text: `Keep filming · ${s.minLeft} s to go` };
-  if (s.issue) return s.issue;
-  if (s.holdLeft != null) return { id: "hold", text: `Hold it there · ${s.holdLeft} s` };
-  if (s.roomSec < 6) return { id: "start", text: s.room === 0 ? "Walk along the walls. Stay 2 m back." : "New room. Walk along its walls." };
-  if (s.tilt.sensed && !s.tilt.sawUp && s.roomSec > 12) {
-    return { id: "tilt", text: s.ceilingDone ? "Tilt up so we see this ceiling." : "Tilt up to the ceiling. Hold 3 s." };
-  }
-  if (s.sheet) return null;
-  if (!s.mapped && s.coverage.supported && s.coverage.percent >= 40 && s.roomSec > 20) return { id: "gap", text: "Turn to film the gap in the ring." };
-  return s.next ? { id: "next", text: `Next: ${s.next}` } : null;
 }
 
 // ---------- the 3D scan, assembling while you film ----------

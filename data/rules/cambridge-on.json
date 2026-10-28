@@ -2066,7 +2066,8 @@
         }
       ],
       "verified": true,
-      "notes": "Status 'open': no closure, waitlist or fully-subscribed notice was found on 2026-10-28, and the City promoted the grant on 2026-08-21. The latest funding figure ($880,000 left of $1,500,000) is as of 2026-03-31, repeated in a 2026-09-04 memo; later balances are not published. Funded by the federal Housing Accelerator Fund (HAF Action Plan Initiative 3), 'provided the City receives all 4 financial installments'; awarded in date order and refusals are final. The enacted CIP by-law number was not found (draft 'By-law 24-XXX'). The CIP does not address combining it with the Region loan."
+      "notes": "Status 'open': no closure, waitlist or fully-subscribed notice was found on 2026-10-28, and the City promoted the grant on 2026-08-21. The latest funding figure ($880,000 left of $1,500,000) is as of 2026-03-31, repeated in a 2026-09-04 memo; later balances are not published. Funded by the federal Housing Accelerator Fund (HAF Action Plan Initiative 3), 'provided the City receives all 4 financial installments'; awarded in date order and refusals are final. The enacted CIP by-law number was not found (draft 'By-law 24-XXX'). The CIP does not address combining it with the Region loan.",
+      "maxCAD": 10000
     },
     {
       "id": "region_ontario_renovates_secondary_suites",
@@ -2166,7 +2167,8 @@
         }
       ],
       "verified": false,
-      "notes": "Unverified: the house-value cap conflicts ($600,000 on the web page vs $505,469 in the Dec 2025 fact sheet). The fact sheet also says work must start within 90 days of approval (p. 4) and within 120 days (p. 7), and still prints an old 'deadline December 1, 2023'. The web page says applications are received on an ongoing basis but annual funding is limited; if the year's money is gone, eligible applicants go on a waitlist for the following year. The 2026 funding balance is not published. The fact sheet sets one income table for the 'Remainder of Waterloo Region', which covers Cambridge (only Wellesley and Wilmot Townships have lower limits). Stacking with the City of Cambridge program (city_cambridge_aru_grant) is not addressed by either program; the stacking rule in the Waterloo pack comes from a City of Waterloo staff report and does not carry over. On 2026-10-28 the Region page also said some online applications were temporarily unavailable because of technical difficulties."
+      "notes": "Unverified: the house-value cap conflicts ($600,000 on the web page vs $505,469 in the Dec 2025 fact sheet). The fact sheet also says work must start within 90 days of approval (p. 4) and within 120 days (p. 7), and still prints an old 'deadline December 1, 2023'. The web page says applications are received on an ongoing basis but annual funding is limited; if the year's money is gone, eligible applicants go on a waitlist for the following year. The 2026 funding balance is not published. The fact sheet sets one income table for the 'Remainder of Waterloo Region', which covers Cambridge (only Wellesley and Wilmot Townships have lower limits). Stacking with the City of Cambridge program (city_cambridge_aru_grant) is not addressed by either program; the stacking rule in the Waterloo pack comes from a City of Waterloo staff report and does not carry over. On 2026-10-28 the Region page also said some online applications were temporarily unavailable because of technical difficulties.",
+      "maxCAD": 25000
     },
     {
       "id": "federal_mhrtc",
@@ -2174,7 +2176,7 @@
       "level": "federal",
       "kind": "refundable_tax_credit",
       "status": "open",
-      "amount": "For 2025: 14.5% of up to $50,000 of qualifying costs per qualifying renovation (maximum $7,250). For renovations completed in 2026 the rate is expected to be 14% (maximum $7,000); not yet confirmed on the CRA page.",
+      "amount": "14% of up to $50,000 of qualifying costs, so up to $7,000, for a suite finished in 2026 or later (the rate follows the lowest federal tax rate, now 14%; the CRA page still shows 2025's 14.5% and $7,250).",
       "conditions": {
         "occupantRelation": "relative65plus|disabled",
         "qualifyingIndividual": "65 or older at the end of the tax year, or 18-64 and eligible for the disability tax credit",
@@ -2241,7 +2243,8 @@
         }
       ],
       "verified": true,
-      "notes": "The 2025 figures are verified on the CRA page. The 2026 rate (14%) is inferred from Finance Canada's statement that the lowest rate is 14% for 2026 and later; the CRA MHRTC page did not yet show a 2026 rate."
+      "notes": "The 2025 figures are verified on the CRA page. The 2026 rate (14%) is inferred from Finance Canada's statement that the lowest rate is 14% for 2026 and later; the CRA MHRTC page did not yet show a 2026 rate.",
+      "maxCAD": 7000
     },
     {
       "id": "dc_exemption_aru",

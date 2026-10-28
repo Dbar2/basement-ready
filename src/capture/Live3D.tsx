@@ -1,7 +1,7 @@
-// The 3D scan so far: a small card that turns slowly while you film, and a full view to check coverage.
+// The room's 3D scan so far, opened from the little room drawing while filming, to check coverage.
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import type { Preview3d } from "./live";
 
@@ -39,32 +39,20 @@ function Scene({ preview, expanded }: { preview: Preview3d; expanded: boolean })
   );
 }
 
-export function Live3D({ preview, room }: { preview: Preview3d | null; room: string }) {
-  const [expanded, setExpanded] = useState(false);
-  const walls = preview ? `${preview.wallsSeen} of 4 walls` : null;
-
-  if (expanded && preview) {
-    return (
-      <div className="cap-3d-full" role="dialog" aria-label="Your scan so far">
-        <Scene preview={preview} expanded />
-        <div className="cap-3d-full-bar">
-          <p>
-            <b>{room} so far</b> · {walls} · {preview.views} views
-            <br />
-            Missed something? Go back and film it. The 3D keeps building while you record.
-          </p>
-          <button className="cap-btn cap-btn--primary" onClick={() => setExpanded(false)}>
-            Keep filming
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+export function Live3DFull({ preview, room, onClose }: { preview: Preview3d; room: string; onClose: () => void }) {
   return (
-    <button className="cap-3d" onClick={() => preview && setExpanded(true)} aria-label={preview ? `${room} in 3D so far, ${walls}. Open to check coverage.` : "Building this room in 3D"}>
-      {preview && <Scene preview={preview} expanded={false} />}
-      <span className="cap-3d-label">{preview ? `${preview.wallsSeen}/4 walls` : "3D…"}</span>
-    </button>
+    <div className="cap-3d-full" role="dialog" aria-label={`${room} in 3D so far`}>
+      <Scene preview={preview} expanded />
+      <div className="cap-3d-full-bar">
+        <p>
+          <b>{room} so far</b> · {preview.wallsSeen} of 4 walls · {preview.views} views
+          <br />
+          Missed something? Go back and film it. The 3D keeps building while you record.
+        </p>
+        <button className="cap-btn cap-btn--primary" onClick={onClose}>
+          Keep filming
+        </button>
+      </div>
+    </div>
   );
 }

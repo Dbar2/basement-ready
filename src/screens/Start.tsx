@@ -1,20 +1,14 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
-import { startScan, type Household } from "../api";
-import { parseLength } from "../units";
+import { startScan, type AddressHit, type Household } from "../api";
+import type { CaptureMeta } from "../capture/Capture";
+import { AddressField, PropertyCard } from "../components/AddressStep";
 import { AccountNav } from "../auth";
 import { Capture } from "../capture";
 import { HeroScan } from "../components/HeroScan";
 import { Logo } from "../components/Logo";
 import { SiteFooter } from "../marketing/parts";
 import { NAV, PATHS } from "../marketing/site";
-
-const CITIES: { id: string; label: string }[] = [
-  { id: "waterloo-on", label: "Waterloo" },
-  { id: "kitchener-on", label: "Kitchener" },
-  { id: "cambridge-on", label: "Cambridge" },
-  { id: "other-on", label: "Elsewhere in Ontario" },
-];
 
 const HOUSEHOLD: { id: Household; label: string }[] = [
   { id: "relative", label: "A parent or relative" },
@@ -31,19 +25,19 @@ const FEATURES = [
 export function Start() {
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
-  const [household, setHousehold] = useState<Household>("relative");
-  const [municipality, setMunicipality] = useState("waterloo-on");
-  const [address, setAddress] = useState("");
-  const [tape, setTape] = useState("");
-  const tapeM = parseLength(tape);
+  const [household, setHousehold] = useState<Household>("unsure");
+  const [picked, setPicked] = useState<AddressHit | null>(null);
   const [upload, setUpload] = useState<{ progress: number; error: string | null } | null>(null);
   const [filming, setFilming] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const begin = async (video: File, rooms?: { startS: number }[]) => {
+  const begin = async (video: File, meta?: Pick<CaptureMeta, "rooms" | "ideas" | "spoken">) => {
     setUpload({ progress: 0, error: null });
     try {
-      const id = await startScan(video, { household, address, municipality, floorToJoistsM: tapeM, rooms }, (progress) =>
+      const where = picked
+        ? { address: picked.address, addressMunicipality: picked.municipality, municipality: picked.city ?? "other-on" }
+        : { address: "", municipality: "other-on" };
+      const id = await startScan(video, { household, ...where, ...meta }, (progress) =>
         setUpload({ progress, error: null }),
       );
       navigate({ to: "/scans/$scanId", params: { scanId: id } });
@@ -74,7 +68,7 @@ export function Start() {
           </p>
           <div className="hero-actions">
             <button className="btn btn-primary" onClick={() => setAsking(true)}>
-              Scan my basement <span className="arrow" aria-hidden>→</span>
+              Check my basement <span className="arrow" aria-hidden>→</span>
             </button>
             <button className="link-quiet" onClick={() => navigate({ to: "/scans/$scanId", params: { scanId: "sample" } })}>
               Try a sample basement
@@ -128,7 +122,7 @@ export function Start() {
         <Capture
           onComplete={(file, meta) => {
             setFilming(false);
-            void begin(file, meta.rooms);
+            void begin(file, meta);
           }}
           onCancel={() => setFilming(false)}
         />
@@ -137,57 +131,22 @@ export function Start() {
       {asking && (
         <div className="sheet-backdrop" onClick={() => !upload && setAsking(false)}>
           <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" onClick={(e) => e.stopPropagation()}>
-            <h2 id="sheet-title">Two quick things.</h2>
-            <div className="field">
-              <label>Who's it for?</label>
-              <div className="chips">
-                {HOUSEHOLD.map((h) => (
-                  <button key={h.id} className="chip" aria-pressed={household === h.id} onClick={() => setHousehold(h.id)}>
-                    {h.label}
-                  </button>
-                ))}
+            <h2 id="sheet-title">Where's the house?</h2>
+            <p className="sheet-lede">We look up your zoning and lot, so you don't have to.</p>
+            <AddressField picked={picked} onPick={setPicked} />
+            {picked && <PropertyCard address={picked} />}
+            {picked && (
+              <div className="field">
+                <label>Who's it for? <span className="muted">Optional</span></label>
+                <div className="chips">
+                  {HOUSEHOLD.map((h) => (
+                    <button key={h.id} className="chip" aria-pressed={household === h.id} onClick={() => setHousehold(h.id)}>
+                      {h.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-            <div className="field">
-              <label>Where is the house?</label>
-              <div className="chips">
-                {CITIES.map((c) => (
-                  <button key={c.id} className="chip" aria-pressed={municipality === c.id} onClick={() => setMunicipality(c.id)}>
-                    {c.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="field">
-              <label htmlFor="address">Your address</label>
-              <input
-                id="address"
-                className="input"
-                placeholder="Street address (optional)"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                autoComplete="street-address"
-              />
-            </div>
-            <div className="field">
-              <label htmlFor="tape">Floor to the underside of the joists (optional)</label>
-              <input
-                id="tape"
-                className="input"
-                inputMode="decimal"
-                placeholder="e.g. 2.10 m, 210 cm or 6' 11&quot;"
-                value={tape}
-                onChange={(e) => setTape(e.target.value)}
-                aria-describedby="tape-help"
-              />
-              <p id="tape-help" className="field-help">
-                {tape && tapeM === null
-                  ? "We couldn't read that. Try 2.10 m, 210 cm or 6' 11\"."
-                  : tapeM
-                    ? `Got it: ${tapeM.toFixed(2)} m. One tape number makes every size in the 3D scan real.`
-                    : "One tape number makes every size in the 3D scan real. Skip it and sizes are estimates."}
-              </p>
-            </div>
+            )}
             {upload && !upload.error ? (
               <div className="upload" role="status">
                 <div className="upload-bar"><span style={{ width: `${Math.round(upload.progress * 100)}%` }} /></div>
@@ -196,10 +155,10 @@ export function Start() {
             ) : (
               <div className="sheet-actions">
                 <button className="btn btn-primary" onClick={() => setFilming(true)}>
-                  Film it now <span className="arrow" aria-hidden>→</span>
+                  Film my basement <span className="arrow" aria-hidden>→</span>
                 </button>
                 <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>Upload a video</button>
-                <button className="link-quiet" onClick={() => setAsking(false)}>Not now</button>
+                {!picked && <p className="field-help">Outside Waterloo Region? Skip the address: we'll use Ontario's rules.</p>}
               </div>
             )}
             {upload?.error && <p className="error" role="alert">{upload.error}</p>}

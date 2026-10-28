@@ -1,14 +1,18 @@
 // Play the take back, then use it or film again.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { CHECKLIST, MIN_SEC, type ChecklistId } from "./checklist";
+import { MIN_SEC } from "./checklist";
+import { NEEDS, type Need } from "./script";
+import type { Spoken } from "./voice";
 import { CornerTicks, Dimension, Icon } from "./drawing";
 import { formatBytes, formatLabel, formatTime, settleDuration } from "./media";
 
 export type Take = {
   file: File;
   durationSec: number;
-  checklist: ChecklistId[];
+  checklist: Need[];
   rooms: number[]; // start of each room, seconds into the take
+  ideas: { room: number; idea: string; sec: number }[];
+  spoken: Spoken[];
   source: "camera" | "upload";
   note?: "max" | "interrupted" | "short";
 };
@@ -21,10 +25,9 @@ const NOTES = {
   short: `This video is under ${MIN_SEC} seconds, so we may miss things. A longer walk-through helps.`,
 };
 
-function missedNote(ids: ChecklistId[]) {
-  if (ids.length === 1 && ids[0] === "door") return "You didn't tick an outside door. That's fine if there isn't one.";
-  const names = CHECKLIST.filter((c) => ids.includes(c.id)).map((c) => c.short);
-  return `Not ticked: ${names.join(", ")}. If you skipped something by accident, a retake helps us check more.`;
+function missedNote(ids: Need[]) {
+  const names = NEEDS.filter((c) => ids.includes(c.id)).map((c) => c.label.toLowerCase());
+  return `We didn't see: ${names.join(", ")}. That's fine if there isn't one. If you skipped something, a retake helps us check more.`;
 }
 
 export function Review({ take, busy, onUse, onRetake, onClose }: Props) {
@@ -46,7 +49,7 @@ export function Review({ take, busy, onUse, onRetake, onClose }: Props) {
   }, [take.file]);
 
   const fromCamera = take.source === "camera";
-  const missed = CHECKLIST.filter((c) => !take.checklist.includes(c.id));
+  const missed = NEEDS.filter((c) => !take.checklist.includes(c.id));
   const length = duration || take.durationSec;
 
   const toggle = () => {
@@ -136,9 +139,9 @@ export function Review({ take, busy, onUse, onRetake, onClose }: Props) {
           )}
           {fromCamera && (
             <div>
-              <dt>Ticked</dt>
+              <dt>Shown</dt>
               <dd>
-                {take.checklist.length} of {CHECKLIST.length}
+                {take.checklist.length} of {NEEDS.length}
               </dd>
             </div>
           )}

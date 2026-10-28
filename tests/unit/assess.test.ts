@@ -11,7 +11,9 @@ describe("buildResult: the trust rule", () => {
   it("holds back a claim with no SAM evidence", () => {
     const r = buildResult(ctx, waterloo, { findings: [{ ruleId: "egress_window_bedroom_area", status: "likely_fix", evidence: [] }] }, detections);
     const f = r.findings.find((x) => x.ruleId === "egress_window_bedroom_area")!;
-    expect(f.status).toBe("needs_measurement");
+    // Not a claim, and not a tape question either: the designer confirms the window.
+    expect(f.status).toBe("designer_checks");
+    expect(f.question).toBeNull();
     expect(r.heldBack).toBe(1);
     expect(r.fixGroups).toHaveLength(0);
   });
@@ -24,7 +26,7 @@ describe("buildResult: the trust rule", () => {
   it("keeps a supported claim and prices it", () => {
     const r = buildResult(ctx, waterloo, { findings: [{ ruleId: "egress_window_bedroom_area", status: "likely_fix", evidence: ["window-window-1"] }] }, detections);
     expect(r.verdict).toBe("fix");
-    expect(r.headline).toBe("Yes, if you fix 1 thing.");
+    expect(r.headline).toBe("Yes, your basement can be a second home after 1 fix.");
     expect(r.cost.low).toBeGreaterThan(0);
   });
 
@@ -40,10 +42,15 @@ describe("buildResult: the trust rule", () => {
     expect(both.cost).toEqual(one.cost);
   });
 
-  it("asks about every core rule Spark skipped", () => {
+  it("asks only what a homeowner knows when Spark skipped everything", () => {
     const r = buildResult(ctx, waterloo, { findings: [] }, detections);
     expect(r.findings).toHaveLength(rules.length);
-    expect(r.findings.every((f) => f.status === "needs_answer" || f.status === "needs_measurement")).toBe(true);
+    const asked = r.findings.filter((f) => f.status === "needs_answer");
+    expect(asked.map((f) => f.ruleId).sort()).toEqual(["exit_from_suite", "plumbing_fixtures_and_shutoff"]);
+    expect(asked.every((f) => f.question && !/ESA|return-air|STC|gypsum/i.test(f.question))).toBe(true);
+    // Fire separation, alarms and the rest are budgeted as standard suite work, not asked.
+    expect(r.standard.map((s) => s.ruleId)).toContain("smoke_alarms_interconnected");
+    expect(r.cost.standardLow).toBeGreaterThan(0);
     expect(r.verdict).toBe("yes");
   });
 });
@@ -54,7 +61,13 @@ describe("money and coverage", () => {
     const rental = buildResult({ ...ctx, household: "renter" }, waterloo, { findings: [] }, []);
     expect(forMom.grants.find((g) => g.id === "federal_mhrtc")!.fit).toBe("fits");
     expect(rental.grants.find((g) => g.id === "city_waterloo_aru_grant_interior")!.fit).toBe("fits");
-    expect(forMom.grants.find((g) => g.id === "canada_secondary_suite_loan_program")!.fit).toBe("cancelled");
+    // Cancelled programs never reach the homeowner.
+    expect(forMom.grants.some((g) => g.id === "canada_secondary_suite_loan_program")).toBe(false);
+    // A suite for Mom: the tax credit fits; the city grant and Region loan depend on renting it affordably.
+    expect(forMom.money.fits).toBe(7000);
+    expect(forMom.money.possible).toBe(7000 + 20000 + 25000);
+    expect(rental.money.fits).toBe(20000 + 25000);
+    expect(rental.grants.find((g) => g.id === "federal_mhrtc")!.fit).toBe("no");
   });
 
   it("falls back to provincial rules outside covered cities", () => {

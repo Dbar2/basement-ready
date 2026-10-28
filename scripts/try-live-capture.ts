@@ -40,10 +40,10 @@ page.on("pageerror", (e) => console.log("PAGE ERROR", e.message));
 page.on("response", (r) => r.url().includes("/api/live/detect") && r.status() !== 200 && console.log("live detect", r.status()));
 
 await page.goto(`${base}/`);
-await page.getByRole("button", { name: "Scan my basement" }).click();
-await page.getByRole("button", { name: /Film it now/ }).click();
+await page.getByRole("button", { name: /Check my basement/ }).click();
+await page.getByRole("button", { name: /Film my basement/ }).click();
 await page.getByRole("button", { name: /Start camera/ }).click();
-await page.getByRole("button", { name: /Start recording/ }).click();
+await page.getByRole("button", { name: "Start", exact: true }).click();
 
 // A desktop browser has no compass or tilt sensor, so turn a pretend phone slowly round the room,
 // and tilt it up to the ceiling for a few seconds, to exercise the ring's track and the ceiling step.
@@ -63,34 +63,36 @@ let movedOn = false;
 for (let t = 5; t <= seconds; t += 5) {
   await page.waitForTimeout(5000);
   const state = await page.evaluate(() => ({
-    room: document.querySelector(".cap-room")?.textContent ?? null,
-    coach: document.querySelector(".cap-coach")?.textContent ?? null,
-    done: [...document.querySelectorAll('.ring-icon[data-done="true"]')].map((e) => e.getAttribute("aria-label")),
-    track: `${document.querySelectorAll('.ring-track[data-on="true"]').length}/36`,
-    mapped: document.querySelector(".room-done-title b")?.textContent ?? null,
+    room: document.querySelector(".guide-room-label")?.textContent ?? null,
+    task: document.querySelector(".guide-task")?.textContent ?? null,
+    voice: document.querySelector(".guide-voice p")?.textContent ?? null,
+    shown: document.querySelector(".guide-count")?.textContent ?? null,
+    turn: document.querySelector(".guide-turn span")?.textContent ?? null,
+    newRoom: document.querySelector(".guide-notice")?.textContent ?? null,
     flash: document.querySelector(".cap-flash-label")?.textContent ?? null,
-    threeD: document.querySelector(".cap-3d-label")?.textContent ?? null,
   }));
   console.log(`${String(t).padStart(3)}s`, JSON.stringify(state));
   await page.screenshot({ path: `${out}/t${String(t).padStart(3, "0")}.png` });
-  // The first time a room is mapped, move on to the next one, the way someone would.
-  if (state.mapped && !movedOn) {
+  // Answer the "what would you like this room to be?" task once, the way someone would.
+  if (state.task?.startsWith("What would you like") && !movedOn) {
     movedOn = true;
-    await page.locator(".room-done").getByRole("button", { name: "Next room" }).click();
-    console.log("     → Next room");
+    // The card can close itself first if it already heard talking.
+    if (await page.getByRole("button", { name: "Bedroom for a parent" }).click({ timeout: 2000 }).then(() => true, () => false)) {
+      console.log("     → tapped Bedroom for a parent");
+    }
   }
 }
 
-// Open the assembling 3D, the way you'd check coverage before stopping.
-const card = page.locator(".cap-3d");
-if ((await card.count()) && (await card.locator(".cap-3d-label").textContent()) !== "3D…") {
-  await card.click();
+// Open the assembling 3D from the little room drawing, the way you'd check coverage before stopping.
+const room = page.locator(".guide-room");
+if ((await room.count()) && (await room.getAttribute("aria-label"))?.includes("Open the 3D")) {
+  await room.click();
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${out}/3d-full.png` });
   await page.locator(".cap-3d-full").getByRole("button", { name: "Keep filming" }).click();
 }
 
-const stop = page.getByRole("button", { name: "Stop and review" });
+const stop = page.getByRole("button", { name: "Done", exact: true });
 if (await stop.count()) {
   await stop.click();
   await page.waitForTimeout(1500);

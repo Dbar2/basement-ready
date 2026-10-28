@@ -22,13 +22,13 @@ export type ScanEvent = {
 
 export type Source = { title: string; url: string; section?: string; retrieved?: string };
 
-export type Measured = { value: number; unit: string; marginM: number; limit: number; source: "model" | "user_measurement" };
+export type Measured = { value: number; unit: string; marginM: number; limit: number; source: "model" | "user_measurement" | "door" };
 
 export type Measurements = {
   ceilingHeightM: number | null;
   widthM: number | null;
   depthM: number | null;
-  scaleSource: "model" | "user_measurement";
+  scaleSource: "model" | "user_measurement" | "door";
   confidence: string;
   expectedErrorPct: number;
   trusted?: boolean;
@@ -49,7 +49,7 @@ export type Plan = {
   openings: { kind: "window" | "door"; side: PlanSide; atM: number; widthM: number; detectionId: string }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
   fixtures: { kind: "furnace" | "panel"; x: number; z: number; detectionId: string }[];
-  scaleSource: "model" | "user_measurement";
+  scaleSource: "model" | "user_measurement" | "door";
   trusted: boolean;
 };
 
@@ -71,20 +71,57 @@ export type Vision = {
   forWhom: string;
 };
 
+export type AnswerValue = number | boolean | "unsure";
+
 export type Finding = {
   measured?: Measured | null;
-  answer?: { value: number | boolean; outcome: "pass" | "fail" | "unknown" } | null;
+  answer?: { value: AnswerValue; outcome: "pass" | "fail" | "unknown" } | null;
   check: { metric: string; operator: string; value: unknown; unit: string | null };
   ruleId: string;
   title: string;
   plain: string;
   category: string;
-  status: "likely_ok" | "likely_fix" | "needs_measurement" | "needs_answer";
+  // standard: work every suite needs, budgeted. designer_checks: a detail the designer confirms.
+  status: "likely_ok" | "likely_fix" | "needs_measurement" | "needs_answer" | "standard" | "designer_checks";
   why: string | null;
   question: string | null;
+  hint?: string | null;
+  options?: { label: string; value: boolean | "unsure" }[];
+  records?: { value: number | boolean } | null; // answered from public records
   evidence: string[];
   source: Source;
 };
+
+export type StandardWork = { ruleId: string; title: string; text: string; costLow: number | null; costHigh: number | null };
+
+export type PlanStep = {
+  id: "money" | "drawings" | "permit" | "build" | "inspect";
+  title: string;
+  who: string;
+  time: string | null;
+  costLow: number | null;
+  costHigh: number | null;
+  detail: string;
+  items?: string[];
+  source?: { title: string; url: string } | null;
+};
+
+// What public data says about the house (server/property.ts).
+export type Property = {
+  address: string;
+  municipality: string;
+  city: string | null;
+  lon: number;
+  lat: number;
+  zone: { code: string; label: string | null; bylaw: string | null } | null;
+  residential: boolean | null;
+  lotAreaM2: number | null;
+  building: { storeys: number | null; footprintM2: number | null; floorAreaM2: number | null } | null;
+  unitsRegistered: number;
+  sources: string[];
+};
+
+export type AddressHit = { address: string; municipality: string; city: string | null; lon: number; lat: number; units: number };
 
 export type FixGroup = {
   category: string;
@@ -103,7 +140,9 @@ export type Grant = {
   name: string;
   level: string;
   status: string;
+  kind?: string;
   amount: string;
+  maxCAD?: number | null;
   fit: "fits" | "depends" | "no" | "cancelled";
   fitNote: string | null;
   nextStep: string | null;
@@ -130,8 +169,12 @@ export type ScanResult = {
   detections: Detection[];
   findings: Finding[];
   fixGroups: FixGroup[];
+  standard?: StandardWork[];
+  steps?: PlanStep[];
+  money?: { fits: number; possible: number };
+  property?: Property | null;
   heldBack: number;
-  cost: { low: number; high: number; pricedFixes: number; unpricedFixes: number };
+  cost: { low: number; high: number; fixesLow?: number; fixesHigh?: number; standardLow?: number; standardHigh?: number; pricedFixes: number; unpricedFixes: number };
   grants: Grant[];
   process: { step: number; title: string; detail: string; source?: Source }[];
   pros: { registry: { name: string; url: string; suggestedSearch?: Record<string, unknown> } };
@@ -154,7 +197,16 @@ export function rememberClaim(basementId: string, claimToken: string) {
 
 export function startScan(
   video: File,
-  input: { household: Household; address: string; municipality: string; floorToJoistsM?: number | null; rooms?: { startS: number }[] },
+  input: {
+    household: Household;
+    address: string;
+    addressMunicipality?: string;
+    municipality: string;
+    floorToJoistsM?: number | null;
+    rooms?: { startS: number }[];
+    ideas?: { room: number; idea: string; sec: number }[];
+    spoken?: { id: string; startMs: number; endMs: number }[];
+  },
   onProgress: (fraction: number) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -164,7 +216,10 @@ export function startScan(
     form.append("address", input.address);
     form.append("municipality", input.municipality);
     if (input.floorToJoistsM) form.append("floorToJoistsM", String(input.floorToJoistsM));
+    if (input.addressMunicipality) form.append("addressMunicipality", input.addressMunicipality);
     if (input.rooms && input.rooms.length > 1) form.append("rooms", JSON.stringify(input.rooms));
+    if (input.ideas?.length) form.append("ideas", JSON.stringify(input.ideas));
+    if (input.spoken?.length) form.append("spoken", JSON.stringify(input.spoken));
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/scans");
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
@@ -197,8 +252,48 @@ export function subscribe(id: string, onEvent: (e: ScanEvent) => void): () => vo
   return () => source.close();
 }
 
+// Address type-ahead, and what public data says about the house picked.
+export async function searchAddress(q: string): Promise<AddressHit[]> {
+  const res = await fetch(`/api/address?q=${encodeURIComponent(q)}`);
+  return res.ok ? (await res.json()).results : [];
+}
+export async function getProperty(a: Pick<AddressHit, "address" | "municipality">): Promise<Property | null> {
+  const res = await fetch(`/api/property?address=${encodeURIComponent(a.address)}&municipality=${encodeURIComponent(a.municipality)}`);
+  return res.ok ? (await res.json()).property : null;
+}
+export const aerialUrl = (a: Pick<AddressHit, "address" | "municipality">) =>
+  `/api/aerial?address=${encodeURIComponent(a.address)}&municipality=${encodeURIComponent(a.municipality)}`;
+
+// The sample isn't saved on the server, so its early answers wait in this tab.
+const SAMPLE_ANSWERS = "br-sample-answers";
+export function sampleEarlyAnswers(): Record<string, AnswerValue> {
+  try {
+    return JSON.parse(sessionStorage.getItem(SAMPLE_ANSWERS) ?? "{}");
+  } catch {
+    return {};
+  }
+}
+
+// While the scan runs: answers are kept and applied when it finishes.
+export async function answerEarly(scanId: string, ruleId: string, value: AnswerValue) {
+  if (scanId === "sample") {
+    try {
+      sessionStorage.setItem(SAMPLE_ANSWERS, JSON.stringify({ ...sampleEarlyAnswers(), [ruleId]: value }));
+    } catch {
+      // Private mode: the sample just asks again on the answer page.
+    }
+    return;
+  }
+  await fetch(`/api/scans/${scanId}/answers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId, value }) });
+}
+export async function setHousehold(scanId: string, household: Household): Promise<ScanResult | null> {
+  if (scanId === "sample") return null;
+  const res = await fetch(`/api/scans/${scanId}/household`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ household }) });
+  return res.ok ? ((await res.json()).result ?? null) : null;
+}
+
 // Saves an answer (or clears it with null) and returns the re-checked result.
-export async function answerQuestion(scanId: string, current: ScanResult, sampleAnswers: Record<string, number | boolean | null>, ruleId: string, value: number | boolean | null) {
+export async function answerQuestion(scanId: string, current: ScanResult, sampleAnswers: Record<string, AnswerValue | null>, ruleId: string, value: AnswerValue | null) {
   const res =
     scanId === "sample"
       ? await fetch("/api/recheck", {

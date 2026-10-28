@@ -34,7 +34,7 @@ describe("recheck", () => {
     const r = recheck(scan, { ceiling_height_suite: 1.8 });
     expect(r.findings.find((x) => x.ruleId === "ceiling_height_suite")!.status).toBe("likely_fix");
     expect(r.fixGroups.length).toBe(before + 1);
-    expect(r.headline).toBe(`Yes, if you fix ${before + 1} things.`);
+    expect(r.headline).toBe(`Yes, your basement can be a second home after ${before + 1} fixes.`);
   });
 
   it("too many homes on the lot rules out a second unit", () => {
@@ -55,6 +55,14 @@ describe("recheck", () => {
 
   it("a wrong kind of answer changes nothing", () => {
     const r = recheck(scan, { ceiling_height_suite: true });
-    expect(r.findings.find((x) => x.ruleId === "ceiling_height_suite")!.status).toBe("needs_measurement");
+    const base = scan.findings.find((x) => x.ruleId === "ceiling_height_suite")!.status;
+    expect(r.findings.find((x) => x.ruleId === "ceiling_height_suite")!.status).toBe(base);
+  });
+
+  it("\"Not sure\" turns a question into something the designer checks", () => {
+    const r = recheck(scan, { exit_from_suite: "unsure" });
+    const f = r.findings.find((x) => x.ruleId === "exit_from_suite")!;
+    expect(f.status).toBe("designer_checks");
+    expect(f.question).toBeNull();
   });
 });

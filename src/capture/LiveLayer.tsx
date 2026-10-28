@@ -1,12 +1,11 @@
-// What sits on top of the camera while recording: the room you're in, one line of coaching,
-// the find outline, and the "room mapped" sheet. Drawing language: corner ticks, hairlines, mono labels.
+// The find outline: mint corner ticks round what SAM just found, on the live picture.
 import { useEffect, useState, type RefObject } from "react";
-import type { Coach, LiveFind } from "./live";
+import type { LiveFind } from "./live";
 
 const angleGap = (a: number, b: number) => Math.abs(((a - b + 540) % 360) - 180);
 
 // Outlines the find on the live picture, but only while the phone still points where it was found.
-function FindFlash({
+export function FindFlash({
   flash,
   videoRef,
   heading,
@@ -46,81 +45,5 @@ function FindFlash({
       <i data-c="br" />
       <span className="cap-flash-label">{label}</span>
     </div>
-  );
-}
-
-// The room so far, drawn like the plan it will become: a rectangle with its sizes.
-function MiniPlan({ widthM, depthM }: { widthM: number; depthM: number }) {
-  const w = 150, h = 84;
-  const k = Math.min((w - 16) / widthM, (h - 22) / depthM);
-  const rw = widthM * k, rh = depthM * k;
-  const x = (w - rw) / 2, y = 4;
-  return (
-    <svg className="room-done-plan" viewBox={`0 0 ${w} ${h}`} aria-hidden>
-      <rect x={x} y={y} width={rw} height={rh} pathLength={1} />
-      <path d={`M${x} ${y + rh + 9}h${rw}M${x} ${y + rh + 5}v8M${x + rw} ${y + rh + 5}v8`} className="room-done-dim" />
-    </svg>
-  );
-}
-
-export function RoomDone(props: {
-  name: string;
-  size: { widthM: number; depthM: number } | null;
-  canAddRoom: boolean;
-  onNext: () => void;
-  onDone: () => void;
-  onKeep: () => void;
-}) {
-  const { name, size, canAddRoom, onNext, onDone, onKeep } = props;
-  return (
-    <div className="room-done" role="status">
-      <p className="room-done-title">
-        <b>{name} mapped</b>
-        <button className="room-done-keep" onClick={onKeep}>
-          Keep filming
-        </button>
-      </p>
-      {size && (
-        <>
-          <MiniPlan widthM={size.widthM} depthM={size.depthM} />
-          <p className="room-done-size">
-            {size.widthM.toFixed(1)} × {size.depthM.toFixed(1)} m <span>est.</span>
-          </p>
-        </>
-      )}
-      <div className="room-done-actions">
-        {canAddRoom && (
-          <button className="cap-btn cap-btn--primary" onClick={onNext}>
-            Next room
-          </button>
-        )}
-        <button className="cap-btn cap-btn--ghost" onClick={onDone}>
-          Done
-        </button>
-      </div>
-    </div>
-  );
-}
-
-export function LiveLayer(props: {
-  videoRef: RefObject<HTMLVideoElement | null>;
-  flash: { find: LiveFind; heading: number | null; seq: number } | null;
-  heading: number | null;
-  room: string | null;
-  line: Coach;
-}) {
-  const { videoRef, flash, heading, room, line } = props;
-  return (
-    <>
-      <FindFlash flash={flash} videoRef={videoRef} heading={heading} />
-      <div className="cap-top">
-        {room && <span className="cap-room">{room}</span>}
-        {line && (
-          <p className="cap-coach" data-kind={line.id} role="status" key={line.text}>
-            {line.text}
-          </p>
-        )}
-      </div>
-    </>
   );
 }

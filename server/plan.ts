@@ -16,9 +16,25 @@ export type Plan = {
   openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
   fixtures: { kind: "furnace" | "panel"; x: number; z: number; detectionId: string }[];
-  scaleSource: "model" | "user_measurement";
+  scaleSource: "model" | "user_measurement" | "door";
   trusted: boolean;
 };
+
+export function rescalePlan(p: Plan, s: number): Plan {
+  const r2 = (n: number) => Math.round(n * s * 100) / 100;
+  return {
+    ...p,
+    box: { minX: r2(p.box.minX), maxX: r2(p.box.maxX), minZ: r2(p.box.minZ), maxZ: r2(p.box.maxZ) },
+    widthM: r2(p.widthM),
+    depthM: r2(p.depthM),
+    areaM2: Math.round(p.areaM2 * s * s * 10) / 10,
+    ceilingHeightM: p.ceilingHeightM == null ? null : r2(p.ceilingHeightM),
+    openings: p.openings.map((o) => ({ ...o, atM: r2(o.atM), widthM: r2(o.widthM) })),
+    stairs: p.stairs.map((st) => ({ ...st, x0: r2(st.x0), z0: r2(st.z0), x1: r2(st.x1), z1: r2(st.z1) })),
+    fixtures: p.fixtures.map((f) => ({ ...f, x: r2(f.x), z: r2(f.z) })),
+    scaleSource: "door",
+  };
+}
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
