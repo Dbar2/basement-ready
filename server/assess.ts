@@ -31,8 +31,10 @@ Trust rules, follow them exactly:
 5. Use "likely_ok" only when the frames clearly show it complies.
 Write plain, short sentences a homeowner understands. Never say "you qualify" or "approved".
 
+Also capture what the homeowner wants the space to become, ONLY from what they actually said (never invent): each room or feature they named, where they said it goes, the second they said it (from the timed speech), and their exact words. Note any look and feel ("bright", "simple", "cozy") and must-haves ("separate entrance", "laundry"). Leave lists empty if they said nothing.
+
 Return ONLY a JSON object:
-{"route":"second_unit"|"basement_finish","wants":"what they said they want, one sentence, or empty","summary":"two short sentences","findings":[{"ruleId":"...","status":"likely_ok"|"likely_fix"|"needs_measurement"|"needs_answer","evidence":["detection ids"],"why":"one sentence","question":"only for needs_*"}]}
+{"route":"second_unit"|"basement_finish","wants":"what they said they want, one sentence, or empty","summary":"two short sentences","vision":{"rooms":[{"room":"kitchen","where":"by the stairs","atSeconds":12.5,"quote":"their words"}],"style":"look and feel, or empty","mustHaves":["..."],"forWhom":"who it is for, or empty"},"findings":[{"ruleId":"...","status":"likely_ok"|"likely_fix"|"needs_measurement"|"needs_answer","evidence":["detection ids"],"why":"one sentence","question":"only for needs_*"}]}
 Include every rule you were given exactly once.`;
 
 // Draws each detection's box on its best frame so Spark sees exactly what SAM found.
@@ -62,7 +64,9 @@ function parseJson(text: string): any {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detections: Detection[], transcript: string) {
+export type SpeechTurn = { startMs: number; endMs: number; transcript: string };
+
+async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detections: Detection[], transcript: string, turns: SpeechTurn[]) {
   const proofs = await proofFrames(ctx.dir, detections);
   const content: any[] = [
     {
@@ -71,6 +75,7 @@ async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detecti
         unitIsFor: ctx.household,
         city,
         homeownerSaid: transcript || "(no speech)",
+        timedSpeech: turns.map((t) => ({ atSeconds: Math.round(t.startMs / 100) / 10, text: t.transcript })),
         detections: detections.map((d) => ({ id: d.id, kind: d.kind, label: d.label, seconds: d.seconds, framesSeen: d.framesSeen })),
         rules: rulesForModel(rules),
       }),
@@ -100,9 +105,15 @@ async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detecti
   throw lastErr;
 }
 
-export async function assess(ctx: AssessContext, detections: Detection[], transcript: string, measurements?: Measurements | null) {
+export async function assess(
+  ctx: AssessContext,
+  detections: Detection[],
+  transcript: string,
+  measurements?: Measurements | null,
+  turns: SpeechTurn[] = [],
+) {
   const coverage = packFor(ctx.municipality);
-  const { model, costUsd } = await askSpark(ctx, coverage.city, coreRules(coverage.pack), detections, transcript);
+  const { model, costUsd } = await askSpark(ctx, coverage.city, coreRules(coverage.pack), detections, transcript, turns);
   return { result: { ...buildResult(ctx, coverage, model, detections, measurements), measurements: measurements ?? null }, costUsd };
 }
 
@@ -130,11 +141,91 @@ export function measuredCheck(rule: Rule, m: Measurements | null | undefined) {
   };
 }
 
+export type Vision = {
+  rooms: { room: string; where: string; atSeconds: number | null; quote: string }[];
+  style: string;
+  mustHaves: string[];
+  forWhom: string;
+};
+
+const text = (v: unknown, max = 140) => (typeof v === "string" ? v.trim().slice(0, max) : "");
+
+// What the homeowner said they want, kept only if it's well-formed; the concepts are planned around it.
+export function cleanVision(v: any): Vision {
+  const rooms = (Array.isArray(v?.rooms) ? v.rooms : [])
+    .map((r: any) => ({
+      room: text(r?.room, 60),
+      where: text(r?.where, 120),
+      atSeconds: typeof r?.atSeconds === "number" && Number.isFinite(r.atSeconds) && r.atSeconds >= 0 ? Math.round(r.atSeconds * 10) / 10 : null,
+      quote: text(r?.quote, 200),
+    }))
+    .filter((r: { room: string }) => r.room)
+    .slice(0, 8);
+  return {
+    rooms,
+    style: text(v?.style),
+    mustHaves: (Array.isArray(v?.mustHaves) ? v.mustHaves : []).map((m: unknown) => text(m, 80)).filter(Boolean).slice(0, 8),
+    forWhom: text(v?.forWhom, 80),
+  };
+}
+
+type VerdictFinding = {
+  ruleId: string;
+  title: string;
+  category: string;
+  status: Status;
+  why: string | null;
+  evidence: string[];
+  source: Rule["source"];
+  fix: Rule["fix"] | null;
+};
+
+// Pure: the verdict, the fix list and the rough cost, from the findings as they stand.
+// Used for the first answer and again every time the homeowner answers a question.
+export function verdictFrom(findings: VerdictFinding[]) {
+  // Zoning can't be fixed with a renovation: if it fails, this lot can't take a second unit.
+  const blockers = findings.filter((f) => f.status === "likely_fix" && f.category === "zoning");
+  // One "thing to fix" per category: the egress area and egress size rules are one new window,
+  // and the fire ceiling and beam boxing are one drywall job. Group cost = the largest item, not the sum.
+  const fixGroups = [...Map.groupBy(findings.filter((f) => f.status === "likely_fix" && f.category !== "zoning"), (f) => f.category)].map(
+    ([category, items]) => {
+      const priced = items.filter((f) => f.fix?.costLowCAD != null && f.fix?.costHighCAD != null);
+      return {
+        category,
+        title: items[0].title,
+        description: items[0].fix?.description ?? "",
+        ruleIds: items.map((f) => f.ruleId),
+        evidence: [...new Set(items.flatMap((f) => f.evidence))],
+        why: items.map((f) => f.why).filter(Boolean) as string[],
+        costLow: priced.length ? Math.max(...priced.map((f) => f.fix!.costLowCAD!)) : null,
+        costHigh: priced.length ? Math.max(...priced.map((f) => f.fix!.costHighCAD!)) : null,
+        costSource: priced[0]?.fix?.costSource ?? null,
+        sources: items.map((f) => f.source),
+      };
+    },
+  );
+  const priced = fixGroups.filter((g) => g.costLow != null);
+  const cost = {
+    low: priced.reduce((s, g) => s + g.costLow!, 0),
+    high: priced.reduce((s, g) => s + g.costHigh!, 0),
+    pricedFixes: priced.length,
+    unpricedFixes: fixGroups.length - priced.length,
+  };
+  const n = fixGroups.length;
+  const verdict: "yes" | "fix" | "no" = blockers.length ? "no" : n > 0 ? "fix" : "yes";
+  const headline = blockers.length
+    ? "Not as a second unit here. You could still finish it as part of your home."
+    : n > 0
+      ? `Yes, if you fix ${n} thing${n === 1 ? "" : "s"}.`
+      : "Looks possible. A few things to confirm.";
+  return { fixGroups, cost, verdict, headline, blockers: blockers.map((b) => b.ruleId) };
+}
+
 // Pure: turns Spark's reading into the answer. The trust rule, grouping and money all live here.
 export function buildResult(
   ctx: Pick<AssessContext, "household" | "municipality">,
   { pack, city, coverage }: Coverage,
-  model: { route?: string; wants?: string; summary?: string; findings?: ModelFinding[] },
+  model: { route?: string; wants?: string; summary?: string; vision?: any; findings?: ModelFinding[] },
   detections: Pick<Detection, "id">[],
   measurements?: Measurements | null,
 ) {
@@ -180,31 +271,10 @@ export function buildResult(
     };
   });
 
-  // One "thing to fix" per category: the egress area and egress size rules are one new window,
-  // and the fire ceiling and beam boxing are one drywall job. Group cost = the largest item, not the sum.
-  const fixGroups = [...Map.groupBy(findings.filter((f) => f.status === "likely_fix"), (f) => f.category)].map(([category, items]) => {
-    const priced = items.filter((f) => f.fix?.costLowCAD != null && f.fix?.costHighCAD != null);
-    return {
-      category,
-      title: items[0].title,
-      description: items[0].fix?.description ?? "",
-      ruleIds: items.map((f) => f.ruleId),
-      evidence: [...new Set(items.flatMap((f) => f.evidence))],
-      why: items.map((f) => f.why).filter(Boolean),
-      costLow: priced.length ? Math.max(...priced.map((f) => f.fix!.costLowCAD!)) : null,
-      costHigh: priced.length ? Math.max(...priced.map((f) => f.fix!.costHighCAD!)) : null,
-      costSource: priced[0]?.fix?.costSource ?? null,
-      sources: items.map((f) => f.source),
-    };
-  });
-  const priced = fixGroups.filter((g) => g.costLow != null);
-  const costLow = priced.reduce((s, g) => s + g.costLow!, 0);
-  const costHigh = priced.reduce((s, g) => s + g.costHigh!, 0);
-  const verdict = fixGroups.length > 0 ? "fix" : "yes";
-  const headline =
-    fixGroups.length > 0 ? `Yes, if you fix ${fixGroups.length} thing${fixGroups.length === 1 ? "" : "s"}.` : "Looks possible. A few things to confirm.";
+  const { fixGroups, cost, verdict, headline } = verdictFrom(findings);
 
   return {
+    vision: cleanVision(model.vision),
     municipality: ctx.municipality,
     city,
     coverage,
@@ -216,7 +286,7 @@ export function buildResult(
     findings,
     fixGroups,
     heldBack,
-    cost: { low: costLow, high: costHigh, pricedFixes: priced.length, unpricedFixes: fixGroups.length - priced.length },
+    cost,
     grants: grantsFor(pack, ctx.household),
     process: pack.process,
     pros: pack.pros,

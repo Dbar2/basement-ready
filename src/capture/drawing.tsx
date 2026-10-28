@@ -1,5 +1,4 @@
-// Drawing-style marks: viewfinder corner ticks, dimension lines and the recording ruler.
-import { formatTime } from "./media";
+// Drawing-style marks: viewfinder corner ticks and dimension lines.
 
 export function CornerTicks() {
   return (
@@ -22,40 +21,6 @@ export function Dimension({ label, axis = "x", className = "" }: { label: string
     <span className={`cap-dim ${className}`} data-axis={axis} aria-hidden>
       <span className="cap-dim-label">{label}</span>
     </span>
-  );
-}
-
-const TICK_EVERY = 10;
-
-export function Ruler({ elapsed, min, max }: { elapsed: number; min: number; max: number }) {
-  const at = (sec: number) => `${(Math.min(sec, max) / max) * 100}%`;
-  const ticks = Array.from({ length: max / TICK_EVERY + 1 }, (_, i) => i * TICK_EVERY);
-  return (
-    <div
-      className="cap-ruler"
-      role="progressbar"
-      aria-label="Recording length"
-      aria-valuemin={0}
-      aria-valuemax={max}
-      aria-valuenow={Math.floor(elapsed)}
-      aria-valuetext={`${formatTime(elapsed)} of ${formatTime(max)}. At least ${formatTime(min)}.`}
-      data-past-min={elapsed >= min}
-    >
-      <div className="cap-ruler-track">
-        <span className="cap-ruler-fill" style={{ width: at(elapsed) }} />
-        {ticks.map((t) => (
-          <span key={t} className="cap-ruler-tick" data-major={t % 30 === 0} style={{ left: at(t) }} />
-        ))}
-        <span className="cap-ruler-min" style={{ left: at(min) }} />
-      </div>
-      <div className="cap-ruler-labels" aria-hidden>
-        <span style={{ left: 0 }}>0:00</span>
-        <span className="cap-ruler-minlabel" style={{ left: at(min) }}>
-          min {formatTime(min)}
-        </span>
-        <span style={{ right: 0 }}>max {formatTime(max)}</span>
-      </div>
-    </div>
   );
 }
 

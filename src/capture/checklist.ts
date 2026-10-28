@@ -10,7 +10,7 @@ export const CHECKLIST: readonly ChecklistItem[] = [
   { id: "ceiling", short: "Ceiling", label: "The ceiling", hint: "Point your phone up and hold it for 3 seconds." },
   { id: "furnace", short: "Furnace", label: "The furnace room", hint: "Show the furnace and the electrical panel." },
   { id: "door", short: "Door", label: "Any outside door", hint: "A door straight outside, if there is one." },
-  { id: "plans", short: "Plans", label: "Say what you want", hint: "“Kitchen here, Mom's room here.” Talk as you walk." },
+  { id: "plans", short: "Plans", label: "Say what you want", hint: "“Kitchen here, Mom's room here, bright and simple.” Point as you say it." },
 ];
 
 export const TIPS = [

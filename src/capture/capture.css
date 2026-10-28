@@ -206,8 +206,8 @@
 /* ---------- live camera ---------- */
 .cap--live {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
-  grid-template-areas: "bar" "stage" "panel";
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "bar" "stage";
   background: var(--color-ink);
 }
 
@@ -267,90 +267,6 @@
   box-shadow: var(--shadow-card);
 }
 .cap-plate--center { position: absolute; top: 50%; left: 50%; z-index: 2; translate: -50% -50%; width: max-content; max-width: min(320px, 80%); text-align: center; }
-
-.cap-panel {
-  grid-area: panel;
-  display: grid;
-  gap: 12px;
-  padding: 12px max(var(--cap-gutter), env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(var(--cap-gutter), env(safe-area-inset-left));
-  background: var(--color-card);
-  border-top: 1px solid var(--color-ink);
-  --dim-bg: var(--color-card);
-}
-
-/* the recording ruler: a timeline drawn like a scale bar */
-.cap-ruler { display: grid; gap: 4px; padding-top: 2px; }
-.cap-ruler-track { position: relative; height: 16px; }
-.cap-ruler-track::before { content: ""; position: absolute; left: 0; right: 0; bottom: 0; border-bottom: 1px solid var(--color-ink); }
-.cap-ruler-fill { position: absolute; left: 0; bottom: 0; height: 9px; background: var(--color-mint); border-right: 2px solid var(--color-ink); transition: width 200ms linear; }
-.cap-ruler-tick { position: absolute; bottom: 0; width: 1px; height: 5px; translate: -0.5px 0; background: var(--color-ink); }
-.cap-ruler-tick[data-major="true"] { height: 10px; }
-.cap-ruler-min { position: absolute; bottom: 0; height: 16px; width: 0; border-left: 1.5px dashed var(--color-ink); }
-.cap-ruler-labels { position: relative; height: 15px; font-family: var(--font-mono); font-size: 12px; line-height: 15px; color: var(--color-ink-muted); }
-.cap-ruler-labels span { position: absolute; top: 0; white-space: nowrap; }
-.cap-ruler-minlabel { translate: -50% 0; }
-.cap-ruler[data-past-min="true"] .cap-ruler-minlabel { color: var(--color-accent-text); }
-
-/* the current step */
-.cap-step {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "num action" "title action" "hint action";
-  align-items: center;
-  column-gap: 12px;
-  row-gap: 2px;
-  animation: cap-rise var(--dur-2) var(--ease-out) both;
-}
-.cap-step-num { grid-area: num; font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
-.cap-step-title { grid-area: title; font-family: var(--font-display); font-weight: 800; font-size: 24px; letter-spacing: -0.03em; line-height: 1.05; }
-.cap-step-hint { grid-area: hint; font-size: 15px; line-height: 1.35; color: var(--color-ink-muted); }
-.cap-step-done { grid-area: action; min-height: 44px; padding: 8px 14px; font-size: 15px; gap: 6px; }
-.cap-step-done svg { width: 16px; height: 16px; }
-.cap-hold { grid-area: action; width: 88px; height: 10px; overflow: hidden; border: 1px solid var(--color-ink); border-radius: 2px; }
-.cap-hold span { display: block; height: 100%; background: var(--color-mint); transition: width 100ms linear; }
-.cap-step[data-holding="true"] .cap-step-hint { color: var(--color-ink); font-weight: 600; }
-
-.cap-tips { grid-area: hint; display: flex; flex-wrap: wrap; gap: 2px 16px; margin-top: 4px; font-family: var(--font-mono); font-size: 13px; }
-.cap-tips li { display: inline-flex; align-items: center; gap: 6px; }
-.cap-tips li::before { content: ""; width: 9px; height: 1px; background: var(--color-ink); }
-
-/* checklist: a strip of six on phones, ruled rows on wide screens */
-.cap-list { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
-.cap-list button, .cap-list-static {
-  display: grid;
-  justify-items: center;
-  align-content: center;
-  gap: 4px;
-  width: 100%;
-  min-height: 54px;
-  padding: 6px 2px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--cap-r-sm);
-  background: var(--color-bg);
-  color: var(--color-ink);
-  transition: background-color var(--dur-1) var(--ease-out), border-color var(--dur-1) var(--ease-out);
-}
-.cap-box {
-  display: grid;
-  place-items: center;
-  width: 20px;
-  height: 20px;
-  border: 1px solid var(--color-ink);
-  border-radius: 3px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1;
-}
-.cap-box svg { width: 14px; height: 14px; }
-.cap-list-short { font-size: 12px; font-weight: 600; line-height: 1.1; }
-.cap-list-label { display: none; }
-.cap-list li[data-current="true"] button { border-color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-ink); }
-.cap-list li[data-done="true"] button { background: var(--color-mint); border-color: var(--color-mint-line); }
-.cap-list li[data-done="true"] .cap-box { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-mint); }
-
-.cap-actions { display: flex; gap: var(--space-2); }
-.cap-actions .cap-btn { flex: 1; min-height: 56px; }
-.cap-nudge { margin-top: -4px; font-size: 14px; text-align: center; color: var(--color-fix); }
 
 /* discard confirmation */
 .cap-confirm {
@@ -419,48 +335,6 @@
 .cap-note { padding: 12px 14px; border-left: 3px solid var(--color-ink); border-radius: 0 var(--cap-r-sm) var(--cap-r-sm) 0; background: var(--color-surface); font-size: 15px; }
 .cap-review > .cap-page-actions { grid-area: actions; }
 
-/* ---------- wide screens and phones held sideways: camera left, panel right ---------- */
-@media (min-width: 900px), (orientation: landscape) and (max-height: 520px) {
-  .cap--live {
-    grid-template-columns: minmax(0, 1fr) 380px;
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas: "bar bar" "stage panel";
-  }
-  .cap-panel {
-    align-content: start;
-    gap: var(--space-3);
-    overflow-y: auto;
-    padding: var(--space-4);
-    border-top: 0;
-    border-left: 1px solid var(--color-ink);
-  }
-  .cap-actions { margin-top: var(--space-2); }
-  .cap-list { grid-template-columns: minmax(0, 1fr); gap: 0; border-top: 1px solid var(--color-ink); }
-  .cap-list button, .cap-list-static {
-    grid-template-columns: 24px minmax(0, 1fr);
-    justify-items: start;
-    align-items: center;
-    gap: 12px;
-    min-height: 48px;
-    padding: 10px 10px 10px 8px;
-    border: 0;
-    border-bottom: 1px solid var(--color-border);
-    border-radius: 0;
-    background: transparent;
-    text-align: left;
-  }
-  .cap-list-short { display: none; }
-  .cap-list-label { display: block; font-size: 15px; font-weight: 600; }
-  .cap-list li[data-current="true"] button { box-shadow: inset 3px 0 0 var(--color-ink); }
-  .cap-list li[data-done="true"] button { border-color: var(--color-border); }
-}
-
-@media (orientation: landscape) and (max-height: 520px) {
-  .cap--live { grid-template-columns: minmax(0, 1fr) 340px; }
-  .cap-panel { padding: var(--space-3); gap: 12px; }
-  .cap-list button, .cap-list-static { min-height: 44px; padding-block: 6px; }
-}
-
 @media (min-width: 900px) {
   .cap-stage { background: var(--color-surface); --dim-bg: var(--color-surface); }
   .cap-frame {
@@ -498,4 +372,126 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* ---------- filming: the picture full-bleed, one line of coaching on top, the record ring below ---------- */
+
+/* the ring's size sets where everything else sits */
+.cap-stage { --ring: min(58vw, 232px, 36cqh); --dock-pad: max(14px, env(safe-area-inset-bottom)); }
+
+.cap-top { position: absolute; z-index: 4; top: 14px; left: 0; right: 0; display: grid; justify-items: center; gap: 8px; padding: 0 16px; pointer-events: none; }
+.cap-room { padding: 5px 10px; border-radius: var(--cap-r-sm); background: var(--color-card); color: var(--color-ink); font-family: var(--font-mono); font-size: 12px; line-height: 1.2; }
+.cap-coach { max-width: min(38ch, 100%); padding: 9px 15px; border-radius: var(--cap-r); background: color-mix(in srgb, var(--color-ink) 64%, transparent); color: var(--color-card); font-weight: 600; font-size: 16px; line-height: 1.3; text-align: center; animation: cap-coach-in var(--dur-2) var(--ease-out) both; }
+/* problems swap to the light card, so they read as different from guidance */
+.cap-coach[data-kind="dark"], .cap-coach[data-kind="fast"], .cap-coach[data-kind="min"] { background: var(--color-card); color: var(--color-ink); }
+.cap-coach[data-kind="hold"] { background: var(--color-mint); color: var(--color-mint-ink); }
+.cap-tips { padding: 4px 10px; border-radius: var(--cap-r-sm); background: color-mix(in srgb, var(--color-ink) 50%, transparent); color: var(--color-card); font-family: var(--font-mono); font-size: 12px; }
+@keyframes cap-coach-in { from { opacity: 0; translate: 0 -6px; } to { opacity: 1; translate: 0 0; } }
+
+/* a find, outlined on the live picture for a moment: mint corner ticks and a forest label */
+.cap-flash { position: absolute; z-index: 3; pointer-events: none; border: 1.5px solid color-mix(in srgb, var(--color-mint) 70%, transparent); animation: cap-flash 1600ms var(--ease-out) both; }
+.cap-flash i { position: absolute; width: 14px; height: 14px; border-color: var(--color-mint); border-style: solid; border-width: 0; }
+.cap-flash i[data-c="tl"] { left: -3px; top: -3px; border-left-width: 3px; border-top-width: 3px; }
+.cap-flash i[data-c="tr"] { right: -3px; top: -3px; border-right-width: 3px; border-top-width: 3px; }
+.cap-flash i[data-c="bl"] { left: -3px; bottom: -3px; border-left-width: 3px; border-bottom-width: 3px; }
+.cap-flash i[data-c="br"] { right: -3px; bottom: -3px; border-right-width: 3px; border-bottom-width: 3px; }
+.cap-flash-label { position: absolute; left: -2px; top: calc(100% + 6px); padding: 4px 8px; border-radius: var(--cap-r-sm); background: var(--color-card); color: var(--color-ink); font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
+@keyframes cap-flash {
+  0% { opacity: 0; scale: 1.08; }
+  12% { opacity: 1; scale: 1; }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* the dock: next room on the left, the ring in the middle, this room's 3D on the right */
+.cap-dock { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: end; gap: 4px; padding: 0 10px var(--dock-pad); pointer-events: none; }
+.cap-dock button { pointer-events: auto; }
+.cap-dock-side { display: flex; align-items: flex-end; justify-content: flex-start; min-width: 0; padding-bottom: 8px; }
+.cap-dock-side--end { justify-content: flex-end; }
+.cap-pill-btn { min-height: 44px; padding: 10px 12px; border: 0; border-radius: var(--radius-pill); background: var(--color-card); color: var(--color-ink); font-weight: 700; font-size: 14px; white-space: nowrap; box-shadow: var(--shadow-card); }
+.cap-pill-btn:active { transform: scale(0.97); }
+/* once the room is mapped, moving on is the next step */
+.cap-pill-btn[data-ready="true"] { background: var(--color-mint); color: var(--color-mint-ink); }
+
+/* the record ring */
+.ring { position: relative; width: var(--ring); aspect-ratio: 1; pointer-events: none; }
+.ring-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.ring-back { fill: color-mix(in srgb, var(--color-ink) 40%, transparent); }
+.ring-seg {
+  fill: color-mix(in srgb, var(--color-card) 92%, transparent);
+  stroke: color-mix(in srgb, var(--color-card) 92%, transparent);
+  stroke-width: 6;
+  stroke-linejoin: round;
+  transform-box: view-box;
+  transform-origin: 120px 120px;
+  transition: fill var(--dur-3) var(--ease-out), stroke var(--dur-3) var(--ease-out);
+}
+.ring-seg[data-done="true"] { fill: var(--color-mint); stroke: var(--color-mint); animation: ring-pop 560ms var(--ease-out); }
+@keyframes ring-pop { 0% { scale: 1; } 35% { scale: 1.05; } 100% { scale: 1; } }
+
+.ring-track { fill: none; stroke: color-mix(in srgb, var(--color-card) 32%, transparent); stroke-width: 4; transition: stroke var(--dur-2) var(--ease-out); }
+.ring-track[data-on="true"] { stroke: var(--color-mint); }
+.ring-track-plain { fill: none; stroke: color-mix(in srgb, var(--color-card) 32%, transparent); stroke-width: 1.5; }
+.ring-heading { fill: var(--color-card); stroke: var(--color-ink); stroke-width: 1.5; }
+.ring-time-base { fill: none; stroke: color-mix(in srgb, var(--color-card) 28%, transparent); stroke-width: 1.5; }
+.ring-time { fill: none; stroke: var(--color-mint); stroke-width: 3; stroke-linecap: round; }
+.ring-time-min { stroke: var(--color-card); stroke-width: 2; }
+.ring-time-min[data-past="true"] { stroke: var(--color-mint); }
+
+.ring-icon { position: absolute; display: grid; place-items: center; width: 19%; aspect-ratio: 1; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-ink); translate: -50% -50%; transition: color var(--dur-2) var(--ease-out); }
+.ring-icon:disabled { cursor: default; }
+.ring-icon svg { width: 56%; height: 56%; }
+.ring-count { position: absolute; top: 2%; right: 0; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px; background: var(--color-ink); color: var(--color-mint); font-family: var(--font-mono); font-size: 10px; line-height: 17px; }
+
+.ring-primary { position: absolute; left: 50%; top: 50%; display: grid; place-items: center; width: 33%; aspect-ratio: 1; padding: 0; border: 3px solid var(--color-card); border-radius: 50%; background: var(--color-ink); translate: -50% -50%; box-shadow: var(--shadow-card); transition: transform var(--dur-1) var(--ease-out); }
+.ring-primary:active:not(:disabled) { transform: scale(0.94); }
+.ring-primary:disabled { opacity: 0.55; cursor: default; }
+.ring-primary-mark { width: 46%; aspect-ratio: 1; border-radius: 50%; background: var(--color-stop); transition: width var(--dur-2) var(--ease-out), border-radius var(--dur-2) var(--ease-out), background-color var(--dur-2) var(--ease-out); }
+.ring[data-recording="true"] .ring-primary-mark { width: 34%; border-radius: 4px; background: var(--color-card); }
+.ring-primary[data-waiting="true"] .ring-primary-mark { opacity: 0.55; }
+
+/* "room mapped": the room drawn as a plan, then next room or done */
+.room-done {
+  position: absolute;
+  z-index: 6;
+  left: 50%;
+  bottom: calc(var(--ring) + var(--dock-pad) + 14px);
+  width: min(300px, calc(100% - 32px));
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: var(--cap-r);
+  background: var(--color-card);
+  color: var(--color-ink);
+  translate: -50% 0;
+  box-shadow: var(--shadow-card);
+  animation: room-done-in var(--dur-3) var(--ease-out) both;
+}
+.room-done-title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.room-done-title b { font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; }
+.room-done-keep { padding: 4px 0; border: 0; background: none; color: var(--color-ink-muted); font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.room-done-plan { display: block; width: 100%; height: 84px; overflow: visible; }
+.room-done-plan rect { fill: color-mix(in srgb, var(--color-mint) 24%, transparent); stroke: var(--color-ink); stroke-width: 2; stroke-dasharray: 1; stroke-dashoffset: 1; animation: plan-draw 900ms var(--ease-out) 120ms forwards; }
+.room-done-dim { fill: none; stroke: var(--color-ink); stroke-width: 1; }
+.room-done-size { margin-top: -4px; font-family: var(--font-mono); font-size: 13px; text-align: center; }
+.room-done-size span { color: var(--color-ink-muted); }
+.room-done-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.room-done-actions:has(> :only-child) { grid-template-columns: 1fr; }
+.room-done-actions .cap-btn { min-height: 46px; padding: 10px 12px; font-size: 16px; }
+@keyframes room-done-in { from { opacity: 0; translate: -50% 12px; } to { opacity: 1; translate: -50% 0; } }
+@keyframes plan-draw { to { stroke-dashoffset: 0; } }
+
+/* this room in 3D: a small turning card in the dock; tap for the full view */
+.cap-3d { position: relative; flex: none; width: 68px; aspect-ratio: 1; padding: 0; border: 2px solid var(--color-card); border-radius: var(--cap-r); overflow: hidden; background: color-mix(in srgb, var(--color-ink) 70%, transparent); box-shadow: var(--shadow-card); cursor: pointer; }
+.cap-3d canvas { display: block; }
+.cap-3d-label { position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 5px; white-space: nowrap; background: var(--color-card); color: var(--color-ink); font-family: var(--font-mono); font-size: 10px; text-align: left; }
+/* the full view covers everything else on the picture, and takes drags to orbit */
+.cap-frame:has(.cap-3d-full) :is(.room-done, .cap-top) { display: none; }
+.cap-3d-full { position: fixed; inset: 0; z-index: 20; pointer-events: auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: color-mix(in srgb, var(--color-ink) 92%, var(--color-mint) 8%); /* a scan reads best on dark */ }
+.cap-3d-full-bar { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 12px 12px max(12px, env(safe-area-inset-bottom)); background: var(--color-card); border-top: 1px solid var(--color-ink); }
+.cap-3d-full-bar p { margin: 0; font-size: 14px; line-height: 1.35; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cap-flash, .cap-coach, .ring-seg, .room-done { animation-duration: 1ms; }
+  .room-done-plan rect { animation: none; stroke-dashoffset: 0; }
 }

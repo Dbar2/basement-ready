@@ -36,8 +36,45 @@ export type Measurements = {
   clearances: { detectionId: string; label: string; clearanceM: number }[];
 };
 
+export type PlanSide = "minX" | "maxX" | "minZ" | "maxZ";
+
+export type Plan = {
+  version: 1;
+  box: { minX: number; maxX: number; minZ: number; maxZ: number };
+  sides: Record<PlanSide, "wall" | "extent">;
+  widthM: number;
+  depthM: number;
+  areaM2: number;
+  ceilingHeightM: number | null;
+  openings: { kind: "window" | "door"; side: PlanSide; atM: number; widthM: number; detectionId: string }[];
+  stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
+  fixtures: { kind: "furnace" | "panel"; x: number; z: number; detectionId: string }[];
+  scaleSource: "model" | "user_measurement";
+  trusted: boolean;
+};
+
+// Filmed room by room, each room gets its own 3D scan and plan. Older scans have none.
+export type RoomResult = {
+  index: number;
+  name: string;
+  startS: number;
+  endS: number;
+  has3d: boolean;
+  plan: Plan | null;
+  measurements: Measurements | null;
+};
+
+export type Vision = {
+  rooms: { room: string; where: string; atSeconds: number | null; quote: string }[];
+  style: string;
+  mustHaves: string[];
+  forWhom: string;
+};
+
 export type Finding = {
   measured?: Measured | null;
+  answer?: { value: number | boolean; outcome: "pass" | "fail" | "unknown" } | null;
+  check: { metric: string; operator: string; value: unknown; unit: string | null };
   ruleId: string;
   title: string;
   plain: string;
@@ -79,7 +116,11 @@ export type ScanResult = {
   city?: string;
   coverage?: "full" | "provincial";
   has3d?: boolean;
+  plan?: Plan | null;
+  rooms?: RoomResult[];
+  mainRoom?: number | null; // the room whose numbers the rules used
   measurements?: Measurements | null;
+  vision?: Vision;
   verdict: "yes" | "fix" | "no";
   headline: string;
   route: "second_unit" | "basement_finish";
@@ -113,7 +154,7 @@ export function rememberClaim(basementId: string, claimToken: string) {
 
 export function startScan(
   video: File,
-  input: { household: Household; address: string; municipality: string; floorToJoistsM?: number | null },
+  input: { household: Household; address: string; municipality: string; floorToJoistsM?: number | null; rooms?: { startS: number }[] },
   onProgress: (fraction: number) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -123,6 +164,7 @@ export function startScan(
     form.append("address", input.address);
     form.append("municipality", input.municipality);
     if (input.floorToJoistsM) form.append("floorToJoistsM", String(input.floorToJoistsM));
+    if (input.rooms && input.rooms.length > 1) form.append("rooms", JSON.stringify(input.rooms));
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/scans");
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
@@ -153,6 +195,24 @@ export function subscribe(id: string, onEvent: (e: ScanEvent) => void): () => vo
     if (e.type === "done" || e.type === "error") source.close();
   };
   return () => source.close();
+}
+
+// Saves an answer (or clears it with null) and returns the re-checked result.
+export async function answerQuestion(scanId: string, current: ScanResult, sampleAnswers: Record<string, number | boolean | null>, ruleId: string, value: number | boolean | null) {
+  const res =
+    scanId === "sample"
+      ? await fetch("/api/recheck", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ result: current, answers: { ...sampleAnswers, [ruleId]: value } }),
+        })
+      : await fetch(`/api/scans/${scanId}/answers`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ruleId, value }),
+        });
+  if (!res.ok) throw new Error("We couldn't check that. Try again.");
+  return (await res.json()).result as ScanResult;
 }
 
 export async function getScan(id: string): Promise<{ status: "queued" | "running" | "done" | "error"; result: ScanResult | null }> {

@@ -29,11 +29,12 @@ export async function scan3dReady(timeoutMs = 3000) {
   }
 }
 
-export async function runScan3d(work: string, frameCount: number, known: { floorToJoistsM?: number }): Promise<Scan3d> {
-  const step = Math.max(1, Math.ceil(frameCount / SEND_FRAMES));
+// One room's frames, [from, to) in our frame numbers.
+export async function runScan3d(work: string, range: { from: number; to: number }, known: { floorToJoistsM?: number }): Promise<Scan3d> {
+  const step = Math.max(1, Math.ceil((range.to - range.from) / SEND_FRAMES));
   const sentFrames: number[] = [];
   const form = new FormData();
-  for (let n = 0; n < frameCount; n += step) {
+  for (let n = range.from; n < range.to; n += step) {
     const name = `${String(n).padStart(4, "0")}.jpg`;
     form.append("frames", new Blob([readFileSync(join(work, "frames", name))], { type: "image/jpeg" }), name);
     sentFrames.push(n);

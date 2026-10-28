@@ -1,8 +1,8 @@
-// Guided basement capture: brief, camera, record with a live checklist, review, hand back a File.
+// Guided basement capture: brief, camera, record room by room around the record ring, review, hand back a File.
 import { useEffect, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
 import "./capture.css";
 import { CHECKLIST, MAX_SEC, MIN_SEC, TIPS, type ChecklistId } from "./checklist";
-import { CornerTicks, Crosshair, Dimension, Icon, Ruler } from "./drawing";
+import { CornerTicks, Crosshair, Dimension, Icon } from "./drawing";
 import { LEVEL_STEPS, useCeilingHold, useMediaQuery, useMicLevel, useWakeLock } from "./hooks";
 import {
   baseType,
@@ -19,10 +19,16 @@ import {
   toProblem,
   type ProblemKind,
 } from "./media";
+import { coachLine, FIND_TICKS, sessionId, useCoaching, useCoverage, useLive3d, useLiveFinds, useRoomTilt } from "./live";
+import { lazy, Suspense } from "react";
+const Live3D = lazy(() => import("./Live3D").then((m) => ({ default: m.Live3D })));
+import { LiveLayer, RoomDone } from "./LiveLayer";
+import { Ring } from "./Ring";
 import { DeniedPage, IntroPage, ProblemPage } from "./Pages";
 import { Review, type Take } from "./Review";
 
-export type CaptureMeta = { durationSec: number; checklist: string[] };
+// rooms: where each room starts in the take, so each gets its own 3D scan. Empty for uploads.
+export type CaptureMeta = { durationSec: number; checklist: string[]; rooms: { startS: number }[] };
 
 export type CaptureProps = {
   onComplete: (file: File, meta: CaptureMeta) => void;
@@ -42,6 +48,8 @@ type StopReason = "user" | "max" | "interrupted" | "discard" | "failed";
 // ~3.5 Mbps keeps a 2-minute 1080p take near 50 MB. The server samples it down to 1280 px at 5 fps anyway.
 const VIDEO_BITRATE = 3_500_000;
 const ORDER = CHECKLIST.map((c) => c.id);
+const MAX_ROOMS = 8;
+const MIN_ROOM_SEC = 5;
 
 export function Capture({ onComplete, onCancel }: CaptureProps) {
   const [phase, setPhase] = useState<Phase>({ name: "intro" });
@@ -54,6 +62,11 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [nudge, setNudge] = useState(false);
   const [announce, setAnnounce] = useState("");
+  // One id per take: live finds and the assembling 3D share it on the server.
+  const [session, setSession] = useState(() => sessionId());
+  // Where each room starts, in seconds into the take. The last one is the room you're in.
+  const [rooms, setRooms] = useState<number[]>([0]);
+  const [keptFilming, setKeptFilming] = useState(-1); // the room whose "mapped" sheet was waved off
 
   const rootRef = useRef<HTMLElement>(null);
   const liveRef = useRef<HTMLVideoElement>(null);
@@ -66,9 +79,11 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
   const milestonesRef = useRef({ min: false, end: false });
   const phaseRef = useRef(phase);
   const checkedRef = useRef(checked);
+  const roomsRef = useRef(rooms);
   const mountedRef = useRef(true);
   phaseRef.current = phase;
   checkedRef.current = checked;
+  roomsRef.current = rooms;
 
   const recording = phase.name === "recording";
 
@@ -141,13 +156,16 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
       return setPhase({ name: "error", kind: "failed" });
     }
     recorderRef.current = rec;
+    setSession(sessionId());
     startedAtRef.current = performance.now();
     setElapsed(0);
     setChecked([]);
+    setRooms([0]);
+    setKeptFilming(-1);
     setNudge(false);
     setConfirmDiscard(false);
     setPhase({ name: "recording" });
-    setAnnounce("Recording. Start at the top of the stairs.");
+    setAnnounce("Recording. Walk along the walls, about 2 metres back.");
   }
 
   function stopRecording(reason: StopReason) {
@@ -171,6 +189,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     if (reason === "discard") {
       setElapsed(0);
       setChecked([]);
+      setRooms([0]);
       setAnnounce("Take thrown away.");
       return setPhase(streamRef.current ? { name: "ready" } : { name: "error", kind: "interrupted" });
     }
@@ -183,7 +202,8 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
 
     const file = new File([blob], `basement-${fileStamp()}.${extensionFor(mime)}`, { type: mime });
     const note = reason === "max" ? "max" : reason === "interrupted" ? "interrupted" : undefined;
-    setPhase({ name: "review", take: { file, durationSec, checklist: ORDER.filter((id) => checkedRef.current.includes(id)), source: "camera", note } });
+    const take: Take = { file, durationSec, checklist: ORDER.filter((id) => checkedRef.current.includes(id)), rooms: roomsRef.current.filter((t) => t < durationSec), source: "camera", note };
+    setPhase({ name: "review", take });
     setAnnounce(reason === "max" ? "Stopped at 2 minutes." : "Stopped. Check your take.");
   }
 
@@ -251,6 +271,8 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
 
   useWakeLock(recording);
   const level = useMicLevel(phase.name === "ready" || recording ? stream : null);
+  const levelRef = useRef(0);
+  levelRef.current = level;
   const sideways = useMediaQuery("(orientation: landscape) and (pointer: coarse) and (max-height: 520px)");
 
   // ---------- checklist ----------
@@ -264,6 +286,65 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     setAnnounce("Ceiling done.");
   });
 
+  // ---------- rooms and live guidance ----------
+
+  const room = rooms.length - 1;
+  const roomSec = recording ? Math.max(0, elapsed - rooms[room]) : 0;
+  // Each room has its own session on the server, so its 3D builds from its own frames.
+  const roomSession = `${session}-r${room}`;
+  const coverage = useCoverage(recording, room);
+  const liveFinds = useLiveFinds({ active: recording, session: roomSession, videoRef: liveRef, headingRef: coverage.headingRef, startedAt: startedAtRef.current });
+  const live3d = useLive3d(recording, roomSession);
+  const issue = useCoaching(recording, liveRef);
+  const tilt = useRoomTilt(recording, room);
+  const windowsFound = liveFinds.finds.filter((f) => f.key === "window").length;
+
+  // Mapped: the track has gone most of the way round, or (no compass) the 3D has found four walls.
+  const mapped =
+    recording && roomSec >= 10 && (coverage.supported ? coverage.percent >= 85 : (live3d.preview?.wallsSeen ?? 0) >= 4);
+  const canAddRoom = recording && rooms.length < MAX_ROOMS && roomSec >= MIN_ROOM_SEC;
+
+  // The "mapped" sheet steps aside after a few seconds; the Next room button stays lit.
+  useEffect(() => {
+    if (!mapped || keptFilming === room) return;
+    const id = window.setTimeout(() => setKeptFilming(room), 8000);
+    return () => clearTimeout(id);
+  }, [mapped, keptFilming, room]);
+
+  function nextRoom() {
+    if (!recording || roomsRef.current.length >= MAX_ROOMS) return;
+    const t = round1((performance.now() - startedAtRef.current) / 1000);
+    if (t - roomsRef.current[roomsRef.current.length - 1] < MIN_ROOM_SEC) return;
+    setRooms((prev) => [...prev, t]);
+    setAnnounce(`Room ${roomsRef.current.length + 1}. Walk along its walls.`);
+  }
+
+  // A find ticks its checklist step, so nobody has to tap Done while holding a phone.
+  useEffect(() => {
+    const latest = liveFinds.finds[liveFinds.finds.length - 1];
+    if (!latest) return;
+    const step = FIND_TICKS[latest.key];
+    if (step && !checkedRef.current.includes(step)) {
+      check(step);
+      setAnnounce(`Found the ${latest.label.toLowerCase()}.`);
+    }
+  }, [liveFinds.finds.length]);
+
+  // About six seconds of talking ticks "Say what you want".
+  const talkMsRef = useRef(0);
+  useEffect(() => {
+    if (!recording) return;
+    talkMsRef.current = 0;
+    const id = window.setInterval(() => {
+      if (levelRef.current >= 3) talkMsRef.current += 250;
+      if (talkMsRef.current >= 6000 && !checkedRef.current.includes("plans")) {
+        check("plans");
+        setAnnounce("Got what you said.");
+      }
+    }, 250);
+    return () => clearInterval(id);
+  }, [recording]);
+
   // ---------- upload ----------
 
   async function onPicked(e: ChangeEvent<HTMLInputElement>) {
@@ -276,7 +357,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     setBusy(false);
     if (!mountedRef.current) return;
     const note = durationSec > 0 && durationSec < MIN_SEC ? "short" : undefined;
-    setPhase({ name: "review", take: { file, durationSec, checklist: [], source: "upload", note } });
+    setPhase({ name: "review", take: { file, durationSec, checklist: [], rooms: [], source: "upload", note } });
   }
 
   const pickFile = () => fileRef.current?.click();
@@ -310,7 +391,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
       <section ref={rootRef} className="cap cap--review" aria-label="Check your video">
         <Review
           take={take}
-          onUse={() => onComplete(take.file, { durationSec: take.durationSec, checklist: take.checklist })}
+          onUse={() => onComplete(take.file, { durationSec: take.durationSec, checklist: take.checklist, rooms: take.rooms.map((startS) => ({ startS })) })}
           onRetake={() => (take.source === "camera" ? startCamera(false) : pickFile())}
           busy={busy}
           onClose={close}
@@ -321,13 +402,29 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     );
   }
 
-  const current = CHECKLIST.find((c) => !checked.includes(c.id)) ?? null;
-  const holding = ceiling.progress > 0;
-  const focus = holding ? CHECKLIST.find((c) => c.id === "ceiling")! : current;
-  const focusIndex = focus ? CHECKLIST.indexOf(focus) : -1;
   const pastMin = elapsed >= MIN_SEC;
   const left = MAX_SEC - elapsed;
   const mirrored = stream?.getVideoTracks()[0]?.getSettings().facingMode === "user";
+  const next = CHECKLIST.find((c) => !checked.includes(c.id));
+  const showDone = mapped && keptFilming !== room;
+  const roomLabel = `Room ${room + 1}`;
+  const line = recording
+    ? coachLine({
+        issue,
+        minLeft: nudge && !pastMin ? Math.ceil(MIN_SEC - elapsed) : null,
+        room,
+        roomSec,
+        holdLeft: ceiling.progress > 0 ? Math.ceil((1 - ceiling.progress) * 3) : null,
+        ceilingDone: checked.includes("ceiling"),
+        tilt,
+        coverage,
+        mapped,
+        sheet: showDone,
+        next: next ? next.label.charAt(0).toLowerCase() + next.label.slice(1) : null,
+      })
+    : null;
+  const stop = () => (pastMin ? stopRecording("user") : setNudge(true));
+  const size = live3d.preview?.widthM && live3d.preview?.depthM ? { widthM: live3d.preview.widthM, depthM: live3d.preview.depthM } : null;
 
   return (
     <section ref={rootRef} className="cap cap--live" data-phase={phase.name} aria-label="Film your basement">
@@ -381,7 +478,68 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
             onResize={(e) => setDims({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
           />
           <CornerTicks />
-          <Crosshair />
+          <h2 className="cap-sr" data-focus tabIndex={-1}>
+            {recording ? `Recording ${roomLabel}` : "Camera ready"}
+          </h2>
+          {recording ? (
+            <LiveLayer videoRef={liveRef} flash={liveFinds.flash} heading={coverage.heading} room={roomLabel} line={line} />
+          ) : (
+            <>
+              <Crosshair />
+              <div className="cap-top">
+                <p className="cap-coach" data-kind="start">
+                  Start at the top of the stairs.
+                </p>
+                <p className="cap-tips">{TIPS.map((t) => t.label).join(" · ")}</p>
+              </div>
+            </>
+          )}
+
+          {showDone && (
+            <RoomDone
+              name={roomLabel}
+              size={size}
+              canAddRoom={canAddRoom}
+              onNext={nextRoom}
+              onDone={stop}
+              onKeep={() => setKeptFilming(room)}
+            />
+          )}
+
+          <div className="cap-dock">
+            <div className="cap-dock-side">
+              {recording
+                ? canAddRoom &&
+                  !showDone && (
+                    <button className="cap-pill-btn" data-ready={mapped} onClick={nextRoom}>
+                      Next room
+                    </button>
+                  )
+                : (
+                    <button className="cap-pill-btn" onClick={pickFile} aria-label="Upload a video instead">
+                      Upload
+                    </button>
+                  )}
+            </div>
+            <Ring
+              recording={recording}
+              done={checked}
+              windows={windowsFound}
+              coverage={coverage}
+              elapsed={elapsed}
+              canStart={Boolean(stream)}
+              onPrimary={recording ? stop : startRecording}
+              onToggle={toggle}
+            />
+            <div className="cap-dock-side cap-dock-side--end">
+              {recording && live3d.available && (
+                <Suspense fallback={null}>
+                  <Live3D key={room} preview={live3d.preview} room={roomLabel} />
+                </Suspense>
+              )}
+            </div>
+          </div>
+
           {dims && (
             <>
               <Dimension className="cap-dim--top" label={`${dims.w} px`} />
@@ -391,115 +549,6 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
         </div>
         {sideways && <p className="cap-plate cap-plate--center">Turn your phone upright</p>}
       </div>
-
-      <aside className="cap-panel" aria-label={recording ? "What to show us" : "Before you start"} inert={confirmDiscard}>
-        <Ruler elapsed={recording ? elapsed : 0} min={MIN_SEC} max={MAX_SEC} />
-
-        {recording ? (
-          <div className="cap-step" data-holding={holding} data-done={!focus}>
-            {focus ? (
-              <>
-                <span className="cap-step-num">
-                  {String(focusIndex + 1).padStart(2, "0")} / {String(CHECKLIST.length).padStart(2, "0")}
-                </span>
-                <h2 className="cap-step-title" data-focus tabIndex={-1}>
-                  {focus.label}
-                </h2>
-                <p className="cap-step-hint">
-                  {holding
-                    ? `Hold it there. ${Math.ceil((1 - ceiling.progress) * 3)} s`
-                    : focus.id === "ceiling" && !ceiling.sensed
-                      ? "Point your phone up for 3 seconds, then tap Done."
-                      : focus.hint}
-                </p>
-                {holding ? (
-                  <span className="cap-hold" aria-hidden>
-                    <span style={{ width: `${ceiling.progress * 100}%` }} />
-                  </span>
-                ) : (
-                  <button className="cap-btn cap-btn--ghost cap-step-done" onClick={() => check(focus.id)}>
-                    <Icon.check /> Done
-                  </button>
-                )}
-              </>
-            ) : (
-              <>
-                <span className="cap-step-num">06 / 06</span>
-                <h2 className="cap-step-title" data-focus tabIndex={-1}>
-                  All six covered.
-                </h2>
-                <p className="cap-step-hint">Keep talking about your plans, or stop when you're ready.</p>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className="cap-step cap-step--ready">
-            <span className="cap-step-num">Before you start</span>
-            <h2 className="cap-step-title" data-focus tabIndex={-1}>
-              Start at the top of the stairs.
-            </h2>
-            <ul className="cap-tips">
-              {TIPS.map((t) => (
-                <li key={t.label}>{t.label}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <ol className="cap-list" aria-label="What to show us" data-interactive={recording}>
-          {CHECKLIST.map((c, i) => {
-            const done = checked.includes(c.id);
-            const isCurrent = recording && focus?.id === c.id;
-            const body = (
-              <>
-                <span className="cap-box" aria-hidden>
-                  {done ? <Icon.check /> : String(i + 1).padStart(2, "0")}
-                </span>
-                <span className="cap-list-short">{c.short}</span>
-                <span className="cap-list-label">{c.label}</span>
-              </>
-            );
-            return (
-              <li key={c.id} data-done={done} data-current={isCurrent}>
-                {recording ? (
-                  <button aria-pressed={done} aria-label={`${String(i + 1).padStart(2, "0")} ${c.label}`} onClick={() => toggle(c.id)}>
-                    {body}
-                  </button>
-                ) : (
-                  <span className="cap-list-static">{body}</span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-
-        <div className="cap-actions">
-          {recording ? (
-            <button
-              className={`cap-btn ${pastMin ? "cap-btn--primary" : "cap-btn--waiting"}`}
-              aria-disabled={!pastMin}
-              aria-describedby={nudge ? "cap-nudge" : undefined}
-              onClick={() => (pastMin ? stopRecording("user") : setNudge(true))}
-            >
-              <Icon.stop /> {pastMin ? "Stop and review" : `Keep filming · ${Math.ceil(MIN_SEC - elapsed)} s to go`}
-            </button>
-          ) : (
-            <>
-              <button className="cap-btn cap-btn--primary" onClick={startRecording} disabled={!stream}>
-                <Icon.rec /> Start recording
-              </button>
-              <button className="cap-btn cap-btn--ghost cap-btn--narrow" onClick={pickFile} aria-label="Upload a video instead">
-                Upload
-              </button>
-            </>
-          )}
-        </div>
-        {nudge && !pastMin && (
-          <p id="cap-nudge" className="cap-nudge">
-            We need at least 30 seconds to see the whole space.
-          </p>
-        )}
-      </aside>
 
       {confirmDiscard && (
         <div

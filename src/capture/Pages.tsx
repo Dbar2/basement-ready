@@ -56,7 +56,10 @@ export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Comm
         )
       }
     >
-      <p className="cap-lede">Walk slowly from the stairs to the furnace room and talk as you go. Tell us what you'd like where.</p>
+      <p className="cap-lede">
+        One room at a time: walk along its walls about 2 m back, tilt up to the ceiling, then tap Next room. Talk as you go and tell
+        us what you'd like where.
+      </p>
 
       <h2 className="cap-h2">What to show us</h2>
       <ol className="cap-shotlist">

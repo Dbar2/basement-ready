@@ -207,6 +207,52 @@ a { color: inherit; }
 .live-log p:last-child { color: var(--color-ink); }
 .live-log .error { color: var(--color-stop); }
 
+/* ---------- Scan views: 3D and floor plan ---------- */
+.scan-views-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 16px; }
+.scan-views-head h2 { margin-bottom: 0; }
+/* rooms, filmed one at a time: a ruled row of tabs, the open one underlined in ink */
+.room-tabs { display: flex; gap: 4px; margin: -4px 0 14px; overflow-x: auto; border-bottom: 1px solid var(--color-border); scrollbar-width: none; }
+.room-tabs button { display: grid; gap: 2px; flex: none; padding: 8px 14px 10px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--color-ink-muted); text-align: left; }
+.room-tabs button b { color: var(--color-ink); font-size: 15px; }
+.room-tabs button .mono { font-size: 12px; }
+.room-tabs button[aria-selected="true"] { border-bottom-color: var(--color-ink); color: var(--color-ink); }
+.segmented { display: inline-flex; border: 1px solid var(--color-ink); border-radius: 6px; overflow: hidden; }
+.segmented button { padding: 8px 18px; border: 0; background: var(--color-card); color: var(--color-ink); font-weight: 700; }
+.segmented button + button { border-left: 1px solid var(--color-ink); }
+.segmented button[aria-selected="true"], .segmented button[aria-pressed="true"] { background: var(--color-ink); color: var(--color-card); }
+.segmented.small button { padding: 4px 12px; font-family: var(--font-mono); font-weight: 500; font-size: 13px; }
+.scan-views-frame { position: relative; border: 1px solid var(--color-ink); border-radius: 6px; overflow: hidden; background: var(--color-surface); aspect-ratio: 16 / 10; }
+.viewer-canvas { position: absolute !important; inset: 0; }
+.viewer-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--color-ink-muted); }
+.viewer-hint { position: absolute; left: 12px; bottom: 10px; margin: 0; padding: 3px 8px; border-radius: 4px; background: var(--color-card); color: var(--color-ink-muted); font-size: 12px; }
+.viewer-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 4px; background: var(--color-card); color: var(--color-ink); font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow-card); }
+.viewer-tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--find-color); }
+.scan-views-tools { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }
+.plan-wrap, .view-layer { position: absolute; inset: 0; }
+.plan-wrap { background: var(--color-card); }
+.plan-wrap[hidden], .view-layer[hidden] { display: none; }
+/* The plan sizes to its own drawing; only the 3D view needs a fixed frame. */
+.scan-views-frame[data-view="plan"] { aspect-ratio: auto; }
+.scan-views-frame[data-view="plan"] .plan-wrap { position: relative; }
+.plan { width: 100%; height: 100%; display: block; }
+.plan-paper { fill: var(--color-card); }
+.plan-wall { stroke: var(--color-ink); stroke-dasharray: 1; stroke-dashoffset: 1; animation: plan-draw 1100ms var(--ease-out) forwards; }
+.plan-unseen { stroke: var(--color-ink-muted); stroke-dasharray: 10 8; }
+.plan-cut { stroke: var(--color-card); }
+.plan-window line:not(.plan-cut) { stroke: var(--find-window); stroke-width: 2.5; }
+.plan-door line:not(.plan-cut), .plan-swing { stroke: var(--find-exit); stroke-width: 2.5; fill: none; }
+.plan-swing { stroke-dasharray: 5 4; }
+.plan-stairs rect, .plan-stairs line { fill: none; stroke: var(--find-stairs); stroke-width: 2; }
+.plan-fixture rect, .plan-fixture line { fill: none; stroke: var(--find-mechanical); stroke-width: 2.5; }
+.plan-tag { font-family: var(--font-mono); font-size: 15px; fill: var(--color-ink); letter-spacing: 0.04em; }
+.plan-dim line { stroke: var(--color-ink); stroke-width: 1.5; }
+.plan-dim text { font-family: var(--font-mono); font-size: 20px; fill: var(--color-ink); }
+.plan-room-name { font-family: var(--font-display); font-weight: 800; font-size: 34px; fill: var(--color-ink); letter-spacing: -0.03em; }
+.plan-room-meta { font-family: var(--font-mono); font-size: 17px; fill: var(--color-ink-muted); }
+.plan-stamp text { font-family: var(--font-mono); font-size: 13px; fill: var(--color-ink-muted); letter-spacing: 0.06em; }
+@keyframes plan-draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .plan-wall { animation: none; stroke-dashoffset: 0; } }
+
 /* ---------- Accounts ---------- */
 .nav-right { display: flex; align-items: center; gap: 24px; }
 .account-nav { display: inline-flex; align-items: center; gap: 16px; }
@@ -234,6 +280,7 @@ a { color: inherit; }
 .verdict-stats { margin: 0; align-self: end; border-top: 1px solid var(--color-ink); }
 .verdict-stats div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--color-border); }
 .verdict-stats dt { color: var(--color-ink-muted); }
+.cost-note { margin: 0; padding: 0 0 12px; font-size: 13px; color: var(--color-ink-muted); text-align: right; border-bottom: 1px solid var(--color-border); }
 .verdict-stats dd { margin: 0; font-size: 22px; font-weight: 500; }
 .verdict-stats div:first-child dd { font-size: 22px; white-space: nowrap; background: var(--color-mint); padding: 2px 8px; border-radius: 4px; }
 
@@ -261,6 +308,18 @@ a { color: inherit; }
 .block .note { padding-left: 0; }
 
 .questions li { display: grid; grid-template-columns: 120px 1fr; gap: 20px; align-items: start; }
+.q-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+.q-input { width: 220px; max-width: 100%; padding: 10px 12px; }
+.q-save { padding: 10px 18px; font-size: 15px; }
+.q-save:disabled { opacity: 0.5; cursor: default; box-shadow: none; transform: none; }
+.q-hint { font-size: 13px; color: var(--color-fix); }
+.sub-h { font-size: 22px; letter-spacing: -0.03em; margin: 32px 0 8px; }
+.answered li { display: grid; grid-template-columns: 12px 1fr auto; gap: 14px; align-items: center; }
+.fit-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-fix); }
+.fit-dot[data-ok="true"] { background: var(--color-ok); }
+.changed { margin-bottom: 16px; padding: 10px 14px; border-left: 3px solid var(--color-mint-line); background: var(--color-card); font-size: 15px; animation: rise var(--dur-3) var(--ease-out) both; }
+.verdict-line { animation: verdict-in 700ms var(--ease-out) both; }
+@keyframes verdict-in { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
 .questions .q { font-weight: 600; margin: 0; }
 .tag-mono { font-family: var(--font-mono); font-size: 12px; padding: 3px 8px; border: 1px solid var(--color-ink); border-radius: 4px; justify-self: start; }
 
@@ -271,6 +330,9 @@ a { color: inherit; }
 .grants li[data-fit="cancelled"] h3 { text-decoration: line-through; text-decoration-thickness: 2px; }
 .grants a { color: var(--color-accent-text); font-size: 14px; }
 .steps li { display: grid; grid-template-columns: 40px 1fr; gap: 24px; }
+.wishes li { display: grid; grid-template-columns: 180px 1fr; gap: 24px; align-items: start; }
+.wishes .quote { font-size: 17px; margin-top: 8px; }
+.wish-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .block .actions { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 24px; }
 
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -292,6 +354,8 @@ a { color: inherit; }
   .fix { grid-template-columns: 1fr; gap: 12px; }
   .questions li, .grants li { grid-template-columns: 1fr; gap: 8px; }
   .dash-list li { grid-template-columns: 1fr; gap: 10px; }
+  .wishes li { grid-template-columns: 1fr; gap: 10px; }
+  .scan-views-frame { aspect-ratio: 4 / 5; }
   .scan-log { left: 16px; bottom: 16px; }
   .scan-next { right: 16px; bottom: 16px; }
 }

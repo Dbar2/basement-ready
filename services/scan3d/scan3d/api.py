@@ -106,7 +106,13 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
             known = options.get("known") or {}
             if not isinstance(known, dict):
                 raise ScanError("known must be an object, e.g. {\"floorToJoistsM\": 2.1}")
-            result = await run_in_threadpool(get_scanner().scan, items, max_frames, known)
+            # Live previews while filming ask for a small cloud and no depth.
+            try:
+                max_points = int(options.get("maxPoints") or 300_000)
+            except (TypeError, ValueError) as e:
+                raise ScanError("maxPoints must be a number") from e
+            skip_depth = bool(options.get("skipDepth"))
+            result = await run_in_threadpool(get_scanner().scan, items, max_frames, known, max_points, skip_depth)
         except (ScanError, json.JSONDecodeError) as e:
             return error(400, str(e))
 

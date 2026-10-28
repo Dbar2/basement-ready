@@ -104,7 +104,14 @@ class Scanner:
             })
         return out
 
-    def scan(self, items: list[tuple[str, bytes]], max_frames: int = 48, known: dict | None = None) -> ScanResult:
+    def scan(
+        self,
+        items: list[tuple[str, bytes]],
+        max_frames: int = 48,
+        known: dict | None = None,
+        max_points: int = MAX_POINTS,
+        skip_depth: bool = False,
+    ) -> ScanResult:
         t0 = time.perf_counter()
         timings = {}
         known = {k: v for k, v in (known or {}).items() if v is not None}
@@ -166,8 +173,9 @@ class Scanner:
         quality["warnings"] = warnings
         R, o = fit.rotation, fit.origin
         cloud = keep
-        if len(cloud) > MAX_POINTS:
-            cloud = np.random.default_rng(0).choice(cloud, MAX_POINTS, replace=False)
+        limit = max(1000, min(int(max_points), MAX_POINTS))
+        if len(cloud) > limit:
+            cloud = np.random.default_rng(0).choice(cloud, limit, replace=False)
         cloud = cloud[np.argsort(fid[cloud], kind="stable")]  # capture order, for the fly-in reveal
         xyz = (fit.to_room(pts[cloud]) * s).astype(np.float32)
         ply = ply_bytes(xyz, rgb[cloud], fid[cloud])
@@ -177,7 +185,8 @@ class Scanner:
             pose = np.eye(4)
             pose[:3, :3] = R @ v["pose"][:3, :3]
             pose[:3, 3] = s * (R @ (v["pose"][:3, 3] - o))
-            depths.append(np.where(valid_masks[i], v["depth"] * s, 0).astype(np.float16))
+            if not skip_depth:  # live previews only need the cloud
+                depths.append(np.where(valid_masks[i], v["depth"] * s, 0).astype(np.float16))
             frames_json.append({
                 "index": i,
                 "sourceIndex": f.source_index,
@@ -191,7 +200,7 @@ class Scanner:
                 "validFraction": round(float(valid_masks[i].mean()), 3),
                 "depthOffset": i * H * W * 2,
             })
-        depth = depth_bytes(depths)
+        depth = depth_bytes(depths) if depths else b""
         timings["exportS"] = time.perf_counter() - t
         timings["totalS"] = time.perf_counter() - t0
 
