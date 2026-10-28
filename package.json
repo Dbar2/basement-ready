@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "worker": "tsx server/worker.ts",
     "smoke": "tsx scripts/smoke.ts",
-    "dev:scan3d": "cd services/scan3d && SCAN3D_TOKEN=dev .venv/bin/python run_local.py serve --port 8790"
+    "dev:scan3d": "cd services/scan3d && SCAN3D_TOKEN=dev .venv/bin/python run_local.py serve --port 8790",
+    "try:live": "tsx scripts/try-live-capture.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1158.0",
@@ -49,6 +50,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
     "drizzle-kit": "^0.31.11",
+    "playwright": "1.58.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.5",

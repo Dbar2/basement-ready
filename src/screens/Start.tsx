@@ -40,10 +40,10 @@ export function Start() {
   const [filming, setFilming] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const begin = async (video: File) => {
+  const begin = async (video: File, rooms?: { startS: number }[]) => {
     setUpload({ progress: 0, error: null });
     try {
-      const id = await startScan(video, { household, address, municipality, floorToJoistsM: tapeM }, (progress) =>
+      const id = await startScan(video, { household, address, municipality, floorToJoistsM: tapeM, rooms }, (progress) =>
         setUpload({ progress, error: null }),
       );
       navigate({ to: "/scans/$scanId", params: { scanId: id } });
@@ -126,9 +126,9 @@ export function Start() {
 
       {filming && (
         <Capture
-          onComplete={(file) => {
+          onComplete={(file, meta) => {
             setFilming(false);
-            void begin(file);
+            void begin(file, meta.rooms);
           }}
           onCancel={() => setFilming(false)}
         />

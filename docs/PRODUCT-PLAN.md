@@ -151,3 +151,24 @@ If time runs short, cut in this order:
 - **Spark eval harness:** about 5 fixture scans with expected findings, run on demand with a spend log.
 - **Live:** run David's real basement video end to end on the Railway URL, then run the `site-preflight` and `responsive-qa` skills before submission.
 - **CI:** GitHub Actions runs typecheck, unit and e2e on every push.
+
+## Decision: web for the hackathon, iPhone capture app after (Oct 28)
+
+The hackathon product stays on the web. Judges use laptops, a native app would need TestFlight and Apple review, and the web flow already has:
+- live SAM finds while filming
+- coaching and the coverage radar
+- the 3D view and the floor plan
+
+**After Nov 4: the iPhone capture app.** Its job is better capture. It feeds the same pipeline and the same results page.
+- **ARKit camera poses and depth** for real scale without a tape measure. On Pro iPhones, LiDAR gives clean walls. The poses and depth go to the server with the video, replacing MapAnything's scale guess.
+- **Live outlines locked onto objects** (SAM finds anchored in AR), plus haptics and background upload.
+- **AR walk-through** of the planned suite in the real basement.
+- **Multi-room floor plans.** Consider Apple RoomPlan for geometry, but keep every AI step on Meta's models (SAM, Spark, Muse Image) so the product stays Meta-first.
+- **Build:** Swift/SwiftUI, Xcode 27 (installed), the iPhone 17 Pro simulators for development, then TestFlight with an Apple Developer account ($99/yr).
+
+**Built since this plan (Oct 28):**
+- live finds, coaching and the coverage radar in the recorder
+- wishes captured from speech and tied to the moment they were said
+- the 3D point-cloud view and the measured floor plan, with m/ft and SVG export
+- tape-measure scaling
+- a quality gate so a rough scan can't decide rules

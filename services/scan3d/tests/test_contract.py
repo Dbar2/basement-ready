@@ -74,7 +74,7 @@ class FakeScanner:
     def __init__(self):
         self.calls = []
 
-    def scan(self, items, max_frames, known):
+    def scan(self, items, max_frames, known, max_points=300_000, skip_depth=False):
         self.calls.append((items, max_frames, known))
         return ScanResult({"version": 1, "frames": len(items)}, b"ply\x00\x01", b"\x00" * 8)
 

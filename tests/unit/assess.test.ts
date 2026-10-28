@@ -68,3 +68,21 @@ describe("money and coverage", () => {
     expect(packFor("../../etc").coverage).toBe("provincial");
   });
 });
+
+import { cleanVision } from "../../server/assess";
+
+describe("cleanVision", () => {
+  it("keeps what the homeowner said, with the moment they said it", () => {
+    const v = cleanVision({ rooms: [{ room: "kitchen", where: "by the stairs", atSeconds: 12.34, quote: "kitchen here" }], style: "bright", mustHaves: ["laundry"], forWhom: "my mom" });
+    expect(v.rooms).toEqual([{ room: "kitchen", where: "by the stairs", atSeconds: 12.3, quote: "kitchen here" }]);
+    expect(v).toMatchObject({ style: "bright", mustHaves: ["laundry"], forWhom: "my mom" });
+  });
+  it("drops junk instead of trusting it", () => {
+    const v = cleanVision({ rooms: [{ room: "" }, { room: "bath", atSeconds: -4 }, "nonsense"], mustHaves: "laundry" });
+    expect(v.rooms).toEqual([{ room: "bath", where: "", atSeconds: null, quote: "" }]);
+    expect(v.mustHaves).toEqual([]);
+  });
+  it("is empty when nothing was said", () => {
+    expect(cleanVision(undefined)).toEqual({ rooms: [], style: "", mustHaves: [], forWhom: "" });
+  });
+});

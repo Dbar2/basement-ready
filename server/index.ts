@@ -5,11 +5,21 @@ import { and, eq, gt, gte, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { randomBytes } from "node:crypto";
+import { mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Readable } from "node:stream";
 import { claimBasements, deleteBasement, deleteUserData, ensureUser, listBasements } from "./accounts";
 import { db, migrateDb, schema, usingPglite } from "./db";
 import { enqueue, startWorker } from "./jobs";
 import { listModels } from "./meta";
+import { buildPlan } from "./plan";
+import { recheck, type Answers } from "./recheck";
+import { finishRooms, ANALYSIS_FPS } from "./pipeline";
+import { cleanRooms, mainRoom, MAX_ROOMS, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
+import { runScan3d, summarize, type Scan3d } from "./scan3d";
+import { admit, detectLive, LIVE_CONCEPTS } from "./live";
+import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
 import { MUNICIPALITIES, type Household } from "./rules";
 import { handlers } from "./scanJobs";
 import { keys, storage } from "./storage";
@@ -84,8 +94,16 @@ app.post("/api/scans", async (c) => {
     .returning();
   // Optional tape measurement, floor to the underside of the joists, in metres.
   const tape = Number(body.floorToJoistsM);
-  const inputs = Number.isFinite(tape) && tape >= 1 && tape <= 4 ? { floorToJoistsM: tape } : null;
-  const [scan] = await db.insert(schema.scans).values({ basementId: basement.id, clientIp: ip, inputs }).returning();
+  // Where each room starts in the take, when it was filmed room by room.
+  const rooms = cleanRooms(body.rooms);
+  const inputs = {
+    ...(Number.isFinite(tape) && tape >= 1 && tape <= 4 ? { floorToJoistsM: tape } : {}),
+    ...(rooms ? { rooms } : {}),
+  };
+  const [scan] = await db
+    .insert(schema.scans)
+    .values({ basementId: basement.id, clientIp: ip, inputs: Object.keys(inputs).length ? inputs : null })
+    .returning();
 
   const ext = (video.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
   const videoKey = keys.input(scan.id, ext);
@@ -184,12 +202,134 @@ app.delete("/api/me", async (c) => {
   return c.json({ deleted: true, scans: scanIds.length });
 });
 
-// The 3D scan's files, for the scan reveal and the explorer.
+// Live finds while filming: a small JPEG frame plus up to three concept keys.
+app.post("/api/live/detect", async (c) => {
+  const body = await c.req.parseBody();
+  const frame = body.frame;
+  const session = String(body.session ?? "").slice(0, 64);
+  let keys: string[] = [];
+  try {
+    keys = (JSON.parse(String(body.concepts ?? "[]")) as string[]).filter((k) => k in LIVE_CONCEPTS).slice(0, 3);
+  } catch {
+    keys = [];
+  }
+  if (!(frame instanceof File) || frame.size > 400 * 1024 || !keys.length || session.length < 8) {
+    return c.json({ error: "Send a small JPEG frame, a session id and 1–3 concepts." }, 400);
+  }
+  const refused = admit(clientIp(c), session, keys.length);
+  if (refused) return c.json({ error: refused, finds: [] }, 429);
+  const started = Date.now();
+  const jpeg = Buffer.from(await frame.arrayBuffer());
+  addLiveFrame(session, jpeg); // the same frames build the 3D preview
+  const finds = await detectLive(`data:image/jpeg;base64,${jpeg.toString("base64")}`, keys);
+  return c.json({ finds, ms: Date.now() - started });
+});
+
+// The 3D scan so far, for this recording. 204 until there's something newer than `since`.
+app.get("/api/live/3d", (c) => {
+  if (!live3dEnabled) return c.body(null, 404);
+  const body = livePreview(String(c.req.query("session") ?? ""), Number(c.req.query("since") ?? 0));
+  if (!body) return c.body(null, 204);
+  return new Response(new Uint8Array(body), { headers: { "Content-Type": "application/octet-stream", "Cache-Control": "no-store" } });
+});
+
+// ---- Answers: the homeowner confirms what the video couldn't show, and the verdict re-checks ----
+
+function cleanAnswer(v: unknown): number | boolean | null {
+  if (typeof v === "boolean") return v;
+  if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 1e6) return v;
+  return null;
+}
+
+app.post("/api/scans/:id/answers", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
+  const body = await c.req.json().catch(() => ({}));
+  const ruleId = String(body.ruleId ?? "");
+  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
+  const result = scan?.result as any;
+  if (!scan || !result) return c.json({ error: "This scan isn't ready yet." }, 404);
+  if (!result.findings?.some((f: any) => f.ruleId === ruleId)) return c.json({ error: "Unknown question." }, 400);
+  const value = cleanAnswer(body.value);
+  if (value === null) {
+    await db.delete(schema.answers).where(and(eq(schema.answers.basementId, scan.basementId), eq(schema.answers.ruleId, ruleId)));
+  } else {
+    await db
+      .insert(schema.answers)
+      .values({ basementId: scan.basementId, ruleId, value })
+      .onConflictDoUpdate({ target: [schema.answers.basementId, schema.answers.ruleId], set: { value, updatedAt: new Date() } });
+  }
+  const rows = await db.select().from(schema.answers).where(eq(schema.answers.basementId, scan.basementId));
+  const answers: Answers = Object.fromEntries(rows.map((r) => [r.ruleId, r.value as number | boolean]));
+  const updated = recheck(result, answers);
+  await db.update(schema.scans).set({ result: updated }).where(eq(schema.scans.id, id));
+  return c.json({ result: updated });
+});
+
+// The sample basement: same re-check, nothing saved, so anyone can try answering.
+app.post("/api/recheck", async (c) => {
+  const body = await c.req.json().catch(() => null);
+  if (!body?.result?.findings || typeof body.answers !== "object") return c.json({ error: "Send a result and answers." }, 400);
+  const answers: Answers = Object.fromEntries(Object.entries(body.answers as Record<string, unknown>).map(([k, v]) => [k, cleanAnswer(v)]));
+  return c.json({ result: recheck(body.result, answers) });
+});
+
+// The 3D scan's files, for the scan reveal and the explorer. `?room=n` for rooms after the first.
 app.get("/api/scans/:id/3d/:file", async (c) => {
   const id = c.req.param("id");
   const file = c.req.param("file");
-  if (!UUID.test(id) || !["scan.json", "points.ply"].includes(file)) return c.json({ error: "Not found" }, 404);
-  return sendStored(keys.scan3d(id, file as "scan.json" | "points.ply"), file.endsWith(".json") ? "application/json" : "application/octet-stream");
+  const room = Number(c.req.query("room") ?? 0);
+  if (!UUID.test(id) || !["scan.json", "points.ply"].includes(file) || !Number.isInteger(room) || room < 0 || room >= MAX_ROOMS) {
+    return c.json({ error: "Not found" }, 404);
+  }
+  return sendStored(keys.scan3d(id, file as "scan.json" | "points.ply", room), file.endsWith(".json") ? "application/json" : "application/octet-stream");
+});
+
+// Development only: rebuild a scan's plan and measurements from its saved 3D files, without a new scan.
+// Send { rooms: [{ startS }] } to redo the 3D room by room instead (local 3D service; no Meta calls).
+app.post("/api/scans/:id/replan", async (c) => {
+  if (process.env.NODE_ENV === "production") return c.json({ error: "Not found" }, 404);
+  const id = c.req.param("id");
+  if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
+  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
+  const result = scan?.result as any;
+  // With room starts, run the 3D again one room at a time from the saved frames.
+  const marks = cleanRooms((await c.req.json().catch(() => ({})))?.rooms);
+  if (result && marks) {
+    const work = join(tmpdir(), "basement-ready", `replan-${id}`);
+    mkdirSync(join(work, "frames"), { recursive: true });
+    try {
+      const ranges = roomRanges(marks, result.frameCount, ANALYSIS_FPS);
+      for (let n = 0; n < result.frameCount; n++) await storage.download(keys.frame(id, n), join(work, "frames", `${String(n).padStart(4, "0")}.jpg`));
+      const known = (scan.inputs as { floorToJoistsM?: number } | null)?.floorToJoistsM;
+      const scans3d: (Scan3d | null)[] = [];
+      for (const r of ranges) scans3d.push(r.to - r.from < MIN_ROOM_FRAMES ? null : await runScan3d(work, r, known ? { floorToJoistsM: known } : {}).catch(() => null));
+      const rooms = await finishRooms(id, ranges, scans3d, result.detections, async () => {});
+      const main = mainRoom(rooms);
+      const next = { ...result, rooms, mainRoom: main?.index ?? null, has3d: rooms.some((r) => r.has3d), plan: main?.plan ?? null, measurements: main?.measurements ?? null };
+      await db.update(schema.scans).set({ result: next }).where(eq(schema.scans.id, id));
+      return c.json({ rooms: rooms.map(({ name, startS, endS, plan }) => ({ name, startS, endS, size: plan && `${plan.widthM} × ${plan.depthM} m`, trusted: plan?.trusted ?? null })) });
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }
+  const json = await storage.get(keys.scan3d(id, "scan.json"));
+  const depthStream = await storage.get(keys.scan3d(id, "depth.bin"));
+  if (!result || !json || !depthStream) return c.json({ error: "No 3D scan saved for this scan" }, 404);
+  const read = async (s: NodeJS.ReadableStream) => {
+    const parts: Buffer[] = [];
+    for await (const chunk of s) parts.push(chunk as Buffer);
+    return Buffer.concat(parts);
+  };
+  const scanJson = JSON.parse((await read(json)).toString("utf8"));
+  const depthBuf = await read(depthStream);
+  const step = Math.max(1, Math.ceil((result.frameCount ?? 0) / 120));
+  const sentFrames: number[] = scanJson.sentFrames ?? Array.from({ length: scanJson.framesReceived }, (_, i) => i * step);
+  const s3: Scan3d = { scan: scanJson, ply: new ArrayBuffer(0), depth: depthBuf.buffer.slice(depthBuf.byteOffset, depthBuf.byteOffset + depthBuf.byteLength), sentFrames };
+  const measurements = summarize(s3, result.detections);
+  const plan = buildPlan(s3, result.detections, measurements.trusted);
+  await db.update(schema.scans).set({ result: { ...result, measurements, plan } }).where(eq(schema.scans.id, id));
+  return c.json({ plan, measurements });
 });
 
 // Queue and spend at a glance. Development only until admin auth lands.

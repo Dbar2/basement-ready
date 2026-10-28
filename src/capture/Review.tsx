@@ -8,6 +8,7 @@ export type Take = {
   file: File;
   durationSec: number;
   checklist: ChecklistId[];
+  rooms: number[]; // start of each room, seconds into the take
   source: "camera" | "upload";
   note?: "max" | "interrupted" | "short";
 };
@@ -127,6 +128,12 @@ export function Review({ take, busy, onUse, onRetake, onClose }: Props) {
             <dt>Length</dt>
             <dd>{length > 0 ? formatTime(length) : "Unknown"}</dd>
           </div>
+          {fromCamera && take.rooms.length > 1 && (
+            <div>
+              <dt>Rooms</dt>
+              <dd>{take.rooms.length}, each scanned on its own</dd>
+            </div>
+          )}
           {fromCamera && (
             <div>
               <dt>Ticked</dt>

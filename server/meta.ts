@@ -62,6 +62,25 @@ export async function samVideo(concept: string, fileId: string): Promise<string>
   return outputText(r);
 }
 
+// SAM 3.1 on a single image (a data URL) for one concept. Returns raw special-token text.
+export async function samImage(concept: string, imageUrl: string): Promise<string> {
+  const r = await responses({
+    model: "sam-3.1",
+    input: [
+      {
+        type: "message",
+        role: "user",
+        content: [
+          { type: "input_text", text: concept },
+          { type: "input_image", image_url: imageUrl },
+        ],
+      },
+    ],
+    metadata: { include_confidence: "true", mask_encoding: "one_bit" },
+  });
+  return outputText(r);
+}
+
 export async function transcribe(wavPath: string): Promise<{ transcript: string; turns: { startMs: number; endMs: number; transcript: string }[] }> {
   const form = new FormData();
   form.append(

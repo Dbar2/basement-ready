@@ -11,6 +11,8 @@ import { db, schema } from "./db";
 import { samVideo, transcribe, uploadFile } from "./meta";
 import type { Household } from "./rules";
 import { bestFrame, parseSam } from "./sam";
+import { buildPlan, type Plan } from "./plan";
+import { mainRoom, MIN_ROOM_FRAMES, roomName, roomRanges, type Room, type RoomMark } from "./rooms";
 import { runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 
@@ -83,7 +85,45 @@ async function uploadFrames(scanId: string, work: string, frameCount: number) {
   );
 }
 
-const plural = (n: number, word: string) => `${n} ${word.toLowerCase()}${n === 1 ? "" : "s"}`;
+const plural = (n: number, word: string) => `${n} ${word.toLowerCase()}${n === 1 || /s$/i.test(word) ? "" : "s"}`;
+
+// Each room's 3D files saved, its measurements and plan worked out from the SAM finds.
+export async function finishRooms(
+  scanId: string,
+  ranges: { index: number; from: number; to: number }[],
+  scans3d: (Scan3d | null)[],
+  detections: Detection[],
+  emit: (type: ScanEventType, text: string, data?: unknown) => Promise<void>,
+): Promise<Room[]> {
+  const mechanicalFrames = detections.filter((d) => d.kind === "mechanical").map((d) => d.frame);
+  const named = new Set<string>();
+  const rooms: Room[] = [];
+  for (const r of ranges) {
+    const s3 = scans3d[r.index];
+    const name = ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, mechanicalFrames, named);
+    let measurements: Measurements | null = null;
+    let plan: Plan | null = null;
+    if (s3) {
+      // Objects seen in other rooms don't land on this room's frames, so they drop out here.
+      measurements = summarize(s3, detections);
+      plan = buildPlan(s3, detections, measurements.trusted);
+      await Promise.all([
+        // sentFrames maps the scan's frames back to ours, so the plan can be rebuilt later.
+        storage.put(keys.scan3d(scanId, "scan.json", r.index), Buffer.from(JSON.stringify({ ...s3.scan, sentFrames: s3.sentFrames })), "application/json"),
+        storage.put(keys.scan3d(scanId, "points.ply", r.index), Buffer.from(s3.ply), "application/octet-stream"),
+        storage.put(keys.scan3d(scanId, "depth.bin", r.index), Buffer.from(s3.depth), "application/octet-stream"),
+      ]);
+      const sizes = [
+        measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,
+        measurements.widthM != null && measurements.depthM != null && `${measurements.widthM.toFixed(1)} × ${measurements.depthM.toFixed(1)} m`,
+      ].filter(Boolean);
+      const caveat = !measurements.trusted ? " (rough: re-film slowly for exact sizes)" : measurements.scaleSource === "model" ? " (estimated)" : "";
+      await emit("measure", `${ranges.length > 1 ? `${name}: ` : "Measured "}${sizes.join(" · ")}${caveat}`, measurements);
+    }
+    rooms.push({ index: r.index, name, startS: r.from / ANALYSIS_FPS, endS: r.to / ANALYSIS_FPS, has3d: Boolean(s3), plan, measurements });
+  }
+  return rooms;
+}
 
 export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, scanId));
@@ -115,20 +155,30 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
           .catch(() => ({ transcript: "", turns: [] }))
       : Promise.resolve({ transcript: "", turns: [] });
 
-    // The 3D scan only needs the frames, so it runs alongside SAM.
-    const known = (scan.inputs ?? {}) as { floorToJoistsM?: number };
-    const scan3dP: Promise<Scan3d | null> = (await scan3dReady())
+    // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
+    const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[] };
+    const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
+    const ranges = roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
+    const scan3dP: Promise<(Scan3d | null)[]> = (await scan3dReady())
       ? (async () => {
-          await emit("log", "Building your basement in 3D");
-          try {
-            return await runScan3d(work, frameCount, known);
-          } catch (err) {
-            console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
-            await emit("log", "3D scan unavailable this time; checking from the video instead");
-            return null;
+          const out: (Scan3d | null)[] = [];
+          for (const r of ranges) {
+            if (r.to - r.from < MIN_ROOM_FRAMES) {
+              out.push(null);
+              continue;
+            }
+            await emit("log", ranges.length > 1 ? `Building room ${r.index + 1} of ${ranges.length} in 3D` : "Building your basement in 3D");
+            try {
+              out.push(await runScan3d(work, r, known));
+            } catch (err) {
+              console.error(`[scan3d] ${scanId} room ${r.index}: ${err instanceof Error ? err.message : err}`);
+              await emit("log", "3D scan unavailable this time; checking from the video instead");
+              out.push(null);
+            }
           }
+          return out;
         })()
-      : Promise.resolve(null);
+      : Promise.resolve(ranges.map(() => null));
 
     await emit("stage", "find");
     const fileId = await uploadFile(analysis, "video/mp4", "basement.mp4");
@@ -164,22 +214,11 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       }),
     );
 
-    const s3 = await scan3dP;
-    let measurements: Measurements | null = null;
-    if (s3) {
-      measurements = summarize(s3, detections);
-      await Promise.all([
-        storage.put(keys.scan3d(scanId, "scan.json"), Buffer.from(JSON.stringify(s3.scan)), "application/json"),
-        storage.put(keys.scan3d(scanId, "points.ply"), Buffer.from(s3.ply), "application/octet-stream"),
-        storage.put(keys.scan3d(scanId, "depth.bin"), Buffer.from(s3.depth), "application/octet-stream"),
-      ]);
-      const room = [
-        measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,
-        measurements.widthM != null && measurements.depthM != null && `room ${measurements.widthM.toFixed(1)} × ${measurements.depthM.toFixed(1)} m`,
-      ].filter(Boolean);
-      const caveat = !measurements.trusted ? " (rough: re-film slowly for exact sizes)" : measurements.scaleSource === "model" ? " (estimated)" : "";
-      await emit("measure", `Measured ${room.join(" · ")}${caveat}`, measurements);
-    }
+    const rooms = await finishRooms(scanId, ranges, await scan3dP, detections, emit);
+    // The rules check one room's numbers: the best-scanned one.
+    const main = mainRoom(rooms);
+    const measurements = main?.measurements ?? null;
+    const plan = main?.plan ?? null;
 
     const transcript = await transcriptP;
     await emit("stage", "assess");
@@ -189,11 +228,23 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       detections,
       transcript.transcript,
       measurements,
+      transcript.turns,
     );
     await uploads;
 
     const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-    const result = { id: scanId, household: basement.household, frameCount, detections, transcript: transcript.transcript, has3d: Boolean(s3), ...assessment.result };
+    const result = {
+      id: scanId,
+      household: basement.household,
+      frameCount,
+      detections,
+      transcript: transcript.transcript,
+      has3d: rooms.some((r) => r.has3d),
+      plan,
+      rooms,
+      mainRoom: main?.index ?? null,
+      ...assessment.result,
+    };
     await db
       .update(schema.scans)
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })
