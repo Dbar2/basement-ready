@@ -84,7 +84,7 @@ function SiteHeader({ path }: { path: string }) {
   );
 }
 
-function SiteFooter() {
+export function SiteFooter() {
   return (
     <footer className="mk-footer">
       <div className="mk-footer-brand">

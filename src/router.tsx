@@ -1,5 +1,9 @@
 import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { Logo } from "./components/Logo";
+import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
+import { applyRouteMeta, marketingRoutes, type MarketingRoute } from "./marketing/routes";
+import { PATHS } from "./marketing/site";
 import { Dashboard } from "./screens/Dashboard";
 import { ScanPage } from "./screens/ScanPage";
 import { Start } from "./screens/Start";
@@ -12,6 +16,32 @@ export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
+// Marketing and legal pages come from their own manifest (src/marketing/routes.ts).
+function withMeta(route: MarketingRoute) {
+  return function Page() {
+    useEffect(() => applyRouteMeta(route), []);
+    const Component = route.component;
+    return <Component />;
+  };
+}
+const pageRoutes = marketingRoutes.map((r) => createRoute({ getParentRoute: () => rootRoute, path: r.path, component: withMeta(r) }));
+
+// Pro accounts open with the pro side of the product; until then, a plain way in.
+function ProJoin() {
+  useEffect(() => {
+    document.title = "Join as a founding pro | Basement Ready";
+  }, []);
+  return (
+    <MarketingPage path={PATHS.proSignUp} motion="join">
+      <PageHead
+        title="Pro sign-up opens soon."
+        lede={<>Founding designers and builders in Waterloo Region are free while pricing is set. Write to <ContactEmail /> and we'll set you up as soon as pro accounts open.</>}
+      />
+    </MarketingPage>
+  );
+}
+const proJoinRoute = createRoute({ getParentRoute: () => rootRoute, path: PATHS.proSignUp, component: ProJoin });
+
 function NotFound() {
   return (
     <main className="not-found">
@@ -23,7 +53,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, dashboardRoute]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
