@@ -27,3 +27,4 @@ __pycache__/
 
 # local embedded database
 .data/
+.cert/

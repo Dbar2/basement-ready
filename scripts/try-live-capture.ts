@@ -26,12 +26,20 @@ const browser = await chromium.launch({
     "--autoplay-policy=no-user-gesture-required",
   ],
 });
-const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, hasTouch: true, permissions: ["camera", "microphone"] });
+// BASE_URL=https://<mac-ip>:5173 checks the phone setup (pnpm dev:phone) the same way.
+const base = process.env.BASE_URL ?? "http://localhost:5173";
+const context = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  deviceScaleFactor: 2,
+  hasTouch: true,
+  permissions: ["camera", "microphone"],
+  ignoreHTTPSErrors: true,
+});
 const page = await context.newPage();
 page.on("pageerror", (e) => console.log("PAGE ERROR", e.message));
 page.on("response", (r) => r.url().includes("/api/live/detect") && r.status() !== 200 && console.log("live detect", r.status()));
 
-await page.goto("http://localhost:5173/");
+await page.goto(`${base}/`);
 await page.getByRole("button", { name: "Scan my basement" }).click();
 await page.getByRole("button", { name: /Film it now/ }).click();
 await page.getByRole("button", { name: /Start camera/ }).click();
@@ -75,7 +83,7 @@ for (let t = 5; t <= seconds; t += 5) {
 
 // Open the assembling 3D, the way you'd check coverage before stopping.
 const card = page.locator(".cap-3d");
-if (await card.count()) {
+if ((await card.count()) && (await card.locator(".cap-3d-label").textContent()) !== "3D…") {
   await card.click();
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${out}/3d-full.png` });
