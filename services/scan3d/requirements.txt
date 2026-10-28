@@ -1,0 +1,10 @@
+# Shared by the Modal image and the local runner. Torch is installed separately:
+# CUDA 12.6 wheels on Modal (see app.py), plain PyPI wheels on the Mac (see README).
+# MapAnything is not on PyPI, so pin the commit behind the v1.1.3 tag.
+mapanything @ git+https://github.com/facebookresearch/map-anything.git@9d1db2dd728bd8a10e74b15d2eb646e1bf933791
+fastapi
+uvicorn
+python-multipart
+numpy
+pillow
+opencv-python-headless==4.10.0.84
