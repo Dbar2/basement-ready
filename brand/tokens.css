@@ -1,0 +1,54 @@
+/* Basement Ready: Fresh Air. The only file allowed to define raw colour values. */
+
+:root {
+  /* surfaces */
+  --color-bg: #F4F6F2;          /* light green-grey white */
+  --color-card: #FBFCFA;        /* raised card */
+  --color-surface: #E6EBE4;     /* panels, viewer frame */
+  --color-border: #D5DDD4;
+
+  /* ink */
+  --color-ink: #0F2A1E;         /* deep forest green: all text, logo, structure lines */
+  --color-ink-muted: #4A5D52;
+
+  /* accent: mint is a FILL only (buttons, scan glow). Never text or thin lines on light. */
+  --color-mint: #4BE38A;
+  --color-mint-ink: #0F2A1E;    /* text on mint */
+  --color-mint-line: #2E9A5C;   /* mint-family lines, rings and large UI on light */
+  --color-accent-text: #1F7A4A; /* green for small text and links */
+
+  /* verdict states */
+  --color-ok: #1F7A4A;
+  --color-fix: #8C6A00;
+  --color-stop: #B42318;
+
+  /* SAM finds: outlines in video and highlights in 3D */
+  --find-window: #2F6FDB;
+  --find-exit: #0F8B8D;
+  --find-stairs: #B58A00;
+  --find-duct: #6B7A86;
+  --find-beam: #8A5A3C;
+  --find-mechanical: #C2417A;
+
+  /* type */
+  --font-display: "Hanken Grotesk", system-ui, sans-serif;
+  --font-body: "Hanken Grotesk", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  /* space */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 16px;
+  --space-4: 24px; --space-5: 40px; --space-6: 64px; --space-7: 104px;
+
+  /* shape and motion */
+  --radius-1: 8px;
+  --radius-2: 16px;
+  --radius-pill: 999px;
+  --shadow-card: 0 1px 0 rgb(15 42 30 / 0.05), 0 16px 40px -16px rgb(15 42 30 / 0.22);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-1: 160ms; --dur-2: 320ms; --dur-3: 640ms;
+}
+
+/* The verdict colour follows the result: <section data-verdict="fix"> */
+[data-verdict="yes"] { --color-verdict: var(--color-ok); }
+[data-verdict="fix"] { --color-verdict: var(--color-fix); }
+[data-verdict="no"]  { --color-verdict: var(--color-stop); }

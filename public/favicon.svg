@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 120" role="img" aria-label="Basement Ready">
+  <!-- The B of Basement, with a house cut out of its lower half: the home inside the basement. -->
+  <path fill="#0F2A1E" fill-rule="evenodd" d="M0 0H56C76 0 90 13 90 30C90 42 84 50 76 55C90 60 98 72 98 87C98 106 84 120 62 120H0Z M12 120V84L39 61L66 84V120Z"/>
+  <rect x="31" y="92" width="16" height="28" fill="#0F2A1E"/>
+</svg>
