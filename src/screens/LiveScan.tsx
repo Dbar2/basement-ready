@@ -1,13 +1,11 @@
 // The scan you watch: your own video plays while SAM's finds lock on to each object.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ANALYSIS_FPS, replaySample, startScan, subscribe, type Detection, type Household, type ScanEvent } from "../api";
+import { ANALYSIS_FPS, localVideos, replaySample, subscribe, type ScanEvent } from "../api";
 import { Logo } from "../components/Logo";
 
 type Props = {
-  video: File | null; // null = the sample basement
-  household: Household;
-  address: string;
-  onDone: (scanId: string) => void;
+  scanId: string; // "sample" replays the recorded sample scan
+  onDone: () => void;
 };
 
 const STAGES = [
@@ -21,34 +19,28 @@ function cssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
-export function LiveScan({ video, household, address, onDone }: Props) {
+export function LiveScan({ scanId, onDone }: Props) {
   const [events, setEvents] = useState<ScanEvent[]>([]);
-  const [scanId, setScanId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const src = useMemo(() => (video ? URL.createObjectURL(video) : "/samples/sample-basement.mp4"), [video]);
+  // Play the file from this tab if we have it; after a refresh, play the server's copy.
+  const local = localVideos.get(scanId);
+  const src = useMemo(
+    () => (scanId === "sample" ? "/samples/sample-basement.mp4" : local ? URL.createObjectURL(local) : `/api/scans/${scanId}/video`),
+    [scanId, local],
+  );
 
-  useEffect(() => () => { if (video) URL.revokeObjectURL(src); }, [src, video]);
+  useEffect(() => () => { if (local) URL.revokeObjectURL(src); }, [src, local]);
 
   useEffect(() => {
+    setEvents([]);
     const push = (e: ScanEvent) => {
       setEvents((prev) => [...prev, e]);
       if (e.type === "error") setError(e.text);
     };
-    if (!video) {
-      setScanId("sample");
-      return replaySample(push);
-    }
-    let stop = () => {};
-    startScan(video, household, address)
-      .then((id) => {
-        setScanId(id);
-        stop = subscribe(id, push);
-      })
-      .catch((err) => setError(err.message));
-    return () => stop();
-  }, [video, household, address]);
+    return scanId === "sample" ? replaySample(push) : subscribe(scanId, push);
+  }, [scanId]);
 
   const detections = useMemo(
     () => events.flatMap((e) => (e.type === "find" ? e.data?.detections ?? [] : [])),
@@ -135,7 +127,19 @@ export function LiveScan({ video, household, address, onDone }: Props) {
 
       <section className="live-stage">
         <div className="live-video">
-          <video ref={videoRef} src={src} autoPlay muted loop playsInline />
+          <video
+            ref={videoRef}
+            src={src}
+            autoPlay
+            muted
+            loop
+            playsInline
+            // The server's copy appears a few seconds into the scan; keep trying until it does.
+            onError={(e) => {
+              const v = e.currentTarget;
+              if (!local && scanId !== "sample") setTimeout(() => v.load(), 2000);
+            }}
+          />
           <canvas ref={canvasRef} aria-hidden />
           {!done && <div className="live-sweep" aria-hidden />}
         </div>
@@ -155,8 +159,8 @@ export function LiveScan({ video, household, address, onDone }: Props) {
               );
             })}
           </ul>
-          {done && scanId && (
-            <button className="btn btn-primary" onClick={() => onDone(scanId)}>
+          {done && (
+            <button className="btn btn-primary" onClick={onDone}>
               See your answer <span className="arrow" aria-hidden>→</span>
             </button>
           )}

@@ -1,0 +1,14 @@
+node_modules
+dist
+.data
+media
+tmp
+.env
+.env.*
+!.env.example
+.git
+.claude
+brand/explorations
+docs
+tests
+*.tsbuildinfo

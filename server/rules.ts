@@ -1,6 +1,6 @@
 // Loads the compiled rules pack and does everything that must be exact in code:
 // rule checks on measured numbers, costs, and which grants fit the household.
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 export type Rule = {
   id: string;
@@ -31,14 +31,49 @@ export type Pack = {
   costs: any[];
 };
 
-export const pack: Pack = JSON.parse(readFileSync(new URL("../data/rules/waterloo-on.json", import.meta.url), "utf8"));
+// Municipalities with a researched pack. Anywhere else in Ontario gets provincial and federal rules only.
+export const MUNICIPALITIES: Record<string, string> = {
+  "waterloo-on": "Waterloo",
+  "kitchener-on": "Kitchener",
+  "cambridge-on": "Cambridge",
+};
 
-export const coreRules = () => pack.rules.filter((r) => r.priority === "core" && r.route.includes("second_unit"));
+const cache = new Map<string, Pack>();
+function load(slug: string): Pack | null {
+  if (!/^[a-z-]+$/.test(slug)) return null;
+  if (cache.has(slug)) return cache.get(slug)!;
+  const file = new URL(`../data/rules/${slug}.json`, import.meta.url);
+  if (!existsSync(file)) return null;
+  const pack = JSON.parse(readFileSync(file, "utf8")) as Pack;
+  cache.set(slug, pack);
+  return pack;
+}
+
+export type Coverage = { pack: Pack; city: string; coverage: "full" | "provincial" };
+
+export function packFor(slug: string): Coverage {
+  const own = load(slug);
+  if (own) return { pack: own, city: own.jurisdiction.city, coverage: "full" };
+  // No local research yet: keep the building code and federal money, drop city zoning, grants and process.
+  const base = load("waterloo-on")!;
+  return {
+    city: "your city",
+    coverage: "provincial",
+    pack: {
+      ...base,
+      rules: base.rules.filter((r) => r.category !== "zoning"),
+      grants: base.grants.filter((g) => g.level === "federal" || g.level === "provincial"),
+      process: [],
+    },
+  };
+}
+
+export const coreRules = (pack: Pack) => pack.rules.filter((r) => r.priority === "core" && r.route.includes("second_unit"));
 
 export type Household = "relative" | "renter" | "unsure";
 
 // Grants are matched in code from the pack's own "fitsPlans" labels, never by the model.
-export function grantsFor(household: Household) {
+export function grantsFor(pack: Pack, household: Household) {
   const plan = household === "relative" ? "family_suite" : household === "renter" ? "rental" : null;
   return pack.grants.map((g) => ({
     id: g.id,

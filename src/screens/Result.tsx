@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { frameUrl, getResult, type Detection, type ScanResult } from "../api";
+import { frameUrl, getScan, type Detection, type ScanResult } from "../api";
+import { AccountNav, SaveCta } from "../auth";
 import { Logo } from "../components/Logo";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
@@ -23,7 +24,7 @@ function Proof({ scanId, d }: { scanId: string; d: Detection }) {
 export function Result({ scanId, onRestart }: { scanId: string; onRestart: () => void }) {
   const [r, setR] = useState<ScanResult | null>(null);
   useEffect(() => {
-    getResult(scanId).then(setR);
+    getScan(scanId).then((s) => setR(s.result));
   }, [scanId]);
 
   if (!r) return <main className="result-loading"><Logo /></main>;
@@ -37,15 +38,20 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
     <main className="result" data-verdict={r.verdict}>
       <header className="nav">
         <Logo />
-        <button className="link-quiet" onClick={onRestart}>Scan another basement</button>
+        <span className="nav-right">
+          <button className="link-quiet" onClick={onRestart}>Scan another basement</button>
+          <AccountNav />
+        </span>
       </header>
 
       <section className="verdict-hero">
         <div>
-          <p className="eyebrow">Your basement · Waterloo · {r.route === "second_unit" ? "Second unit route" : "Basement finish route"}</p>
+          <p className="eyebrow">Your basement · {r.city ?? "Waterloo"} · {r.route === "second_unit" ? "Second unit route" : "Basement finish route"}</p>
+          {r.coverage === "provincial" && <p className="note-inline">We haven't researched your city's own rules yet, so this uses Ontario's building code. Confirm zoning with your city.</p>}
           <h1>{r.headline}</h1>
           <p className="summary">{r.summary}</p>
           {r.wants && <blockquote>“{r.wants}”</blockquote>}
+          {scanId !== "sample" && <SaveCta />}
         </div>
         <dl className="verdict-stats">
           <div>
