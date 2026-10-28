@@ -1,12 +1,16 @@
+import { useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
+import { startScan, type Household } from "../api";
 import { HeroScan } from "../components/HeroScan";
+import { AccountNav } from "../auth";
 import { Logo } from "../components/Logo";
 
-export type Household = "relative" | "renter" | "unsure";
-
-type Props = {
-  onStart: (input: { household: Household; address: string; video: File | null }) => void;
-};
+const CITIES: { id: string; label: string }[] = [
+  { id: "waterloo-on", label: "Waterloo" },
+  { id: "kitchener-on", label: "Kitchener" },
+  { id: "cambridge-on", label: "Cambridge" },
+  { id: "other-on", label: "Elsewhere in Ontario" },
+];
 
 const HOUSEHOLD: { id: Household; label: string }[] = [
   { id: "relative", label: "A parent or relative" },
@@ -20,11 +24,24 @@ const FEATURES = [
   { title: "Find costs & grants", body: "Rough costs, the money you may get, and who nearby can build it." },
 ];
 
-export function Start({ onStart }: Props) {
+export function Start() {
+  const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
   const [household, setHousehold] = useState<Household>("relative");
+  const [municipality, setMunicipality] = useState("waterloo-on");
   const [address, setAddress] = useState("");
+  const [upload, setUpload] = useState<{ progress: number; error: string | null } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const begin = async (video: File) => {
+    setUpload({ progress: 0, error: null });
+    try {
+      const id = await startScan(video, { household, address, municipality }, (progress) => setUpload({ progress, error: null }));
+      navigate({ to: "/scans/$scanId", params: { scanId: id } });
+    } catch (err) {
+      setUpload({ progress: 0, error: err instanceof Error ? err.message : "Upload failed." });
+    }
+  };
 
   return (
     <main className="home">
@@ -34,6 +51,7 @@ export function Start({ onStart }: Props) {
           <a href="#how">How it works</a>
           <a href="#become">What we check</a>
           <a href="#features">Grants</a>
+          <AccountNav />
         </nav>
       </header>
 
@@ -49,7 +67,7 @@ export function Start({ onStart }: Props) {
             <button className="btn btn-primary" onClick={() => setAsking(true)}>
               Scan my basement <span className="arrow" aria-hidden>→</span>
             </button>
-            <button className="link-quiet" onClick={() => onStart({ household, address, video: null })}>
+            <button className="link-quiet" onClick={() => navigate({ to: "/scans/$scanId", params: { scanId: "sample" } })}>
               Try a sample basement
             </button>
           </div>
@@ -96,7 +114,7 @@ export function Start({ onStart }: Props) {
       </section>
 
       {asking && (
-        <div className="sheet-backdrop" onClick={() => setAsking(false)}>
+        <div className="sheet-backdrop" onClick={() => !upload && setAsking(false)}>
           <div className="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" onClick={(e) => e.stopPropagation()}>
             <h2 id="sheet-title">Two quick things.</h2>
             <div className="field">
@@ -110,22 +128,40 @@ export function Start({ onStart }: Props) {
               </div>
             </div>
             <div className="field">
+              <label>Where is the house?</label>
+              <div className="chips">
+                {CITIES.map((c) => (
+                  <button key={c.id} className="chip" aria-pressed={municipality === c.id} onClick={() => setMunicipality(c.id)}>
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field">
               <label htmlFor="address">Your address</label>
               <input
                 id="address"
                 className="input"
-                placeholder="Street address, Waterloo"
+                placeholder="Street address (optional)"
                 value={address}
                 onChange={(e) => setAddress(e.target.value)}
                 autoComplete="street-address"
               />
             </div>
-            <div className="sheet-actions">
-              <button className="btn btn-primary" onClick={() => fileRef.current?.click()}>
-                Film or choose a video <span className="arrow" aria-hidden>→</span>
-              </button>
-              <button className="link-quiet" onClick={() => setAsking(false)}>Not now</button>
-            </div>
+            {upload && !upload.error ? (
+              <div className="upload" role="status">
+                <div className="upload-bar"><span style={{ width: `${Math.round(upload.progress * 100)}%` }} /></div>
+                <p className="mono">{upload.progress < 1 ? `Uploading your video · ${Math.round(upload.progress * 100)}%` : "Starting your scan…"}</p>
+              </div>
+            ) : (
+              <div className="sheet-actions">
+                <button className="btn btn-primary" onClick={() => fileRef.current?.click()}>
+                  Film or choose a video <span className="arrow" aria-hidden>→</span>
+                </button>
+                <button className="link-quiet" onClick={() => setAsking(false)}>Not now</button>
+              </div>
+            )}
+            {upload?.error && <p className="error" role="alert">{upload.error}</p>}
             <input
               ref={fileRef}
               type="file"
@@ -134,7 +170,7 @@ export function Start({ onStart }: Props) {
               hidden
               onChange={(e) => {
                 const video = e.target.files?.[0] ?? null;
-                if (video) onStart({ household, address, video });
+                if (video) void begin(video);
               }}
             />
           </div>

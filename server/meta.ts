@@ -1,9 +1,11 @@
 // Thin client for Meta Model API. Every model call in the app goes through here.
 import { readFileSync } from "node:fs";
 
-const BASE = "https://api.meta.ai/v1";
+// META_API_BASE points at the Canada relay in production (see services/meta-relay); direct otherwise.
+const BASE = process.env.META_API_BASE ?? "https://api.meta.ai/v1";
 
-function auth() {
+function auth(): Record<string, string> {
+  if (process.env.RELAY_TOKEN) return { "x-relay-token": process.env.RELAY_TOKEN };
   const key = process.env.MODEL_API_KEY;
   if (!key) throw new Error("MODEL_API_KEY is not set");
   return { Authorization: `Bearer ${key}` };
@@ -74,6 +76,13 @@ export async function transcribe(wavPath: string): Promise<{ transcript: string;
   if (!res.ok) throw new Error(`Transcribe ${res.status}: ${text.slice(0, 300)}`);
   const json = JSON.parse(text);
   return { transcript: json.transcript ?? "", turns: json.turns ?? [] };
+}
+
+// Which models this key can reach from where the server runs. Logged at boot.
+export async function listModels(): Promise<string[]> {
+  const res = await fetch(`${BASE}/models`, { headers: auth() });
+  if (!res.ok) throw new Error(`models ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return ((await res.json()).data ?? []).map((m: { id: string }) => m.id);
 }
 
 export const dataUrl = (path: string, mime: string) =>

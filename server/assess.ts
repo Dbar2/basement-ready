@@ -4,17 +4,23 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { dataUrl, outputText, responses } from "./meta";
-import type { Detection, Job } from "./pipeline";
-import { coreRules, grantsFor, pack, rulesForModel, type Rule } from "./rules";
+import type { Detection } from "./pipeline";
+import { coreRules, grantsFor, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
 
 const run = promisify(execFile);
 
 type Status = "likely_ok" | "likely_fix" | "needs_measurement" | "needs_answer";
 type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?: string; question?: string };
 
-const INSTRUCTIONS = `You are the assessment agent for Basement Ready. It helps homeowners in Waterloo, Ontario learn whether their basement can become a legal second unit.
+export type AssessContext = { dir: string; household: Household; municipality: string };
 
-You get: what SAM 3.1 detected in their basement video (each detection has an id, a kind and the frame where it is clearest), proof frames with each detection boxed in green, what the homeowner said while filming, who the unit is for, and the compiled Waterloo rules (core rules only).
+// Meta pricing for Muse Spark (USD per token).
+const SPARK_IN = 1.25 / 1e6;
+const SPARK_OUT = 4.25 / 1e6;
+
+const instructions = (city: string) => `You are the assessment agent for Basement Ready. It helps homeowners in ${city}, Ontario learn whether their basement can become a legal second unit.
+
+You get: what SAM 3.1 detected in their basement video (each detection has an id, a kind and the frame where it is clearest), proof frames with each detection boxed in green, what the homeowner said while filming, who the unit is for, and the compiled ${city} rules (core rules only).
 
 Trust rules, follow them exactly:
 1. Only claim something about the basement if a detection supports it, and cite the detection ids in "evidence".
@@ -29,8 +35,8 @@ Return ONLY a JSON object:
 Include every rule you were given exactly once.`;
 
 // Draws each detection's box on its best frame so Spark sees exactly what SAM found.
-async function proofFrames(job: Job, detections: Detection[]) {
-  const dir = join(job.dir, "proof");
+async function proofFrames(work: string, detections: Detection[]) {
+  const dir = join(work, "proof");
   mkdirSync(dir, { recursive: true });
   // One clear shot per kind, plus every window (windows decide egress).
   const picked: Detection[] = [];
@@ -39,7 +45,7 @@ async function proofFrames(job: Job, detections: Detection[]) {
   }
   const out: { detection: Detection; path: string }[] = [];
   for (const d of picked.slice(0, 8)) {
-    const src = join(job.dir, "frames", `${String(d.frame).padStart(4, "0")}.jpg`);
+    const src = join(work, "frames", `${String(d.frame).padStart(4, "0")}.jpg`);
     const dst = join(dir, `${d.id}.jpg`);
     const box = `drawbox=x=iw*${d.box.x.toFixed(4)}:y=ih*${d.box.y.toFixed(4)}:w=iw*${d.box.w.toFixed(4)}:h=ih*${d.box.h.toFixed(4)}:color=0x4BE38A@0.95:t=5`;
     await run("ffmpeg", ["-y", "-loglevel", "error", "-i", src, "-vf", `${box},scale='min(768,iw)':-2`, "-q:v", "4", dst]);
@@ -55,14 +61,14 @@ function parseJson(text: string): any {
   return JSON.parse(text.slice(start, end + 1));
 }
 
-async function askSpark(job: Job, rules: Rule[], detections: Detection[], transcript: string) {
-  const proofs = await proofFrames(job, detections);
+async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detections: Detection[], transcript: string) {
+  const proofs = await proofFrames(ctx.dir, detections);
   const content: any[] = [
     {
       type: "input_text",
       text: JSON.stringify({
-        unitIsFor: job.household,
-        city: pack.jurisdiction.city,
+        unitIsFor: ctx.household,
+        city,
         homeownerSaid: transcript || "(no speech)",
         detections: detections.map((d) => ({ id: d.id, kind: d.kind, label: d.label, seconds: d.seconds, framesSeen: d.framesSeen })),
         rules: rulesForModel(rules),
@@ -74,16 +80,18 @@ async function askSpark(job: Job, rules: Rule[], detections: Detection[], transc
     content.push({ type: "input_image", image_url: dataUrl(p.path, "image/jpeg") });
   }
   let lastErr: unknown;
+  let costUsd = 0;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const r = await responses({
         model: "muse-spark-1.3",
         input: [
-          { role: "developer", content: INSTRUCTIONS },
+          { role: "developer", content: instructions(city) },
           { role: "user", content },
         ],
       });
-      return parseJson(outputText(r));
+      costUsd += (r.usage?.input_tokens ?? 0) * SPARK_IN + (r.usage?.output_tokens ?? 0) * SPARK_OUT;
+      return { model: parseJson(outputText(r)), costUsd };
     } catch (err) {
       lastErr = err;
     }
@@ -91,9 +99,20 @@ async function askSpark(job: Job, rules: Rule[], detections: Detection[], transc
   throw lastErr;
 }
 
-export async function assess(job: Job, detections: Detection[], transcript: string) {
-  const rules = coreRules();
-  const model = await askSpark(job, rules, detections, transcript);
+export async function assess(ctx: AssessContext, detections: Detection[], transcript: string) {
+  const coverage = packFor(ctx.municipality);
+  const { model, costUsd } = await askSpark(ctx, coverage.city, coreRules(coverage.pack), detections, transcript);
+  return { result: buildResult(ctx, coverage, model, detections), costUsd };
+}
+
+// Pure: turns Spark's reading into the answer. The trust rule, grouping and money all live here.
+export function buildResult(
+  ctx: Pick<AssessContext, "household" | "municipality">,
+  { pack, city, coverage }: Coverage,
+  model: { route?: string; wants?: string; summary?: string; findings?: ModelFinding[] },
+  detections: Pick<Detection, "id">[],
+) {
+  const rules = coreRules(pack);
   const ids = new Set(detections.map((d) => d.id));
   const byRule = new Map<string, ModelFinding>((model.findings ?? []).map((f: ModelFinding) => [f.ruleId, f]));
 
@@ -149,6 +168,9 @@ export async function assess(job: Job, detections: Detection[], transcript: stri
     fixGroups.length > 0 ? `Yes, if you fix ${fixGroups.length} thing${fixGroups.length === 1 ? "" : "s"}.` : "Looks possible. A few things to confirm.";
 
   return {
+    municipality: ctx.municipality,
+    city,
+    coverage,
     verdict,
     headline,
     route: model.route === "basement_finish" ? "basement_finish" : "second_unit",
@@ -158,7 +180,7 @@ export async function assess(job: Job, detections: Detection[], transcript: stri
     fixGroups,
     heldBack,
     cost: { low: costLow, high: costHigh, pricedFixes: priced.length, unpricedFixes: fixGroups.length - priced.length },
-    grants: grantsFor(job.household),
+    grants: grantsFor(pack, ctx.household),
     process: pack.process,
     pros: pack.pros,
     compiledAt: pack.compiledAt,

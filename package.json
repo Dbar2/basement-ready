@@ -12,15 +12,29 @@
     "start": "tsx server/index.ts",
     "test:meta": "tsx --env-file=.env scripts/test-meta.ts",
     "typecheck": "tsc -b",
-    "make:sample": "tsx scripts/make-sample.ts"
+    "make:sample": "tsx scripts/make-sample.ts",
+    "db:generate": "drizzle-kit generate",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "worker": "tsx server/worker.ts",
+    "smoke": "tsx scripts/smoke.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1158.0",
+    "@aws-sdk/s3-request-presigner": "^3.1158.0",
+    "@clerk/backend": "^3.26.4",
+    "@clerk/react": "^6.18.3",
+    "@electric-sql/pglite": "^0.5.13",
+    "@hono/clerk-auth": "^3.1.1",
     "@hono/node-server": "^2.1.5",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
+    "@tanstack/react-router": "^1.170.46",
+    "drizzle-orm": "^0.45.4",
     "hono": "^4.13.14",
     "motion": "^14.7.1",
     "openai": "^7.45.1",
+    "postgres": "^3.4.9",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "three": "^0.186.1",
@@ -33,9 +47,11 @@
     "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
+    "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vite": "^8.3.5"
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -44,5 +60,6 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "packageManager": "pnpm@10.33.0"
 }
