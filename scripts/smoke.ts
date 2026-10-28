@@ -2,7 +2,7 @@
 // Without --scan it only reads (free). With --scan it runs one real scan (~$0.15 of Meta API).
 import { readFileSync } from "node:fs";
 
-const [base, flag, videoPath] = process.argv.slice(2);
+const [base, flag, videoPath, city = "waterloo-on"] = process.argv.slice(2);
 if (!base) {
   console.error("Usage: pnpm smoke <base-url> [--scan video.mp4]");
   process.exit(1);
@@ -55,7 +55,7 @@ if (flag === "--scan" && videoPath) {
     const form = new FormData();
     form.append("video", new Blob([readFileSync(videoPath)], { type: "video/mp4" }), "basement.mp4");
     form.append("household", "relative");
-    form.append("municipality", "waterloo-on");
+    form.append("municipality", city);
     const created = await fetch(new URL("/api/scans", base), { method: "POST", body: form });
     if (!created.ok) throw new Error(`create → ${created.status} ${await created.text()}`);
     const { id } = await created.json();
@@ -65,7 +65,8 @@ if (flag === "--scan" && videoPath) {
       if (s.status === "done") {
         const frame = s.result.detections[0]?.frame;
         if (frame !== undefined) await get(`/api/scans/${id}/frames/${frame}`);
-        return `${s.result.headline} in ${Math.round((Date.now() - started) / 1000)} s → ${new URL(`/scans/${id}`, base)}`;
+        if (s.result.municipality !== city) throw new Error(`answered for ${s.result.municipality}, expected ${city}`);
+        return `${s.result.city}: ${s.result.headline} in ${Math.round((Date.now() - started) / 1000)} s → ${new URL(`/scans/${id}`, base)}`;
       }
       if (s.status === "error") throw new Error("scan failed");
       if (Date.now() - started > 240_000) throw new Error("timed out");
