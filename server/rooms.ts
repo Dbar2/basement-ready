@@ -39,6 +39,54 @@ export function cleanRooms(raw: unknown, maxSec = 120): RoomMark[] | null {
   return marks.length > 1 ? marks : null;
 }
 
+// What they tapped when the guide asked what a room should be.
+export type Idea = { room: number; idea: string; sec: number };
+export function cleanIdeas(raw: unknown): Idea[] | null {
+  try {
+    const list = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!Array.isArray(list)) return null;
+    const ideas = list
+      .map((x) => ({ room: Number(x?.room), idea: String(x?.idea ?? "").slice(0, 40), sec: Number(x?.sec) }))
+      .filter((x) => Number.isInteger(x.room) && x.room >= 0 && x.room < MAX_ROOMS && x.idea && Number.isFinite(x.sec))
+      .slice(0, 16);
+    return ideas.length ? ideas : null;
+  } catch {
+    return null;
+  }
+}
+
+// When the guide was talking, so its voice can be cut out of the transcript.
+export type Span = { startMs: number; endMs: number };
+export function cleanSpoken(raw: unknown): Span[] | null {
+  try {
+    const list = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!Array.isArray(list)) return null;
+    const spans = list
+      .map((x) => ({ startMs: Number(x?.startMs), endMs: Number(x?.endMs) }))
+      .filter((x) => Number.isFinite(x.startMs) && Number.isFinite(x.endMs) && x.endMs > x.startMs && x.startMs >= 0 && x.endMs < 130_000)
+      .slice(0, 200);
+    return spans.length ? spans : null;
+  } catch {
+    return null;
+  }
+}
+
+// Speech turns that overlap the guide's own voice are the guide, not the homeowner.
+export function withoutGuide<T extends { startMs: number; endMs: number }>(turns: T[], spoken: Span[] | null | undefined, padMs = 300) {
+  if (!spoken?.length) return turns;
+  return turns.filter((t) => !spoken.some((s) => t.startMs < s.endMs + padMs && t.endMs > s.startMs - padMs));
+}
+
+// Ideas tapped while filming join what they said, in the room they were filmed in.
+type VisionRoom = { room: string; where: string; atSeconds: number | null; quote: string };
+export function withIdeas<V extends { rooms: VisionRoom[] }>(vision: V, ideas: Idea[] | undefined, rooms: { index: number; name: string }[]): V {
+  const tapped = (ideas ?? [])
+    .filter((i) => !/not sure/i.test(i.idea))
+    .filter((i) => !vision.rooms.some((r) => r.room.toLowerCase() === i.idea.toLowerCase()))
+    .map((i) => ({ room: i.idea, where: rooms.find((r) => r.index === i.room)?.name ?? `Room ${i.room + 1}`, atSeconds: i.sec, quote: "" }));
+  return tapped.length ? { ...vision, rooms: [...vision.rooms, ...tapped] } : vision;
+}
+
 // Frame ranges [from, to) for each room, at the analysis frame rate.
 export function roomRanges(marks: RoomMark[] | null, frameCount: number, fps: number) {
   const starts = (marks ?? [{ startS: 0 }]).map((m) => Math.min(frameCount, Math.round(m.startS * fps)));

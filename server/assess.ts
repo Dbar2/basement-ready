@@ -6,14 +6,20 @@ import { promisify } from "node:util";
 import { dataUrl, outputText, responses } from "./meta";
 import type { Detection } from "./pipeline";
 import type { Measurements } from "./scan3d";
-import { coreRules, grantsFor, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
+import type { Property } from "./property";
+import { evaluate } from "./recheck";
+import { coreRules, grantsFor, moneyFor, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
+import { planSteps } from "./steps";
+import { ASK_OPTIONS, fromRecords, TRIAGE } from "./triage";
 
 const run = promisify(execFile);
 
-type Status = "likely_ok" | "likely_fix" | "needs_measurement" | "needs_answer";
+// "standard": work nearly every suite needs, budgeted without asking. "designer_checks": a size or
+// detail the video couldn't settle; the designer confirms it, the homeowner is never sent for a tape.
+export type Status = "likely_ok" | "likely_fix" | "needs_measurement" | "needs_answer" | "standard" | "designer_checks";
 type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?: string; question?: string };
 
-export type AssessContext = { dir: string; household: Household; municipality: string };
+export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null };
 
 // Meta pricing for Muse Spark (USD per token).
 const SPARK_IN = 1.25 / 1e6;
@@ -204,26 +210,72 @@ export function verdictFrom(findings: VerdictFinding[]) {
       };
     },
   );
+  // Standard suite work: stated and priced, but not a "fix" against this basement.
+  const standard = findings
+    .filter((f) => f.status === "standard")
+    .map((f) => ({ ruleId: f.ruleId, title: f.title, text: f.why ?? "", costLow: f.fix?.costLowCAD ?? null, costHigh: f.fix?.costHighCAD ?? null }));
   const priced = fixGroups.filter((g) => g.costLow != null);
+  const pricedStandard = standard.filter((s) => s.costLow != null && s.costHigh != null);
+  const fixesLow = priced.reduce((s, g) => s + g.costLow!, 0);
+  const fixesHigh = priced.reduce((s, g) => s + g.costHigh!, 0);
+  const standardLow = pricedStandard.reduce((s, x) => s + x.costLow!, 0);
+  const standardHigh = pricedStandard.reduce((s, x) => s + x.costHigh!, 0);
   const cost = {
-    low: priced.reduce((s, g) => s + g.costLow!, 0),
-    high: priced.reduce((s, g) => s + g.costHigh!, 0),
+    low: fixesLow + standardLow,
+    high: fixesHigh + standardHigh,
+    fixesLow,
+    fixesHigh,
+    standardLow,
+    standardHigh,
     pricedFixes: priced.length,
     unpricedFixes: fixGroups.length - priced.length,
   };
   const n = fixGroups.length;
+  const open = findings.filter((f) => f.status === "needs_answer" || f.status === "needs_measurement" || f.status === "designer_checks").length;
   const verdict: "yes" | "fix" | "no" = blockers.length ? "no" : n > 0 ? "fix" : "yes";
   const headline = blockers.length
     ? "Not as a second unit here. You could still finish it as part of your home."
     : n > 0
-      ? `Yes, if you fix ${n} thing${n === 1 ? "" : "s"}.`
-      : "Looks possible. A few things to confirm.";
-  return { fixGroups, cost, verdict, headline, blockers: blockers.map((b) => b.ruleId) };
+      ? `Yes, your basement can be a second home after ${n} fix${n === 1 ? "" : "es"}.`
+      : open
+        ? "Looks like yes. Your designer confirms a few details."
+        : "Yes, your basement can be a second home.";
+  return { fixGroups, standard, cost, verdict, headline, blockers: blockers.map((b) => b.ruleId) };
+}
+
+type Triageable = { ruleId: string; check: Rule["check"]; status: Status; why: string | null; question: string | null; evidence: string[]; fix: Rule["fix"] | null };
+
+// Who answers each rule (server/triage.ts). Public records first, then what the video proved; what's
+// left becomes standard work, a designer check, or one of the few plain questions.
+export function triage<F extends Triageable>(f: F, rule: Rule, property?: Property | null) {
+  const t = TRIAGE[f.ruleId];
+  if (t?.who === "records") {
+    const r = fromRecords(f.ruleId, f.check, property);
+    const outcome = r ? evaluate(f.check, r.value) : "unknown";
+    if (r && outcome !== "unknown") {
+      return {
+        ...f,
+        status: (outcome === "pass" ? "likely_ok" : "likely_fix") as Status,
+        why: r.why,
+        question: null,
+        evidence: [...f.evidence, "records"],
+        fix: outcome === "fail" ? rule.fix : null,
+        records: { value: r.value },
+      };
+    }
+    return { ...f, status: "designer_checks" as Status, question: null, why: "The City confirms this for your lot." };
+  }
+  // Proof in the video beats any default.
+  if (f.status === "likely_ok" || f.status === "likely_fix") return f;
+  if (t?.who === "standard") return { ...f, status: "standard" as Status, question: null, why: t.text, fix: rule.fix };
+  if (t?.who === "ask") return { ...f, status: "needs_answer" as Status, question: t.question!, hint: t.hint ?? null, options: ASK_OPTIONS };
+  // A size the scan couldn't settle: show what it read, and the designer confirms it.
+  return { ...f, status: "designer_checks" as Status, question: null, why: f.why ?? t?.text ?? rule.plain };
 }
 
 // Pure: turns Spark's reading into the answer. The trust rule, grouping and money all live here.
 export function buildResult(
-  ctx: Pick<AssessContext, "household" | "municipality">,
+  ctx: Pick<AssessContext, "household" | "municipality" | "property">,
   { pack, city, coverage }: Coverage,
   model: { route?: string; wants?: string; summary?: string; vision?: any; findings?: ModelFinding[] },
   detections: Pick<Detection, "id">[],
@@ -271,7 +323,8 @@ export function buildResult(
     };
   });
 
-  const { fixGroups, cost, verdict, headline } = verdictFrom(findings);
+  const triaged = findings.map((f) => triage(f, rules.find((r) => r.id === f.ruleId)!, ctx.property));
+  const { fixGroups, standard, cost, verdict, headline } = verdictFrom(triaged);
 
   return {
     vision: cleanVision(model.vision),
@@ -283,11 +336,15 @@ export function buildResult(
     route: model.route === "basement_finish" ? "basement_finish" : "second_unit",
     wants: model.wants ?? "",
     summary: model.summary ?? "",
-    findings,
+    findings: triaged,
     fixGroups,
+    standard,
+    property: ctx.property ?? null,
     heldBack,
     cost,
     grants: grantsFor(pack, ctx.household),
+    money: moneyFor(grantsFor(pack, ctx.household)),
+    steps: planSteps({ city, fixGroups, standard, cost, grants: grantsFor(pack, ctx.household), plan: null }, pack),
     process: pack.process,
     pros: pack.pros,
     compiledAt: pack.compiledAt,

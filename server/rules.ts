@@ -73,15 +73,18 @@ export const coreRules = (pack: Pack) => pack.rules.filter((r) => r.priority ===
 export type Household = "relative" | "renter" | "unsure";
 
 // Grants are matched in code from the pack's own "fitsPlans" labels, never by the model.
+// Cancelled or closed programs are kept in the pack for the record but never shown.
 export function grantsFor(pack: Pack, household: Household) {
   const plan = household === "relative" ? "family_suite" : household === "renter" ? "rental" : null;
-  return pack.grants.map((g) => ({
+  return pack.grants.filter((g) => g.status === "open").map((g) => ({
     id: g.id,
     name: g.name,
     level: g.level,
+    kind: g.kind as string,
     status: g.status,
     amount: g.amount,
-    fit: g.status === "cancelled" ? "cancelled" : plan ? (g.fitsPlans?.[plan] ?? "depends") : "depends",
+    maxCAD: typeof g.maxCAD === "number" ? (g.maxCAD as number) : null,
+    fit: (plan ? (g.fitsPlans?.[plan] ?? "depends") : "depends") as "fits" | "depends" | "no",
     fitNote: g.fitsPlansNote ?? null,
     nextStep: g.nextStep ?? null,
     source: g.source,
@@ -99,4 +102,10 @@ export function rulesForModel(rules: Rule[]) {
     evidence: r.evidence,
     existingHouseAlternative: r.existingBuildingAlternative ? JSON.stringify(r.existingBuildingAlternative).slice(0, 300) : null,
   }));
+}
+
+// The "up to" headline: money that lands with the homeowner from programs that fit (or might).
+export function moneyFor(grants: ReturnType<typeof grantsFor>) {
+  const sum = (fit: string[]) => grants.filter((g) => fit.includes(g.fit) && g.maxCAD).reduce((s, g) => s + g.maxCAD!, 0);
+  return { fits: sum(["fits"]), possible: sum(["fits", "depends"]) };
 }

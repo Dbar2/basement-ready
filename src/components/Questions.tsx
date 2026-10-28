@@ -1,24 +1,20 @@
-// "What we couldn't see": each question takes the answer it needs, and the verdict re-checks.
+// The few questions left after the video and public records: plain words, a tap to answer, and
+// "Not sure" always allowed (then the designer checks it). The verdict re-checks on every answer.
 import { useState } from "react";
-import type { Finding } from "../api";
+import type { AnswerValue, Finding } from "../api";
 import { parseLength } from "../units";
 
-type Value = number | boolean | null;
-
-function kindOf(f: Finding): "yesno" | "length" | "number" {
-  const c = f.check;
-  if (c.operator === "exists" || typeof c.value === "boolean") return "yesno";
-  if (c.unit === "m" || c.unit === "mm") return "length";
-  return "number";
-}
-
-const UNIT_HINT: Record<string, string> = { m2: "m²", units: "homes", spaces: "spaces", STC: "STC" };
+const YES_NO: { label: string; value: AnswerValue }[] = [
+  { label: "Yes", value: true },
+  { label: "No", value: false },
+  { label: "Not sure", value: "unsure" },
+];
 
 function parseFor(f: Finding, text: string): number | null {
   if (f.check.unit === "m") return parseLength(text);
   if (f.check.unit === "mm") {
     const bare = Number(text.trim());
-    if (Number.isFinite(bare) && bare >= 100 && bare <= 5000) return bare; // already millimetres
+    if (Number.isFinite(bare) && bare >= 100 && bare <= 5000) return bare;
     const m = parseLength(text);
     return m == null ? null : Math.round(m * 1000);
   }
@@ -26,22 +22,22 @@ function parseFor(f: Finding, text: string): number | null {
   return text.trim() && Number.isFinite(n) ? n : null;
 }
 
-function Question({ f, busy, onAnswer }: { f: Finding; busy: boolean; onAnswer: (value: Value) => void }) {
-  const kind = kindOf(f);
+function Question({ f, busy, onAnswer }: { f: Finding; busy: boolean; onAnswer: (value: AnswerValue) => void }) {
   const [text, setText] = useState("");
-  const parsed = kind === "yesno" ? null : parseFor(f, text);
-  const placeholder = f.check.unit === "m" ? "e.g. 2.05 m or 6' 9\"" : f.check.unit === "mm" ? "e.g. 600 mm or 24\"" : `number of ${UNIT_HINT[f.check.unit ?? ""] ?? "units"}`;
-
+  const yesNo = f.options?.length || f.check.operator === "exists" || typeof f.check.value === "boolean";
+  const parsed = yesNo ? null : parseFor(f, text);
   return (
     <li className="q-item">
-      <span className="tag-mono">{f.measured ? "Close call" : f.status === "needs_measurement" ? "Tape measure" : "Question"}</span>
       <div className="q-body">
         <p className="q">{f.question}</p>
-        <p className="muted">{f.title}</p>
-        {kind === "yesno" ? (
+        {f.hint && <p className="muted">{f.hint}</p>}
+        {yesNo ? (
           <div className="q-actions">
-            <button className="chip" disabled={busy} onClick={() => onAnswer(true)}>Yes</button>
-            <button className="chip" disabled={busy} onClick={() => onAnswer(false)}>No</button>
+            {(f.options ?? YES_NO).map((o) => (
+              <button key={o.label} className="chip" disabled={busy} onClick={() => onAnswer(o.value)}>
+                {o.label}
+              </button>
+            ))}
           </div>
         ) : (
           <form
@@ -51,11 +47,13 @@ function Question({ f, busy, onAnswer }: { f: Finding; busy: boolean; onAnswer: 
               if (parsed != null) onAnswer(parsed);
             }}
           >
-            <input className="input q-input" inputMode="decimal" placeholder={placeholder} value={text} onChange={(e) => setText(e.target.value)} aria-label={f.title} />
+            <input className="input q-input" inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} aria-label={f.title} />
             <button className="btn btn-primary q-save" disabled={busy || parsed == null}>
               {busy ? "Checking…" : "Check"}
             </button>
-            {text && parsed == null && <span className="q-hint">We couldn't read that.</span>}
+            <button type="button" className="chip" disabled={busy} onClick={() => onAnswer("unsure")}>
+              Not sure
+            </button>
           </form>
         )}
       </div>
@@ -63,7 +61,7 @@ function Question({ f, busy, onAnswer }: { f: Finding; busy: boolean; onAnswer: 
   );
 }
 
-export function Questions({ findings, busyRule, onAnswer }: { findings: Finding[]; busyRule: string | null; onAnswer: (ruleId: string, value: Value) => void }) {
+export function Questions({ findings, busyRule, onAnswer }: { findings: Finding[]; busyRule: string | null; onAnswer: (ruleId: string, value: AnswerValue) => void }) {
   return (
     <ul className="ruled questions">
       {findings.map((f) => (
@@ -73,7 +71,9 @@ export function Questions({ findings, busyRule, onAnswer }: { findings: Finding[
   );
 }
 
-// Answered questions, so a wrong answer is one tap to undo.
+const said = (v: AnswerValue) => (v === "unsure" ? "Not sure" : v === true ? "Yes" : v === false ? "No" : String(v));
+
+// What they told us, so a wrong answer is one tap to undo.
 export function Answered({ findings, busyRule, onClear }: { findings: Finding[]; busyRule: string | null; onClear: (ruleId: string) => void }) {
   if (!findings.length) return null;
   return (
@@ -82,7 +82,7 @@ export function Answered({ findings, busyRule, onClear }: { findings: Finding[];
         <li key={f.ruleId}>
           <span className="fit-dot" data-ok={f.status === "likely_ok"} aria-hidden />
           <div>
-            <b>{f.title}</b> <span className="muted">{f.why}</span>
+            <b>{f.question ?? f.title}</b> <span className="muted">You said: {said(f.answer!.value)}</span>
           </div>
           <button className="link-quiet" disabled={busyRule === f.ruleId} onClick={() => onClear(f.ruleId)}>
             Change

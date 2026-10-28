@@ -114,11 +114,64 @@ export function clearanceUnder(s3: Scan3d, d: Detection): number | null {
   return lows.length ? Math.round(median(lows) * 100) / 100 : null;
 }
 
+// ---- Scale from doors: no tape needed ----
+
+// A North American interior door slab is 80 in (2.03 m); with its frame, a door reads about 2.04 m.
+export const DOOR_HEIGHT_M = 2.04;
+const DOORS_AGREE = 0.04;
+
+// Each door's height in scan units, from the frames where the whole door is in view.
+export function doorHeights(s3: Scan3d, detections: Detection[]) {
+  const heights: number[] = [];
+  for (const d of detections.filter((x) => x.kind === "exit")) {
+    const byFrame = new Map(d.track.map((t) => [t[0], t]));
+    const seen: number[] = [];
+    s3.scan.frames.forEach((f: any, i: number) => {
+      const t = byFrame.get(s3.sentFrames[f.sourceIndex]);
+      // A door cut off by the edge of the picture would read short.
+      if (!t || t[2] < 0.02 || t[2] + t[4] > 0.98 || t[4] < 0.35) return;
+      const lifted = liftBox(s3.scan, s3.depth, i, { x: t[1], y: t[2], w: t[3], h: t[4] });
+      if (lifted) seen.push(lifted.p95[1] - lifted.p05[1]);
+    });
+    if (seen.length) heights.push(median(seen));
+  }
+  return heights;
+}
+
+// The factor that makes the doors 2.04 m tall, when two or more doors agree on it. In everyday
+// footage doors are often open, cut off or behind clutter, so a big correction is distrusted:
+// doors only fine-tune the 3D model's own scale.
+const MAX_DOOR_CORRECTION = 0.15;
+export function doorScale(heights: number[]): number | null {
+  const ok = heights.filter((h) => h > 0.5 && h < 5);
+  if (ok.length < 2) return null;
+  const mid = median(ok);
+  const agree = ok.filter((h) => Math.abs(h - mid) / mid <= DOORS_AGREE);
+  if (agree.length < 2) return null;
+  const s = DOOR_HEIGHT_M / median(agree);
+  return Math.abs(s - 1) <= MAX_DOOR_CORRECTION ? s : null;
+}
+
+// Every length times s. Doors pin the scale to a few percent.
+export function rescaleMeasurements(m: Measurements, s: number): Measurements {
+  const r2 = (n: number | null) => (n == null ? null : Math.round(n * s * 100) / 100);
+  return {
+    ...m,
+    ceilingHeightM: r2(m.ceilingHeightM),
+    widthM: r2(m.widthM),
+    depthM: r2(m.depthM),
+    clearances: m.clearances.map((c) => ({ ...c, clearanceM: r2(c.clearanceM)! })),
+    scaleSource: "door",
+    confidence: "medium",
+    expectedErrorPct: 6,
+  };
+}
+
 export type Measurements = {
   ceilingHeightM: number | null;
   widthM: number | null;
   depthM: number | null;
-  scaleSource: "model" | "user_measurement";
+  scaleSource: "model" | "user_measurement" | "door";
   confidence: "low" | "medium" | "high";
   expectedErrorPct: number;
   pass: Record<string, boolean | null> | null;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildResult, measuredCheck } from "../../server/assess";
 import { packFor } from "../../server/rules";
-import type { Measurements } from "../../server/scan3d";
+import { doorScale, rescaleMeasurements, type Measurements } from "../../server/scan3d";
 import { parseLength } from "../../src/units";
 
 describe("parseLength", () => {
@@ -55,5 +55,32 @@ describe("measuredCheck", () => {
     expect(f.status).toBe("likely_ok");
     expect(f.evidence).toContain("scan3d");
     expect(f.measured?.value).toBeCloseTo(2.08, 2);
+  });
+});
+
+describe("doors as a ruler", () => {
+  it("uses two doors that agree, and only for a small correction", () => {
+    // Two doors reading 1.98 and 2.01 scan units → scale about 1.02.
+    const s = doorScale([1.98, 2.01, 1.2]);
+    expect(s).not.toBeNull();
+    expect(s!).toBeGreaterThan(1.01);
+    expect(s!).toBeLessThan(1.03);
+  });
+
+  it("ignores one door, doors that disagree, and corrections too big to trust", () => {
+    expect(doorScale([2.0])).toBeNull();
+    expect(doorScale([1.5, 2.0])).toBeNull();
+    // Your furnace room: four doors around 1.6 → a 23% correction, rejected.
+    expect(doorScale([1.47, 1.65, 1.77, 1.6])).toBeNull();
+  });
+
+  it("rescales every length and marks the source", () => {
+    const m = rescaleMeasurements(
+      { ceilingHeightM: 2.2, widthM: 4, depthM: 3, scaleSource: "model", confidence: "low", expectedErrorPct: 20, pass: null, trusted: false, warnings: [], clearances: [{ detectionId: "d", label: "Duct", clearanceM: 1.9 }] },
+      1.1,
+    );
+    expect(m.ceilingHeightM).toBe(2.42);
+    expect(m.clearances[0].clearanceM).toBe(2.09);
+    expect(m.scaleSource).toBe("door");
   });
 });

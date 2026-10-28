@@ -2,13 +2,16 @@
 // the scan's own reading is kept underneath, so clearing an answer puts it back.
 import { verdictFrom } from "./assess";
 import { packFor, type Rule } from "./rules";
+import { planSteps } from "./steps";
 
-export type AnswerValue = number | boolean;
+// "unsure": the homeowner doesn't know. The designer checks it instead; it stops being a question.
+export type AnswerValue = number | boolean | "unsure";
 export type Answers = Record<string, AnswerValue | null | undefined>;
 
 type Check = Rule["check"];
 
 export function evaluate(check: Check, value: AnswerValue): "pass" | "fail" | "unknown" {
+  if (value === "unsure") return "unknown";
   const target = check.value;
   switch (check.operator) {
     case "exists":
@@ -29,6 +32,7 @@ export function evaluate(check: Check, value: AnswerValue): "pass" | "fail" | "u
 const UNIT: Record<string, string> = { m: "m", mm: "mm", m2: "m²", units: "homes", spaces: "parking spaces", STC: "STC" };
 
 function show(value: AnswerValue, unit: string | null) {
+  if (value === "unsure") return "not sure";
   if (typeof value === "boolean") return value ? "yes" : "no";
   const n = unit === "m" ? value.toFixed(2) : String(Math.round(value * 100) / 100);
   return unit ? `${n} ${UNIT[unit] ?? unit}` : n;
@@ -55,6 +59,7 @@ export function recheck<R extends { municipality?: string; findings: AnyFinding[
     const value = answers[f.ruleId];
     if (value === undefined || value === null) return { ...f, answer: null };
     const outcome = evaluate(f.check, value);
+    if (value === "unsure") return { ...f, status: "designer_checks", question: null, answer: { value, outcome } };
     if (outcome === "unknown") return { ...f, answer: { value, outcome } };
     const rule = rules.get(f.ruleId);
     return {
@@ -69,5 +74,7 @@ export function recheck<R extends { municipality?: string; findings: AnyFinding[
   });
 
   const verdict = verdictFrom(findings as any);
-  return { ...result, baseFindings: base, findings, ...verdict, answeredCount: findings.filter((f) => f.answer).length };
+  const r = result as R & { city?: string; grants?: any[]; plan?: { areaM2: number } | null };
+  const steps = planSteps({ city: r.city ?? "your city", ...verdict, grants: r.grants ?? [], plan: r.plan ?? null }, pack);
+  return { ...result, baseFindings: base, findings, ...verdict, steps, answeredCount: findings.filter((f) => f.answer).length };
 }

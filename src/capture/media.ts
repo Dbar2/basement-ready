@@ -26,11 +26,13 @@ export const canRecord = () =>
   typeof MediaRecorder !== "undefined" &&
   Boolean(navigator.mediaDevices?.getUserMedia);
 
+// 60 fps where the phone allows it: each frame is exposed for less time, so walking blurs it less.
+// The server still samples a few frames a second; what 60 buys is sharper ones to pick from.
 const VIDEO: MediaTrackConstraints = {
   facingMode: { ideal: "environment" },
   width: { ideal: 1920 },
   height: { ideal: 1080 },
-  frameRate: { ideal: 30 },
+  frameRate: { ideal: 60 },
 };
 
 export type Camera = { stream: MediaStream; hasAudio: boolean };
@@ -54,6 +56,8 @@ export async function openCamera(): Promise<Camera> {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: true });
     await tuneTrack(stream.getVideoTracks()[0]);
+    const got = stream.getVideoTracks()[0]?.getSettings();
+    if (got) console.info(`[camera] ${got.width}×${got.height} at ${got.frameRate} fps`);
     return { stream, hasAudio: stream.getAudioTracks().length > 0 };
   } catch (err) {
     // A laptop with no microphone still has a camera: film without sound rather than fail.

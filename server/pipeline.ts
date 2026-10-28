@@ -7,13 +7,15 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
 import { assess } from "./assess";
+import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
 import { samVideo, transcribe, uploadFile } from "./meta";
+import type { Property } from "./property";
 import type { Household } from "./rules";
 import { bestFrame, parseSam } from "./sam";
-import { buildPlan, type Plan } from "./plan";
-import { mainRoom, MIN_ROOM_FRAMES, roomName, roomRanges, type Room, type RoomMark } from "./rooms";
-import { runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
+import { buildPlan, rescalePlan, type Plan } from "./plan";
+import { mainRoom, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
+import { doorHeights, doorScale, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 
 const run = promisify(execFile);
@@ -108,6 +110,12 @@ export async function finishRooms(
       // Objects seen in other rooms don't land on this room's frames, so they drop out here.
       measurements = summarize(s3, detections);
       plan = buildPlan(s3, detections, measurements.trusted);
+      // No tape: let the doors fine-tune the model's scale when they agree.
+      const s = measurements.scaleSource === "model" ? doorScale(doorHeights(s3, detections)) : null;
+      if (s) {
+        measurements = rescaleMeasurements(measurements, s);
+        plan = plan && rescalePlan(plan, s);
+      }
       await Promise.all([
         // sentFrames maps the scan's frames back to ours, so the plan can be rebuilt later.
         storage.put(keys.scan3d(scanId, "scan.json", r.index), Buffer.from(JSON.stringify({ ...s3.scan, sentFrames: s3.sentFrames })), "application/json"),
@@ -147,17 +155,25 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     await emit("log", `Reading ${frameCount} frames from your video`, { frameCount });
     const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
 
+    // One retry, and a failure is logged rather than passed off as "you didn't talk".
     const transcriptP = wav
       ? transcribe(wav)
+          .catch(async (err) => {
+            console.error(`[voice] ${scanId}: ${err instanceof Error ? err.message : err}; retrying`);
+            return transcribe(wav);
+          })
           .then(async (t) => {
-            if (t.transcript) await emit("log", `Heard: “${t.transcript.slice(0, 90)}${t.transcript.length > 90 ? "…" : ""}”`);
+            await emit("log", t.transcript ? `Heard: “${t.transcript.slice(0, 90)}${t.transcript.length > 90 ? "…" : ""}”` : "No talking heard in the video");
             return t;
           })
-          .catch(() => ({ transcript: "", turns: [] }))
+          .catch((err) => {
+            console.error(`[voice] ${scanId}: ${err instanceof Error ? err.message : err}`);
+            return { transcript: "", turns: [] };
+          })
       : Promise.resolve({ transcript: "", turns: [] });
 
     // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
-    const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[] };
+    const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[]; ideas?: Idea[]; spoken?: Span[] };
     const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
     const ranges = roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
     const scan3dP: Promise<(Scan3d | null)[]> = (await scan3dReady())
@@ -221,11 +237,21 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const measurements = main?.measurements ?? null;
     const plan = main?.plan ?? null;
 
-    const transcript = await transcriptP;
+    const heard = await transcriptP;
+    // Drop the guide's own voice, and add what they tapped when asked what a room should be.
+    const turns = withoutGuide(heard.turns, inputs.spoken);
+    const tapped = (inputs.ideas ?? []).map((i) => `[Tapped at ${i.sec.toFixed(0)} s, room ${i.room + 1}: "${i.idea}"]`);
+    const transcript = {
+      transcript: [inputs.spoken?.length ? turns.map((t) => t.transcript).join(" ") : heard.transcript, ...tapped].filter(Boolean).join("\n"),
+      turns,
+    };
     await emit("stage", "assess");
     await emit("log", "Checking your city's second-unit rules");
+    // They may have answered "who's it for" while this ran.
+    const [latest] = await db.select().from(schema.basements).where(eq(schema.basements.id, basement.id));
+    const household = (latest?.household ?? basement.household) as Household;
     const assessment = await assess(
-      { dir: work, household: basement.household as Household, municipality: basement.municipality },
+      { dir: work, household, municipality: basement.municipality, property: basement.property as Property | null },
       detections,
       transcript.transcript,
       measurements,
@@ -234,9 +260,9 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     await uploads;
 
     const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-    const result = {
+    const assessed = {
       id: scanId,
-      household: basement.household,
+      household,
       frameCount,
       detections,
       transcript: transcript.transcript,
@@ -246,6 +272,11 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       mainRoom: main?.index ?? null,
       ...assessment.result,
     };
+    // Questions answered while it ran are applied now; recheck also redoes the plan with the room's size.
+    const answered = await db.select().from(schema.answers).where(eq(schema.answers.basementId, basement.id));
+    const rechecked = recheck(assessed, Object.fromEntries(answered.map((a) => [a.ruleId, a.value as AnswerValue])));
+    // Ideas they tapped while filming count as much as what they said.
+    const result = { ...rechecked, vision: withIdeas(rechecked.vision, inputs.ideas, rooms) };
     await db
       .update(schema.scans)
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })
