@@ -51,7 +51,7 @@ export function LiveScan({ scanId, onDone }: Props) {
     : [...events].reverse().find((e) => e.type === "stage")?.text ?? "prepare";
   const stageIndex = STAGES.findIndex((s) => s.id === stage);
   const done = stage === "done";
-  const finds = events.filter((e) => e.type === "find");
+  const finds = events.filter((e) => e.type === "find" || e.type === "measure");
   const log = events.filter((e) => e.type === "log").slice(-3);
 
   // Draw SAM's boxes for whatever frame the video is on.
@@ -150,6 +150,15 @@ export function LiveScan({ scanId, onDone }: Props) {
             {finds.length === 0 && <li className="muted">Looking through your video…</li>}
             {finds.map((f, i) => {
               const n = f.data?.detections?.length ?? 0;
+              if (f.type === "measure") {
+                return (
+                  <li key={i} className="measured-row">
+                    <span className="find-dot" />
+                    <span>{f.text}</span>
+                    <span className="mono">3D</span>
+                  </li>
+                );
+              }
               return (
                 <li key={i} data-kind={f.data?.kind} className={n ? "" : "muted"}>
                   <span className="find-dot" />

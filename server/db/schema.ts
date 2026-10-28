@@ -41,6 +41,8 @@ export const scans = pgTable(
     result: jsonb("result"),
     error: text("error"),
     costUsd: doublePrecision("cost_usd").notNull().default(0),
+    // What the homeowner measured themselves, e.g. { floorToJoistsM: 2.1 }. Sets the 3D scan's scale.
+    inputs: jsonb("inputs"),
     clientIp: text("client_ip"),
     createdAt: createdAt(),
     startedAt: timestamp("started_at", { withTimezone: true }),

@@ -15,14 +15,29 @@ export type Detection = {
 
 export type ScanEvent = {
   at: number;
-  type: "log" | "find" | "stage" | "done" | "error";
+  type: "log" | "find" | "measure" | "stage" | "done" | "error";
   text: string;
   data?: { kind?: string; label?: string; detections?: Detection[]; frameCount?: number };
 };
 
 export type Source = { title: string; url: string; section?: string; retrieved?: string };
 
+export type Measured = { value: number; unit: string; marginM: number; limit: number; source: "model" | "user_measurement" };
+
+export type Measurements = {
+  ceilingHeightM: number | null;
+  widthM: number | null;
+  depthM: number | null;
+  scaleSource: "model" | "user_measurement";
+  confidence: string;
+  expectedErrorPct: number;
+  trusted?: boolean;
+  warnings: string[];
+  clearances: { detectionId: string; label: string; clearanceM: number }[];
+};
+
 export type Finding = {
+  measured?: Measured | null;
   ruleId: string;
   title: string;
   plain: string;
@@ -63,6 +78,8 @@ export type ScanResult = {
   household: Household;
   city?: string;
   coverage?: "full" | "provincial";
+  has3d?: boolean;
+  measurements?: Measurements | null;
   verdict: "yes" | "fix" | "no";
   headline: string;
   route: "second_unit" | "basement_finish";
@@ -96,7 +113,7 @@ export function rememberClaim(basementId: string, claimToken: string) {
 
 export function startScan(
   video: File,
-  input: { household: Household; address: string; municipality: string },
+  input: { household: Household; address: string; municipality: string; floorToJoistsM?: number | null },
   onProgress: (fraction: number) => void,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -105,6 +122,7 @@ export function startScan(
     form.append("household", input.household);
     form.append("address", input.address);
     form.append("municipality", input.municipality);
+    if (input.floorToJoistsM) form.append("floorToJoistsM", String(input.floorToJoistsM));
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/scans");
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);

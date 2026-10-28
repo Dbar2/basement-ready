@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "concurrently -k -n api,web -c blue,green \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:web": "vite",
-    "dev:api": "API_PORT=8787 tsx watch --env-file=.env server/index.ts",
+    "dev:api": "API_PORT=8787 SCAN3D_URL=http://127.0.0.1:8790 SCAN3D_TOKEN=dev tsx watch --env-file=.env server/index.ts",
     "build": "tsc -b && vite build",
     "start": "tsx server/index.ts",
     "test:meta": "tsx --env-file=.env scripts/test-meta.ts",
@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "worker": "tsx server/worker.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "dev:scan3d": "cd services/scan3d && SCAN3D_TOKEN=dev .venv/bin/python run_local.py serve --port 8790"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1158.0",

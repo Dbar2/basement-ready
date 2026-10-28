@@ -82,7 +82,10 @@ app.post("/api/scans", async (c) => {
     .insert(schema.basements)
     .values({ claimToken, household, municipality, address: String(body.address ?? "").slice(0, 200) })
     .returning();
-  const [scan] = await db.insert(schema.scans).values({ basementId: basement.id, clientIp: ip }).returning();
+  // Optional tape measurement, floor to the underside of the joists, in metres.
+  const tape = Number(body.floorToJoistsM);
+  const inputs = Number.isFinite(tape) && tape >= 1 && tape <= 4 ? { floorToJoistsM: tape } : null;
+  const [scan] = await db.insert(schema.scans).values({ basementId: basement.id, clientIp: ip, inputs }).returning();
 
   const ext = (video.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
   const videoKey = keys.input(scan.id, ext);
@@ -179,6 +182,14 @@ app.delete("/api/me", async (c) => {
   const scanIds = await deleteUserData(userId);
   await Promise.all(scanIds.map((id) => storage.removePrefix(keys.scanPrefix(id))));
   return c.json({ deleted: true, scans: scanIds.length });
+});
+
+// The 3D scan's files, for the scan reveal and the explorer.
+app.get("/api/scans/:id/3d/:file", async (c) => {
+  const id = c.req.param("id");
+  const file = c.req.param("file");
+  if (!UUID.test(id) || !["scan.json", "points.ply"].includes(file)) return c.json({ error: "Not found" }, 404);
+  return sendStored(keys.scan3d(id, file as "scan.json" | "points.ply"), file.endsWith(".json") ? "application/json" : "application/octet-stream");
 });
 
 // Queue and spend at a glance. Development only until admin auth lands.
