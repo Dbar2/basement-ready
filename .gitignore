@@ -1,0 +1,26 @@
+# secrets
+.env
+.env.*
+!.env.example
+
+# deps and builds
+node_modules/
+dist/
+.vite/
+
+# local media: homeowner footage and generated frames never go in the public repo
+media/private/
+tmp/
+*.mov
+*.MOV
+*.mp4
+!public/samples/*.mp4
+
+# python
+__pycache__/
+.venv/
+
+.DS_Store
+
+# build cache
+*.tsbuildinfo
