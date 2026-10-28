@@ -63,7 +63,8 @@ async function prepare(work: string, inputPath: string) {
     "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-movflags", "+faststart", analysis,
   ]);
   // Frames come from the analysis video itself, so frame N here is frame N in SAM's output.
-  await run("ffmpeg", ["-y", "-loglevel", "error", "-i", analysis, "-vsync", "0", "-q:v", "3", "-start_number", "0", join(work, "frames", "%04d.jpg")]);
+  // Best JPEG quality: these frames feed the 3D scan and the proof pictures.
+  await run("ffmpeg", ["-y", "-loglevel", "error", "-i", analysis, "-vsync", "0", "-q:v", "2", "-start_number", "0", join(work, "frames", "%04d.jpg")]);
   const wav = join(work, "voice.wav");
   try {
     await run("ffmpeg", ["-y", "-loglevel", "error", "-i", inputPath, "-t", "120", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-map_metadata", "-1", wav]);

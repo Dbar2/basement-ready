@@ -113,7 +113,7 @@ export function useLiveFinds(opts: {
         const frame = video ? grab(video) : null;
         const heading = headingRef.current;
         if (frame) {
-          const blob: Blob | null = await new Promise((r) => frame.toBlob(r, "image/jpeg", 0.72));
+          const blob: Blob | null = await new Promise((r) => frame.toBlob(r, "image/jpeg", 0.85));
           if (blob && !stopped) {
             const form = new FormData();
             form.append("frame", blob, "frame.jpg");
