@@ -1,6 +1,7 @@
 // Room by room: the phone marks where each room starts, and each room gets its own 3D scan and plan.
 // A whole basement in one 3D scan comes out with walls placed twice; one room at a time doesn't.
 import type { Measurements } from "./scan3d";
+import type { RoomPlacement } from "./basement";
 import type { Plan } from "./plan";
 
 export type RoomMark = { startS: number };
@@ -13,6 +14,8 @@ export type Room = {
   has3d: boolean;
   plan: Plan | null;
   measurements: Measurements | null;
+  // Where this room sits in the one basement plan (server/basement.ts); null without the 3D.
+  placement?: RoomPlacement | null;
 };
 
 export const MAX_ROOMS = 8;

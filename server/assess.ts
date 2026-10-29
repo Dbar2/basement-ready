@@ -118,9 +118,23 @@ export async function assess(
   measurements?: Measurements | null,
   turns: SpeechTurn[] = [],
 ) {
+  return finishAssessment(ctx, await readWithSpark(ctx, detections, transcript, turns), detections, measurements);
+}
+
+// Spark reads the video's finds and what they said; it never sees the 3D's numbers, so it can run while
+// the 3D is still measuring. finishAssessment then applies the measurements in code.
+export async function readWithSpark(ctx: AssessContext, detections: Detection[], transcript: string, turns: SpeechTurn[] = []) {
   const coverage = packFor(ctx.municipality);
-  const { model, costUsd } = await askSpark(ctx, coverage.city, coreRules(coverage.pack), detections, transcript, turns);
-  return { result: { ...buildResult(ctx, coverage, model, detections, measurements), measurements: measurements ?? null }, costUsd };
+  return { coverage, ...(await askSpark(ctx, coverage.city, coreRules(coverage.pack), detections, transcript, turns)) };
+}
+
+export function finishAssessment(
+  ctx: AssessContext,
+  read: Awaited<ReturnType<typeof readWithSpark>>,
+  detections: Detection[],
+  measurements?: Measurements | null,
+) {
+  return { result: { ...buildResult(ctx, read.coverage, read.model, detections, measurements), measurements: measurements ?? null }, costUsd: read.costUsd };
 }
 
 // 5/8" drywall under joists, ducts and beams: the finished height is this much lower than the scan.

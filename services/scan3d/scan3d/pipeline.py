@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from . import MODEL_CODE_TAG, MODEL_ID, MODEL_REVISION, ScanError
-from .export import depth_bytes, ply_bytes
+from .export import depth_bytes, ply_bytes, surfel_bytes
 from .frames import crop_for, load_frames, model_size, select_sharpest
 from .room import describe, fit_room
 
@@ -17,6 +17,10 @@ FIT_VOXEL = 0.02  # m, voxel grid for plane fitting and the exported cloud (rese
 MAX_POINTS = 300_000
 CONF_PERCENTILE = 20  # drop each view's least confident 20% of pixels (research note)
 MAX_MEASUREMENT_RATIO = 1.5  # a tape number this far from the model's estimate is probably a typo
+SURFEL_STRIDE = 2  # every 2nd pixel of every frame becomes a surface point for the photo-like view
+SURFEL_VOXEL = 0.012  # m: one point per 1.2 cm cell, the sharpest one
+SURFEL_AGREE = 0.04  # m: two frames must put a surface in the same 4 cm cell, so lone edge smears go
+MAX_SURFELS = 1_500_000
 
 
 @dataclass
@@ -24,6 +28,44 @@ class ScanResult:
     scan: dict
     points_ply: bytes
     depth_bin: bytes
+    surfels: bytes = b""
+
+
+def _cell_keys(pts: np.ndarray, voxel: float) -> np.ndarray:
+    keys = np.floor(pts / voxel).astype(np.int64)
+    keys -= keys.min(0)
+    return (keys[:, 0] << 42) | (keys[:, 1] << 21) | keys[:, 2]
+
+
+def dense_surfels(views: list[dict], to_room, s: float) -> bytes:
+    """Every 2nd pixel of every frame as a coloured surface point, in the room frame, sized to the
+    patch of surface it covers. Kept where two frames agree; one point per 1.2 cm, the sharpest."""
+    H, W = views[0]["depth"].shape
+    vv, uu = np.mgrid[0:H:SURFEL_STRIDE, 0:W:SURFEL_STRIDE].astype(np.float32)
+    pts, rgb, size, fid = [], [], [], []
+    for i, v in enumerate(views):
+        z = v["depth"][::SURFEL_STRIDE, ::SURFEL_STRIDE]
+        m = v["mask"][::SURFEL_STRIDE, ::SURFEL_STRIDE] & (z > 0)
+        K, z = v["K"], z[m]
+        cam = np.stack([(uu[m] - K[0, 2]) * z / K[0, 0], (vv[m] - K[1, 2]) * z / K[1, 1], z], 1)
+        pts.append(cam @ v["pose"][:3, :3].T + v["pose"][:3, 3])
+        rgb.append(v["rgb"][::SURFEL_STRIDE, ::SURFEL_STRIDE][m])
+        size.append(z * SURFEL_STRIDE / K[0, 0])
+        fid.append(np.full(len(z), i, np.uint16))
+    pts = to_room(np.concatenate(pts)) * s
+    rgb, size, fid = np.concatenate(rgb), np.concatenate(size) * s, np.concatenate(fid)
+    if len(views) > 1:
+        cell = _cell_keys(pts, SURFEL_AGREE)
+        pair = np.unique(np.stack([cell, fid.astype(np.int64)], 1), axis=0)
+        cells, frames_in = np.unique(pair[:, 0], return_counts=True)
+        agreed = frames_in[np.searchsorted(cells, cell)] >= 2
+        pts, rgb, size, fid = pts[agreed], rgb[agreed], size[agreed], fid[agreed]
+    order = np.argsort(size, kind="stable")  # sharpest first, so it wins its cell
+    _, first = np.unique(_cell_keys(pts[order], SURFEL_VOXEL), return_index=True)
+    keep = order[first]
+    rng = np.random.default_rng(0)
+    keep = rng.permutation(keep)[:MAX_SURFELS]  # shuffled: any prefix is an even sample, for phones
+    return surfel_bytes(pts[keep], rgb[keep], size[keep], fid[keep])
 
 
 def _voxel_keep(pts: np.ndarray, voxel: float, order: np.ndarray) -> np.ndarray:
@@ -201,6 +243,7 @@ class Scanner:
                 "depthOffset": i * H * W * 2,
             })
         depth = depth_bytes(depths) if depths else b""
+        surfels = b"" if skip_depth else dense_surfels(views, fit.to_room, s)
         timings["exportS"] = time.perf_counter() - t
         timings["totalS"] = time.perf_counter() - t0
 
@@ -234,4 +277,4 @@ class Scanner:
             },
             "timings": {k: round(v, 2) for k, v in timings.items()},
         }
-        return ScanResult(scan, ply, depth)
+        return ScanResult(scan, ply, depth, surfels)

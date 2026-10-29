@@ -114,8 +114,179 @@ def plot(path: Path, views, fit, room, cams, title: str):
     cv2.imwrite(str(path), img)
 
 
+def truth_rooms(bid: str) -> list[tuple[float, float, float, float]]:
+    """Each room's interior rectangle (x0, y0, x1, y1), read from the generator's plans."""
+    import ast
+
+    src = (ROOT / "scripts" / "eval" / "generate.py").read_text()
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.Assign) and getattr(n.targets[0], "id", None) == "BASEMENTS")
+    plans = eval(compile(ast.Expression(node.value), "generate.py", "eval"), {"dict": dict, "__builtins__": {}})
+    return [tuple(r["rect"]) for r in next(b for b in plans if b["id"] == bid)["rooms"]]
+
+
+def whole(bid: str, truth: dict, frames: int, do_plot: bool):
+    """One MapAnything run over the whole take, scored against the whole basement."""
+    d = frames_for(bid)
+    views, _ = views_for(sent(d, 0, len(list(d.glob("*.jpg")))), frames)
+    room, q, fit, cams = measure(views)
+    rects = truth_rooms(bid)
+    xs, ys = [v for r in rects for v in (r[0], r[2])], [v for r in rects for v in (r[1], r[3])]
+    tw, td = sorted([max(xs) - min(xs), max(ys) - min(ys)], reverse=True)
+    w, dd = room["widthM"], room["depthM"]
+    print(f"{bid[:2]} whole ({len(views)} frames, {len(rects)} rooms)  box {w:.2f} x {dd:.2f} vs {tw:.2f} x {td:.2f} "
+          f"({(w - tw) / tw * 100:+.0f}% / {(dd - td) / td * 100:+.0f}%)  walls {len(room['walls'])}  doubled {len(q['doubledWalls'])}  "
+          f"pass {''.join('y' if v else 'n' if v is False else '-' for v in q['pass'].values())}  ceil {room['ceilingHeightM']}")
+    if do_plot:
+        plot(OUT / "plots" / f"{bid[:2]}-whole-{frames}.png", views, fit, room, cams, f"{bid} whole, {len(views)} frames: {w:.2f} x {dd:.2f} (true {tw:.2f} x {td:.2f})")
+    return views, room, fit, cams
+
+
+def _cams2d(views, fit):
+    """Each view's camera position and forward direction on the room's floor plane (x, z)."""
+    poses = np.stack([v["pose"] for v in views])
+    pos = fit.to_room(poses[:, :3, 3])[:, [0, 2]]
+    fwd = (poses[:, :3, 2] @ fit.rotation.T)[:, [0, 2]]
+    return pos, fwd
+
+
+def score_plan(rects, truth_rects):
+    """Best match of our room rectangles to the true ones over the 8 turns/mirrors of the plan:
+    union area IoU and the mean distance between room centres."""
+    best = None
+    for k in range(8):
+        def tf(x, z):
+            for _ in range(k % 4):
+                x, z = -z, x
+            return (x, -z) if k >= 4 else (x, z)
+        ours = []
+        for r in rects:
+            (ax, az), (bx, bz) = tf(r.x0, r.z0), tf(r.x1, r.z1)
+            ours.append((min(ax, bx), min(az, bz), max(ax, bx), max(az, bz)))
+        oc = np.array([((a + c) / 2, (b + d) / 2) for a, b, c, d in ours])
+        tc = np.array([((a + c) / 2, (b + d) / 2) for a, b, c, d in truth_rects])
+        off = (tc - oc).mean(0)
+        ours = [(a + off[0], b + off[1], c + off[0], d + off[1]) for a, b, c, d in ours]
+        lo = np.minimum(np.min([r[:2] for r in ours + list(truth_rects)], 0), 0) - 1
+        hi = np.max([r[2:] for r in ours + list(truth_rects)], 0) + 1
+        g = 0.05
+        shape = tuple(np.ceil((hi - lo) / g).astype(int))
+        def raster(rs):
+            m = np.zeros(shape, bool)
+            for a, b, c, d in rs:
+                m[int((a - lo[0]) / g) : int((c - lo[0]) / g), int((b - lo[1]) / g) : int((d - lo[1]) / g)] = True
+            return m
+        A, B = raster(ours), raster(truth_rects)
+        iou = (A & B).sum() / max(1, (A | B).sum())
+        err = float(np.linalg.norm(oc + off - tc, axis=1).mean())
+        if best is None or iou > best[0]:
+            best = (iou, err)
+    return best
+
+
+def composite(bid: str, truth: dict | None, frames: int, whole_frames: int, by: str, do_plot: bool, d: Path | None = None):
+    """Rooms measured on their own and placed by one rough pass over the whole walk. `by`: "truth"
+    uses the true room starts; "walk" cuts the walk where the camera moved on to a new area."""
+    from scan3d.assemble import place, placed_rect, resolve, rot, settle, split_walk, square
+
+    d = d or frames_for(bid)
+    total = len(list(d.glob("*.jpg")))
+    wv, wn = views_for(sent(d, 0, total), whole_frames)
+    _, _, wfit, _ = measure(wv)
+    wpos, wfwd = _cams2d(wv, wfit)
+    widx = [int(n[:4]) for n in wn]
+    if by == "truth":
+        spans = [(round(r["startS"] * FPS), min(total, round(r["endS"] * FPS))) for r in truth["rooms"]]
+    else:
+        cuts = split_walk(wpos)
+        edges = [0] + [widx[a] for a, _ in cuts[1:]] + [total]
+        spans = list(zip(edges[:-1], edges[1:]))
+    parts = []
+    for lo, hi in spans:
+        rv, rn = views_for(sent(d, lo, hi), frames)
+        room, _, fit, _ = measure(rv)
+        pos, fwd = _cams2d(rv, fit)
+        parts.append((room, pos, place([int(n[:4]) for n in rn], pos, fwd, widx, wpos, wfwd)))
+    S = float(np.median([pl.scale for _, _, pl in parts if pl]))
+    rects, cams = [], []
+    for room, pos, pl in parts:
+        th = square(pl.theta) if pl else 0.0
+        centre = pl.shift / S if pl else np.zeros(2)
+        rects.append(placed_rect(room["widthM"], room["depthM"], th, centre))
+        cams.append(pos @ rot(th).T + centre)
+    kept, owner = resolve(rects, cams)
+    moves = settle(kept)
+    final = [rc.shift(*m) for rc, m in zip(kept, moves)]
+    sizes = " ".join(f"{r.x1 - r.x0:.2f}x{r.z1 - r.z0:.2f}" for r in final)
+    head = f"{bid[:2]} composite by {by}: {len(spans)} stretches {[(round(a / FPS), round(b / FPS)) for a, b in spans]} -> {len(final)} rooms [{sizes}]"
+    if truth is None:
+        print(head)
+    else:
+        truth_rects = truth_rooms(bid)
+        iou, err = score_plan(final, truth_rects) if len(final) == len(truth_rects) else (score_plan_union(final, truth_rects), float("nan"))
+        true_sizes = " ".join(f"{abs(c - a):.2f}x{abs(dd - b):.2f}" for a, b, c, dd in truth_rects)
+        print(f"{head} vs true [{true_sizes}]  IoU {iou:.2f} centre err {err:.2f} m")
+    if do_plot:
+        plot_plan(OUT / "plots" / f"{bid[:2]}-composite-{by}.png", final, truth_rooms(bid) if truth else None, cams=[c for c in cams], title=head)
+    return final
+
+
+def plot_plan(path: Path, rects, truth_rects, cams, title: str):
+    import cv2
+
+    pts = np.concatenate([[[r.x0, r.z0], [r.x1, r.z1]] for r in rects] + list(cams))
+    lo, hi = pts.min(0) - 0.6, pts.max(0) + 0.6
+    px, pad = 60, 20
+    W, H = int((hi[0] - lo[0]) * px) + 2 * pad, int((hi[1] - lo[1]) * px) + 2 * pad + 28
+    img = np.full((H, W, 3), 250, np.uint8)
+    to = lambda x, z: (int((x - lo[0]) * px) + pad, int((z - lo[1]) * px) + pad + 28)  # noqa: E731
+    colours = [(200, 90, 20), (40, 150, 40), (40, 40, 220), (150, 40, 150), (20, 140, 200)]
+    for i, (r, c) in enumerate(zip(rects, cams)):
+        col = colours[i % len(colours)]
+        cv2.rectangle(img, to(r.x0, r.z0), to(r.x1, r.z1), col, 2)
+        for p in c:
+            cv2.circle(img, to(*p), 2, col, -1)
+    cv2.putText(img, title[:110], (6, 18), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cv2.imwrite(str(path), img)
+
+
+def score_plan_union(rects, truth_rects):
+    """Union IoU only, for when the room counts differ: best over the 8 turns/mirrors, aligned by
+    the union's bounding-box centre."""
+    best = 0.0
+    for k in range(8):
+        def tf(x, z):
+            for _ in range(k % 4):
+                x, z = -z, x
+            return (x, -z) if k >= 4 else (x, z)
+        ours = []
+        for r in rects:
+            (ax, az), (bx, bz) = tf(r.x0, r.z0), tf(r.x1, r.z1)
+            ours.append((min(ax, bx), min(az, bz), max(ax, bx), max(az, bz)))
+        oc = (np.min([o[:2] for o in ours], 0) + np.max([o[2:] for o in ours], 0)) / 2
+        tc = (np.min([t[:2] for t in truth_rects], 0) + np.max([t[2:] for t in truth_rects], 0)) / 2
+        off = tc - oc
+        ours = [(a + off[0], b + off[1], c + off[0], d + off[1]) for a, b, c, d in ours]
+        lo = np.min([r[:2] for r in ours + list(truth_rects)], 0) - 1
+        hi = np.max([r[2:] for r in ours + list(truth_rects)], 0) + 1
+        g = 0.05
+        shape = tuple(np.ceil((hi - lo) / g).astype(int))
+        def raster(rs):
+            m = np.zeros(shape, bool)
+            for a, b, c, d in rs:
+                m[int((a - lo[0]) / g) : int((c - lo[0]) / g), int((b - lo[1]) / g) : int((d - lo[1]) / g)] = True
+            return m
+        A, B = raster(ours), raster(truth_rects)
+        best = max(best, (A & B).sum() / max(1, (A | B).sum()))
+    return best
+
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("--composite", choices=["truth", "walk"], help="rooms on their own, placed by a whole-walk pass; rooms from the truth or cut from the walk")
+    ap.add_argument("--whole-frames", type=int, default=64)
+    ap.add_argument("--real", help="a real take's frames folder (no truth): composite only")
+    ap.add_argument("--whole", action="store_true", help="one run over the whole take instead of one per room")
     ap.add_argument("--plot", action="store_true", help="write a plan view per room to tmp/eval/plots")
     ap.add_argument("--only", default="")
     ap.add_argument("--frames", type=int, default=48)
@@ -130,6 +301,14 @@ def main():
         if not (tp.parent / "walkthrough.mp4").exists():
             continue
         truth = json.loads(tp.read_text())
+        if a.whole:
+            whole(bid, truth, a.frames, a.plot)
+            continue
+        if a.composite and a.real:
+            break
+        if a.composite:
+            composite(bid, truth, a.frames, a.whole_frames, a.composite, a.plot)
+            continue
         d = frames_for(bid)
         total = len(list(d.glob("*.jpg")))
         for r in truth["rooms"]:
@@ -154,6 +333,8 @@ def main():
             if a.plot:
                 plot(OUT / "plots" / f"{bid[:2]}-{r['index'] + 1}.png", views, fit, room, cams, f"{row['room']}  w {row['w']}  d {row['d']}  ceil {row['ceil']}")
             print(f"{row['room']:<26} w {row['w']:<18} d {row['d']:<18} ceil {row['ceil']:<12} camH {row['camH']} pass {row['pass']} cands {row['cands']}")
+    if a.real:
+        composite("real", None, a.frames, a.whole_frames, a.composite or "walk", a.plot, Path(a.real))
     if rows:
         print(f"median |w| {np.median([abs(r['wErr']) for r in rows]) * 100:.1f}%  |d| {np.median([abs(r['dErr']) for r in rows]) * 100:.1f}%  "
               f"|ceil| {np.median([abs(r['cErr']) for r in rows if r['cErr'] is not None]) * 100:.1f} cm")

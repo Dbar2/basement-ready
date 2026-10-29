@@ -6,7 +6,7 @@ import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
-import { assess } from "./assess";
+import { finishAssessment, readWithSpark } from "./assess";
 import { enqueue } from "./jobs";
 import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
@@ -17,6 +17,7 @@ import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
 import { buildPlan, rescalePlan, type Plan } from "./plan";
 import { mainRoom, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
+import { basementViewpoints, mergeSurfels, scanBasement, type BasementScan, type RoomPlacement } from "./basement";
 import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 
@@ -93,12 +94,28 @@ async function uploadFrames(scanId: string, work: string, frameCount: number) {
 const plural = (n: number, word: string) => `${n} ${word.toLowerCase()}${n === 1 || /s$/i.test(word) ? "" : "s"}`;
 
 // Each room's 3D files saved, its measurements and plan worked out from the SAM finds.
+// The basement's own 3D files: every room's surface points in one frame, and where the camera stood.
+export async function saveBasement3d(scanId: string, b: BasementScan) {
+  const rooms = b.scans.map((s3, i) => ({
+    scan: s3.scan,
+    surfels: s3.surfels,
+    placement: b.placements[i],
+    frameNumbers: (s3.scan.frames ?? []).map((f: { sourceIndex: number }) => s3.sentFrames[f.sourceIndex]),
+  }));
+  const withPoints = rooms.filter((r): r is typeof r & { surfels: ArrayBuffer } => Boolean(r.surfels));
+  await Promise.all([
+    storage.put(keys.basement3d(scanId, "scan.json"), Buffer.from(JSON.stringify(basementViewpoints(rooms))), "application/json"),
+    ...(withPoints.length ? [storage.put(keys.basement3d(scanId, "surfels.bin"), mergeSurfels(withPoints), "application/octet-stream")] : []),
+  ]);
+}
+
 export async function finishRooms(
   scanId: string,
   ranges: { index: number; from: number; to: number }[],
   scans3d: (Scan3d | null)[],
   detections: Detection[],
   emit: (type: ScanEventType, text: string, data?: unknown) => Promise<void>,
+  placements?: RoomPlacement[],
 ): Promise<Room[]> {
   const furnaceFrames = detections.filter((d) => d.label === "Furnace").map((d) => d.frame);
   const named = new Set<string>();
@@ -123,6 +140,7 @@ export async function finishRooms(
         storage.put(keys.scan3d(scanId, "scan.json", r.index), Buffer.from(JSON.stringify({ ...s3.scan, sentFrames: s3.sentFrames })), "application/json"),
         storage.put(keys.scan3d(scanId, "points.ply", r.index), Buffer.from(s3.ply), "application/octet-stream"),
         storage.put(keys.scan3d(scanId, "depth.bin", r.index), Buffer.from(s3.depth), "application/octet-stream"),
+        ...(s3.surfels ? [storage.put(keys.scan3d(scanId, "surfels.bin", r.index), Buffer.from(s3.surfels), "application/octet-stream")] : []),
       ]);
       const sizes = [
         measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,
@@ -131,7 +149,7 @@ export async function finishRooms(
       const caveat = !measurements.trusted ? " (rough: re-film slowly for exact sizes)" : measurements.scaleSource === "model" ? " (estimated)" : "";
       await emit("measure", `${ranges.length > 1 ? `${name}: ` : "Measured "}${sizes.join(" · ")}${caveat}`, measurements);
     }
-    rooms.push({ index: r.index, name, startS: r.from / ANALYSIS_FPS, endS: r.to / ANALYSIS_FPS, has3d: Boolean(s3), plan, measurements });
+    rooms.push({ index: r.index, name, startS: r.from / ANALYSIS_FPS, endS: r.to / ANALYSIS_FPS, has3d: Boolean(s3), plan, measurements, placement: placements?.[r.index] ?? null });
   }
   return rooms;
 }
@@ -177,27 +195,14 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
     const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[]; ideas?: Idea[]; spoken?: Span[] };
     const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
-    const ranges = roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
-    const scan3dP: Promise<(Scan3d | null)[]> = (await scan3dReady())
-      ? (async () => {
-          const out: (Scan3d | null)[] = [];
-          for (const r of ranges) {
-            if (r.to - r.from < MIN_ROOM_FRAMES) {
-              out.push(null);
-              continue;
-            }
-            await emit("log", ranges.length > 1 ? `Building room ${r.index + 1} of ${ranges.length} in 3D` : "Building your basement in 3D");
-            try {
-              out.push(await runScan3d(work, r, known));
-            } catch (err) {
-              console.error(`[scan3d] ${scanId} room ${r.index}: ${err instanceof Error ? err.message : err}`);
-              await emit("log", "3D scan unavailable this time; checking from the video instead");
-              out.push(null);
-            }
-          }
-          return out;
-        })()
-      : Promise.resolve(ranges.map(() => null));
+    // One connected basement: a rough whole-walk pass places the areas, each measured on its own.
+    const basementP: Promise<BasementScan | null> = (await scan3dReady())
+      ? scanBasement(work, frameCount, known, (text) => emit("log", text)).catch(async (err) => {
+          console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
+          await emit("log", "3D scan unavailable this time; checking from the video instead");
+          return null;
+        })
+      : Promise.resolve(null);
 
     await emit("stage", "find");
     const fileId = await uploadFile(analysis, "video/mp4", "basement.mp4");
@@ -233,18 +238,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       }),
     );
 
-    const scans3d = await scan3dP;
-    const low = lowOverhead(scans3d, detections);
-    if (low.length) {
-      for (const d of low) detections.splice(detections.indexOf(d), 1);
-      await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
-    }
-    const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit);
-    // The rules check one room's numbers: the best-scanned one.
-    const main = mainRoom(rooms);
-    const measurements = main?.measurements ?? null;
-    const plan = main?.plan ?? null;
-
+    // Spark reads the finds and what they said while the 3D is still measuring.
     const heard = await transcriptP;
     // Drop the guide's own voice, and add what they tapped when asked what a room should be.
     const turns = withoutGuide(heard.turns, inputs.spoken);
@@ -255,16 +249,29 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     };
     await emit("stage", "assess");
     await emit("log", "Checking your city's second-unit rules");
+    const ctx = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
+    const sparkP = readWithSpark(ctx, detections, transcript.transcript, transcript.turns);
+
+    const basement3d = await basementP;
+    // Without the 3D, the phone's room marks still name the areas.
+    const ranges = basement3d ? basement3d.spans.map((span, index) => ({ index, ...span })) : roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
+    const scans3d: (Scan3d | null)[] = basement3d ? basement3d.scans : ranges.map(() => null);
+    const low = lowOverhead(scans3d, detections);
+    if (low.length) {
+      for (const d of low) detections.splice(detections.indexOf(d), 1);
+      await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
+    }
+    const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements);
+    if (basement3d) await saveBasement3d(scanId, basement3d);
+    // The rules check one room's numbers: the best-scanned one.
+    const main = mainRoom(rooms);
+    const measurements = main?.measurements ?? null;
+    const plan = main?.plan ?? null;
+
     // They may have answered "who's it for" while this ran.
     const [latest] = await db.select().from(schema.basements).where(eq(schema.basements.id, basement.id));
     const household = (latest?.household ?? basement.household) as Household;
-    const assessment = await assess(
-      { dir: work, household, municipality: basement.municipality, property: basement.property as Property | null },
-      detections,
-      transcript.transcript,
-      measurements,
-      transcript.turns,
-    );
+    const assessment = finishAssessment({ ...ctx, household }, await sparkP, detections, measurements);
     await uploads;
 
     const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;

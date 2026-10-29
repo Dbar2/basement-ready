@@ -53,7 +53,11 @@ export type Plan = {
   trusted: boolean;
 };
 
-// Filmed room by room, each room gets its own 3D scan and plan. Older scans have none.
+// Where a room sits in the one basement plan: turned by quarter turns about the vertical
+// (x' = c·x − s·z, z' = s·x + c·z), then shifted on the floor (server/basement.ts).
+export type RoomPlacement = { turn: 0 | 1 | 2 | 3; x: number; z: number };
+
+// Each area of the basement is measured on its own, then placed in one plan. Older scans have no placement.
 export type RoomResult = {
   index: number;
   name: string;
@@ -62,6 +66,7 @@ export type RoomResult = {
   has3d: boolean;
   plan: Plan | null;
   measurements: Measurements | null;
+  placement?: RoomPlacement | null;
 };
 
 export type Vision = {

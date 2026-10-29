@@ -33,6 +33,33 @@ Tried, measured and dropped, because each fixed one room and broke another:
 
 Next, if there's time: render b4–b7 (about 1¾ hours) so a change is judged on 20 rooms rather than 6, and look again at small rooms and the ceiling.
 
+## Oct 29, evening: one connected basement
+
+David filmed 3 rooms and asked for one plan, not a scan per room. Four ways to get one model of the whole walk, tested on b2/b3 (true room positions read from `scripts/eval/generate.py`) and on David's take `c859f7dc`:
+
+| Approach | Result |
+|---|---|
+| One MapAnything run over the whole walk (64 frames) | Connected, but the geometry drifts along the walk. b2 came out 31% short, and its 6.4 m family room squashed to about the width of its 3 m utility room. On David's take, the walls lean a few degrees and the last room smears. |
+| Overlapping time slices joined through shared frames (Umeyama on the shared pixels' 3D points) | Failed. The same picture's points differ by 20 cm to 1.6 m between runs, so the joins twist the rooms. |
+| COLMAP structure-from-motion for the camera path (pycolmap 4.2, SIFT, BSD) | At 2.5–5 fps it breaks David's take into 9–14 pieces (dim walls, quick pans). At 10 fps it ran over 25 minutes without finishing. Too fragile and too slow. |
+| **Each area measured on its own, placed by a rough whole-walk pass** (`server/basement.ts`, `server/assemble.ts`, mirrored in `services/scan3d/scan3d/assemble.py`) | **b2: 90% overlap with the true plan, rooms within 8 cm of their true position.** b3 was let down by its workshop, which still takes in the next room's walls (+154%). |
+
+How the chosen approach works:
+
+1. A rough MapAnything pass over the whole walk (40 frames).
+2. The walk is cut where the camera moves on to a new area. This uses dynamic programming on the camera path, and each cut costs a tenth of the walk's spread. On b2 and b3 it found every true room start, plus a harmless extra cut. On David's take it found 3 areas, at 0:00, 0:36 and 1:24, where the phone had only marked 1:25.
+3. Each area is measured on its own (48 frames).
+4. Frames close in time are the same camera in both runs, which gives each area its turn, scale and shift into the whole-walk plan.
+5. Turns snap to right angles.
+6. Two pieces of one open room merge: each box holds at least half of the other's camera positions.
+7. Neighbours settle to share a 12 cm wall.
+
+On David's take, the 0:36–1:23 stretch merged into the first room, so his plan shows 2 rooms where he filmed 3. His tape measurements will say which is right.
+
+Tried and dropped: trimming a room where it reaches over another room's camera positions. With placement off by about a metre, it cut b2's family room to 4.4 m.
+
+The 3D view is now photo-like (`src/three/RealScan.tsx`). It uses every 2nd pixel of every kept frame, kept where two frames agree within 4 cm, one point per 1.2 cm (David's take: 463k points, 5.6 MB). Each point is drawn as a soft disc sized to the patch of surface it covers. A phone loads the first 400k, and they're shuffled so any prefix is an even sample.
+
 ## What's built
 
 - `scripts/eval/generate.py` (Blender, headless) builds 7 synthetic basements from exact plans. They have 1–4 rooms, ceilings from 1.85 m to 2.60 m, open joists, ducts, beams and bulkheads, windows with escape-size and too-small openings, 2.03 m doors, stairs, a furnace, clutter, and dim lighting metered room by room the way a phone would. For each basement it renders a 1080×1920 30 fps handheld walkthrough in the filming guide's order and writes `truth.json`.

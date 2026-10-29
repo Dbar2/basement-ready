@@ -972,6 +972,34 @@ function Scene({
   );
 }
 
+// The suggested layout on its own: furniture and the new walls, lit, without the room's shell. It sits
+// inside the real scan (src/three/RealScan.tsx), in the room's own frame.
+export function StagedFurniture({ plan, layout, finishKey = "light" }: { plan: Plan; layout: Layout; finishKey?: FinishKey }) {
+  const maps = useMaps();
+  const mats = useMemo(() => makeMats(FINISHES[finishKey], maps), [finishKey, maps]);
+  const cut = useRef<Partial<Record<PlanSide, number>>>({});
+  const h = Math.min(2.6, Math.max(2.0, plan.ceilingHeightM ?? 2.3));
+  const b = plan.box;
+  return (
+    <CutCtx.Provider value={cut}>
+      <MatsCtx.Provider value={mats}>
+        <Environment resolution={128} frames={1} environmentIntensity={0.9}>
+          <Lightformer form="rect" intensity={2.2} color="#FFF8EE" position={[0, 8, 0]} rotation-x={Math.PI / 2} scale={[14, 14, 1]} />
+          <Lightformer form="rect" intensity={0.8} color="#F2F5F0" position={[-8, 3, 0]} rotation-y={Math.PI / 2} scale={[14, 4, 1]} />
+        </Environment>
+        <hemisphereLight args={["#FFFFFF", "#D9D2C4", 0.5]} />
+        <directionalLight position={[(b.minX + b.maxX) / 2 + 3, 8, (b.minZ + b.maxZ) / 2 + 2]} intensity={1.2} color="#FFF5E8" />
+        {layout.walls.map((w, i) => (
+          <Partition key={i} w={w} doors={layout.doors} h={h} />
+        ))}
+        {layout.zones.map((z, i) => (
+          <Furniture key={`${z.kind}${i}`} z={z} layout={layout} plan={plan} h={h} />
+        ))}
+      </MatsCtx.Provider>
+    </CutCtx.Provider>
+  );
+}
+
 function Loading() {
   const { active, progress } = useProgress();
   if (!active) return null;
