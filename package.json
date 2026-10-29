@@ -21,7 +21,8 @@
     "worker": "tsx server/worker.ts",
     "smoke": "tsx scripts/smoke.ts",
     "dev:scan3d": "cd services/scan3d && SCAN3D_TOKEN=dev .venv/bin/python run_local.py serve --port 8790",
-    "try:live": "tsx scripts/try-live-capture.ts"
+    "try:live": "tsx scripts/try-live-capture.ts",
+    "eval": "tsx scripts/eval/run.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1158.0",
