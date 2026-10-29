@@ -17,7 +17,7 @@ import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
 import { buildPlan, rescalePlan, type Plan } from "./plan";
 import { mainRoom, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
-import { doorHeights, doorScale, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
+import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 
 const run = promisify(execFile);
@@ -100,12 +100,12 @@ export async function finishRooms(
   detections: Detection[],
   emit: (type: ScanEventType, text: string, data?: unknown) => Promise<void>,
 ): Promise<Room[]> {
-  const mechanicalFrames = detections.filter((d) => d.kind === "mechanical").map((d) => d.frame);
+  const furnaceFrames = detections.filter((d) => d.label === "Furnace").map((d) => d.frame);
   const named = new Set<string>();
   const rooms: Room[] = [];
   for (const r of ranges) {
     const s3 = scans3d[r.index];
-    const name = ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, mechanicalFrames, named);
+    const name = ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named);
     let measurements: Measurements | null = null;
     let plan: Plan | null = null;
     if (s3) {
@@ -233,7 +233,13 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       }),
     );
 
-    const rooms = await finishRooms(scanId, ranges, await scan3dP, detections, emit);
+    const scans3d = await scan3dP;
+    const low = lowOverhead(scans3d, detections);
+    if (low.length) {
+      for (const d of low) detections.splice(detections.indexOf(d), 1);
+      await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
+    }
+    const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit);
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
     const measurements = main?.measurements ?? null;

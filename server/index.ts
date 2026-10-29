@@ -18,9 +18,9 @@ import { searchAddresses } from "./address";
 import { suggestLayout } from "./layout";
 import { fetchAerial, lookupProperty } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
-import { finishRooms, ANALYSIS_FPS } from "./pipeline";
+import { finishRooms, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
-import { runScan3d, summarize, type Scan3d } from "./scan3d";
+import { lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
 import { grantsFor, moneyFor, MUNICIPALITIES, packFor, type Household } from "./rules";
@@ -399,9 +399,11 @@ app.post("/api/scans/:id/replan", async (c) => {
       const known = (scan.inputs as { floorToJoistsM?: number } | null)?.floorToJoistsM;
       const scans3d: (Scan3d | null)[] = [];
       for (const r of ranges) scans3d.push(r.to - r.from < MIN_ROOM_FRAMES ? null : await runScan3d(work, r, known ? { floorToJoistsM: known } : {}).catch(() => null));
-      const rooms = await finishRooms(id, ranges, scans3d, result.detections, async () => {});
+      const low = new Set(lowOverhead(scans3d, result.detections));
+      const detections = (result.detections as Detection[]).filter((d) => !low.has(d));
+      const rooms = await finishRooms(id, ranges, scans3d, detections, async () => {});
       const main = mainRoom(rooms);
-      const next = { ...result, rooms, mainRoom: main?.index ?? null, has3d: rooms.some((r) => r.has3d), plan: main?.plan ?? null, measurements: main?.measurements ?? null };
+      const next = { ...result, detections, rooms, mainRoom: main?.index ?? null, has3d: rooms.some((r) => r.has3d), plan: main?.plan ?? null, measurements: main?.measurements ?? null };
       await db.update(schema.scans).set({ result: next }).where(eq(schema.scans.id, id));
       return c.json({ rooms: rooms.map(({ name, startS, endS, plan }) => ({ name, startS, endS, size: plan && `${plan.widthM} × ${plan.depthM} m`, trusted: plan?.trusted ?? null })) });
     } finally {

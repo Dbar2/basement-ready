@@ -102,9 +102,10 @@ export function mainRoom(rooms: Room[]): Room | null {
   return [...scanned].sort((a, b) => Number(Boolean(b.plan!.trusted)) - Number(Boolean(a.plan!.trusted)) || b.plan!.areaM2 - a.plan!.areaM2)[0];
 }
 
-// "Furnace room" when the furnace was seen best there; otherwise its number.
-export function roomName(index: number, from: number, to: number, mechanicalFrames: number[], named: Set<string>) {
-  if (!named.has("Furnace room") && mechanicalFrames.some((f) => f >= from && f < to)) {
+// "Furnace room" where the furnace was seen; otherwise its number. An electrical panel alone doesn't
+// make a furnace room.
+export function roomName(index: number, from: number, to: number, furnaceFrames: number[], named: Set<string>) {
+  if (!named.has("Furnace room") && furnaceFrames.some((f) => f >= from && f < to)) {
     named.add("Furnace room");
     return "Furnace room";
   }
