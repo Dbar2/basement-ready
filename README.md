@@ -20,7 +20,7 @@ pnpm dev                    # web on http://localhost:5173, API on :8787, local 
 Open http://localhost:5173. The example works without a key. Filming your own basement needs the key.
 
 - **Film from your phone:** `pnpm dev:phone` serves the app over HTTPS on your network. Phones only allow the camera and compass on HTTPS.
-- **Measured 3D (optional):** this runs MapAnything locally. It needs Python 3.12 and [uv](https://docs.astral.sh/uv/), an Apple Silicon Mac or a CUDA GPU, and about 5 GB for the model weights.
+- **Measured 3D (optional):** this runs MapAnything locally. It needs Python 3.12 and [uv](https://docs.astral.sh/uv/), an Apple Silicon Mac or a CUDA GPU, about 5 GB for the model weights, and about 10 GB of free memory while a room is measured (on a 16 GB Mac, set `SCAN3D_MAX_FRAMES=24` in `.env`).
   ```bash
   cd services/scan3d
   uv venv --python 3.12 .venv

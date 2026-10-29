@@ -6,7 +6,8 @@ import type { Detection } from "./pipeline";
 
 const URL_ = process.env.SCAN3D_URL;
 const TOKEN = process.env.SCAN3D_TOKEN;
-const MAX_FRAMES = Number(process.env.SCAN3D_MAX_FRAMES ?? 24);
+// 48 frames per room measure rooms clearly better than 24 (docs/research/scan-eval.md).
+const MAX_FRAMES = Number(process.env.SCAN3D_MAX_FRAMES ?? 48);
 // Send at most this many frames; the service keeps the sharpest in each slice.
 const SEND_FRAMES = 120;
 

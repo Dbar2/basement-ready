@@ -21,7 +21,7 @@ from email.parser import BytesParser
 from email.policy import default
 from pathlib import Path
 
-LOCAL_MAX_FRAMES = 24  # research note: MPS memory gets risky above ~24-32 views
+LOCAL_MAX_FRAMES = 48  # about 10 GB on an M3 Pro; 24 measured rooms much worse (docs/research/scan-eval.md)
 
 
 def read_frames(src: str) -> list[tuple[str, bytes]]:
