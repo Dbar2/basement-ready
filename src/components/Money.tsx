@@ -1,0 +1,292 @@
+// The money and the road to it, on the answer page: what they qualify for (decided in code from
+// each program's written conditions), the one answer that settles the rest, "How to apply" in the
+// order it happens, and who draws and builds it. Never a recommended business: public registries only.
+import type { Grant, MoneyQuestion, MoneyValue, PlanStep, ScanResult } from "../api";
+import { MoneyQuestionCard } from "./Questions";
+import "../styles/money.css";
+
+export const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+const range = (lo: number | null | undefined, hi: number | null | undefined) =>
+  lo == null || hi == null ? null : lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`;
+
+const KIND: Record<string, string> = {
+  grant: "grant",
+  forgivable_loan: "forgivable loan",
+  refundable_tax_credit: "tax credit",
+};
+
+// "$20,000 grant", "Saves fees", "Financing".
+export function worth(g: Grant) {
+  if (g.value === "cash" && g.amountCAD != null) return `${money(g.amountCAD)} ${KIND[g.kind] ?? ""}`.trim();
+  if (g.value === "financing") return "Financing";
+  return "Saves fees";
+}
+
+function Program({ g }: { g: Grant }) {
+  return (
+    <li className="program" data-qualify={g.qualify} data-value={g.value}>
+      <div className="program-head">
+        <h3>{g.shortName}</h3>
+        <span className="program-worth mono">{worth(g)}</span>
+      </div>
+      <p>{g.reason}</p>
+      {g.commitments.length > 0 && (
+        <details className="program-terms">
+          <summary>What you agree to</summary>
+          <ul>
+            {g.commitments.map((c) => (
+              <li key={c}>{c}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+      {g.note && <p className="muted program-note">{g.note}</p>}
+      <a className="program-source" href={g.source.url} target="_blank" rel="noreferrer">
+        {g.verified ? "Source" : "Source (one detail still unconfirmed)"}
+      </a>
+    </li>
+  );
+}
+
+type Answer = (id: string, value: MoneyValue | null) => void;
+
+export function MoneySection({ r, busy, onAnswer }: { r: ScanResult; busy: string | null; onAnswer: Answer }) {
+  const grants = r.grants ?? [];
+  const yes = grants.filter((g) => g.qualify === "yes");
+  const no = grants.filter((g) => g.qualify === "no");
+  const questions = r.moneyQuestions ?? [];
+  const total = r.money?.total ?? 0;
+  const ifYes = r.money?.ifYes ?? 0;
+  const cash = yes.filter((g) => g.value === "cash");
+  // Answered questions that no longer decide anything still show, so any answer can be changed.
+  const answered = (r.moneyAnswered ?? []).filter((a) => !questions.some((q) => q.id === a.id));
+
+  return (
+    <section className="block money" id="money">
+      <h2>Money you can get</h2>
+      <div className="money-total" data-none={total === 0 || undefined}>
+        {total > 0 ? (
+          <>
+            <span className="mono">You qualify for up to</span>
+            <strong>{money(total)}</strong>
+            <span>
+              {cash.length === 1 ? `From the ${cash[0].shortName}.` : `From ${cash.length} programs, listed below.`}
+              {ifYes > 0 && ` Answer ${questions.length === 1 ? "one question" : `${questions.length} questions`} to see if ${money(ifYes)} more applies.`}
+            </span>
+          </>
+        ) : ifYes > 0 ? (
+          <>
+            <span className="mono">Up to {money(ifYes)} is one answer away</span>
+            <span>Answer below and we'll tell you exactly what you qualify for.</span>
+          </>
+        ) : (
+          <>
+            <span className="mono">No grants for this plan</span>
+            <span>{yes.length ? "But the savings and financing below still apply." : "The reasons are below."}</span>
+          </>
+        )}
+      </div>
+
+      {yes.length > 0 && (
+        <ul className="programs">
+          {yes.map((g) => (
+            <Program key={g.id} g={g} />
+          ))}
+        </ul>
+      )}
+
+      {questions.length > 0 && (
+        <div className="money-ask">
+          <h3>One answer away</h3>
+          <ul className="ruled questions money-questions">
+            {questions.map((q) => (
+              <MoneyQuestionCard
+                key={q.id}
+                q={q}
+                busy={busy === q.id}
+                decides={grants.filter((g) => g.question === q.id)}
+                onAnswer={(v) => onAnswer(q.id, v)}
+              />
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {no.length > 0 && (
+        <details className="money-no">
+          <summary>
+            {no.length === 1 ? "1 program you don't qualify for" : `${no.length} programs you don't qualify for`}
+          </summary>
+          <ul className="ruled">
+            {no.map((g) => (
+              <li key={g.id}>
+                <b>{g.shortName}</b> <span className="muted">{g.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {answered.length > 0 && <MoneyAnswers answered={answered} busy={busy} onAnswer={onAnswer} />}
+      <p className="note">
+        Decided from each program's written rules, checked {r.compiledAt}. The program makes the final call when you apply.
+      </p>
+    </section>
+  );
+}
+
+const said = (q: MoneyQuestion) => q.options.find((o) => o.value === q.answer)?.label ?? String(q.answer);
+
+// What they told us about the money, one tap to change.
+function MoneyAnswers({ answered, busy, onAnswer }: { answered: MoneyQuestion[]; busy: string | null; onAnswer: Answer }) {
+  return (
+    <details className="money-told">
+      <summary>What you told us</summary>
+      <ul className="ruled questions money-questions">
+        {answered.map((q) => (
+          <MoneyQuestionCard key={q.id} q={q} busy={busy === q.id} decides={[]} onAnswer={(v) => onAnswer(q.id, v)} label={said(q)} />
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function Links({ links }: { links: { label: string; url: string }[] }) {
+  if (!links.length) return null;
+  return (
+    <p className="task-links">
+      {links.map((l) => (
+        <a key={l.url} href={l.url} target={l.url.startsWith("mailto:") ? undefined : "_blank"} rel="noreferrer">
+          {l.label}
+        </a>
+      ))}
+    </p>
+  );
+}
+
+export function HowToApply({ steps }: { steps: PlanStep[] }) {
+  // Results from before the timeline have no tasks; they show nothing rather than half a plan.
+  const usable = steps.filter((s) => Array.isArray(s.tasks));
+  if (!usable.length) return null;
+  return (
+    <section className="block plan-steps" id="how-to-apply">
+      <h2>How to apply</h2>
+      <p className="lede">In the order it happens, from today to move-in: where to go, what to bring, who does it.</p>
+      <ol className="timeline">
+        {usable.map((s, i) => (
+          <li key={s.id} data-step={s.id}>
+            <span className="timeline-num">{i + 1}</span>
+            <div>
+              <p className="timeline-when mono">{s.when}</p>
+              <h3>{s.title}</h3>
+              <p className="timeline-meta mono">{[s.who, s.time, range(s.costLow, s.costHigh)].filter(Boolean).join(" · ")}</p>
+              {s.costNote && <p className="timeline-cost">{s.costNote}</p>}
+              <p className="muted">{s.detail}</p>
+              {s.tasks.length > 0 && (
+                <ul className="tasks">
+                  {s.tasks.map((t) => (
+                    <li key={t.title} className="task" data-qualify={t.program?.qualify}>
+                      <p className="task-title">
+                        <b>{t.title}</b>
+                        {t.program?.qualify === "ask" && <span className="tag-mono">If you qualify</span>}
+                      </p>
+                      {t.detail && <p className="muted">{t.detail}</p>}
+                      {t.bring && t.bring.length > 0 && (
+                        <div className="task-bring">
+                          <span className="mono">Bring</span>
+                          <ul>
+                            {t.bring.map((b) => (
+                              <li key={b}>{b}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <Links links={t.links} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {s.source?.url && (
+                <a className="timeline-source" href={s.source.url} target="_blank" rel="noreferrer">
+                  Source
+                </a>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+// Who draws it and who builds it: the owner's own drawings, the public designer registry, the trade
+// registries, and the one-page plan to send.
+export function GetItDone({ r, scanId, onShare }: { r: ScanResult; scanId: string; onShare: () => void }) {
+  const { registry, selfDraw, designerCost, trades, cityNote } = r.pros;
+  const designerUrl = registry.searchUrl ?? registry.url;
+  const inPlay = (id?: string) => !id || (r.grants ?? []).some((g) => g.id === id && g.qualify !== "no");
+  const hires = (trades ?? []).filter((t) => inPlay(t.program));
+  return (
+    <section className="block" id="get-it-done">
+      <h2>Get it done</h2>
+      <div className="paths">
+        {selfDraw && (
+          <article className="path">
+            <p className="mono path-tag">Free</p>
+            <h3>Draw the plans yourself</h3>
+            <p>{selfDraw.detail}</p>
+            {selfDraw.note && <p className="muted">{selfDraw.note}</p>}
+            <Links links={[selfDraw.checklist, selfDraw.rule].filter((l): l is { label: string; url: string } => Boolean(l))} />
+          </article>
+        )}
+        <article className="path">
+          <p className="mono path-tag">{designerCost ? `${range(designerCost.lowCAD, designerCost.highCAD)}` : "Registered"}</p>
+          <h3>Hire a registered designer</h3>
+          {designerCost?.note && <p className="muted">{designerCost.note}</p>}
+          {registry.howToSearch && <p>{registry.howToSearch}</p>}
+          <a className="btn btn-primary" href={designerUrl} target="_blank" rel="noreferrer">
+            Find a BCIN designer <span className="arrow" aria-hidden>→</span>
+          </a>
+          {registry.searchLinks && registry.searchLinks.length > 1 && <Links links={registry.searchLinks.slice(1)} />}
+          {designerCost?.source?.url && (
+            <a className="path-source" href={designerCost.source.url} target="_blank" rel="noreferrer">
+              Cost source
+            </a>
+          )}
+        </article>
+        <article className="path">
+          <p className="mono path-tag">Your plan</p>
+          <h3>Send your plan to a designer</h3>
+          <p>One page with the floor plan, the fixes, the money and these steps, ready to email or print.</p>
+          <div className="path-actions">
+            <a className="btn btn-ghost" href={`/scans/${scanId}/brief`}>
+              One-page plan (PDF)
+            </a>
+            <button className="link-quiet" onClick={onShare}>
+              Share my plan
+            </button>
+          </div>
+        </article>
+      </div>
+
+      {hires.length > 0 && (
+        <>
+          <h3 className="trades-head">Check the trades you hire</h3>
+          <ul className="ruled trades">
+            {hires.map((t) => (
+              <li key={t.url}>
+                <div>
+                  <b>{t.title}</b> <span className="muted">{t.detail}</span>
+                </div>
+                <a href={t.url} target="_blank" rel="noreferrer">
+                  {t.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      <p className="note">{cityNote ? `${cityNote} ` : ""}We don't recommend businesses either: these are public registries, so you can check anyone you hire.</p>
+    </section>
+  );
+}

@@ -16,14 +16,15 @@ import { listModels } from "./meta";
 import { buildPlan } from "./plan";
 import { searchAddresses } from "./address";
 import { suggestLayout } from "./layout";
-import { fetchAerial, lookupProperty } from "./property";
+import { fetchAerial, lookupProperty, type Property } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { finishRooms, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
-import { grantsFor, moneyFor, MUNICIPALITIES, packFor, type Household } from "./rules";
+import { MUNICIPALITIES, packFor, type Household } from "./rules";
+import { cleanMoneyAnswer, evaluateMoney, STORED_MONEY_QUESTIONS, type MoneyAnswers } from "./eligibility";
 import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
 import { keys, storage } from "./storage";
@@ -164,7 +165,9 @@ app.get("/api/scans/:id", async (c) => {
   // Scans from before layouts get one on the way out: it's pure, from the saved plan.
   const result = scan.result as any;
   const withLayout = result?.plan && !result.layout ? { ...result, layout: suggestLayout(result.plan) } : result;
-  return c.json({ id: scan.id, status: scan.status, result: withLayout ?? null, error: scan.status === "error" ? "We couldn't read this video." : null });
+  // And scans from before the money questions get their money worked out again, with their answers.
+  const withMoney = withLayout?.findings && !withLayout.moneyQuestions ? recheck(withLayout, await savedAnswers(scan.basementId)) : withLayout;
+  return c.json({ id: scan.id, status: scan.status, result: withMoney ?? null, error: scan.status === "error" ? "We couldn't read this video." : null });
 });
 
 // Live scan events: replays what already happened, then follows new rows until done.
@@ -306,6 +309,16 @@ function cleanAnswer(v: unknown): number | boolean | "unsure" | null {
   return null;
 }
 
+// A rule answer (yes/no, a number, or "unsure"), or a money question's own option.
+function answerFor(ruleId: string, v: unknown, pack: ReturnType<typeof packFor>["pack"]) {
+  return STORED_MONEY_QUESTIONS.has(ruleId) ? cleanMoneyAnswer(ruleId, v, pack) : cleanAnswer(v);
+}
+
+async function savedAnswers(basementId: string): Promise<Answers> {
+  const rows = await db.select().from(schema.answers).where(eq(schema.answers.basementId, basementId));
+  return Object.fromEntries(rows.map((r) => [r.ruleId, r.value as AnswerValue]));
+}
+
 app.post("/api/scans/:id/answers", async (c) => {
   const id = c.req.param("id");
   if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
@@ -314,17 +327,25 @@ app.post("/api/scans/:id/answers", async (c) => {
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
   const result = scan?.result as any;
   if (!scan) return c.json({ error: "Not found" }, 404);
-  const value = cleanAnswer(body.value);
+  const [basement] = await db.select().from(schema.basements).where(eq(schema.basements.id, scan.basementId));
+  const { pack } = packFor(result?.municipality ?? basement?.municipality ?? "waterloo-on");
+  const value = answerFor(ruleId, body.value, pack);
+  const known = STORED_MONEY_QUESTIONS.has(ruleId) || (result ? result.findings?.some((f: any) => f.ruleId === ruleId) : ruleId in TRIAGE);
+  if (!known) return c.json({ error: "Unknown question." }, 400);
+  // null clears an answer; anything else the question doesn't offer is refused, never taken as a clear.
+  if (value === null && body.value !== null) return c.json({ error: "Unknown answer." }, 400);
   // Answered while the scan runs: keep it, and the scan applies it when it finishes.
   if (!result) {
-    if (!(ruleId in TRIAGE) || value === null) return c.json({ error: "Unknown question." }, 400);
+    if (value === null) {
+      await db.delete(schema.answers).where(and(eq(schema.answers.basementId, scan.basementId), eq(schema.answers.ruleId, ruleId)));
+      return c.json({ saved: true });
+    }
     await db
       .insert(schema.answers)
       .values({ basementId: scan.basementId, ruleId, value })
       .onConflictDoUpdate({ target: [schema.answers.basementId, schema.answers.ruleId], set: { value, updatedAt: new Date() } });
     return c.json({ saved: true });
   }
-  if (!result.findings?.some((f: any) => f.ruleId === ruleId)) return c.json({ error: "Unknown question." }, 400);
   if (value === null) {
     await db.delete(schema.answers).where(and(eq(schema.answers.basementId, scan.basementId), eq(schema.answers.ruleId, ruleId)));
   } else {
@@ -333,9 +354,7 @@ app.post("/api/scans/:id/answers", async (c) => {
       .values({ basementId: scan.basementId, ruleId, value })
       .onConflictDoUpdate({ target: [schema.answers.basementId, schema.answers.ruleId], set: { value, updatedAt: new Date() } });
   }
-  const rows = await db.select().from(schema.answers).where(eq(schema.answers.basementId, scan.basementId));
-  const answers: Answers = Object.fromEntries(rows.map((r) => [r.ruleId, r.value as AnswerValue]));
-  const updated = recheck(result, answers);
+  const updated = recheck(result, await savedAnswers(scan.basementId));
   await db.update(schema.scans).set({ result: updated }).where(eq(schema.scans.id, id));
   return c.json({ result: updated });
 });
@@ -352,21 +371,47 @@ app.post("/api/scans/:id/household", async (c) => {
   await db.update(schema.basements).set({ household }).where(eq(schema.basements.id, scan.basementId));
   const result = scan.result as any;
   if (!result) return c.json({ saved: true });
-  const { pack } = packFor(result.municipality ?? "waterloo-on");
-  const grants = grantsFor(pack, household as Household);
-  // Re-check with the saved answers, so the plan's money step follows the new grants.
-  const rows = await db.select().from(schema.answers).where(eq(schema.answers.basementId, scan.basementId));
-  const updated = recheck({ ...result, household, grants, money: moneyFor(grants) }, Object.fromEntries(rows.map((r) => [r.ruleId, r.value as AnswerValue])));
+  // Re-check with the saved answers: the money and the plan's steps follow who it's for.
+  const updated = recheck({ ...result, household }, await savedAnswers(scan.basementId));
   await db.update(schema.scans).set({ result: updated }).where(eq(schema.scans.id, id));
   return c.json({ result: updated });
+});
+
+// The money questions still open for this basement, asked on the wait screen while the scan runs.
+app.get("/api/scans/:id/money", async (c) => {
+  const id = c.req.param("id");
+  if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
+  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
+  if (!scan) return c.json({ error: "Not found" }, 404);
+  const [basement] = await db.select().from(schema.basements).where(eq(schema.basements.id, scan.basementId));
+  const { pack } = packFor(basement.municipality);
+  const money = evaluateMoney(pack, {
+    household: basement.household as Household,
+    answers: (await savedAnswers(scan.basementId)) as MoneyAnswers,
+    property: basement.property as Property | null,
+  });
+  return c.json({ questions: money.questions, total: money.total });
+});
+
+// The sample basement's money questions: nothing saved, the answers come with the request.
+app.post("/api/money", async (c) => {
+  const body = await c.req.json().catch(() => ({}));
+  const household = (["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : "unsure") as Household;
+  const { pack } = packFor(String(body.municipality ?? "waterloo-on"));
+  const raw = (body.answers && typeof body.answers === "object" ? body.answers : {}) as Record<string, unknown>;
+  const answers = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, cleanMoneyAnswer(k, v, pack)]).filter(([, v]) => v !== null));
+  const money = evaluateMoney(pack, { household, answers, property: null });
+  return c.json({ questions: money.questions, total: money.total });
 });
 
 // The sample basement: same re-check, nothing saved, so anyone can try answering.
 app.post("/api/recheck", async (c) => {
   const body = await c.req.json().catch(() => null);
   if (!body?.result?.findings || typeof body.answers !== "object") return c.json({ error: "Send a result and answers." }, 400);
-  const answers: Answers = Object.fromEntries(Object.entries(body.answers as Record<string, unknown>).map(([k, v]) => [k, cleanAnswer(v)]));
-  return c.json({ result: recheck(body.result, answers) });
+  const { pack } = packFor(body.result.municipality ?? "waterloo-on");
+  const answers: Answers = Object.fromEntries(Object.entries(body.answers as Record<string, unknown>).map(([k, v]) => [k, answerFor(k, v, pack)]));
+  const household = ["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : body.result.household;
+  return c.json({ result: recheck({ ...body.result, household }, answers) });
 });
 
 // The 3D scan's files, for the scan reveal and the explorer. `?room=n` for rooms after the first.

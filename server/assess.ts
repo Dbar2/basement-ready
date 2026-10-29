@@ -7,9 +7,8 @@ import { dataUrl, outputText, responses } from "./meta";
 import type { Detection } from "./pipeline";
 import type { Measurements } from "./scan3d";
 import type { Property } from "./property";
-import { evaluate } from "./recheck";
-import { coreRules, grantsFor, moneyFor, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
-import { planSteps } from "./steps";
+import { evaluate, moneyAndSteps } from "./recheck";
+import { coreRules, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
 import { ASK_OPTIONS, fromRecords, TRIAGE } from "./triage";
 
 const run = promisify(execFile);
@@ -342,9 +341,8 @@ export function buildResult(
     property: ctx.property ?? null,
     heldBack,
     cost,
-    grants: grantsFor(pack, ctx.household),
-    money: moneyFor(grantsFor(pack, ctx.household)),
-    steps: planSteps({ city, fixGroups, standard, cost, grants: grantsFor(pack, ctx.household), plan: null }, pack),
+    // Money and the road to it. Answers arrive later through recheck, which redoes this part.
+    ...moneyAndSteps({ household: ctx.household, property: ctx.property, city, plan: null }, { fixGroups, standard, cost }, {}, pack),
     process: pack.process,
     pros: pack.pros,
     compiledAt: pack.compiledAt,
