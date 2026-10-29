@@ -193,7 +193,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       : Promise.resolve({ transcript: "", turns: [] });
 
     // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
-    const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[]; ideas?: Idea[]; spoken?: Span[] };
+    const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[]; ideas?: Idea[]; spoken?: Span[]; lens?: "ultrawide" | "wide"; wideAt?: number };
     const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
     // One connected basement: a rough whole-walk pass places the areas, each measured on its own.
     const basementP: Promise<BasementScan | null> = (await scan3dReady())
@@ -295,6 +295,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const result = {
       ...rechecked,
       vision: withIdeas(rechecked.vision, inputs.ideas, rooms),
+      // How it was filmed: the lens, and the still wide shot the staged photos start from.
+      capture: { lens: inputs.lens ?? null, wideAt: inputs.wideAt ?? null },
       layout: plan ? suggestLayout(plan) : null,
       // The photos come from their own job, right after this answer.
       concepts: { status: "pending" as const, items: [] },

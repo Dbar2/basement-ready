@@ -41,6 +41,8 @@ page.on("response", (r) => r.url().includes("/api/live/detect") && r.status() !=
 
 await page.goto(`${base}/`);
 await page.getByRole("button", { name: /Check my basement/ }).click();
+// "Who's it for?" must be answered before filming.
+await page.getByRole("button", { name: "Parent or relative" }).click();
 await page.getByRole("button", { name: /Film my basement/ }).click();
 await page.getByRole("button", { name: /Start camera/ }).waitFor();
 await page.screenshot({ path: `${out}/intro.png` });

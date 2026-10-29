@@ -60,7 +60,7 @@ export function Start() {
     return false;
   };
 
-  const begin = async (video: File, meta?: Pick<CaptureMeta, "rooms" | "ideas" | "spoken">) => {
+  const begin = async (video: File, meta?: Pick<CaptureMeta, "rooms" | "ideas" | "spoken" | "lens" | "wideAt">) => {
     setUpload({ progress: 0, error: null });
     try {
       const where = picked
