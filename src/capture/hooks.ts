@@ -1,24 +1,24 @@
 import { useEffect, useRef, useState } from "react";
 import { CEILING_HOLD_MS } from "./checklist";
+import { audioContext } from "./audio";
 import { cameraLift } from "./media";
 
 export const LEVEL_STEPS = 5;
 
 // Microphone level as 0..LEVEL_STEPS, so people can see we hear them. Re-renders only when the step changes.
+// It listens on the capture's one shared AudioContext (see audio.ts), never a second one.
 export function useMicLevel(stream: MediaStream | null): number {
   const [level, setLevel] = useState(0);
   useEffect(() => {
     setLevel(0);
-    const AudioCtx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!stream || stream.getAudioTracks().length === 0 || !AudioCtx) return;
-    let ctx: AudioContext;
+    const ctx = stream && stream.getAudioTracks().length > 0 ? audioContext() : null;
+    if (!stream || !ctx) return;
+    let source: MediaStreamAudioSourceNode;
     try {
-      ctx = new AudioCtx();
+      source = ctx.createMediaStreamSource(stream);
     } catch {
       return;
     }
-    void ctx.resume().catch(() => {});
-    const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 1024;
     source.connect(analyser);
@@ -34,15 +34,15 @@ export function useMicLevel(stream: MediaStream | null): number {
     return () => {
       clearInterval(id);
       source.disconnect();
-      void ctx.close().catch(() => {});
     };
   }, [stream]);
   return level;
 }
 
-// Watches the tilt sensor while `armed`. Holding the rear camera pointed up for 3 s calls onHeld once.
-// `progress` is 0..1 while pointed up and 0 otherwise. `sensed` turns true once the sensor reports at all.
-export function useCeilingHold(armed: boolean, onHeld: () => void) {
+// Watches the tilt sensor while `armed`. Holding the rear camera pointed up (or down) for `holdMs` calls
+// onHeld once. For phones with tilt but no compass, where the coverage view can't paint.
+// `progress` is 0..1 while held and 0 otherwise. `sensed` turns true once the sensor reports at all.
+export function useTiltHold(armed: boolean, toward: "up" | "down", onHeld: () => void, holdMs = CEILING_HOLD_MS) {
   const [progress, setProgress] = useState(0);
   const [sensed, setSensed] = useState(false);
   const onHeldRef = useRef(onHeld);
@@ -51,17 +51,18 @@ export function useCeilingHold(armed: boolean, onHeld: () => void) {
   useEffect(() => {
     setProgress(0);
     if (!armed || typeof DeviceOrientationEvent === "undefined") return;
-    let upSince: number | null = null;
+    let heldSince: number | null = null;
     let fired = false;
     const onOrient = (e: DeviceOrientationEvent) => {
       if (e.beta == null || e.gamma == null) return;
       setSensed(true);
-      // sin(50°) ≈ 0.77: far enough up that the frame is mostly ceiling.
-      if (cameraLift(e.beta, e.gamma) > 0.77) upSince ??= performance.now();
-      else upSince = null;
+      // sin(50°) ≈ 0.77: far enough up that the frame is mostly ceiling; sin(40°) down is mostly floor.
+      const lift = cameraLift(e.beta, e.gamma);
+      if (toward === "up" ? lift > 0.77 : lift < -0.64) heldSince ??= performance.now();
+      else heldSince = null;
     };
     const id = window.setInterval(() => {
-      const p = upSince == null ? 0 : Math.min(1, (performance.now() - upSince) / CEILING_HOLD_MS);
+      const p = heldSince == null ? 0 : Math.min(1, (performance.now() - heldSince) / holdMs);
       setProgress(p);
       if (p >= 1 && !fired) {
         fired = true;
@@ -73,7 +74,7 @@ export function useCeilingHold(armed: boolean, onHeld: () => void) {
       clearInterval(id);
       window.removeEventListener("deviceorientation", onOrient);
     };
-  }, [armed]);
+  }, [armed, toward, holdMs]);
 
   return { progress, sensed };
 }
