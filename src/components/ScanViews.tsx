@@ -1,7 +1,7 @@
 // "Your basement, scanned": the 3D scan and the measured floor plan, one tap apart. Filmed room by
 // room, each room has its own scan and plan, picked from a row of room tabs.
 import { lazy, Suspense, useRef, useState } from "react";
-import type { Plan, RoomResult } from "../api";
+import type { Layout, Plan, RoomResult } from "../api";
 import { downloadSvg, FloorPlan, type Units } from "./FloorPlan";
 
 // three.js is heavy; load the 3D view only when someone opens it.
@@ -9,7 +9,8 @@ const ScanViewer3D = lazy(() => import("../three/ScanViewer3D").then((m) => ({ d
 
 const size = (p: Plan | null) => (p ? `${p.widthM.toFixed(1)} × ${p.depthM.toFixed(1)} m` : "No 3D");
 
-export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null }) {
+export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null; layout?: Layout | null }) {
+  const layout = props.layout ?? null;
   const { scanId } = props;
   const scanned = (props.rooms ?? []).filter((r) => r.has3d || r.plan);
   const multi = scanned.length > 1;
@@ -84,7 +85,7 @@ export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boo
         )}
         {plan && (
           <div ref={planRef} className="plan-wrap" hidden={shown !== "plan"}>
-            <FloorPlan plan={plan} units={units} name={room?.name} />
+            <FloorPlan plan={plan} units={units} name={room?.name} layout={layout && (!room || room.index === props.mainRoom) ? layout : null} />
           </div>
         )}
       </div>

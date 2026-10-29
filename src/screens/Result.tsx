@@ -7,6 +7,7 @@ import { AccountNav, SaveCta } from "../auth";
 import { Logo } from "../components/Logo";
 import { SiteFooter } from "../marketing/parts";
 import { ScanViews } from "../components/ScanViews";
+import { StagedViews } from "../components/StagedViews";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const range = (lo: number | null | undefined, hi: number | null | undefined) =>
@@ -85,6 +86,17 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
     }
   };
 
+  // The photos arrive a little after the answer: check back until they're in.
+  useEffect(() => {
+    if (scanId === "sample" || r?.concepts?.status !== "pending") return;
+    const id = window.setInterval(() => {
+      void getScan(scanId).then((s) => {
+        if (s.result?.concepts?.status !== "pending") setR((prev) => (prev ? { ...prev, concepts: s.result!.concepts } : prev));
+      });
+    }, 4000);
+    return () => clearInterval(id);
+  }, [scanId, r?.concepts?.status]);
+
   if (!r) return <main className="result-loading"><Logo /></main>;
 
   const byId = new Map(r.detections.map((d) => [d.id, d]));
@@ -155,6 +167,8 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
           <Answered findings={answered} busyRule={busyRule} onClear={(id) => void answer(id, null)} />
         </section>
       )}
+
+      <StagedViews scanId={scanId} plan={r.plan ?? null} layout={r.layout ?? null} concepts={r.concepts ?? null} />
 
       {r.steps && r.steps.length > 0 && (
         <section className="block plan-steps">
@@ -303,7 +317,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
         </section>
       )}
 
-      <ScanViews scanId={scanId} plan={r.plan ?? null} has3d={Boolean(r.has3d)} rooms={r.rooms} mainRoom={r.mainRoom} />
+      <ScanViews scanId={scanId} plan={r.plan ?? null} has3d={Boolean(r.has3d)} rooms={r.rooms} mainRoom={r.mainRoom} layout={r.layout ?? null} />
       {rooms.length > 1 && <p className="note">{rooms.length} rooms scanned, each on its own.</p>}
 
       <section className="block">
@@ -363,8 +377,8 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
           <a className="btn btn-primary" href={r.pros.registry.url} target="_blank" rel="noreferrer">
             Find a registered designer <span className="arrow" aria-hidden>→</span>
           </a>
-          <button className="btn btn-ghost" onClick={() => void sharePlan()}>Share my plan</button>
-          <button className="link-quiet" onClick={() => window.print()}>Print</button>
+          <a className="btn btn-ghost" href={`/scans/${scanId}/brief`}>One-page plan (PDF)</a>
+          <button className="link-quiet" onClick={() => void sharePlan()}>Share my plan</button>
         </div>
       </section>
 

@@ -4,6 +4,7 @@ import { Logo } from "./components/Logo";
 import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
 import { applyRouteMeta, marketingRoutes, type MarketingRoute } from "./marketing/routes";
 import { PATHS } from "./marketing/site";
+import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
 import { ScanPage } from "./screens/ScanPage";
 import { Start } from "./screens/Start";
@@ -13,6 +14,9 @@ const rootRoute = createRootRoute({ component: Outlet });
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Start });
 
 export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId", component: ScanPage });
+
+// The one-page plan to hand a designer, made to print or save as a PDF.
+const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -53,7 +57,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });

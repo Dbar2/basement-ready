@@ -106,3 +106,21 @@ export async function listModels(): Promise<string[]> {
 
 export const dataUrl = (path: string, mime: string) =>
   `data:${mime};base64,${readFileSync(path).toString("base64")}`;
+
+// Muse Image: edit a photo by instruction (OpenAI-style images/edits). Returns the new image's bytes.
+// $0.01 an image. `size` sets the aspect ratio only; the server picks the pixels (up to 1600 px).
+export async function museEdit(image: Buffer, mime: string, prompt: string, size: string): Promise<Buffer> {
+  const form = new FormData();
+  form.append("model", "muse-image-1.0");
+  form.append("prompt", prompt);
+  form.append("n", "1");
+  form.append("size", size);
+  form.append("image", new Blob([new Uint8Array(image)], { type: mime }), mime === "image/png" ? "frame.png" : "frame.jpg");
+  const res = await fetch(`${BASE}/images/edits`, { method: "POST", headers: auth(), body: form, signal: AbortSignal.timeout(120_000) });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`Muse Image ${res.status}: ${text.slice(0, 300)}`);
+  const b64 = JSON.parse(text).data?.[0]?.b64_json;
+  if (!b64) throw new Error("Muse Image returned no image");
+  return Buffer.from(b64, "base64");
+}
+

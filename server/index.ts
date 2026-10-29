@@ -15,6 +15,7 @@ import { enqueue, startWorker } from "./jobs";
 import { listModels } from "./meta";
 import { buildPlan } from "./plan";
 import { searchAddresses } from "./address";
+import { suggestLayout } from "./layout";
 import { fetchAerial, lookupProperty } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { finishRooms, ANALYSIS_FPS } from "./pipeline";
@@ -160,7 +161,10 @@ app.get("/api/scans/:id", async (c) => {
   if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
   if (!scan) return c.json({ error: "Not found" }, 404);
-  return c.json({ id: scan.id, status: scan.status, result: scan.result ?? null, error: scan.status === "error" ? "We couldn't read this video." : null });
+  // Scans from before layouts get one on the way out: it's pure, from the saved plan.
+  const result = scan.result as any;
+  const withLayout = result?.plan && !result.layout ? { ...result, layout: suggestLayout(result.plan) } : result;
+  return c.json({ id: scan.id, status: scan.status, result: withLayout ?? null, error: scan.status === "error" ? "We couldn't read this video." : null });
 });
 
 // Live scan events: replays what already happened, then follows new rows until done.
@@ -195,6 +199,26 @@ async function sendStored(key: string, type: string) {
   if (!body) return new Response("Not found", { status: 404 });
   return new Response(Readable.toWeb(body) as ReadableStream, { headers: { "Content-Type": type, "Cache-Control": "private, max-age=86400" } });
 }
+
+// Development only: make the finished-basement photos again for a scan.
+app.post("/api/scans/:id/concepts", async (c) => {
+  if (process.env.NODE_ENV === "production") return c.json({ error: "Not found" }, 404);
+  const id = c.req.param("id");
+  if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
+  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
+  if (!scan?.result) return c.json({ error: "Not ready" }, 404);
+  await db.update(schema.scans).set({ result: { ...(scan.result as object), concepts: { status: "pending", items: [] } } }).where(eq(schema.scans.id, id));
+  await enqueue("concepts", { scanId: id });
+  return c.json({ queued: true });
+});
+
+// The finished-basement photos (virtually staged).
+app.get("/api/scans/:id/concepts/:file", async (c) => {
+  const id = c.req.param("id");
+  const n = Number.parseInt(c.req.param("file"), 10);
+  if (!UUID.test(id) || !Number.isInteger(n) || n < 1 || n > 4) return c.json({ error: "Not found" }, 404);
+  return sendStored(keys.concept(id, n), "image/jpeg");
+});
 
 app.get("/api/scans/:id/frames/:n", async (c) => {
   const id = c.req.param("id");

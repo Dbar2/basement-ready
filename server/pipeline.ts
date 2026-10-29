@@ -7,12 +7,14 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
 import { assess } from "./assess";
+import { enqueue } from "./jobs";
 import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
 import { samVideo, transcribe, uploadFile } from "./meta";
 import type { Property } from "./property";
 import type { Household } from "./rules";
 import { bestFrame, parseSam } from "./sam";
+import { suggestLayout } from "./layout";
 import { buildPlan, rescalePlan, type Plan } from "./plan";
 import { mainRoom, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
 import { doorHeights, doorScale, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
@@ -276,12 +278,20 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const answered = await db.select().from(schema.answers).where(eq(schema.answers.basementId, basement.id));
     const rechecked = recheck(assessed, Object.fromEntries(answered.map((a) => [a.ruleId, a.value as AnswerValue])));
     // Ideas they tapped while filming count as much as what they said.
-    const result = { ...rechecked, vision: withIdeas(rechecked.vision, inputs.ideas, rooms) };
+    // A starting layout inside the main room, for the 3D staging, the plan drawing and the brief.
+    const result = {
+      ...rechecked,
+      vision: withIdeas(rechecked.vision, inputs.ideas, rooms),
+      layout: plan ? suggestLayout(plan) : null,
+      // The photos come from their own job, right after this answer.
+      concepts: { status: "pending" as const, items: [] },
+    };
     await db
       .update(schema.scans)
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })
       .where(eq(schema.scans.id, scanId));
     await emit("done", "Your answer is ready");
+    await enqueue("concepts", { scanId });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (opts.lastAttempt) {

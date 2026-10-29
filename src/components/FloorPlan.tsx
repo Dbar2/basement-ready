@@ -1,6 +1,6 @@
 // The measured floor plan, drawn like a sheet from a drawing set: walls, openings, dimensions, labels.
 import { useMemo, useRef } from "react";
-import type { Plan, PlanSide } from "../api";
+import type { Layout, Plan, PlanSide } from "../api";
 
 export type Units = "m" | "ft";
 
@@ -33,7 +33,7 @@ function sideLine(side: PlanSide, b: Plan["box"], s: number, ox: number, oz: num
   }
 }
 
-export function FloorPlan({ plan, units, name = "Main room" }: { plan: Plan; units: Units; name?: string }) {
+export function FloorPlan({ plan, units, name = "Main room", layout = null }: { plan: Plan; units: Units; name?: string; layout?: Layout | null }) {
   const svgRef = useRef<SVGSVGElement>(null);
   const b = plan.box;
   const s = (W - 2 * M) / Math.max(plan.widthM, plan.depthM * 1.2);
@@ -50,6 +50,36 @@ export function FloorPlan({ plan, units, name = "Main room" }: { plan: Plan; uni
   return (
     <svg ref={svgRef} className="plan" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Floor plan, ${fmtLength(plan.widthM, units)} by ${fmtLength(plan.depthM, units)}`}>
       <rect x={0} y={0} width={W} height={H} className="plan-paper" />
+
+      {/* the suggested layout: rooms as soft fills with their names, new walls as thin lines */}
+      {layout && (
+        <g className="plan-layout">
+          {layout.zones
+            .filter((z) => z.kind !== "stairs")
+            .map((z, i) => (
+              <g key={i} className="plan-zone" data-kind={z.kind}>
+                <rect x={X(z.x0)} y={Z(z.z0)} width={(z.x1 - z.x0) * s} height={(z.z1 - z.z0) * s} />
+                {(z.x1 - z.x0) * s > 70 && (z.z1 - z.z0) * s > 34 && (
+                  <text x={X((z.x0 + z.x1) / 2)} y={Z((z.z0 + z.z1) / 2) + 4} textAnchor="middle" className="plan-zone-name">
+                    {z.name}
+                    {z.areaM2 >= 2 && <tspan className="plan-zone-area"> {fmtArea(z.areaM2, units)}</tspan>}
+                  </text>
+                )}
+              </g>
+            ))}
+          {layout.walls.map((w, i) => (
+            <line key={`w${i}`} x1={X(w.x0)} y1={Z(w.z0)} x2={X(w.x1)} y2={Z(w.z1)} className="plan-partition" strokeWidth={Math.max(4, wallW * 0.6)} />
+          ))}
+          {layout.doors.map((d, i) => {
+            const half = (d.widthM / 2) * s;
+            return d.along === "x" ? (
+              <line key={`d${i}`} x1={X(d.x) - half} y1={Z(d.z)} x2={X(d.x) + half} y2={Z(d.z)} className="plan-cut" strokeWidth={Math.max(4, wallW * 0.6) + 2} />
+            ) : (
+              <line key={`d${i}`} x1={X(d.x)} y1={Z(d.z) - half} x2={X(d.x)} y2={Z(d.z) + half} className="plan-cut" strokeWidth={Math.max(4, wallW * 0.6) + 2} />
+            );
+          })}
+        </g>
+      )}
 
       {/* walls: solid where the scan saw one, dashed where it never did */}
       {sides.map((l) => (
@@ -155,7 +185,7 @@ export function FloorPlan({ plan, units, name = "Main room" }: { plan: Plan; uni
       </g>
 
       {/* room label */}
-      <g className="plan-room">
+      <g className="plan-room" display={layout ? "none" : undefined}>
         <text x={X((b.minX + b.maxX) / 2)} y={Z((b.minZ + b.maxZ) / 2) - 8} textAnchor="middle" className="plan-room-name">
           {name}
         </text>

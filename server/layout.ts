@@ -1,0 +1,203 @@
+// A starting layout for the suite, drawn inside the real room from the scan: where the bedroom,
+// bathroom, kitchen and living space could go. Pure and rule-checked: the bedroom gets the escape
+// window, rooms meet minimum sizes, the stairs and furnace stay clear. A designer refines it; this
+// is so a homeowner can see their basement as a home.
+import type { Plan, Side } from "./plan";
+
+export type ZoneKind = "bedroom" | "bathroom" | "kitchen" | "living" | "stairs" | "mechanical";
+export type Rect = { x0: number; z0: number; x1: number; z1: number };
+export type Zone = Rect & { kind: ZoneKind; name: string; areaM2: number };
+export type Wall = { x0: number; z0: number; x1: number; z1: number };
+export type Door = { x: number; z: number; along: "x" | "z"; widthM: number };
+export type Layout = {
+  version: 1;
+  kind: "one_bedroom" | "studio";
+  zones: Zone[];
+  walls: Wall[]; // new partition walls
+  doors: Door[]; // doors in the new walls
+  window: { side: Side; atM: number; widthM: number } | null; // the bedroom's escape window
+  checks: { label: string; ok: boolean | null; detail: string }[];
+};
+
+const BEDROOM_MIN_M2 = 7; // Ontario Building Code 9.5.7: a bedroom other than the main one
+const LIVING_MIN_M2 = 13.5; // the rules pack's combined living space minimum
+const BED_DEPTH = 3.3;
+const BED_ALONG = 3.2;
+const BATH_DEPTH = 1.6;
+const BATH_ALONG = 2.4;
+const COUNTER = 0.65;
+const DOOR_W = 0.8;
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+const area = (r: Rect) => r2(Math.abs(r.x1 - r.x0) * Math.abs(r.z1 - r.z0));
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+// Work in (along, into-room) coordinates for one wall, then map back to the plan's x and z.
+function frame(box: Plan["box"], side: Side) {
+  const alongX = side === "minZ" || side === "maxZ";
+  const aMin = alongX ? box.minX : box.minZ;
+  const aMax = alongX ? box.maxX : box.maxZ;
+  const c0 = side === "minX" ? box.minX : side === "maxX" ? box.maxX : side === "minZ" ? box.minZ : box.maxZ;
+  const dir = side.startsWith("min") ? 1 : -1;
+  const reach = alongX ? box.maxZ - box.minZ : box.maxX - box.minX;
+  // A rectangle from a0..a1 along the wall, d0..d1 metres into the room.
+  const rect = (a0: number, a1: number, d0: number, d1: number): Rect => {
+    const c = [c0 + dir * d0, c0 + dir * d1].sort((p, q) => p - q);
+    return alongX ? { x0: r2(a0), x1: r2(a1), z0: r2(c[0]), z1: r2(c[1]) } : { x0: r2(c[0]), x1: r2(c[1]), z0: r2(a0), z1: r2(a1) };
+  };
+  return { alongX, aMin, aMax, reach, rect };
+}
+
+const opposite: Record<Side, Side> = { minX: "maxX", maxX: "minX", minZ: "maxZ", maxZ: "minZ" };
+
+export function suggestLayout(plan: Plan): Layout {
+  const { box } = plan;
+  const checks: Layout["checks"] = [];
+  const zones: Zone[] = [];
+  const walls: Wall[] = [];
+  const doors: Door[] = [];
+  const zone = (kind: ZoneKind, name: string, r: Rect) => zones.push({ kind, name, ...r, areaM2: area(r) });
+
+  // The bedroom goes where the biggest window is: it's the escape window.
+  const windows = plan.openings.filter((o) => o.kind === "window").sort((a, b) => b.widthM - a.widthM);
+  const win = windows[0] ?? null;
+  const sides: Side[] = ["minX", "maxX", "minZ", "maxZ"];
+  const longest = sides.sort((a, b) => frame(box, b).aMax - frame(box, b).aMin - (frame(box, a).aMax - frame(box, a).aMin))[0];
+  const side: Side = win?.side ?? longest;
+  const f = frame(box, side);
+  const length = f.aMax - f.aMin;
+  const studio = plan.areaM2 < 30 || f.reach < BED_DEPTH + 2.5;
+
+  // Keep-outs that stay as they are: the stairs, and the furnace in its own fire-separated corner.
+  for (const s of plan.stairs) zone("stairs", "Stairs", { x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1 });
+  for (const fx of plan.fixtures.filter((x) => x.kind === "furnace").slice(0, 1)) {
+    const half = 0.9;
+    zone("mechanical", "Furnace room", {
+      x0: r2(clamp(fx.x - half, box.minX, box.maxX - 2 * half)),
+      x1: r2(clamp(fx.x + half, box.minX + 2 * half, box.maxX)),
+      z0: r2(clamp(fx.z - half, box.minZ, box.maxZ - 2 * half)),
+      z1: r2(clamp(fx.z + half, box.minZ + 2 * half, box.maxZ)),
+    });
+  }
+
+  // Nothing new goes on top of the stairs or into the furnace corner.
+  const keepouts: Rect[] = zones.map((z) => ({ x0: z.x0, z0: z.z0, x1: z.x1, z1: z.z1 }));
+  const free = (r: Rect) => !keepouts.some((k) => r.x0 < k.x1 - 0.05 && r.x1 > k.x0 + 0.05 && r.z0 < k.z1 - 0.05 && r.z1 > k.z0 + 0.05);
+  // Slide a span along the wall, nearest to `want` first, until it's clear.
+  const slide = (want: number, len: number, d0: number, d1: number, lo = f.aMin, hi = f.aMax - len) => {
+    const steps = [0, ...Array.from({ length: 40 }, (_, i) => (i % 2 ? -1 : 1) * (Math.floor(i / 2) + 1) * 0.2)];
+    for (const s of steps) {
+      const a0 = clamp(want + s, lo, hi);
+      if (free(f.rect(a0, a0 + len, d0, d1))) return a0;
+    }
+    return null;
+  };
+
+  // A bathroom always gets its own walls and door: its inner side, and any side that isn't already a
+  // room wall or the wall it shares with the bedroom.
+  const encloseBath = (a0: number, shared: number | null) => {
+    const a1 = a0 + BATH_ALONG;
+    const inner = f.rect(a0, a1, BATH_DEPTH, BATH_DEPTH);
+    walls.push({ x0: inner.x0, z0: inner.z0, x1: inner.x1, z1: inner.z1 });
+    for (const a of [a0, a1]) {
+      if ([f.aMin, f.aMax, shared].some((b) => b !== null && Math.abs(a - b) < 0.05)) continue;
+      const s = f.rect(a, a, 0, BATH_DEPTH);
+      walls.push({ x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1 });
+    }
+    const d = f.rect(a0 + BATH_ALONG / 2, a0 + BATH_ALONG / 2, BATH_DEPTH, BATH_DEPTH);
+    doors.push({ x: d.x0, z: d.z0, along: f.alongX ? "x" : "z", widthM: DOOR_W });
+  };
+
+  const winAt = win ? f.aMin + win.atM : f.aMin + length / 2;
+  const depth = Math.min(BED_DEPTH, f.reach * 0.45);
+  // The bedroom must still take in the window: it can slide only so far.
+  const bedLo = win ? Math.max(f.aMin, winAt - BED_ALONG + 0.3) : f.aMin;
+  const bedHi = win ? Math.min(f.aMax - BED_ALONG, winAt - 0.3) : f.aMax - BED_ALONG;
+  let bedA0 = slide(winAt - BED_ALONG / 2, BED_ALONG, 0, depth, bedLo, Math.max(bedLo, bedHi));
+  const windowInBedroom = bedA0 !== null && Boolean(win);
+  bedA0 ??= slide(f.aMin + length / 2 - BED_ALONG / 2, BED_ALONG, 0, depth) ?? clamp(winAt - BED_ALONG / 2, f.aMin, f.aMax - BED_ALONG);
+  const bedA1 = bedA0 + BED_ALONG;
+  if (studio) {
+    // Sleeping corner by the window, a bathroom next to it, the rest is living and kitchen.
+    zone("bedroom", "Sleeping area", f.rect(bedA0, bedA1, 0, depth));
+    keepouts.push(f.rect(bedA0, bedA1, 0, depth));
+    const bathA0 = slide(bedA0 > f.aMin + length / 2 ? f.aMin : f.aMax - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
+    if (bathA0 !== null) {
+      zone("bathroom", "Bathroom", f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
+      encloseBath(bathA0, null);
+    }
+  } else {
+    // Bedroom on the window; bathroom beside it on the roomier side.
+    zone("bedroom", "Bedroom", f.rect(bedA0, bedA1, 0, depth));
+    keepouts.push(f.rect(bedA0, bedA1, 0, depth));
+    const roomLeft = bedA0 - f.aMin, roomRight = f.aMax - bedA1;
+    const bathA0 = slide(roomRight >= roomLeft ? bedA1 : bedA0 - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
+    if (bathA0 !== null) {
+      zone("bathroom", "Bathroom", f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
+      keepouts.push(f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
+    }
+    // New walls: along the bedroom's inner edge, and between bedroom and bathroom.
+    const inner = f.rect(bedA0, bedA1, depth, depth);
+    walls.push({ x0: inner.x0, z0: inner.z0, x1: inner.x1, z1: inner.z1 });
+    const between = f.rect(roomRight >= roomLeft ? bedA1 : bedA0, roomRight >= roomLeft ? bedA1 : bedA0, 0, depth);
+    walls.push({ x0: between.x0, z0: between.z0, x1: between.x1, z1: between.z1 });
+    // The bedroom door, on the inner wall away from the bathroom.
+    const doorA = roomRight >= roomLeft ? bedA0 + 0.3 + DOOR_W / 2 : bedA1 - 0.3 - DOOR_W / 2;
+    const d = f.rect(doorA, doorA, depth, depth);
+    doors.push({ x: d.x0, z: d.z0, along: f.alongX ? "x" : "z", widthM: DOOR_W });
+    if (bathA0 !== null) encloseBath(bathA0, roomRight >= roomLeft ? bedA1 : bedA0);
+  }
+
+  // Kitchen along the opposite wall, clear of the stairs; living space is what's left in the middle.
+  const o = frame(box, opposite[side]);
+  const kitchenLen = Math.min(3.0, o.aMax - o.aMin);
+  const kWant = o.aMin + (o.aMax - o.aMin - kitchenLen) / 2;
+  let kA0: number | null = null;
+  for (const s of [0, ...Array.from({ length: 40 }, (_, i) => (i % 2 ? -1 : 1) * (Math.floor(i / 2) + 1) * 0.2)]) {
+    const a0 = clamp(kWant + s, o.aMin, o.aMax - kitchenLen);
+    if (free(o.rect(a0, a0 + kitchenLen, 0, COUNTER))) {
+      kA0 = a0;
+      break;
+    }
+  }
+  zone("kitchen", "Kitchen", o.rect(kA0 ?? kWant, (kA0 ?? kWant) + kitchenLen, 0, COUNTER));
+  const band = studio ? Math.max(BATH_DEPTH, depth) : depth;
+  const living = f.rect(f.aMin, f.aMax, band, f.reach - COUNTER);
+  zone("living", studio ? "Living and kitchen" : "Living and dining", living);
+
+  const bed = zones.find((z) => z.kind === "bedroom")!;
+  checks.push({
+    label: "The bedroom has an escape window",
+    ok: windowInBedroom,
+    detail: windowInBedroom
+      ? "The bedroom sits on the wall with your biggest window. Its opening still needs to be at least 0.35 m², no side under 38 cm."
+      : win
+        ? "The stairs are in the way of the window wall: the bedroom needs a new escape window where it is."
+        : "No window was seen in this room: the bedroom needs a new escape window (in your fixes).",
+  });
+  checks.push({
+    label: `Bedroom is at least ${BEDROOM_MIN_M2} m²`,
+    ok: bed.areaM2 >= BEDROOM_MIN_M2,
+    detail: `About ${bed.areaM2.toFixed(1)} m².`,
+  });
+  if (!zones.some((z) => z.kind === "bathroom")) {
+    checks.push({
+      label: "There's room for a bathroom",
+      ok: false,
+      detail: "A bathroom (about 2.4 × 1.6 m) doesn't fit beside the bedroom here: your designer finds it a spot.",
+    });
+  }
+  const livingArea = zones.filter((z) => z.kind === "living").reduce((s, z) => s + z.areaM2, 0);
+  checks.push({
+    label: `Living space is at least ${LIVING_MIN_M2} m²`,
+    ok: livingArea >= LIVING_MIN_M2,
+    detail: `About ${livingArea.toFixed(1)} m², kitchen included.`,
+  });
+  checks.push({
+    label: "Sizes are from the scan",
+    ok: plan.trusted ? true : null,
+    detail: plan.trusted ? "The scan passed its checks." : "The scan's sizes are rough; your designer confirms them.",
+  });
+
+  return { version: 1, kind: studio ? "studio" : "one_bedroom", zones, walls, doors, window: win ? { side: win.side, atM: win.atM, widthM: win.widthM } : null, checks };
+}
