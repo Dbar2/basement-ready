@@ -217,7 +217,8 @@ function viewpoints(scan: any): Viewpoint[] {
 
 // `ideas`: the suggested layout's furniture and walls, placed in the scan, behind an "Ideas" toggle.
 // `labels`: what SAM found, tagged where it sits.
-export function RealScan(props: { surfelsUrl: string; scanUrl: string; ceilingHeightM: number | null; fallback?: ReactNode; ideas?: ReactNode; labels?: ScanLabel[] }) {
+// `liteUrl`: a phone-sized file; without one, phones ask the server for `?lite=1`.
+export function RealScan(props: { surfelsUrl: string; liteUrl?: string; scanUrl: string; ceilingHeightM: number | null; fallback?: ReactNode; ideas?: ReactNode; labels?: ScanLabel[] }) {
   const phone = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   const [surfels, setSurfels] = useState<Surfels | null>(null);
   const [scan, setScan] = useState<any>(null);
@@ -229,7 +230,7 @@ export function RealScan(props: { surfelsUrl: string; scanUrl: string; ceilingHe
 
   useEffect(() => {
     let gone = false;
-    const url = phone ? `${props.surfelsUrl}${props.surfelsUrl.includes("?") ? "&" : "?"}lite=1` : props.surfelsUrl;
+    const url = !phone ? props.surfelsUrl : (props.liteUrl ?? `${props.surfelsUrl}${props.surfelsUrl.includes("?") ? "&" : "?"}lite=1`);
     Promise.all([
       fetch(url).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status))))),
       fetch(props.scanUrl).then((r) => (r.ok ? r.json() : null)),
@@ -243,7 +244,7 @@ export function RealScan(props: { surfelsUrl: string; scanUrl: string; ceilingHe
     return () => {
       gone = true;
     };
-  }, [props.surfelsUrl, props.scanUrl, phone]);
+  }, [props.surfelsUrl, props.liteUrl, props.scanUrl, phone]);
 
   const spots = useMemo(() => viewpoints(scan), [scan]);
   // The overview frames where most of the basement is, not its stray far points.

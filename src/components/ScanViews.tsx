@@ -44,8 +44,9 @@ function BasementViews(props: {
           <View3DBoundary>
             <Suspense fallback={<p className="viewer-empty mono">Loading your basement in 3D…</p>}>
               <RealScan
-                surfelsUrl={`/api/scans/${scanId}/3d/surfels.bin?room=all`}
-                scanUrl={`/api/scans/${scanId}/3d/scan.json?room=all`}
+                {...(scanId === "sample"
+                  ? { surfelsUrl: "/samples/sample/3d/surfels.bin", liteUrl: "/samples/sample/3d/surfels-lite.bin", scanUrl: "/samples/sample/3d/scan.json" }
+                  : { surfelsUrl: `/api/scans/${scanId}/3d/surfels.bin?room=all`, scanUrl: `/api/scans/${scanId}/3d/scan.json?room=all` })}
                 ceilingHeightM={ceilings.length ? Math.max(...ceilings) : null}
                 labels={scanLabels(rooms.map((r) => r.plan))}
                 ideas={
