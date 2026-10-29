@@ -72,7 +72,7 @@ a { color: inherit; }
 .logo span { font-weight: 800; font-size: 21px; letter-spacing: -0.03em; }
 
 /* ---------- Home ---------- */
-.home { overflow-x: hidden; }
+.home { overflow-x: clip; }
 .nav { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; padding: 28px clamp(20px, 4vw, 56px); }
 .nav-links { display: flex; gap: 32px; font-weight: 500; font-size: 15px; background: var(--color-bg); padding: 12px 24px; border-radius: 14px; }
 .nav-links a { text-decoration: none; }
@@ -129,17 +129,25 @@ a { color: inherit; }
 .feature p { margin: 0; color: var(--color-ink-muted); }
 
 /* ---------- Start sheet (two quick questions) ---------- */
-.sheet-backdrop { position: fixed; inset: 0; background: rgb(15 42 30 / 0.28); z-index: 50; display: grid; place-items: end center; animation: fade-in var(--dur-2) var(--ease-out); }
-.sheet { width: min(560px, 100%); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; background: var(--color-card); border-radius: 22px 22px 0 0; padding: 28px 28px 32px; display: grid; gap: 22px; box-shadow: var(--shadow-card); animation: sheet-up var(--dur-3) var(--ease-out); }
-@media (min-width: 720px) { .sheet-backdrop { place-items: center; } .sheet { border-radius: 22px; } }
+.sheet-backdrop { position: fixed; inset: 0; background: rgb(15 42 30 / 0.28); z-index: 50; display: grid; place-items: center; animation: fade-in var(--dur-2) var(--ease-out); }
+/* the questions scroll; the buttons sit below them, never on top */
+.sheet { position: relative; width: min(560px, 100%); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; background: var(--color-card); border-radius: 22px; box-shadow: var(--shadow-card); animation: sheet-up var(--dur-3) var(--ease-out); }
+.sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 22px; padding: 28px 28px 24px; }
+.sheet-foot { flex: none; padding: 16px 28px 24px; border-top: 1px solid var(--color-border); }
+.sheet-close { position: absolute; top: 16px; right: 16px; z-index: 2; display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: var(--color-card); color: var(--color-ink); }
+.sheet-close:hover { background: var(--color-surface); }
+.sheet-close:disabled { opacity: 0.4; cursor: default; }
+.sheet-close svg { width: 22px; height: 22px; }
 .sheet h2 { font-size: 34px; }
 .field { display: grid; gap: 10px; }
 .field label { font-weight: 600; font-size: 14px; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .input { padding: 14px 16px; border-radius: var(--radius-1); border: 1px solid var(--color-border); background: var(--color-bg); font: inherit; color: var(--color-ink); width: 100%; }
 .sheet-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.sheet-actions .error { flex-basis: 100%; }
 .upload { display: grid; gap: 10px; }
 .field-help { margin: 0; font-size: 13px; color: var(--color-ink-muted); }
+.field-error { margin: 0; font-size: 14px; font-weight: 600; color: var(--color-stop); }
 .measured-row .find-dot { background: var(--color-mint-line); }
 .measured-tag { margin-left: 8px; }
 .upload-bar { height: 6px; border-radius: 3px; background: var(--color-surface); overflow: hidden; }
@@ -343,11 +351,12 @@ a { color: inherit; }
 
 /* ---------- the address step ---------- */
 .sheet-lede { margin: -14px 0 0; color: var(--color-ink-muted); }
-/* the next step stays in reach on a phone, however long the sheet gets */
-.sheet .sheet-actions { position: sticky; bottom: 0; z-index: 6; margin: 0 -28px -32px; padding: 14px 28px max(20px, env(safe-area-inset-bottom)); background: var(--color-card); border-top: 1px solid var(--color-border); }
-.addr { position: relative; display: grid; gap: 8px; }
+.addr { display: grid; gap: 8px; }
 .addr label { font-weight: 600; font-size: 14px; }
-.addr-list { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none; border: 1px solid var(--color-ink); border-radius: var(--radius-1); background: var(--color-card); box-shadow: var(--shadow-card); }
+.addr-box { position: relative; }
+.addr-list { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; max-height: 45dvh; overflow-y: auto; overscroll-behavior: contain; margin: 4px 0 0; padding: 4px; list-style: none; border: 1px solid var(--color-ink); border-radius: var(--radius-1); background: var(--color-card); box-shadow: var(--shadow-card); }
+/* on a wide screen the list hangs over the sheet, so the scroll box mustn't clip it while it's open */
+.sheet-body:has(.addr[data-open="true"]) { overflow: visible; }
 .addr-list li { display: flex; justify-content: space-between; gap: 12px; padding: 11px 12px; border-radius: 4px; cursor: pointer; }
 .addr-list li span { color: var(--color-ink-muted); font-size: 14px; }
 .addr-list li[aria-selected="true"] { background: var(--color-mint); }
@@ -357,6 +366,28 @@ a { color: inherit; }
 .prop-head { margin: 0; font-weight: 700; line-height: 1.3; }
 .prop-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-family: var(--font-mono); font-size: 12.5px; }
 .prop-credit { margin: 0; font-size: 11.5px; color: var(--color-ink-muted); }
+
+/* On a phone the sheet is the whole screen: the questions scroll above a short footer, and the address
+   list opens in place, pushing the rest down, with the footer out of the way until a pick. */
+@media (max-width: 719px) {
+  .sheet-backdrop { place-items: end center; }
+  .sheet { height: 100svh; max-height: none; border-radius: 0; }
+  .sheet-body, .sheet-body:has(.addr[data-open="true"]) { overflow-y: auto; }
+  .sheet-body { gap: 20px; padding: 24px 20px 28px; }
+  .sheet h2 { font-size: 28px; }
+  .sheet-foot { padding: 12px 20px max(14px, env(safe-area-inset-bottom)); }
+  .sheet:has(.addr[data-open="true"]) .sheet-actions { display: none; }
+  .sheet-actions { flex-wrap: nowrap; gap: 10px; }
+  .sheet-actions:has(.error) { flex-wrap: wrap; }
+  .sheet-actions .btn { flex: 1 1 auto; justify-content: center; padding: 15px 12px; font-size: 16px; }
+  .sheet-actions .arrow { display: none; }
+  .sheet .chips { gap: 6px; }
+  .sheet .chip { padding: 9px 11px; font-size: 15px; }
+  .addr-list { position: static; max-height: none; box-shadow: none; }
+  .prop { grid-template-columns: 72px minmax(0, 1fr); gap: 12px; }
+  .prop-aerial { width: 72px; }
+  .prop-credit { display: none; }
+}
 
 /* ---------- while we check it ---------- */
 .live-left { font-size: 13px; color: var(--color-ink-muted); }
