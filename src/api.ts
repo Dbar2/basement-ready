@@ -77,6 +77,8 @@ export type Vision = {
 };
 
 export type AnswerValue = number | boolean | "unsure";
+// The money questions' answers: yes/no, "unsure", a rent amount, or "none" / "market" / who it's for.
+export type AnyAnswer = AnswerValue | string;
 
 export type Finding = {
   measured?: Measured | null;
@@ -99,15 +101,28 @@ export type Finding = {
 
 export type StandardWork = { ruleId: string; title: string; text: string; costLow: number | null; costHigh: number | null };
 
+export type Link = { label: string; url: string };
+
+// "How to apply" (server/steps.ts): six steps in the order they happen, each a few concrete tasks.
+export type PlanTask = {
+  title: string;
+  detail?: string | null;
+  links: Link[];
+  bring?: string[];
+  program?: { id: string; qualify: "yes" | "ask" } | null;
+};
+
 export type PlanStep = {
-  id: "money" | "drawings" | "permit" | "build" | "inspect";
+  id: "before" | "drawings" | "permit" | "build" | "after" | "tax";
+  when: string;
   title: string;
   who: string;
   time: string | null;
   costLow: number | null;
   costHigh: number | null;
+  costNote?: string | null;
   detail: string;
-  items?: string[];
+  tasks: PlanTask[];
   source?: { title: string; url: string } | null;
 };
 
@@ -155,18 +170,37 @@ export type FixGroup = {
   sources: Source[];
 };
 
+// A money program, decided in code (server/eligibility.ts): yes, no, or one answer away.
+export type Qualify = "yes" | "no" | "ask";
+export type MoneyValue = boolean | number | string;
 export type Grant = {
   id: string;
   name: string;
+  shortName: string;
   level: string;
   status: string;
-  kind?: string;
+  kind: string;
   amount: string;
-  maxCAD?: number | null;
-  fit: "fits" | "depends" | "no" | "cancelled";
-  fitNote: string | null;
-  nextStep: string | null;
+  maxCAD: number | null;
+  value: "cash" | "savings" | "financing";
+  amountCAD: number | null;
+  qualify: Qualify;
+  reason: string;
+  question: string | null;
+  commitments: string[];
+  note: string | null;
+  apply: { when: string; paidWhen?: string | null; who: string; where: Link[]; bring: string[] } | null;
   source: Source;
+  verified: boolean;
+};
+
+export type MoneyQuestion = {
+  id: string;
+  question: string;
+  hint: string;
+  options: { label: string; value: MoneyValue }[];
+  decides: string[];
+  answer: MoneyValue | null;
 };
 
 export type ScanResult = {
@@ -191,7 +225,9 @@ export type ScanResult = {
   fixGroups: FixGroup[];
   standard?: StandardWork[];
   steps?: PlanStep[];
-  money?: { fits: number; possible: number };
+  money?: { total: number; ifYes: number };
+  moneyQuestions?: MoneyQuestion[];
+  moneyAnswered?: MoneyQuestion[];
   property?: Property | null;
   layout?: Layout | null;
   concepts?: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
@@ -199,7 +235,13 @@ export type ScanResult = {
   cost: { low: number; high: number; fixesLow?: number; fixesHigh?: number; standardLow?: number; standardHigh?: number; pricedFixes: number; unpricedFixes: number };
   grants: Grant[];
   process: { step: number; title: string; detail: string; source?: Source }[];
-  pros: { registry: { name: string; url: string; suggestedSearch?: Record<string, unknown> } };
+  pros: {
+    registry: { name: string; url: string; searchUrl?: string; searchLinks?: Link[]; howToSearch?: string; suggestedSearch?: Record<string, unknown> };
+    cityNote?: string;
+    selfDraw?: { detail: string; note?: string; checklist?: Link | null; rule?: Link | null };
+    designerCost?: { lowCAD: number; highCAD: number; note?: string; source?: Source };
+    trades?: { title: string; detail: string; label: string; url: string; program?: string }[];
+  };
   compiledAt: string;
 };
 
@@ -288,7 +330,7 @@ export const aerialUrl = (a: Pick<AddressHit, "address" | "municipality">) =>
 
 // The sample isn't saved on the server, so its early answers wait in this tab.
 const SAMPLE_ANSWERS = "br-sample-answers";
-export function sampleEarlyAnswers(): Record<string, AnswerValue> {
+export function sampleEarlyAnswers(): Record<string, AnyAnswer> {
   try {
     return JSON.parse(sessionStorage.getItem(SAMPLE_ANSWERS) ?? "{}");
   } catch {
@@ -297,7 +339,7 @@ export function sampleEarlyAnswers(): Record<string, AnswerValue> {
 }
 
 // While the scan runs: answers are kept and applied when it finishes.
-export async function answerEarly(scanId: string, ruleId: string, value: AnswerValue) {
+export async function answerEarly(scanId: string, ruleId: string, value: AnyAnswer) {
   if (scanId === "sample") {
     try {
       sessionStorage.setItem(SAMPLE_ANSWERS, JSON.stringify({ ...sampleEarlyAnswers(), [ruleId]: value }));
@@ -309,27 +351,52 @@ export async function answerEarly(scanId: string, ruleId: string, value: AnswerV
   await fetch(`/api/scans/${scanId}/answers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId, value }) });
 }
 export async function setHousehold(scanId: string, household: Household): Promise<ScanResult | null> {
-  if (scanId === "sample") return null;
+  if (scanId === "sample") {
+    await answerEarly(scanId, "household", household);
+    return null;
+  }
   const res = await fetch(`/api/scans/${scanId}/household`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ household }) });
   return res.ok ? ((await res.json()).result ?? null) : null;
 }
 
-// Saves an answer (or clears it with null) and returns the re-checked result.
-export async function answerQuestion(scanId: string, current: ScanResult, sampleAnswers: Record<string, AnswerValue | null>, ruleId: string, value: AnswerValue | null) {
-  const res =
-    scanId === "sample"
-      ? await fetch("/api/recheck", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ result: current, answers: { ...sampleAnswers, [ruleId]: value } }),
-        })
-      : await fetch(`/api/scans/${scanId}/answers`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ruleId, value }),
-        });
+// Saves an answer (or clears it with null) and returns the re-checked result. Who it's for has its
+// own route; the sample keeps everything in this tab and re-checks without saving.
+export async function answerQuestion(scanId: string, current: ScanResult, sampleAnswers: Record<string, AnyAnswer | null>, ruleId: string, value: AnyAnswer | null) {
+  if (scanId === "sample") {
+    const { household, ...answers } = { ...sampleAnswers, [ruleId]: value };
+    const res = await fetch("/api/recheck", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ result: current, answers, household: household ?? current.household }),
+    });
+    if (!res.ok) throw new Error("We couldn't check that. Try again.");
+    return (await res.json()).result as ScanResult;
+  }
+  if (ruleId === "household") {
+    const next = await setHousehold(scanId, value as Household);
+    if (!next) throw new Error("We couldn't check that. Try again.");
+    return next;
+  }
+  const res = await fetch(`/api/scans/${scanId}/answers`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ruleId, value }),
+  });
   if (!res.ok) throw new Error("We couldn't check that. Try again.");
   return (await res.json()).result as ScanResult;
+}
+
+// The money questions still open while the scan runs, so the wait screen asks only what matters.
+export async function openMoneyQuestions(scanId: string): Promise<MoneyQuestion[]> {
+  const res =
+    scanId === "sample"
+      ? await fetch("/api/money", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ municipality: "waterloo-on", household: sampleEarlyAnswers().household ?? "relative", answers: sampleEarlyAnswers() }),
+        })
+      : await fetch(`/api/scans/${scanId}/money`);
+  return res.ok ? (await res.json()).questions : [];
 }
 
 export async function getScan(id: string): Promise<{ status: "queued" | "running" | "done" | "error"; result: ScanResult | null }> {

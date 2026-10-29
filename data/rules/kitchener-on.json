@@ -2033,7 +2033,27 @@
         }
       ],
       "verified": true,
-      "notes": "Status 'open': the program page showed no closure notice on 2026-10-28 and the 2026-09-14 report says staff continue to process applications; remaining funds are not published. The program is funded by the federal Housing Accelerator Fund for 2026-2027, with an annual City budget planned from 2028. Recorded conflicts: launch date (page: applications open 2026-01-19; HAF report: launched 2026-01-05; news release 2026-01-15) and HAF funding ($4,214,000 in the CIP by-law vs $6.21 million in the 2025-12-15 Key Decisions post)."
+      "notes": "Status 'open': the program page showed no closure notice on 2026-10-28 and the 2026-09-14 report says staff continue to process applications; remaining funds are not published. The program is funded by the federal Housing Accelerator Fund for 2026-2027, with an annual City budget planned from 2028. Recorded conflicts: launch date (page: applications open 2026-01-19; HAF report: launched 2026-01-05; news release 2026-01-15) and HAF funding ($4,214,000 in the CIP by-law vs $6.21 million in the 2025-12-15 Key Decisions post).",
+      "shortName": "City of Kitchener ADU grant",
+      "apply": {
+        "when": "at_permit",
+        "who": "You",
+        "detail": "Only if your permit bill includes a school-board development charge.",
+        "where": [
+          {
+            "label": "Application form (PDF)",
+            "url": "https://www.kitchener.ca/media/ys3dnroa/dsd_plan_application_for_cip_adu_grant.pdf"
+          },
+          {
+            "label": "HousingIncentives@kitchener.ca",
+            "url": "mailto:HousingIncentives@kitchener.ca"
+          }
+        ],
+        "bring": [
+          "The permit invoice",
+          "Proof you own the house, such as a parcel register"
+        ]
+      }
     },
     {
       "id": "region_ontario_renovates_secondary_suites",
@@ -2097,7 +2117,20 @@
           "full bathroom",
           "separate entrance"
         ],
-        "stackableWith": []
+        "stackableWith": [],
+        "workStartWithinDaysOfApproval": {
+          "value": null,
+          "conflict": [
+            {
+              "days": 90,
+              "source": "Application form v11 (2026-05-22), s. 8.5"
+            },
+            {
+              "days": 120,
+              "source": "Fact sheet (Dec 2025), p. 7 step 10"
+            }
+          ]
+        }
       },
       "fitsPlans": {
         "family_suite": "depends",
@@ -2134,7 +2167,45 @@
       ],
       "verified": false,
       "notes": "Unverified: the house-value cap conflicts ($600,000 on the web page vs $505,469 in the Dec 2025 fact sheet). The fact sheet also says work must start within 90 days of approval (p. 4) and within 120 days (p. 7), and still prints an old 'deadline December 1, 2023'. The web page says applications are received on an ongoing basis but annual funding is limited; if the year's money is gone, eligible applicants go on a waitlist for the following year. The 2026 funding balance is not published. The fact sheet sets one income table for the 'Remainder of Waterloo Region', which covers Kitchener (only Wellesley and Wilmot Townships have lower limits). Stacking with the City of Kitchener program (city_kitchener_adu_grant) is not addressed by either program; the stacking rule in the Waterloo pack comes from a City of Waterloo staff report and does not carry over. On 2026-10-28 the Region page also said some online applications were temporarily unavailable because of technical difficulties.",
-      "maxCAD": 25000
+      "maxCAD": 25000,
+      "shortName": "Region of Waterloo forgivable loan",
+      "apply": {
+        "when": "before_work",
+        "paidWhen": "after the work is finished and inspected",
+        "who": "You",
+        "where": [
+          {
+            "label": "Application form (PDF)",
+            "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/55bf0zge/docs_admin-2295447-v11-ontario_renovates_secondary_suite_application-aoda.pdf"
+          },
+          {
+            "label": "OntarioRenovates@regionofwaterloo.ca",
+            "url": "mailto:OntarioRenovates@regionofwaterloo.ca"
+          }
+        ],
+        "bring": [
+          "Written confirmation from the City that your lot is zoned for a second unit",
+          "Photo ID, proof of status in Canada and proof of age for each owner",
+          "Your latest tax bill or MPAC assessment notice",
+          "Proof your mortgage, property tax and home insurance payments are up to date",
+          "Your mortgage balance, and your lender's OK for a second mortgage if the work costs more than $25,000"
+        ],
+        "payout": {
+          "title": "send invoices and the occupancy permit",
+          "detail": "The Region inspects the work, then pays. It checks the tenant's income before the lease is signed.",
+          "where": [
+            {
+              "label": "OntarioRenovates@regionofwaterloo.ca",
+              "url": "mailto:OntarioRenovates@regionofwaterloo.ca"
+            }
+          ],
+          "bring": [
+            "Paid invoices",
+            "The occupancy permit",
+            "The tenant's income check and the signed lease"
+          ]
+        }
+      }
     },
     {
       "id": "federal_mhrtc",
@@ -2174,7 +2245,8 @@
         ],
         "rentCap": null,
         "tenantIncomeLimit": null,
-        "requiresOwnerOccupied": false
+        "requiresOwnerOccupied": false,
+        "ratePct": 14
       },
       "fitsPlans": {
         "family_suite": "fits",
@@ -2210,7 +2282,22 @@
       ],
       "verified": true,
       "notes": "The 2025 figures are verified on the CRA page. The 2026 rate (14%) is inferred from Finance Canada's statement that the lowest rate is 14% for 2026 and later; the CRA MHRTC page did not yet show a 2026 rate.",
-      "maxCAD": 7000
+      "maxCAD": 7000,
+      "shortName": "Multigenerational home tax credit",
+      "apply": {
+        "when": "tax_time",
+        "who": "You, on your tax return",
+        "detail": "Line 45355, for the year the suite is finished.",
+        "where": [
+          {
+            "label": "CRA: line 45355",
+            "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc.html"
+          }
+        ],
+        "bring": [
+          "Every receipt for the work"
+        ]
+      }
     },
     {
       "id": "dc_exemption_aru",
@@ -2294,7 +2381,8 @@
         }
       ],
       "verified": false,
-      "notes": "City and Region DC exemption is verified in the statute (DCA s. 2(3.2)); the City's 2022 by-law still prints older, narrower wording (conflict recorded; the statute should prevail). Unverified: the education DC part; the WRDSB and WCDSB EDC by-laws were not read. 'Gross floor area' in O. Reg. 20/98 counts only floors above average grade."
+      "notes": "City and Region DC exemption is verified in the statute (DCA s. 2(3.2)); the City's 2022 by-law still prints older, narrower wording (conflict recorded; the statute should prevail). Unverified: the education DC part; the WRDSB and WCDSB EDC by-laws were not read. 'Gross floor area' in O. Reg. 20/98 counts only floors above average grade.",
+      "shortName": "No development charges"
     },
     {
       "id": "cmhc_refinance_secondary_suite",
@@ -2343,7 +2431,22 @@
         }
       ],
       "verified": true,
-      "notes": "The CMHC page shows no publish date; it presents the product as current. Start date 2025-01-15 is from the Finance Canada release."
+      "notes": "The CMHC page shows no publish date; it presents the product as current. Start date 2025-01-15 is from the Finance Canada release.",
+      "shortName": "CMHC refinance",
+      "apply": {
+        "when": "before_work",
+        "who": "You, through your lender",
+        "detail": "Ask your mortgage lender. Only CMHC-approved lenders offer it, and CMHC must approve it before construction.",
+        "where": [
+          {
+            "label": "CMHC: refinance for a secondary suite",
+            "url": "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/refinance"
+          }
+        ],
+        "bring": [
+          "Quotes for the work: the lender adds them to your home's value today"
+        ]
+      }
     },
     {
       "id": "canada_secondary_suite_loan_program",
@@ -2379,7 +2482,8 @@
         }
       ],
       "verified": true,
-      "notes": "Budget 2025 says the program 'is not yet operational' and 'will not be implemented' because it overlaps with the insured-mortgage refinance changes. Cancellation date recorded as the Budget 2025 page date, 2025-11-04."
+      "notes": "Budget 2025 says the program 'is not yet operational' and 'will not be implemented' because it overlaps with the insured-mortgage refinance changes. Cancellation date recorded as the Budget 2025 page date, 2025-11-04.",
+      "shortName": "Canada Secondary Suite Loan"
     }
   ],
   "process": [
@@ -2394,7 +2498,8 @@
         "retrieved": "2026-10-28"
       },
       "verified": false,
-      "notes": "Minimum duplex fee conflicts ($163 on the permits page vs $95 general minimum in the 2026 fee schedule); see routes.second_unit."
+      "notes": "Minimum duplex fee conflicts ($163 on the permits page vs $95 general minimum in the 2026 fee schedule); see routes.second_unit.",
+      "phase": null
     },
     {
       "step": 2,
@@ -2419,6 +2524,19 @@
           "section": "row 344 Zoning (Occupancy) Certificate $348.00",
           "retrieved": "2026-10-28"
         }
+      ],
+      "phase": "before",
+      "task": "Confirm your zoning",
+      "who": "You",
+      "where": [
+        {
+          "label": "planning@kitchener.ca",
+          "url": "mailto:planning@kitchener.ca"
+        },
+        {
+          "label": "Zoning (occupancy) certificates",
+          "url": "https://www.kitchener.ca/development-and-construction/zoning/zoning-occupancy-certificate/"
+        }
       ]
     },
     {
@@ -2432,7 +2550,19 @@
         "retrieved": "2026-10-28"
       },
       "verified": false,
-      "notes": "Whether a basement unit in an existing house needs the letter is not confirmed (see kitchener_water_allocation)."
+      "notes": "Whether a basement unit in an existing house needs the letter is not confirmed (see kitchener_water_allocation).",
+      "phase": "permit",
+      "task": "Ask about water allocation",
+      "where": [
+        {
+          "label": "planning.applications@kitchener.ca",
+          "url": "mailto:planning.applications@kitchener.ca"
+        },
+        {
+          "label": "Water allocation policy",
+          "url": "https://www.kitchener.ca/development-and-construction/kitchener-water-allocation-policy/"
+        }
+      ]
     },
     {
       "step": 4,
@@ -2443,7 +2573,8 @@
         "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-compliance",
         "section": "Division A 1.3.3.3B.(1); Division B 11.5.1.1.(2)",
         "retrieved": "2026-10-28"
-      }
+      },
+      "phase": "drawings"
     },
     {
       "step": 5,
@@ -2462,7 +2593,8 @@
           "section": "p. 1",
           "retrieved": "2026-10-28"
         }
-      ]
+      ],
+      "phase": "before"
     },
     {
       "step": 6,
@@ -2481,7 +2613,8 @@
           "section": "'designer or architect : required if you're proposing three or more units in a building'",
           "retrieved": "2026-10-28"
         }
-      ]
+      ],
+      "phase": "drawings"
     },
     {
       "step": 7,
@@ -2508,7 +2641,24 @@
         }
       ],
       "verified": false,
-      "notes": "Minimum fee conflict ($163 vs $95) and review-time wording ('10 business days' vs the 2026 ADU guide's '10 or 15 business days')."
+      "notes": "Minimum fee conflict ($163 vs $95) and review-time wording ('10 business days' vs the 2026 ADU guide's '10 or 15 business days').",
+      "phase": "permit",
+      "task": "Apply online and pay the fee",
+      "who": "You or your designer",
+      "time": "about 10 business days",
+      "where": [
+        {
+          "label": "City online service portal",
+          "url": "https://onlineserviceportal2.kitchener.ca/citizenportal/"
+        }
+      ],
+      "bring": [
+        "Your drawings",
+        "The Ontario permit application form",
+        "Schedule 1, from your designer or you",
+        "The 'Project Information: Residential' form",
+        "The Water Capacity Application Form"
+      ]
     },
     {
       "step": 8,
@@ -2521,7 +2671,8 @@
         "retrieved": "2026-10-28"
       },
       "verified": false,
-      "notes": "Guide last updated 2023-01-30."
+      "notes": "Guide last updated 2023-01-30.",
+      "phase": "build"
     },
     {
       "step": 9,
@@ -2554,7 +2705,19 @@
         }
       ],
       "verified": false,
-      "notes": "Whether a duplex, which needs no zoning certificate, still gets the zoning inspection is not confirmed; the page wording ('where residential units are added') suggests it does."
+      "notes": "Whether a duplex, which needs no zoning certificate, still gets the zoning inspection is not confirmed; the page wording ('where residential units are added') suggests it does.",
+      "phase": "build",
+      "task": "Book each inspection",
+      "where": [
+        {
+          "label": "City online service portal",
+          "url": "https://onlineserviceportal2.kitchener.ca/citizenportal/"
+        },
+        {
+          "label": "519-741-2761",
+          "url": "tel:5197412761"
+        }
+      ]
     },
     {
       "step": 10,
@@ -2593,7 +2756,8 @@
         }
       ],
       "verified": false,
-      "notes": "The absence of a general rental licence is based on the City's licence list and 2026 fee schedule; no explicit City statement was found. The enacted number and final fees of the Rental Renovation Licensing By-law were not confirmed."
+      "notes": "The absence of a general rental licence is based on the City's licence list and 2026 fee schedule; no explicit City statement was found. The enacted number and final fees of the Rental Renovation Licensing By-law were not confirmed.",
+      "phase": "after"
     },
     {
       "step": 11,
@@ -2604,7 +2768,8 @@
         "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc.html",
         "section": null,
         "retrieved": "2026-10-28"
-      }
+      },
+      "phase": null
     }
   ],
   "pros": {
@@ -2650,7 +2815,20 @@
           "retrieved": "2026-10-28"
         }
       ],
-      "verified": true
+      "verified": true,
+      "searchUrl": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D4%264%3D*House*%266%3D*Kitchener*",
+      "searchLinks": [
+        {
+          "label": "Independent designers near Kitchener",
+          "url": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D4%264%3D*House*%266%3D*Kitchener*"
+        },
+        {
+          "label": "Design firms near Kitchener",
+          "url": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D3%264%3D*House*%266%3D*Kitchener*"
+        }
+      ],
+      "howToSearch": "Opens Ontario's public registry filtered to designers registered for houses near Kitchener. Check that their classes include “House”, not only HVAC or plumbing.",
+      "searchNote": "Filters go in the 'mf' query parameter (3 = registration type: 3 design firms, 4 independent designers; 4 = classes; 6 = location; text needs * on both sides). Principal Authority returns nothing for designers, so location is used. Checked 2026-10-29: Waterloo 16 designers, 13 firms."
     },
     "whoNeedsOne": "Designers who are not the owner generally must be registered (Div. C 3.2.4-3.2.5); an owner designing their own house is exempt (Div. C 3.2.5.1.(3)(b)). Architects and professional engineers are separate routes.",
     "whoNeedsOneSource": {
@@ -2665,7 +2843,50 @@
       "url": "https://www.kitchener.ca/media/jxzar2i0/dsd_plan_hhme-owners-adu-guide-april-2026-reduced-file-size.pdf",
       "section": "p. 10",
       "retrieved": "2026-10-28"
-    }
+    },
+    "selfDraw": {
+      "detail": "For a basement suite (a duplex), the drawings may be done by you, the homeowner, or a qualified BCIN designer. If the suite gets its own heating, the heat-loss calculations need a BCIN HVAC designer. The City's duplex guide lists what the drawings must show.",
+      "checklist": {
+        "label": "Kitchener's duplex guide (PDF)",
+        "url": "https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf"
+      },
+      "rule": {
+        "label": "Building Code, Div. C 3.2.5.1.(3)(b)",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications"
+      }
+    },
+    "designerCost": {
+      "lowCAD": 2000,
+      "highCAD": 5000,
+      "note": "A Toronto price guide's figure for permit drawings (Aug 2026). No Waterloo Region figure is published, so ask 2 or 3 designers to quote.",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto (HomeStars, updated 2026-08-21)",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "section": "Permits and drawings: 'Architectural or designer drawings ... typically add another $2,000 to $5,000'",
+        "retrieved": "2026-10-29"
+      }
+    },
+    "trades": [
+      {
+        "title": "Electrician",
+        "detail": "Must hold an ESA licence; they take out the ESA permit for the electrical work.",
+        "label": "ESA contractor locator",
+        "url": "https://licensing.esasafe.com/contractor-locator-tool/"
+      },
+      {
+        "title": "Gas fitter",
+        "detail": "For the furnace, water heater or gas lines: must be registered with TSSA.",
+        "label": "TSSA gas contractors near Kitchener",
+        "url": "https://www.tssa.org/fuels-contractor?address_combine=Kitchener&field_fuel_type_natural_gas_value=Yes"
+      },
+      {
+        "title": "General contractor, for the Region's loan",
+        "detail": "The Region needs 3 quotes, each from a contractor with WSIB coverage and liability insurance.",
+        "label": "Region's loan fact sheet",
+        "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/qorb1jgf/secondary-suite-fact-sheet.pdf",
+        "program": "region_ontario_renovates_secondary_suites"
+      }
+    ]
   },
   "costs": [
     {
@@ -3168,5 +3389,24 @@
       "notes": "City guide: 'less than $100 per square foot (for renovations) to $400 and more per square foot (for new construction)'; additions or backyard homes 'can cost $200,000 and more'.",
       "estimate": true
     }
-  ]
+  ],
+  "permitFee": {
+    "perSqftCAD": 0.37,
+    "minimumCAD": 163,
+    "extras": [
+      {
+        "label": "rebate fee, refunded after the final inspection",
+        "CAD": 250,
+        "refundable": true
+      }
+    ],
+    "estimate": false,
+    "note": "Add $95 for an HVAC permit if the suite gets its own heating",
+    "source": {
+      "title": "Residential building permits (City of Kitchener)",
+      "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
+      "section": "Duplex: '$0.37 per square foot of finished space (or $163 minimum)'",
+      "retrieved": "2026-10-29"
+    }
+  }
 }

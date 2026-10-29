@@ -104,3 +104,55 @@ Kitchener calls ARUs **additional dwelling units (ADUs)**; a house with one ADU 
 | Home Owners' Guide to ADUs (2026) | https://www.kitchener.ca/media/jxzar2i0/dsd_plan_hhme-owners-adu-guide-april-2026-reduced-file-size.pdf | "less than $100 per square foot (for renovations)" | 2026 | 2026-10-28 |
 
 The Caliber Contracting cost guide reused from the Waterloo pack covers "Kitchener-Waterloo & Cambridge"; it gives no Kitchener-only figures. The City of Waterloo's $100/sq ft rule of thumb is not carried into this pack because Kitchener publishes its own range.
+
+## Money: what the app decides, and from what (added 2026-10-29)
+
+`server/eligibility.ts` reads each open program's `conditions` and gives one of three answers: yes, no, or one plain question away. Nothing is a model call. The facts it relies on, each read on the source on 2026-10-29:
+
+- **Region of Waterloo forgivable loan.** The owner must live in the house ("sole and principal residence"), may not own any other property ("including a cottage or have partial ownership of another property"), and the home must be a single family home valued at or below the cap. The tenant's income is checked by the Region before a lease is signed, and a signed lease is required (fact sheet Dec 2025 pp. 1, 4, 7; application form v11 s. 10). Rent at or under the cap for 15 years. Work must not start before approval ("Any modifications performed prior to loan approval" are ineligible, fact sheet p. 3).
+  - **How the app decides the house-value conflict:** it asks against the stricter figure, $505,469, and the result names the web page's $600,000 so anyone between the two knows to ask the Region.
+  - **Family living free:** every occupant is a tenant who signs a lease at or under the cap after an income check, so a relative paying no rent is a "no". This is the app's reading of the fact sheet and form; neither says "rent-free family" in those words.
+  - **Order of steps** (fact sheet p. 7): apply with zoning confirmation; conditional approval; building permit; 3 contractor quotes (WSIB and liability insurance); loan agreement and security; start work; invoices and occupancy permit; Region inspects and pays; tenant's income verified and lease sent. The form v11 (s. 8.5) says work starts within 90 days of final approval; the fact sheet (p. 7) says 120 days. Recorded as a conflict in `conditions.workStartWithinDaysOfApproval`.
+  - **Documents to attach** (fact sheet p. 2; form v11): written zoning confirmation from the City, photo ID, status in Canada and proof of age for each owner, latest tax bill or MPAC notice, confirmation that mortgage, property tax and insurance are up to date, mortgage balance and the lender's OK for a second mortgage if the project exceeds $25,000.
+- **CMHC refinance.** "Borrowers must own the home and they, or a close relative, must live in it"; "Insured financing must be approved by CMHC prior to the start of construction or at least at an early stage"; up to 4 units including existing ones. Applied for through a lender.
+- **Multigenerational home renovation tax credit.** Needs a qualifying individual (65+, or 18–64 with the disability tax credit) living with a qualifying relation, so the app asks "Will someone 65 or older, or with a disability, live in the house?" and says no for a rental to an unrelated tenant. Expenses "that can reasonably be considered to have been reimbursed" are excluded (CRA expenses page), so the app counts only costs no grant or loan paid for. Treating the forgivable loan as a reimbursement is the app's cautious reading.
+- **Money never adds up to more than the work.** Each cash program is capped by its own rule (the City of Waterloo grant at 50% of costs), and together they are capped at the result's own high cost estimate: grants first, then the loan, then the tax credit. This is the app's arithmetic, not a program rule.
+- **Rent and income caps** are read for a one-bedroom suite.
+
+## Unverified: money and how to apply (added 2026-10-29)
+
+- **Cost of permit drawings in Waterloo Region.** No public body publishes one: the City of Waterloo ARU Guide 2025 (blank "Design Consulting Fees" line), the City of Kitchener ADU guide 2026, the City of Cambridge ARU page and Report 24-109-CD, Oxford County's guide, and local contractor cost guides were checked, along with local news. The app keeps the Toronto figure ($2,000–$5,000, HomeStars, updated 2026-08-21) and says on screen that it is a Toronto figure. HomeStars' Canada-wide guide gives $1,500–$4,000 for engineering assessments and stamped drawings when structure changes, which is a different service, so it is not used.
+- **QuARTS filters.** `*House*` also matches "HVAC-House" and "Plumbing-House", and the location text can match a street name in another town (e.g. "Waterloo St., Port Elgin"). The app tells homeowners to check for "House" in the designer's classes. Counts on 2026-10-29: Waterloo 16 independent designers, 13 firms; Kitchener 36 and 25; Cambridge 21 and 18.
+- **ESA and TSSA.** ESA's locator has no URL filters; the TSSA city filter can also match street names elsewhere. Both are the regulators' own public lists; the app names no business.
+- **Kitchener duplex minimum fee.** The pack's 2026-10-28 basement-finish line says a $95 minimum; the permits page on 2026-10-29 gives $163 as the duplex minimum. The permit fee in `permitFee` uses $163.
+
+## Sources: how to apply (added 2026-10-29)
+
+### Region, federal, registries and trades
+
+| Source | URL | Used for | Retrieved |
+|---|---|---|---|
+| QuARTS Public Search Registry, filtered | https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D4%264%3D*House*%266%3D*Kitchener* | Deep link to independent designers (`3=4`) or design firms (`3=3`) registered for houses near the city. The page reads its filter from the `mf` query parameter; text needs `*` on both sides; Principal Authority returns nothing for designers, so location (key 6) is used | 2026-10-29 |
+| ESA Contractor Locator Tool | https://licensing.esasafe.com/contractor-locator-tool/ | Check an electrician holds an ESA licence (no deep-link filters) | 2026-10-29 |
+| ESA: Finding the right contractor | https://esasafe.com/compliance/finding-the-right-contractor/ | The ESA permit step | 2026-10-29 |
+| TSSA Authorized Heating Fuel Contractors | https://www.tssa.org/fuels-contractor?address_combine=Kitchener&field_fuel_type_natural_gas_value=Yes | Gas contractors registered with TSSA, filtered by city (a GET form); "Find or verify companies with a valid TSSA Registration" | 2026-10-29 |
+| Region: Ontario Renovates application form v11 (2026-05-22) | https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/55bf0zge/docs_admin-2295447-v11-ontario_renovates_secondary_suite_application-aoda.pdf | Where to apply, documents to attach, 3 quotes after conditional approval, 90-day start, tenant income check | 2026-10-29 |
+| Region: Ontario Renovates fact sheet (Dec 2025) | https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/qorb1jgf/secondary-suite-fact-sheet.pdf | Eligibility, steps and payout (pp. 1-7); contractor WSIB and liability insurance | 2026-10-29 |
+| Region: Funding for Secondary Suites | https://www.regionofwaterloo.ca/programs-and-services/employment-and-financial-supports/financial-support-for-renters-and-homeowners/funding-for-secondary-suites/ | Submit by email, fax, mail or in person; "annual funding is limited" | 2026-10-29 |
+| CMHC Refinance for Building Secondary Suites | https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/refinance | Owner or close relative lives there; approval before construction; through a lender | 2026-10-29 |
+| MHRTC: Expenses you can claim (CRA) | https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc/expenses-claim-mhrtc.html | Reimbursed expenses excluded; keep receipts | 2026-10-29 |
+| 2024 Building Code Compendium, Division C Part 3 | https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications | Div. C 3.2.5.1.(3)(b): an owner designing their own house needs no registration | 2026-10-28 |
+| HomeStars: Basement renovation cost Toronto (updated 2026-08-21) | https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto | Designer drawings $2,000–$5,000: "Architectural or designer drawings, which are required for permit applications" | 2026-10-29 |
+
+Every URL above, and every link in the packs' `apply`, `process[].where`, `pros.selfDraw` and `pros.trades`, returned HTTP 200 on 2026-10-29 (the CRA page answered a browser fetch; plain `curl` timed out).
+
+### City of Kitchener
+
+| Source | URL | Used for | Retrieved |
+|---|---|---|---|
+| City of Kitchener: Residential building permits | https://www.kitchener.ca/building-and-renovating/residential-building-permits/ | Duplex fee "$0.37 per square foot of finished space (or $163 minimum)", $250 rebate fee refunded after the final inspection, 10 business days; Schedule 1 "completed by a qualified designer or homeowner" | 2026-10-29 |
+| City of Kitchener: Building Guide & Process – Duplex (2025-04-01) | https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf | "Drawings must be completed by the homeowner or a qualified BCIN designer"; the drawings checklist | 2026-10-29 |
+| City of Kitchener: online service portal | https://onlineserviceportal2.kitchener.ca/citizenportal/ | Apply, pay and book inspections | 2026-10-29 |
+| City of Kitchener: ADU grant application (PDF, 2026) | https://www.kitchener.ca/media/ys3dnroa/dsd_plan_application_for_cip_adu_grant.pdf | Email HousingIncentives@kitchener.ca with proof of ownership; permits issued on or after 2026-01-05 | 2026-10-29 |
+| City of Kitchener: Zoning (occupancy) certificate | https://www.kitchener.ca/development-and-construction/zoning/zoning-occupancy-certificate/ | Zoning step link | 2026-10-29 |
+| City of Kitchener: Water allocation policy | https://www.kitchener.ca/development-and-construction/kitchener-water-allocation-policy/ | Water step link | 2026-10-29 |

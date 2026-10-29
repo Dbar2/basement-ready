@@ -2067,7 +2067,27 @@
       ],
       "verified": true,
       "notes": "Status 'open': no closure, waitlist or fully-subscribed notice was found on 2026-10-28, and the City promoted the grant on 2026-08-21. The latest funding figure ($880,000 left of $1,500,000) is as of 2026-03-31, repeated in a 2026-09-04 memo; later balances are not published. Funded by the federal Housing Accelerator Fund (HAF Action Plan Initiative 3), 'provided the City receives all 4 financial installments'; awarded in date order and refusals are final. The enacted CIP by-law number was not found (draft 'By-law 24-XXX'). The CIP does not address combining it with the Region loan.",
-      "maxCAD": 10000
+      "maxCAD": 10000,
+      "shortName": "City of Cambridge ARU grant",
+      "apply": {
+        "when": "after_occupancy",
+        "who": "You",
+        "detail": "Once occupancy is granted and the permit is closed. On the portal: Financial Incentives, New Application, Additional Residential Unit Community Improvement Plan.",
+        "where": [
+          {
+            "label": "City application portal",
+            "url": "https://permits.cambridge.ca/"
+          },
+          {
+            "label": "planning@cambridge.ca",
+            "url": "mailto:planning@cambridge.ca"
+          }
+        ],
+        "bring": [
+          "Paid invoices",
+          "A parcel register for the property"
+        ]
+      }
     },
     {
       "id": "region_ontario_renovates_secondary_suites",
@@ -2131,7 +2151,20 @@
           "full bathroom",
           "separate entrance"
         ],
-        "stackableWith": []
+        "stackableWith": [],
+        "workStartWithinDaysOfApproval": {
+          "value": null,
+          "conflict": [
+            {
+              "days": 90,
+              "source": "Application form v11 (2026-05-22), s. 8.5"
+            },
+            {
+              "days": 120,
+              "source": "Fact sheet (Dec 2025), p. 7 step 10"
+            }
+          ]
+        }
       },
       "fitsPlans": {
         "family_suite": "depends",
@@ -2168,7 +2201,45 @@
       ],
       "verified": false,
       "notes": "Unverified: the house-value cap conflicts ($600,000 on the web page vs $505,469 in the Dec 2025 fact sheet). The fact sheet also says work must start within 90 days of approval (p. 4) and within 120 days (p. 7), and still prints an old 'deadline December 1, 2023'. The web page says applications are received on an ongoing basis but annual funding is limited; if the year's money is gone, eligible applicants go on a waitlist for the following year. The 2026 funding balance is not published. The fact sheet sets one income table for the 'Remainder of Waterloo Region', which covers Cambridge (only Wellesley and Wilmot Townships have lower limits). Stacking with the City of Cambridge program (city_cambridge_aru_grant) is not addressed by either program; the stacking rule in the Waterloo pack comes from a City of Waterloo staff report and does not carry over. On 2026-10-28 the Region page also said some online applications were temporarily unavailable because of technical difficulties.",
-      "maxCAD": 25000
+      "maxCAD": 25000,
+      "shortName": "Region of Waterloo forgivable loan",
+      "apply": {
+        "when": "before_work",
+        "paidWhen": "after the work is finished and inspected",
+        "who": "You",
+        "where": [
+          {
+            "label": "Application form (PDF)",
+            "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/55bf0zge/docs_admin-2295447-v11-ontario_renovates_secondary_suite_application-aoda.pdf"
+          },
+          {
+            "label": "OntarioRenovates@regionofwaterloo.ca",
+            "url": "mailto:OntarioRenovates@regionofwaterloo.ca"
+          }
+        ],
+        "bring": [
+          "Written confirmation from the City that your lot is zoned for a second unit",
+          "Photo ID, proof of status in Canada and proof of age for each owner",
+          "Your latest tax bill or MPAC assessment notice",
+          "Proof your mortgage, property tax and home insurance payments are up to date",
+          "Your mortgage balance, and your lender's OK for a second mortgage if the work costs more than $25,000"
+        ],
+        "payout": {
+          "title": "send invoices and the occupancy permit",
+          "detail": "The Region inspects the work, then pays. It checks the tenant's income before the lease is signed.",
+          "where": [
+            {
+              "label": "OntarioRenovates@regionofwaterloo.ca",
+              "url": "mailto:OntarioRenovates@regionofwaterloo.ca"
+            }
+          ],
+          "bring": [
+            "Paid invoices",
+            "The occupancy permit",
+            "The tenant's income check and the signed lease"
+          ]
+        }
+      }
     },
     {
       "id": "federal_mhrtc",
@@ -2208,7 +2279,8 @@
         ],
         "rentCap": null,
         "tenantIncomeLimit": null,
-        "requiresOwnerOccupied": false
+        "requiresOwnerOccupied": false,
+        "ratePct": 14
       },
       "fitsPlans": {
         "family_suite": "fits",
@@ -2244,7 +2316,22 @@
       ],
       "verified": true,
       "notes": "The 2025 figures are verified on the CRA page. The 2026 rate (14%) is inferred from Finance Canada's statement that the lowest rate is 14% for 2026 and later; the CRA MHRTC page did not yet show a 2026 rate.",
-      "maxCAD": 7000
+      "maxCAD": 7000,
+      "shortName": "Multigenerational home tax credit",
+      "apply": {
+        "when": "tax_time",
+        "who": "You, on your tax return",
+        "detail": "Line 45355, for the year the suite is finished.",
+        "where": [
+          {
+            "label": "CRA: line 45355",
+            "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc.html"
+          }
+        ],
+        "bring": [
+          "Every receipt for the work"
+        ]
+      }
     },
     {
       "id": "dc_exemption_aru",
@@ -2325,7 +2412,8 @@
         }
       ],
       "verified": false,
-      "notes": "City and Region DC exemption is verified in the statute (DCA s. 2(3.2)) and the City's by-law 24-040; the other seven City service by-laws were assumed to match and not read. The Region's own DC by-law text was not read. Unverified: the education DC part, where three official sources disagree. 'Gross floor area' in O. Reg. 20/98 counts only floors above average grade."
+      "notes": "City and Region DC exemption is verified in the statute (DCA s. 2(3.2)) and the City's by-law 24-040; the other seven City service by-laws were assumed to match and not read. The Region's own DC by-law text was not read. Unverified: the education DC part, where three official sources disagree. 'Gross floor area' in O. Reg. 20/98 counts only floors above average grade.",
+      "shortName": "No development charges"
     },
     {
       "id": "cmhc_refinance_secondary_suite",
@@ -2374,7 +2462,22 @@
         }
       ],
       "verified": true,
-      "notes": "The CMHC page shows no publish date; it presents the product as current. Start date 2025-01-15 is from the Finance Canada release."
+      "notes": "The CMHC page shows no publish date; it presents the product as current. Start date 2025-01-15 is from the Finance Canada release.",
+      "shortName": "CMHC refinance",
+      "apply": {
+        "when": "before_work",
+        "who": "You, through your lender",
+        "detail": "Ask your mortgage lender. Only CMHC-approved lenders offer it, and CMHC must approve it before construction.",
+        "where": [
+          {
+            "label": "CMHC: refinance for a secondary suite",
+            "url": "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/refinance"
+          }
+        ],
+        "bring": [
+          "Quotes for the work: the lender adds them to your home's value today"
+        ]
+      }
     },
     {
       "id": "canada_secondary_suite_loan_program",
@@ -2410,7 +2513,8 @@
         }
       ],
       "verified": true,
-      "notes": "Budget 2025 says the program 'is not yet operational' and 'will not be implemented' because it overlaps with the insured-mortgage refinance changes. Cancellation date recorded as the Budget 2025 page date, 2025-11-04."
+      "notes": "Budget 2025 says the program 'is not yet operational' and 'will not be implemented' because it overlaps with the insured-mortgage refinance changes. Cancellation date recorded as the Budget 2025 page date, 2025-11-04.",
+      "shortName": "Canada Secondary Suite Loan"
     }
   ],
   "process": [
@@ -2425,7 +2529,8 @@
         "retrieved": "2026-10-28"
       },
       "verified": false,
-      "notes": "The fee line for a new ARU is not confirmed."
+      "notes": "The fee line for a new ARU is not confirmed.",
+      "phase": null
     },
     {
       "step": 2,
@@ -2450,6 +2555,19 @@
           "section": "pp. 4, 15, 19-20 (deferred lands)",
           "retrieved": "2026-10-28"
         }
+      ],
+      "phase": "before",
+      "task": "Confirm your zoning",
+      "who": "You",
+      "where": [
+        {
+          "label": "City zoning map",
+          "url": "https://experience.arcgis.com/experience/c9f28e5db04e4ff487cd62229dff156b"
+        },
+        {
+          "label": "planning@cambridge.ca",
+          "url": "mailto:planning@cambridge.ca"
+        }
       ]
     },
     {
@@ -2463,7 +2581,19 @@
         "retrieved": "2026-10-28"
       },
       "verified": false,
-      "notes": "Whether a basement ARU on an existing service is outside the policy is not confirmed (see cambridge_water_allocation)."
+      "notes": "Whether a basement ARU on an existing service is outside the policy is not confirmed (see cambridge_water_allocation).",
+      "phase": "permit",
+      "task": "Check water allocation",
+      "where": [
+        {
+          "label": "Water supply allocation",
+          "url": "https://www.cambridge.ca/business-building-development/building-planning/water-supply-allocation/"
+        },
+        {
+          "label": "planning@cambridge.ca",
+          "url": "mailto:planning@cambridge.ca"
+        }
+      ]
     },
     {
       "step": 4,
@@ -2474,7 +2604,8 @@
         "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-compliance",
         "section": "Division A 1.3.3.3B.(1); Division B 11.5.1.1.(2)",
         "retrieved": "2026-10-28"
-      }
+      },
+      "phase": "drawings"
     },
     {
       "step": 5,
@@ -2493,7 +2624,8 @@
           "section": "s. 6.3",
           "retrieved": "2026-10-28"
         }
-      ]
+      ],
+      "phase": "before"
     },
     {
       "step": 6,
@@ -2512,7 +2644,8 @@
           "section": null,
           "retrieved": "2026-10-28"
         }
-      ]
+      ],
+      "phase": "drawings"
     },
     {
       "step": 7,
@@ -2537,6 +2670,25 @@
           "section": "Schedule A p. 22 (special permit fee)",
           "retrieved": "2026-10-28"
         }
+      ],
+      "phase": "permit",
+      "task": "Apply online",
+      "who": "You or your designer",
+      "time": "about 15 business days",
+      "where": [
+        {
+          "label": "City application portal",
+          "url": "https://permits.cambridge.ca/"
+        },
+        {
+          "label": "building@cambridge.ca",
+          "url": "mailto:building@cambridge.ca"
+        }
+      ],
+      "bring": [
+        "Your drawings",
+        "The provincial permit application (filled in for you online)",
+        "An Owner Acknowledgement Form, if you're your own contractor"
       ]
     },
     {
@@ -2550,7 +2702,8 @@
         "retrieved": "2026-10-28"
       },
       "verified": false,
-      "notes": "Guide last updated 2023-01-30."
+      "notes": "Guide last updated 2023-01-30.",
+      "phase": "build"
     },
     {
       "step": 9,
@@ -2568,6 +2721,14 @@
           "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/",
           "section": "Inspections",
           "retrieved": "2026-10-28"
+        }
+      ],
+      "phase": "build",
+      "task": "Call for each inspection",
+      "where": [
+        {
+          "label": "Building inspections",
+          "url": "https://www.cambridge.ca/business-building-development/building-planning/building-inspections/"
         }
       ]
     },
@@ -2602,7 +2763,8 @@
         }
       ],
       "verified": false,
-      "notes": "No rental licence is an absence finding (licensing page, By-law 142-16 and council portal searches); no explicit City statement was found."
+      "notes": "No rental licence is an absence finding (licensing page, By-law 142-16 and council portal searches); no explicit City statement was found.",
+      "phase": "after"
     },
     {
       "step": 11,
@@ -2621,7 +2783,8 @@
           "section": null,
           "retrieved": "2026-10-28"
         }
-      ]
+      ],
+      "phase": null
     }
   ],
   "pros": {
@@ -2667,7 +2830,20 @@
           "retrieved": "2026-10-28"
         }
       ],
-      "verified": true
+      "verified": true,
+      "searchUrl": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D4%264%3D*House*%266%3D*Cambridge*",
+      "searchLinks": [
+        {
+          "label": "Independent designers near Cambridge",
+          "url": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D4%264%3D*House*%266%3D*Cambridge*"
+        },
+        {
+          "label": "Design firms near Cambridge",
+          "url": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D3%264%3D*House*%266%3D*Cambridge*"
+        }
+      ],
+      "howToSearch": "Opens Ontario's public registry filtered to designers registered for houses near Cambridge. Check that their classes include “House”, not only HVAC or plumbing.",
+      "searchNote": "Filters go in the 'mf' query parameter (3 = registration type: 3 design firms, 4 independent designers; 4 = classes; 6 = location; text needs * on both sides). Principal Authority returns nothing for designers, so location is used. Checked 2026-10-29: Waterloo 16 designers, 13 firms."
     },
     "whoNeedsOne": "Designers who are not the owner generally must be registered (Div. C 3.2.4-3.2.5); an owner designing their own house is exempt (Div. C 3.2.5.1.(3)(b)). Architects and professional engineers are separate routes.",
     "whoNeedsOneSource": {
@@ -2682,7 +2858,50 @@
       "url": "https://www.cambridge.ca/business-building-development/building-planning/housing-design-catalogue/",
       "section": null,
       "retrieved": "2026-10-28"
-    }
+    },
+    "selfDraw": {
+      "detail": "Drawings may be prepared by you, the owner, or by a qualified designer. The City's building permits page lists what they must show, at 3/16\" = 1'-0\" or larger.",
+      "checklist": {
+        "label": "Cambridge drawing requirements",
+        "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/"
+      },
+      "rule": {
+        "label": "Building Code, Div. C 3.2.5.1.(3)(b)",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications"
+      }
+    },
+    "designerCost": {
+      "lowCAD": 2000,
+      "highCAD": 5000,
+      "note": "A Toronto price guide's figure for permit drawings (Aug 2026). No Waterloo Region figure is published, so ask 2 or 3 designers to quote. The City's $10,000 grant can pay for professionally prepared drawings.",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto (HomeStars, updated 2026-08-21)",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "section": "Permits and drawings: 'Architectural or designer drawings ... typically add another $2,000 to $5,000'",
+        "retrieved": "2026-10-29"
+      }
+    },
+    "trades": [
+      {
+        "title": "Electrician",
+        "detail": "Must hold an ESA licence; they take out the ESA permit for the electrical work.",
+        "label": "ESA contractor locator",
+        "url": "https://licensing.esasafe.com/contractor-locator-tool/"
+      },
+      {
+        "title": "Gas fitter",
+        "detail": "For the furnace, water heater or gas lines: must be registered with TSSA.",
+        "label": "TSSA gas contractors near Cambridge",
+        "url": "https://www.tssa.org/fuels-contractor?address_combine=Cambridge&field_fuel_type_natural_gas_value=Yes"
+      },
+      {
+        "title": "General contractor, for the Region's loan",
+        "detail": "The Region needs 3 quotes, each from a contractor with WSIB coverage and liability insurance.",
+        "label": "Region's loan fact sheet",
+        "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/qorb1jgf/secondary-suite-fact-sheet.pdf",
+        "program": "region_ontario_renovates_secondary_suites"
+      }
+    ]
   },
   "costs": [
     {
@@ -3150,5 +3369,23 @@
       "notes": "'the average cost to construct an ARU is $47,232'. Method, year and unit type (basement or detached) not stated; well below the contractor ranges for a full legal basement suite.",
       "estimate": true
     }
-  ]
+  ],
+  "permitFee": {
+    "perSqftCAD": 0.5,
+    "minimumCAD": 143,
+    "extras": [
+      {
+        "label": "zoning review",
+        "CAD": 25
+      }
+    ],
+    "estimate": true,
+    "note": "Cambridge has no fee line just for a second unit; this uses its interior-finish rate, and the City invoices the exact fee after review",
+    "source": {
+      "title": "Municipal Fees and Charges By-law 25-079 (City of Cambridge)",
+      "url": "https://www.cambridge.ca/media/nridbsyx/municipal-fees-and-charges-by-law-25-079.pdf",
+      "section": "Building: alterations / interior finishes; zoning review",
+      "retrieved": "2026-10-28"
+    }
+  }
 }
