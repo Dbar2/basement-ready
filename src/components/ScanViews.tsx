@@ -1,11 +1,12 @@
 // "Your basement, scanned": the 3D scan and the measured floor plan, one tap apart. Filmed room by
 // room, each room has its own scan and plan, picked from a row of room tabs.
-import { lazy, Suspense, useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import type { Layout, Plan, RoomResult } from "../api";
 import { downloadSvg, FloorPlan, type Units } from "./FloorPlan";
+import { lazy3d, View3DBoundary } from "./View3D";
 
 // three.js is heavy; load the 3D view only when someone opens it.
-const ScanViewer3D = lazy(() => import("../three/ScanViewer3D").then((m) => ({ default: m.ScanViewer3D })));
+const ScanViewer3D = lazy3d(() => import("../three/ScanViewer3D").then((m) => m.ScanViewer3D));
 
 const size = (p: Plan | null) => (p ? `${p.widthM.toFixed(1)} × ${p.depthM.toFixed(1)} m` : "No 3D");
 
@@ -67,20 +68,22 @@ export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boo
       <div className="scan-views-frame" data-view={shown}>
         {any3d && (
           <div className="view-layer" hidden={shown !== "3d"}>
-            <Suspense fallback={<p className="viewer-empty mono">Loading your basement in 3D…</p>}>
-              {multi ? (
-                scanned
-                  .filter((r) => r.has3d && opened.includes(r.index))
-                  .map((r) => (
-                    <div key={r.index} className="view-layer" hidden={r.index !== room!.index}>
-                      <ScanViewer3D plyUrl={plyUrl(r.index)} plan={r.plan} />
-                    </div>
-                  ))
-              ) : (
-                <ScanViewer3D plyUrl={plyUrl(0)} plan={plan} />
-              )}
-              <p className="viewer-hint mono">Drag to orbit · pinch or scroll to zoom</p>
-            </Suspense>
+            <View3DBoundary>
+              <Suspense fallback={<p className="viewer-empty mono">Loading your basement in 3D…</p>}>
+                {multi ? (
+                  scanned
+                    .filter((r) => r.has3d && opened.includes(r.index))
+                    .map((r) => (
+                      <div key={r.index} className="view-layer" hidden={r.index !== room!.index}>
+                        <ScanViewer3D plyUrl={plyUrl(r.index)} plan={r.plan} />
+                      </div>
+                    ))
+                ) : (
+                  <ScanViewer3D plyUrl={plyUrl(0)} plan={plan} />
+                )}
+                <p className="viewer-hint mono">Drag to orbit · pinch or scroll to zoom</p>
+              </Suspense>
+            </View3DBoundary>
           </div>
         )}
         {plan && (
