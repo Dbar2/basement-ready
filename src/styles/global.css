@@ -436,6 +436,7 @@ a { color: inherit; }
   .questions li, .grants li { grid-template-columns: 1fr; gap: 8px; }
   .dash-list li { grid-template-columns: 1fr; gap: 10px; }
   .wishes li { grid-template-columns: 1fr; gap: 10px; }
+  .wishes .proof { max-width: 160px; }
   .scan-views-frame { aspect-ratio: 4 / 5; }
   .scan-log { left: 16px; bottom: 16px; }
   .scan-next { right: 16px; bottom: 16px; }

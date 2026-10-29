@@ -1,4 +1,4 @@
-// The guide's voice. Pre-made clips (public/voice/<line>.mp3, scripts/make-voice.ts) play through
+// The guide's voice. Pre-made clips (public/voice/<line>.mp3, made by `pnpm voice` with Kokoro) play through
 // Web Audio, which iOS keeps on the loudspeaker while the mic records; the phone's own speech voice
 // gets turned down to the earpiece there, so it's only the fallback when a clip is missing.
 // The caption always shows. Each line's time is logged so the server can cut our own voice out of
@@ -22,6 +22,9 @@ export function prepareAudioSession() {
 }
 
 const REPEAT_AFTER_MS = 14_000;
+// Nagging about speed or light every few seconds helps nobody.
+const REPEAT_ISSUE_MS = 35_000;
+const ISSUES = new Set<LineId>(["slow_down", "too_dark"]);
 
 export function useVoice(active: boolean, startedAt: number) {
   const [caption, setCaption] = useState<{ id: LineId; text: string } | null>(null);
@@ -110,7 +113,7 @@ export function useVoice(active: boolean, startedAt: number) {
     (id: LineId, { again = false } = {}) => {
       if (!active) return;
       const at = lastSaid.current.get(id);
-      if (!again && at != null && performance.now() - at < REPEAT_AFTER_MS) return;
+      if (!again && at != null && performance.now() - at < (ISSUES.has(id) ? REPEAT_ISSUE_MS : REPEAT_AFTER_MS)) return;
       if (playing.current) pending.current = id;
       else play(id);
     },

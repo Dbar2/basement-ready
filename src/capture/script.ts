@@ -1,5 +1,5 @@
 // The filming guide: what to say, and which one task is on screen. Pure, so it can be tested
-// without a camera. Every line here is also a voice clip (scripts/make-voice.ts reads LINES).
+// without a camera. Every line here is also a voice clip (`pnpm voice` reads LINES).
 
 export type LineId =
   | "intro"
@@ -24,28 +24,29 @@ export type LineId =
   | "too_dark"
   | "keep_going";
 
+// Said the way a friendly contractor would say it, walking beside you.
 export const LINES: Record<LineId, string> = {
-  intro: "Hi! I'll guide you. Start at the bottom of the stairs, and film the stairs as you go.",
-  stairs_done: "Got the stairs.",
-  walls: "Now walk slowly along the walls of this room, about two metres back.",
-  turn_left: "Turn left. This wall isn't filmed yet.",
-  turn_right: "Turn right. This wall isn't filmed yet.",
-  turn_around: "Turn around. The wall behind you isn't filmed yet.",
-  walls_done: "That's every wall in this room.",
-  ceiling: "Tilt your phone up and show me the ceiling.",
-  ceiling_done: "Got the ceiling.",
-  windows: "Point at each window in this room.",
+  intro: "Hi, I'm here to help. Let's start with the stairs. Just film them on your way down.",
+  stairs_done: "Nice, got the stairs.",
+  walls: "Now walk slowly along the walls of this room. Stay a couple of metres back.",
+  turn_left: "Turn a little to your left. That wall's not filmed yet.",
+  turn_right: "Turn a little to your right. That wall's not filmed yet.",
+  turn_around: "Turn around for me. The wall behind you still needs filming.",
+  walls_done: "Perfect, that's every wall in here.",
+  ceiling: "Now tilt your phone up and show me the ceiling.",
+  ceiling_done: "Great, got the ceiling.",
+  windows: "Point at each window in this room for a second.",
   window_found: "Found a window.",
-  plans: "What would you like this room to be? Just say it, or tap an idea.",
-  plans_heard: "Got it.",
-  new_room: "Looks like a new room.",
-  furnace_room: "Looks like the furnace room. Show me the furnace and the electrical panel.",
+  plans: "So, what would you like this room to be? Just tell me, or tap an idea.",
+  plans_heard: "Love it. Got it.",
+  new_room: "Looks like you're in a new room.",
+  furnace_room: "This looks like the furnace room. Show me the furnace and the electrical panel.",
   furnace_found: "Got the furnace.",
-  next_room: "When you're ready, walk into the next room.",
-  enough: "That's enough to check it. Film another room, or tap Done.",
-  slow_down: "Slow down a little.",
-  too_dark: "It's dark here. Turn on a light if you can.",
-  keep_going: "Keep going, a few more seconds.",
+  next_room: "Whenever you're ready, head into the next room.",
+  enough: "That's plenty to check it. Film another room, or tap Done.",
+  slow_down: "Slow down just a little for me.",
+  too_dark: "It's a bit dark here. Turn on a light if you can.",
+  keep_going: "Keep going, just a few more seconds.",
 };
 
 // The six things a check needs, shown as progress dots.
