@@ -424,6 +424,11 @@ a { color: inherit; }
 .stage-tools > * { pointer-events: auto; }
 .stage-tools .link-quiet { padding: 4px 8px; border-radius: 4px; background: var(--color-card); font-size: 13px; }
 .stage-note { position: absolute; left: 12px; bottom: 10px; margin: 0; padding: 3px 8px; border-radius: 4px; background: var(--color-card); color: var(--color-ink-muted); font-size: 12px; }
+.stage-finish { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; padding: 3px; border-radius: 6px; background: var(--color-card); }
+.stage-finish button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--color-ink); font: inherit; font-size: 12px; cursor: pointer; }
+.stage-finish button[aria-pressed="true"] { border-color: var(--color-ink); }
+.stage-swatch { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12); }
+.stage-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--color-ink-muted); font-size: 13px; pointer-events: none; }
 .stage-tag { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 8px; border-radius: 4px; background: var(--color-card); color: var(--color-ink); font-size: 12px; white-space: nowrap; box-shadow: var(--shadow-card); pointer-events: none; }
 .stage-tag span { font-family: var(--font-mono); color: var(--color-ink-muted); font-size: 11px; }
 .stage-checks { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
@@ -443,6 +448,9 @@ a { color: inherit; }
 @media (max-width: 900px) {
   .stage { aspect-ratio: 4 / 5; }
   .stage-tools { flex-wrap: wrap; }
+  .stage-finish button { padding: 4px; }
+  .stage-finish button span:last-child { display: none; }
+  .stage-note-long { display: none; }
 }
 
 /* ---------- the suggested layout on the plan ---------- */

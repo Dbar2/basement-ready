@@ -33,6 +33,7 @@
     "@hono/node-server": "^2.1.5",
     "@react-three/drei": "^10.7.9",
     "@react-three/fiber": "^9.8.2",
+    "@react-three/postprocessing": "^3.2.2",
     "@tanstack/react-router": "^1.170.46",
     "drizzle-orm": "^0.45.4",
     "hono": "^4.13.14",
