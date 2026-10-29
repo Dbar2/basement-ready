@@ -225,6 +225,7 @@ a { color: inherit; }
 .viewer-canvas { position: absolute !important; inset: 0; }
 .viewer-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--color-ink-muted); }
 .viewer-failed { display: grid; justify-items: center; gap: 12px; padding: 16px; text-align: center; }
+@media (max-width: 600px) { .scan-views-frame .stage-finish ~ .viewer-hint { bottom: 52px; } }
 .scan-spots { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 6px; background: var(--color-card); font-size: 12px; }
 .scan-spots button { width: 28px; height: 28px; border: 0; border-radius: 4px; background: none; color: var(--color-ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
 .scan-spots button:hover { background: var(--color-surface); }
