@@ -1,0 +1,115 @@
+# pnpm test (vitest) · 2026-10-29 10:48 EDT · commit b41b900
+
+
+ RUN  v5.0.5 .
+
+ ✓ tests/unit/sam.test.ts > parseSam > groups boxes into tracks across frames 2ms
+ ✓ tests/unit/sam.test.ts > parseSam > ignores digits inside mask data 0ms
+ ✓ tests/unit/sam.test.ts > parseSam > returns nothing for an empty result 0ms
+ ✓ tests/unit/sam.test.ts > parseSam > picks the biggest, most confident frame as proof 0ms
+ ✓ tests/unit/sam.test.ts > parseSam > parses a real SAM 3.1 video response 3ms
+ ✓ tests/unit/layout.test.ts > suggested layout > puts the bedroom on the wall with the escape window 3ms
+ ✓ tests/unit/layout.test.ts > suggested layout > keeps every zone inside the room, with a bathroom, kitchen and living space 1ms
+ ✓ tests/unit/layout.test.ts > suggested layout > walls the bathroom in, in a studio too 0ms
+ ✓ tests/unit/layout.test.ts > suggested layout > makes a studio in a small room 0ms
+ ✓ tests/unit/layout.test.ts > suggested layout > keeps the stairs and furnace as they are 0ms
+ ✓ tests/unit/layout.test.ts > suggested layout > never puts the bedroom, bathroom or kitchen on the stairs 0ms
+ ✓ tests/unit/assess.test.ts > buildResult: the trust rule > holds back a claim with no SAM evidence 3ms
+ ✓ tests/unit/assess.test.ts > buildResult: the trust rule > drops evidence ids SAM never produced 0ms
+ ✓ tests/unit/assess.test.ts > buildResult: the trust rule > keeps a supported claim and prices it 0ms
+ ✓ tests/unit/assess.test.ts > buildResult: the trust rule > counts related rules as one thing to fix and never double-counts cost 0ms
+ ✓ tests/unit/assess.test.ts > buildResult: the trust rule > asks only what a homeowner knows when Spark skipped everything 1ms
+ ✓ tests/unit/assess.test.ts > money and coverage > matches grants to who the unit is for 0ms
+ ✓ tests/unit/assess.test.ts > money and coverage > falls back to provincial rules outside covered cities 0ms
+ ✓ tests/unit/assess.test.ts > money and coverage > rejects odd municipality slugs 0ms
+ ✓ tests/unit/assess.test.ts > cleanVision > keeps what the homeowner said, with the moment they said it 1ms
+ ✓ tests/unit/assess.test.ts > cleanVision > drops junk instead of trusting it 0ms
+ ✓ tests/unit/assess.test.ts > cleanVision > is empty when nothing was said 0ms
+ ✓ tests/unit/recheck.test.ts > evaluate > compares numbers and yes/no answers against the rule 2ms
+ ✓ tests/unit/recheck.test.ts > recheck > a measured ceiling that passes leaves the question list and stays a pass 1ms
+ ✓ tests/unit/recheck.test.ts > recheck > a ceiling that's too low becomes a priced fix and changes the count 0ms
+ ✓ tests/unit/recheck.test.ts > recheck > too many homes on the lot rules out a second unit 0ms
+ ✓ tests/unit/recheck.test.ts > recheck > clearing an answer puts back what the scan said 0ms
+ ✓ tests/unit/recheck.test.ts > recheck > a wrong kind of answer changes nothing 0ms
+ ✓ tests/unit/recheck.test.ts > recheck > "Not sure" turns a question into something the designer checks 1ms
+ ✓ tests/unit/packs.test.ts > rules pack waterloo-on > loads as a fully researched city 1ms
+ ✓ tests/unit/packs.test.ts > rules pack waterloo-on > has the same core building-code rules as Waterloo 1ms
+ ✓ tests/unit/packs.test.ts > rules pack waterloo-on > cites a source for every rule and grant 1ms
+ ✓ tests/unit/packs.test.ts > rules pack waterloo-on > flags the cancelled federal suite loan 0ms
+ ✓ tests/unit/packs.test.ts > rules pack waterloo-on > produces an answer 2ms
+ ✓ tests/unit/packs.test.ts > rules pack kitchener-on > loads as a fully researched city 0ms
+ ✓ tests/unit/packs.test.ts > rules pack kitchener-on > has the same core building-code rules as Waterloo 0ms
+ ✓ tests/unit/packs.test.ts > rules pack kitchener-on > cites a source for every rule and grant 0ms
+ ✓ tests/unit/packs.test.ts > rules pack kitchener-on > flags the cancelled federal suite loan 0ms
+ ✓ tests/unit/packs.test.ts > rules pack kitchener-on > produces an answer 0ms
+ ✓ tests/unit/packs.test.ts > rules pack cambridge-on > loads as a fully researched city 0ms
+ ✓ tests/unit/packs.test.ts > rules pack cambridge-on > has the same core building-code rules as Waterloo 0ms
+ ✓ tests/unit/packs.test.ts > rules pack cambridge-on > cites a source for every rule and grant 0ms
+ ✓ tests/unit/packs.test.ts > rules pack cambridge-on > flags the cancelled federal suite loan 0ms
+ ✓ tests/unit/packs.test.ts > rules pack cambridge-on > produces an answer 0ms
+ ✓ tests/unit/triage.test.ts > public records answer the zoning questions > a single house in a residential zone can add a suite, and is on City services 5ms
+ ✓ tests/unit/triage.test.ts > public records answer the zoning questions > Cambridge's limit of 3 homes counts the units already registered 1ms
+ ✓ tests/unit/triage.test.ts > public records answer the zoning questions > without records, the City confirms zoning instead of asking the homeowner 1ms
+ ✓ tests/unit/triage.test.ts > public records answer the zoning questions > a commercial zone is never treated as a house lot 0ms
+ ✓ tests/unit/triage.test.ts > residential zones > knows the three cities' house zones 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 2.1 → 2.1 m 1ms
+ ✓ tests/unit/measure.test.ts > parseLength > 2.10 m → 2.1 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 210 cm → 2.1 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 210 → 2.1 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 2100 mm → 2.1 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 6'11" → 2.108 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 6' 11 → 2.108 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 6 ft 11 in → 2.108 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 83 in → 2.108 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > 7' → 2.134 m 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > rejects "" 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > rejects "tall" 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > rejects "12" 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > rejects "0.5" 0ms
+ ✓ tests/unit/measure.test.ts > parseLength > rejects "6 feet tall" 0ms
+ ✓ tests/unit/measure.test.ts > measuredCheck > passes a ceiling clearly above the limit when the tape set the scale 0ms
+ ✓ tests/unit/measure.test.ts > measuredCheck > calls a near miss a close call instead of guessing 0ms
+ ✓ tests/unit/measure.test.ts > measuredCheck > flags a ceiling clearly too low 0ms
+ ✓ tests/unit/measure.test.ts > measuredCheck > won't decide from an estimated scale unless it's far from the limit 0ms
+ ✓ tests/unit/measure.test.ts > measuredCheck > ignores a scan that failed its own quality checks 0ms
+ ✓ tests/unit/measure.test.ts > measuredCheck > uses the lowest duct or beam for clearance 0ms
+ ✓ tests/unit/measure.test.ts > measuredCheck > overrides Spark and cites the scan in the answer 1ms
+ ✓ tests/unit/measure.test.ts > doors as a ruler > uses two doors that agree, and only for a small correction 0ms
+ ✓ tests/unit/measure.test.ts > doors as a ruler > ignores one door, doors that disagree, and corrections too big to trust 0ms
+ ✓ tests/unit/measure.test.ts > doors as a ruler > rescales every length and marks the source 0ms
+ ✓ tests/unit/script.test.ts > the one task on screen > starts with the stairs 2ms
+ ✓ tests/unit/script.test.ts > the one task on screen > walks a room in order: walls, ceiling, windows, plans, then on 0ms
+ ✓ tests/unit/script.test.ts > the one task on screen > skips what the phone can't sense, and moves on when a step drags 0ms
+ ✓ tests/unit/script.test.ts > the one task on screen > asks for the furnace in the furnace room 0ms
+ ✓ tests/unit/script.test.ts > which way to turn > points at the biggest stretch not filmed yet 0ms
+ ✓ tests/unit/script.test.ts > which way to turn > stays quiet for small gaps, a full room, or no compass 0ms
+ ✓ tests/unit/rooms.test.ts > cleanRooms > reads the form field, sorts and starts at 0 1ms
+ ✓ tests/unit/rooms.test.ts > cleanRooms > adds the first room when the phone only sent the later ones 0ms
+ ✓ tests/unit/rooms.test.ts > cleanRooms > is null for one room, junk or out-of-range times 0ms
+ ✓ tests/unit/rooms.test.ts > cleanRooms > drops repeats and caps the count 0ms
+ ✓ tests/unit/rooms.test.ts > roomRanges > is the whole video without marks 0ms
+ ✓ tests/unit/rooms.test.ts > roomRanges > splits at each mark, in frames 0ms
+ ✓ tests/unit/rooms.test.ts > roomRanges > drops a room that starts after the video ends 0ms
+ ✓ tests/unit/rooms.test.ts > mainRoom > prefers a trusted scan over a bigger rough one 0ms
+ ✓ tests/unit/rooms.test.ts > mainRoom > takes the biggest floor among equals 0ms
+ ✓ tests/unit/rooms.test.ts > mainRoom > is null when no room was scanned 0ms
+ ✓ tests/unit/rooms.test.ts > roomName > names the room the furnace was seen in, once 0ms
+ ✓ tests/unit/rooms.test.ts > the guide's voice and tapped ideas > cuts speech that overlaps the guide talking 0ms
+ ✓ tests/unit/rooms.test.ts > the guide's voice and tapped ideas > keeps only well-formed ideas and spans 0ms
+ ✓ tests/unit/rooms.test.ts > tapped ideas in what you want > adds them to the room they were tapped in, skipping 'not sure' and repeats 0ms
+ ✓ tests/unit/concepts.test.ts > photos of what it could look like > finishes the frame where they said what they wanted first 1ms
+ ✓ tests/unit/concepts.test.ts > photos of what it could look like > makes the window room a bedroom for a parent, and adds a wide view 0ms
+ ✓ tests/unit/concepts.test.ts > photos of what it could look like > asks Muse Image to keep windows, doors and stairs in place 0ms
+ ✓ tests/unit/concepts.test.ts > photos of what it could look like > only passes a picture where every window is still about where it was 0ms
+ ✓ tests/unit/concepts.test.ts > photos of what it could look like > never picks a close-up or the furnace corner as the wide view 0ms
+ ✓ tests/unit/accounts.test.ts > accounts > claims an anonymous scan only with the right token 15ms
+ ✓ tests/unit/accounts.test.ts > accounts > only the owner can delete a basement 6ms
+ ✓ tests/unit/accounts.test.ts > accounts > deleting an account removes its basements and scans 8ms
+ ✓ tests/unit/jobs.test.ts > job queue > claims each job once, in order 9ms
+ ✓ tests/unit/jobs.test.ts > job queue > retries with backoff, then fails for good 3ms
+
+ Test Files  12 passed (12)
+      Tests  104 passed (104)
+   Start at  10:48:25
+   Duration  1.70s (tests 59%, import 28%, transform 11%, worker 2%)
+
