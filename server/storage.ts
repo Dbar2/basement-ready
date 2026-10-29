@@ -92,6 +92,7 @@ export const keys = {
   input: (scanId: string, ext: string) => `scans/${scanId}/input.${ext}`,
   analysis: (scanId: string) => `scans/${scanId}/analysis.mp4`,
   frame: (scanId: string, n: number) => `scans/${scanId}/frames/${String(n).padStart(4, "0")}.jpg`,
+  concept: (scanId: string, n: number) => `scans/${scanId}/concepts/${n}.jpg`,
   // The first room keeps the original path, so scans from before rooms still open.
   scan3d: (scanId: string, file: "scan.json" | "points.ply" | "depth.bin", room = 0) =>
     room > 0 ? `scans/${scanId}/3d/room-${room}/${file}` : `scans/${scanId}/3d/${file}`,

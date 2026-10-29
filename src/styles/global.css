@@ -417,6 +417,94 @@ a { color: inherit; }
   .block { padding-top: 28px; break-inside: avoid; }
 }
 
+/* ---------- what it could look like ---------- */
+.stage { position: relative; border: 1px solid var(--color-ink); border-radius: 6px; overflow: hidden; background: var(--color-surface); aspect-ratio: 16 / 10; }
+.stage canvas { display: block; }
+.stage-tools { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px; pointer-events: none; }
+.stage-tools > * { pointer-events: auto; }
+.stage-tools .link-quiet { padding: 4px 8px; border-radius: 4px; background: var(--color-card); font-size: 13px; }
+.stage-note { position: absolute; left: 12px; bottom: 10px; margin: 0; padding: 3px 8px; border-radius: 4px; background: var(--color-card); color: var(--color-ink-muted); font-size: 12px; }
+.stage-tag { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 8px; border-radius: 4px; background: var(--color-card); color: var(--color-ink); font-size: 12px; white-space: nowrap; box-shadow: var(--shadow-card); pointer-events: none; }
+.stage-tag span { font-family: var(--font-mono); color: var(--color-ink-muted); font-size: 11px; }
+.stage-checks { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; font-size: 14px; }
+.stage-checks li { position: relative; padding-left: 22px; }
+.stage-checks li::before { content: ""; position: absolute; left: 0; top: 5px; width: 12px; height: 12px; border-radius: 50%; background: var(--color-mint); }
+.stage-checks li[data-ok="false"]::before { background: var(--color-fix); }
+.stage-checks li[data-ok="unknown"]::before { background: var(--color-border); }
+.concepts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+.concept { position: relative; margin: 0; }
+.concept img { display: block; width: 100%; aspect-ratio: 9 / 14; object-fit: cover; border-radius: 6px; background: var(--color-surface); }
+.concept-label { position: absolute; top: 10px; left: 10px; padding: 3px 8px; border-radius: 4px; background: var(--color-card); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; }
+.concept figcaption { display: grid; gap: 2px; margin-top: 8px; }
+.concept-check { font-size: 13px; color: var(--color-accent-text); }
+.concept-check--warn { color: var(--color-fix); }
+.concepts-wait { position: static; padding: 40px 0; }
+
+@media (max-width: 900px) {
+  .stage { aspect-ratio: 4 / 5; }
+  .stage-tools { flex-wrap: wrap; }
+}
+
+/* ---------- the suggested layout on the plan ---------- */
+.plan-zone rect { fill: color-mix(in srgb, var(--color-surface) 70%, transparent); stroke: none; }
+.plan-zone[data-kind="bedroom"] rect { fill: color-mix(in srgb, var(--color-mint) 26%, transparent); }
+.plan-zone[data-kind="bathroom"] rect { fill: color-mix(in srgb, var(--color-border) 80%, transparent); }
+.plan-zone[data-kind="kitchen"] rect { fill: color-mix(in srgb, var(--color-ink) 14%, transparent); }
+.plan-zone[data-kind="mechanical"] rect { fill: color-mix(in srgb, var(--color-fix) 14%, transparent); }
+.plan-zone-name { font-family: var(--font-body); font-size: 15px; font-weight: 700; fill: var(--color-ink); }
+.plan-zone-area { font-family: var(--font-mono); font-size: 12px; font-weight: 400; fill: var(--color-ink-muted); }
+.plan-partition { stroke: var(--color-ink); stroke-linecap: square; }
+
+/* ---------- the one-page plan ---------- */
+.brief { max-width: 960px; margin: 0 auto; padding: 24px clamp(16px, 4vw, 40px) 48px; display: grid; gap: 22px; }
+.brief-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.brief-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--color-ink); }
+.brief-head .mono { margin: 0; font-size: 12px; text-align: right; color: var(--color-ink-muted); }
+.brief-decision h1 { font-size: clamp(30px, 4.4vw, 48px); max-width: 22ch; }
+.brief-decision > p { margin: 10px 0 0; max-width: 60ch; }
+.brief-decision dl { display: flex; flex-wrap: wrap; gap: 8px 28px; margin: 16px 0 0; }
+.brief-decision dt { font-size: 12px; color: var(--color-ink-muted); }
+.brief-decision dd { margin: 0; font-family: var(--font-mono); font-size: 17px; }
+.brief-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 28px; align-items: start; }
+.brief h2 { font-size: 20px; margin: 0 0 10px; }
+.brief section > h2 + * { margin-top: 0; }
+.brief-checks, .brief-list, .brief-steps { margin: 10px 0 0; padding-left: 18px; font-size: 14px; display: grid; gap: 4px; }
+.brief-list { list-style: none; padding: 0; border-top: 1px solid var(--color-ink); gap: 0; }
+.brief-list li { display: flex; justify-content: space-between; gap: 14px; padding: 7px 0; border-bottom: 1px solid var(--color-border); }
+.brief-list .mono { white-space: nowrap; font-size: 13px; }
+.brief-photos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+.brief-photos figure { margin: 0; }
+.brief-photos img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 4px; }
+.brief-photos figcaption { font-size: 11px; color: var(--color-ink-muted); margin-top: 4px; }
+.brief-aerial { width: 100%; border-radius: 4px; }
+.brief-foot { padding-top: 12px; border-top: 1px solid var(--color-border); font-size: 11px; color: var(--color-ink-muted); }
+@media (max-width: 760px) { .brief-grid { grid-template-columns: 1fr; } }
+@media print {
+  @page { size: letter; margin: 10mm; }
+  html, body { background: #fff; }
+  .brief { padding: 0; gap: 8px; max-width: none; font-size: 10.5px; line-height: 1.35; }
+  .brief-actions { display: none; }
+  .brief-head { padding-bottom: 6px; }
+  .brief-head .logo { transform: scale(0.8); transform-origin: left center; }
+  .brief-decision h1 { font-size: 22px; max-width: none; }
+  .brief-decision > p { margin-top: 4px; }
+  .brief-decision dl { margin-top: 8px; gap: 4px 20px; }
+  .brief-decision dd { font-size: 12px; }
+  .brief-grid { grid-template-columns: 1.15fr 1fr; gap: 14px; }
+  .brief h2 { font-size: 13px; margin-bottom: 4px; }
+  .brief section { break-inside: avoid; }
+  .brief .plan { max-height: 230px; width: 100%; }
+  .brief-checks { font-size: 9.5px; gap: 1px; margin-top: 4px; }
+  .brief-list, .brief-steps, .brief ul, .brief ol { font-size: 10.5px; }
+  .brief-list li { padding: 3px 0; }
+  .brief-list .mono { font-size: 9.5px; }
+  .brief-steps { gap: 1px; margin-top: 4px; }
+  .brief-photos { gap: 6px; margin-bottom: 8px; }
+  .brief-photos img { aspect-ratio: 4 / 3; }
+  .brief-foot { padding-top: 6px; font-size: 8.5px; }
+  .plan-wall { animation: none; stroke-dashoffset: 0; }
+}
+
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 

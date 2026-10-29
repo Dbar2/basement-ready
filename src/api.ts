@@ -106,6 +106,21 @@ export type PlanStep = {
   source?: { title: string; url: string } | null;
 };
 
+// A starting layout inside the main room (server/layout.ts).
+export type LayoutZone = { kind: "bedroom" | "bathroom" | "kitchen" | "living" | "stairs" | "mechanical"; name: string; x0: number; z0: number; x1: number; z1: number; areaM2: number };
+export type Layout = {
+  version: 1;
+  kind: "one_bedroom" | "studio";
+  zones: LayoutZone[];
+  walls: { x0: number; z0: number; x1: number; z1: number }[];
+  doors: { x: number; z: number; along: "x" | "z"; widthM: number }[];
+  window: { side: PlanSide; atM: number; widthM: number } | null;
+  checks: { label: string; ok: boolean | null; detail: string }[];
+};
+
+// "What it could look like": their own frames, finished by Muse Image, checked by SAM.
+export type Concept = { n: number; frame: number; title: string; kept: boolean; checked: string };
+
 // What public data says about the house (server/property.ts).
 export type Property = {
   address: string;
@@ -173,6 +188,8 @@ export type ScanResult = {
   steps?: PlanStep[];
   money?: { fits: number; possible: number };
   property?: Property | null;
+  layout?: Layout | null;
+  concepts?: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
   heldBack: number;
   cost: { low: number; high: number; fixesLow?: number; fixesHigh?: number; standardLow?: number; standardHigh?: number; pricedFixes: number; unpricedFixes: number };
   grants: Grant[];
