@@ -1,0 +1,20 @@
+# services/scan3d pytest · 2026-10-29 10:48 EDT · commit b41b900 · no model weights needed
+
+============================= test session starts ==============================
+collecting ... collected 13 items
+
+tests/test_contract.py::test_model_sizes_match_mapanything PASSED        [  7%]
+tests/test_contract.py::test_crop_mapping_matches_mapanything[size0] PASSED [ 15%]
+tests/test_contract.py::test_crop_mapping_matches_mapanything[size1] PASSED [ 23%]
+tests/test_contract.py::test_crop_mapping_matches_mapanything[size2] PASSED [ 30%]
+tests/test_contract.py::test_crop_mapping_matches_mapanything[size3] PASSED [ 38%]
+tests/test_contract.py::test_keeps_the_sharpest_frame_per_window PASSED  [ 46%]
+tests/test_contract.py::test_lift_box_returns_points_under_the_box PASSED [ 53%]
+tests/test_contract.py::test_http_contract PASSED                        [ 61%]
+tests/test_room.py::test_measures_the_room PASSED                        [ 69%]
+tests/test_room.py::test_bookshelf_is_not_a_doubled_wall PASSED          [ 76%]
+tests/test_room.py::test_flags_a_doubled_wall PASSED                     [ 84%]
+tests/test_room.py::test_scale_multiplies_every_length PASSED            [ 92%]
+tests/test_room.py::test_room_frame_puts_floor_at_zero_and_cameras_inside PASSED [100%]
+
+============================= 13 passed in 11.49s ==============================
