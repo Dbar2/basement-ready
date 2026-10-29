@@ -115,6 +115,17 @@ export function clearanceUnder(s3: Scan3d, d: Detection): number | null {
   return lows.length ? Math.round(median(lows) * 100) / 100 : null;
 }
 
+// SAM's "beam" and "duct" also outline shelves and sofa backs. Anything overhead has its underside
+// well above furniture, even with the 3D's scale 20% off; below this it isn't a beam or a duct.
+const MIN_OVERHEAD_M = 1.2;
+export function lowOverhead(scans3d: (Scan3d | null)[], detections: Detection[], measure = clearanceUnder): Detection[] {
+  return detections.filter((d) => {
+    if (d.kind !== "beam" && d.kind !== "duct") return false;
+    const seen = scans3d.flatMap((s3) => (s3 ? [measure(s3, d)] : [])).filter((c): c is number => c !== null);
+    return seen.length > 0 && Math.max(...seen) < MIN_OVERHEAD_M;
+  });
+}
+
 // ---- Scale from doors: no tape needed ----
 
 // A North American interior door slab is 80 in (2.03 m); with its frame, a door reads about 2.04 m.
