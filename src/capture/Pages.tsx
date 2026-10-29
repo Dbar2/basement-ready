@@ -54,22 +54,22 @@ export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Comm
       actions={
         recordable ? (
           <>
+            <p className="cap-fine" aria-live="polite">
+              {busy ? "Tap Allow when your phone asks." : `Allow the camera and mic${ios ? ", and motion so we know when you tilt up" : ""}. Turn your sound on to hear the guide.`}
+            </p>
             <button className="cap-btn cap-btn--primary" onClick={onStart} disabled={busy}>
               {busy ? "Waiting for the camera…" : "Start camera"} {!busy && <Icon.arrow />}
             </button>
             <button className="cap-btn cap-btn--ghost" onClick={onUpload} disabled={busy}>
-              Upload a video instead
+              Upload a video
             </button>
-            <p className="cap-fine" aria-live="polite">
-              {busy ? "Tap Allow when your phone asks." : `Allow the camera and mic${ios ? ", and motion so we know when you tilt up" : ""}. Turn your sound on to hear the guide.`}
-            </p>
           </>
         ) : (
           <>
+            <p className="cap-fine">This browser can't film here. Film with your camera app, then upload the video.</p>
             <button className="cap-btn cap-btn--primary" onClick={onUpload} disabled={busy}>
               Upload a video <Icon.arrow />
             </button>
-            <p className="cap-fine">This browser can't film here. Film with your camera app, then upload the video.</p>
           </>
         )
       }

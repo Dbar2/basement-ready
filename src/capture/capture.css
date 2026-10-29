@@ -203,6 +203,12 @@
   border-top: 1px solid var(--color-border);
 }
 .cap-fine { font-size: 14px; color: var(--color-ink-muted); text-align: center; }
+/* the brief's footer on a phone: fine print first, then both buttons on one row */
+@media (max-width: 719px) {
+  .cap-page-actions:has(> .cap-fine) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cap-page-actions:has(> .cap-fine) > .cap-btn { padding-inline: 12px; }
+  .cap-page-actions > .cap-fine, .cap-page-actions > .cap-btn:only-of-type { grid-column: 1 / -1; }
+}
 
 @media (min-width: 720px) {
   .cap-page-actions { grid-template-columns: auto auto 1fr; align-items: center; justify-content: start; position: static; border-top: 0; padding-top: 0; padding-bottom: var(--space-6); }
