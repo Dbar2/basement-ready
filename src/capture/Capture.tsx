@@ -21,8 +21,9 @@ import {
   type ProblemKind,
 } from "./media";
 import { FIND_TICKS, sessionId, useCoaching, useCoverage, useLive3d, useLiveFinds, useRoomTilt } from "./live";
-import { lazy, Suspense } from "react";
-const Live3DFull = lazy(() => import("./Live3D").then((m) => ({ default: m.Live3DFull })));
+import { Suspense } from "react";
+import { lazy3d, View3DBoundary } from "../components/View3D";
+const Live3DFull = lazy3d(() => import("./Live3D").then((m) => m.Live3DFull));
 import { FindFlash } from "./LiveLayer";
 import { MiniRoom, TaskCard, TurnHint, VoiceBubble } from "./Guide";
 import { RoomDetector } from "./rooms";
@@ -663,9 +664,11 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
           </div>
 
           {show3d && live3d.preview && (
-            <Suspense fallback={null}>
-              <Live3DFull preview={live3d.preview} room={roomLabel} onClose={() => setShow3d(false)} />
-            </Suspense>
+            <View3DBoundary quiet>
+              <Suspense fallback={null}>
+                <Live3DFull preview={live3d.preview} room={roomLabel} onClose={() => setShow3d(false)} />
+              </Suspense>
+            </View3DBoundary>
           )}
 
           {dims && (

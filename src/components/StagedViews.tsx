@@ -1,9 +1,10 @@
 // "What it could look like": the real room finished in 3D to a starting layout, and photos of the
 // homeowner's own frames finished by Muse Image (always labelled virtually staged, checked by SAM).
-import { lazy, Suspense, useState } from "react";
+import { Suspense, useState } from "react";
 import type { Concept, Layout, Plan } from "../api";
+import { lazy3d, View3DBoundary } from "./View3D";
 
-const StagedBasement = lazy(() => import("../three/StagedBasement").then((m) => ({ default: m.StagedBasement })));
+const StagedBasement = lazy3d(() => import("../three/StagedBasement").then((m) => m.StagedBasement));
 
 export const conceptUrl = (scanId: string, n: number) => (scanId === "sample" ? `/samples/sample/concepts/${n}.jpg` : `/api/scans/${scanId}/concepts/${n}.jpg`);
 
@@ -44,9 +45,11 @@ export function StagedViews(props: {
       {/* Both stay mounted once shown: tearing the 3D down breaks its labels. */}
       {has3d && (
         <div hidden={shown !== "3d"}>
-          <Suspense fallback={<p className="viewer-empty mono">Building your finished basement in 3D…</p>}>
-            <StagedBasement plan={plan!} layout={layout!} />
-          </Suspense>
+          <View3DBoundary>
+            <Suspense fallback={<p className="viewer-empty mono">Building your finished basement in 3D…</p>}>
+              <StagedBasement plan={plan!} layout={layout!} />
+            </Suspense>
+          </View3DBoundary>
           <ul className="stage-checks">
             {layout!.checks.map((c) => (
               <li key={c.label} data-ok={c.ok === null ? "unknown" : c.ok}>
