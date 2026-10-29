@@ -57,7 +57,7 @@ URLs must be `http(s)` and reachable from Modal. Each frame is capped at 10 MB.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `maxFrames` | 48 | Frames to reconstruct. Clamped to 2–64 on Modal and 2–24 locally. When more frames are sent, the capture is cut into `maxFrames` equal slices and the sharpest frame (variance of the Laplacian) is kept from each |
+| `maxFrames` | 48 | Frames to reconstruct. Clamped to 2–64 on Modal and 2–48 locally. When more frames are sent, the capture is cut into `maxFrames` equal slices and the sharpest frame (variance of the Laplacian) is kept from each |
 | `known.floorToJoistsM` | none | One tape measurement, floor to the underside of the joists or ceiling, in metres (1.0–4.0). Sets the scale; see [Scale](#scale) |
 
 **Response `200`:** `multipart/form-data` with three parts:
@@ -275,7 +275,7 @@ SCAN3D_TOKEN=dev .venv/bin/python run_local.py serve --port 8790               #
 SCAN3D_TOKEN=dev .venv/bin/python run_local.py post http://127.0.0.1:8790 path/to/frames --out out/test
 ```
 
-Locally the cap is 24 frames: MPS memory gets risky above that, and FlashAttention isn't available.
+Locally the cap is 48 frames, about 10 GB of memory and a minute a room on an M3 Pro. On a 16 GB Mac, set `SCAN3D_MAX_FRAMES=24` in the app's `.env`: it still works, but rooms measure less well.
 
 ### Deploy to Modal
 
