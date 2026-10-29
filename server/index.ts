@@ -18,15 +18,16 @@ import { searchAddresses } from "./address";
 import { suggestLayout } from "./layout";
 import { fetchAerial, lookupProperty } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
-import { finishRooms, ANALYSIS_FPS, type Detection } from "./pipeline";
+import { finishRooms, saveBasement3d, ANALYSIS_FPS, type Detection } from "./pipeline";
+import { scanBasement } from "./basement";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
-import { lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
+import { liteSurfels, lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
 import { grantsFor, moneyFor, MUNICIPALITIES, packFor, type Household } from "./rules";
 import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
-import { keys, storage } from "./storage";
+import { keys, storage, type Scan3dFile } from "./storage";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
 const SCANS_PER_IP_PER_HOUR = Number(process.env.SCANS_PER_IP_PER_HOUR ?? 6);
@@ -370,14 +371,25 @@ app.post("/api/recheck", async (c) => {
 });
 
 // The 3D scan's files, for the scan reveal and the explorer. `?room=n` for rooms after the first.
+// `surfels.bin?lite=1` is the first share of the (shuffled) surface points, for phones.
 app.get("/api/scans/:id/3d/:file", async (c) => {
   const id = c.req.param("id");
   const file = c.req.param("file");
-  const room = Number(c.req.query("room") ?? 0);
-  if (!UUID.test(id) || !["scan.json", "points.ply"].includes(file) || !Number.isInteger(room) || room < 0 || room >= MAX_ROOMS) {
+  // `?room=all`: the whole basement put together (server/basement.ts).
+  const all = c.req.query("room") === "all";
+  const room = all ? 0 : Number(c.req.query("room") ?? 0);
+  if (!UUID.test(id) || !["scan.json", "points.ply", "surfels.bin"].includes(file) || !Number.isInteger(room) || room < 0 || room >= MAX_ROOMS || (all && file === "points.ply")) {
     return c.json({ error: "Not found" }, 404);
   }
-  return sendStored(keys.scan3d(id, file as "scan.json" | "points.ply", room), file.endsWith(".json") ? "application/json" : "application/octet-stream");
+  const key = all ? keys.basement3d(id, file as "scan.json" | "surfels.bin") : keys.scan3d(id, file as Scan3dFile, room);
+  if (file === "surfels.bin" && c.req.query("lite")) {
+    const body = await storage.get(key);
+    if (!body) return c.json({ error: "Not found" }, 404);
+    const parts: Buffer[] = [];
+    for await (const chunk of body) parts.push(chunk as Buffer);
+    return new Response(new Uint8Array(liteSurfels(Buffer.concat(parts))), { headers: { "Content-Type": "application/octet-stream", "Cache-Control": "private, max-age=86400" } });
+  }
+  return sendStored(key, file.endsWith(".json") ? "application/json" : "application/octet-stream");
 });
 
 // Development only: rebuild a scan's plan and measurements from its saved 3D files, without a new scan.
@@ -388,8 +400,39 @@ app.post("/api/scans/:id/replan", async (c) => {
   if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
   const result = scan?.result as any;
+  const body = await c.req.json().catch(() => ({}));
+  // { basement: true }: the whole basement again, the way new scans do it (server/basement.ts).
+  if (result && body?.basement === true) {
+    const work = join(tmpdir(), "basement-ready", `replan-${id}`);
+    mkdirSync(join(work, "frames"), { recursive: true });
+    try {
+      for (let n = 0; n < result.frameCount; n++) await storage.download(keys.frame(id, n), join(work, "frames", `${String(n).padStart(4, "0")}.jpg`));
+      const known = (scan.inputs as { floorToJoistsM?: number } | null)?.floorToJoistsM;
+      const b = await scanBasement(work, result.frameCount, known ? { floorToJoistsM: known } : {}, async (t) => console.log(`[replan] ${id}: ${t}`));
+      if (!b) return c.json({ error: "No 3D" }, 500);
+      const low = new Set(lowOverhead(b.scans, result.detections));
+      const detections = (result.detections as Detection[]).filter((d) => !low.has(d));
+      const rooms = await finishRooms(id, b.spans.map((s, index) => ({ index, ...s })), b.scans, detections, async () => {}, b.placements);
+      await saveBasement3d(id, b);
+      const main = mainRoom(rooms);
+      const next = {
+        ...result,
+        detections,
+        rooms,
+        mainRoom: main?.index ?? null,
+        has3d: rooms.some((r) => r.has3d),
+        plan: main?.plan ?? null,
+        measurements: main?.measurements ?? null,
+        layout: main?.plan ? suggestLayout(main.plan) : null,
+      };
+      await db.update(schema.scans).set({ result: next }).where(eq(schema.scans.id, id));
+      return c.json({ rooms: rooms.map(({ name, startS, endS, plan, placement }) => ({ name, startS, endS, size: plan && `${plan.widthM} × ${plan.depthM} m`, placement })), rects: b.rects });
+    } finally {
+      rmSync(work, { recursive: true, force: true });
+    }
+  }
   // With room starts, run the 3D again one room at a time from the saved frames.
-  const marks = cleanRooms((await c.req.json().catch(() => ({})))?.rooms);
+  const marks = cleanRooms(body?.rooms);
   if (result && marks) {
     const work = join(tmpdir(), "basement-ready", `replan-${id}`);
     mkdirSync(join(work, "frames"), { recursive: true });

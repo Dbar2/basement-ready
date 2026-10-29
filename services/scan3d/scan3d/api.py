@@ -120,6 +120,7 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
             ("scan", "scan.json", "application/json", json.dumps(result.scan).encode()),
             ("points", "points.ply", "application/octet-stream", result.points_ply),
             ("depth", "depth.bin", "application/octet-stream", result.depth_bin),
+            *([("surfels", "surfels.bin", "application/octet-stream", result.surfels)] if result.surfels else []),
         ])
         return Response(body, media_type=media)
 

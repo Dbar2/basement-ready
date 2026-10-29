@@ -225,6 +225,10 @@ a { color: inherit; }
 .viewer-canvas { position: absolute !important; inset: 0; }
 .viewer-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--color-ink-muted); }
 .viewer-failed { display: grid; justify-items: center; gap: 12px; padding: 16px; text-align: center; }
+.scan-spots { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 6px; background: var(--color-card); font-size: 12px; }
+.scan-spots button { width: 28px; height: 28px; border: 0; border-radius: 4px; background: none; color: var(--color-ink); font: inherit; font-size: 18px; line-height: 1; cursor: pointer; }
+.scan-spots button:hover { background: var(--color-surface); }
+.scan-spots span { padding: 0 4px; color: var(--color-ink-muted); }
 .viewer-hint { position: absolute; left: 12px; bottom: 10px; margin: 0; padding: 3px 8px; border-radius: 4px; background: var(--color-card); color: var(--color-ink-muted); font-size: 12px; }
 .viewer-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 4px; background: var(--color-card); color: var(--color-ink); font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow-card); }
 .viewer-tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--find-color); }

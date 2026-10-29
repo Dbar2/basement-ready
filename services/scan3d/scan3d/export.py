@@ -19,6 +19,33 @@ def ply_bytes(xyz: np.ndarray, rgb: np.ndarray, frame: np.ndarray) -> bytes:
     return header.encode() + v.tobytes()
 
 
+SURFELS_MAGIC = b"BRS1"
+
+
+def surfel_bytes(xyz: np.ndarray, rgb: np.ndarray, size_m: np.ndarray, frame: np.ndarray) -> bytes:
+    """Dense surface points for the photo-like view, as four packed arrays after an 8-byte header
+    ("BRS1", uint32 count): positions int16 x3 in millimetres (room frame), colours uint8 x3,
+    footprint uint8 in millimetres (the patch of surface one point covers), frame uint16."""
+    n = len(xyz)
+    pos = np.clip(np.round(xyz * 1000), -32767, 32767).astype("<i2")
+    size = np.clip(np.round(size_m * 1000), 1, 255).astype("u1")
+    return SURFELS_MAGIC + np.uint32(n).astype("<u4").tobytes() + pos.tobytes() + rgb.astype("u1").tobytes() + size.tobytes() + frame.astype("<u2").tobytes()
+
+
+def read_surfels(data: bytes) -> dict:
+    assert data[:4] == SURFELS_MAGIC
+    n = int(np.frombuffer(data, "<u4", 1, 4)[0])
+    o = 8
+    pos = np.frombuffer(data, "<i2", n * 3, o).reshape(n, 3).astype(np.float32) / 1000
+    o += n * 6
+    rgb = np.frombuffer(data, "u1", n * 3, o).reshape(n, 3)
+    o += n * 3
+    size = np.frombuffer(data, "u1", n, o).astype(np.float32) / 1000
+    o += n
+    frame = np.frombuffer(data, "<u2", n, o)
+    return {"xyz": pos, "rgb": rgb, "size": size, "frame": frame}
+
+
 def read_ply(data: bytes) -> np.ndarray:
     end = data.index(b"end_header\n") + len(b"end_header\n")
     dt = [("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("red", "u1"), ("green", "u1"), ("blue", "u1"), ("frame", "<u2")]

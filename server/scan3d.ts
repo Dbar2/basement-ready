@@ -17,6 +17,7 @@ export type Scan3d = {
   scan: any; // scan.json, see services/scan3d/README.md
   ply: ArrayBuffer;
   depth: ArrayBuffer;
+  surfels?: ArrayBuffer; // dense surface points for the photo-like view (services/scan3d export.py)
   sentFrames: number[]; // our frame index for each request position (scan.frames[i].sourceIndex → this)
 };
 
@@ -31,7 +32,7 @@ export async function scan3dReady(timeoutMs = 3000) {
 }
 
 // One room's frames, [from, to) in our frame numbers.
-export async function runScan3d(work: string, range: { from: number; to: number }, known: { floorToJoistsM?: number }): Promise<Scan3d> {
+export async function runScan3d(work: string, range: { from: number; to: number }, known: { floorToJoistsM?: number }, maxFrames = MAX_FRAMES): Promise<Scan3d> {
   const step = Math.max(1, Math.ceil((range.to - range.from) / SEND_FRAMES));
   const sentFrames: number[] = [];
   const form = new FormData();
@@ -40,7 +41,7 @@ export async function runScan3d(work: string, range: { from: number; to: number 
     form.append("frames", new Blob([readFileSync(join(work, "frames", name))], { type: "image/jpeg" }), name);
     sentFrames.push(n);
   }
-  form.append("options", JSON.stringify({ maxFrames: MAX_FRAMES, ...(known.floorToJoistsM ? { known } : {}) }));
+  form.append("options", JSON.stringify({ maxFrames, ...(known.floorToJoistsM ? { known } : {}) }));
   const res = await fetch(`${URL_}/scan`, {
     method: "POST",
     body: form,
@@ -50,12 +51,35 @@ export async function runScan3d(work: string, range: { from: number; to: number 
   if (!res.ok) throw new Error(`scan3d ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const parts = await res.formData();
   const scan = JSON.parse(await (parts.get("scan") as File).text());
-  return { scan, ply: await (parts.get("points") as File).arrayBuffer(), depth: await (parts.get("depth") as File).arrayBuffer(), sentFrames };
+  const surfels = parts.get("surfels") as File | null;
+  return {
+    scan,
+    ply: await (parts.get("points") as File).arrayBuffer(),
+    depth: await (parts.get("depth") as File).arrayBuffer(),
+    surfels: surfels ? await surfels.arrayBuffer() : undefined,
+    sentFrames,
+  };
+}
+
+// ---- Surface points for the photo-like view (services/scan3d/scan3d/export.py surfel_bytes) ----
+
+// "BRS1", uint32 count, then positions int16 x3, colours uint8 x3, footprint uint8, frame uint16.
+// The points are shuffled, so the first n are an even sample: a phone gets that many.
+export const LITE_SURFELS = 400_000;
+export function liteSurfels(buf: Buffer, n = LITE_SURFELS): Buffer {
+  const count = buf.readUInt32LE(4);
+  const m = Math.min(count, n);
+  if (m === count) return buf;
+  const at = (offset: number, width: number) => buf.subarray(8 + offset * count, 8 + offset * count + width * m);
+  const head = Buffer.alloc(8);
+  buf.copy(head, 0, 0, 4);
+  head.writeUInt32LE(m, 4);
+  return Buffer.concat([head, at(0, 6), at(6, 3), at(9, 1), at(10, 2)]);
 }
 
 // ---- Lifting SAM boxes into the room (formula from services/scan3d/README.md) ----
 
-function half(bits: number) {
+export function half(bits: number) {
   const e = (bits >> 10) & 0x1f;
   const m = bits & 0x3ff;
   const s = bits & 0x8000 ? -1 : 1;

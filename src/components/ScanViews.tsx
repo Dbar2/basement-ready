@@ -1,16 +1,104 @@
-// "Your basement, scanned": the 3D scan and the measured floor plan, one tap apart. Filmed room by
-// room, each room has its own scan and plan, picked from a row of room tabs.
+// "Your basement, scanned": the 3D scan and the measured floor plan, one tap apart. A scan that put
+// its rooms together shows one basement; older scans show a tab per room.
 import { Suspense, useRef, useState } from "react";
-import type { Layout, Plan, RoomResult } from "../api";
-import { downloadSvg, FloorPlan, type Units } from "./FloorPlan";
+import type { Layout, Plan, RoomPlacement, RoomResult } from "../api";
+import { basementRooms, placeLayout, scanLabels } from "./basementPlan";
+import { BasementFloorPlan, downloadSvg, FloorPlan, type Units } from "./FloorPlan";
 import { lazy3d, View3DBoundary } from "./View3D";
 
 // three.js is heavy; load the 3D view only when someone opens it.
 const ScanViewer3D = lazy3d(() => import("../three/ScanViewer3D").then((m) => m.ScanViewer3D));
+const RealScan = lazy3d(() => import("../three/RealScan").then((m) => m.RealScan));
+const StagedFurniture = lazy3d(() => import("../three/StagedBasement").then((m) => m.StagedFurniture));
 
 const size = (p: Plan | null) => (p ? `${p.widthM.toFixed(1)} × ${p.depthM.toFixed(1)} m` : "No 3D");
 
+// The whole basement, one model and one plan.
+function BasementViews(props: {
+  scanId: string;
+  rooms: NonNullable<ReturnType<typeof basementRooms>>;
+  layout: Layout | null; // in the basement frame, for the plan
+  staging: { plan: Plan; layout: Layout; placement: RoomPlacement } | null; // the main room's own frame, for the 3D
+}) {
+  const { scanId, rooms, layout, staging } = props;
+  const [view, setView] = useState<"3d" | "plan">("3d");
+  const [units, setUnits] = useState<Units>("m");
+  const planRef = useRef<HTMLDivElement>(null);
+  const ceilings = rooms.flatMap((r) => (r.plan.ceilingHeightM != null ? [r.plan.ceilingHeightM] : []));
+  const rough = rooms.some((r) => !r.plan.trusted);
+  return (
+    <section className="block scan-views">
+      <div className="scan-views-head">
+        <h2>Your basement, scanned</h2>
+        <div className="segmented" role="tablist" aria-label="View">
+          <button role="tab" aria-selected={view === "3d"} onClick={() => setView("3d")}>
+            3D
+          </button>
+          <button role="tab" aria-selected={view === "plan"} onClick={() => setView("plan")}>
+            Plan
+          </button>
+        </div>
+      </div>
+      <div className="scan-views-frame" data-view={view}>
+        <div className="view-layer" hidden={view !== "3d"}>
+          <View3DBoundary>
+            <Suspense fallback={<p className="viewer-empty mono">Loading your basement in 3D…</p>}>
+              <RealScan
+                surfelsUrl={`/api/scans/${scanId}/3d/surfels.bin?room=all`}
+                scanUrl={`/api/scans/${scanId}/3d/scan.json?room=all`}
+                ceilingHeightM={ceilings.length ? Math.max(...ceilings) : null}
+                labels={scanLabels(rooms.map((r) => r.plan))}
+                ideas={
+                  staging && (
+                    // Room frame -> basement frame: x' = c·x − s·z is a turn of −θ about +Y in three.js.
+                    <group rotation-y={(-staging.placement.turn * Math.PI) / 2} position={[staging.placement.x, 0, staging.placement.z]}>
+                      <StagedFurniture plan={staging.plan} layout={staging.layout} />
+                    </group>
+                  )
+                }
+              />
+            </Suspense>
+          </View3DBoundary>
+        </div>
+        <div ref={planRef} className="plan-wrap" hidden={view !== "plan"}>
+          <BasementFloorPlan rooms={rooms.map((r) => ({ name: r.room.name, plan: r.plan }))} units={units} layout={layout} />
+        </div>
+      </div>
+      {view === "plan" && (
+        <div className="scan-views-tools">
+          <div className="segmented small" role="group" aria-label="Units">
+            <button aria-pressed={units === "m"} onClick={() => setUnits("m")}>m</button>
+            <button aria-pressed={units === "ft"} onClick={() => setUnits("ft")}>ft</button>
+          </div>
+          <button
+            className="link-quiet"
+            onClick={() => {
+              const svg = planRef.current?.querySelector("svg");
+              if (svg) downloadSvg(svg, "basement-plan.svg");
+            }}
+          >
+            Download plan (SVG)
+          </button>
+          {rough && <span className="muted">Sizes are from your video. A designer confirms them with a tape before drawing.</span>}
+        </div>
+      )}
+    </section>
+  );
+}
+
 export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null; layout?: Layout | null }) {
+  const basement = basementRooms(props.rooms);
+  if (basement) {
+    // The layout was worked out in the main room; it moves with that room.
+    const main = basement.find((b) => b.room.index === props.mainRoom)?.room;
+    const layout = props.layout && main?.placement ? placeLayout(props.layout, main.placement) : null;
+    const staging = props.layout && main?.plan && main.placement ? { plan: main.plan, layout: props.layout, placement: main.placement } : null;
+    return <BasementViews scanId={props.scanId} rooms={basement} layout={layout} staging={staging} />;
+  }
+  return <RoomViews {...props} />;
+}
+
+function RoomViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null; layout?: Layout | null }) {
   const layout = props.layout ?? null;
   const { scanId } = props;
   const scanned = (props.rooms ?? []).filter((r) => r.has3d || r.plan);
@@ -22,7 +110,16 @@ export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boo
   const plan = room ? room.plan : props.plan;
   const has3d = room ? room.has3d : props.has3d;
   const any3d = multi ? scanned.some((r) => r.has3d) : props.has3d;
-  const plyUrl = (index: number) => `/api/scans/${scanId}/3d/points.ply${index > 0 ? `?room=${index}` : ""}`;
+  const fileUrl = (file: string, index: number) => `/api/scans/${scanId}/3d/${file}${index > 0 ? `?room=${index}` : ""}`;
+  // The photo-like scan where there is one; older scans show their points.
+  const viewer = (index: number, p: Plan | null) => (
+    <RealScan surfelsUrl={fileUrl("surfels.bin", index)} scanUrl={fileUrl("scan.json", index)} ceilingHeightM={p?.ceilingHeightM ?? null} fallback={
+        <>
+          <ScanViewer3D plyUrl={fileUrl("points.ply", index)} plan={p} />
+          <p className="viewer-hint mono">Drag to orbit · pinch or scroll to zoom</p>
+        </>
+      } />
+  );
   const pick = (index: number) => {
     setRoomIx(index);
     setOpened((o) => (o.includes(index) ? o : [...o, index]));
@@ -75,13 +172,12 @@ export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boo
                     .filter((r) => r.has3d && opened.includes(r.index))
                     .map((r) => (
                       <div key={r.index} className="view-layer" hidden={r.index !== room!.index}>
-                        <ScanViewer3D plyUrl={plyUrl(r.index)} plan={r.plan} />
+                        {viewer(r.index, r.plan)}
                       </div>
                     ))
                 ) : (
-                  <ScanViewer3D plyUrl={plyUrl(0)} plan={plan} />
+                  viewer(0, plan)
                 )}
-                <p className="viewer-hint mono">Drag to orbit · pinch or scroll to zoom</p>
               </Suspense>
             </View3DBoundary>
           </div>

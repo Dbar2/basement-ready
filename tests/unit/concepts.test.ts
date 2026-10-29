@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { conceptPrompt, keptInPlace, pickFrames } from "../../server/concepts";
+import { conceptPrompt, keptInPlace, pickFrames, type FrameView } from "../../server/concepts";
 
 const det = (kind: string, frame: number, framesSeen: number, w = 0.15) => ({
   kind,
@@ -39,5 +39,37 @@ describe("photos of what it could look like", () => {
     const stairs = det("stairs", 420, 4);
     const picks = pickFrames([close, furnace, wide, stairs], null, "unsure", 600);
     expect(picks.find((p) => p.title === "Living and kitchen")!.frame).toBe(420);
+  });
+
+  it("with the 3D, shows each room from where the camera saw farthest, up to four photos", () => {
+    // The window is tracked over frames 100-140; the whole window is in view at 100, 120 and 140.
+    const window = {
+      kind: "window",
+      frame: 110,
+      framesSeen: 30,
+      box: { x: 0.3, y: 0.2, w: 0.3, h: 0.2 },
+      track: [
+        [100, 0.3, 0.2, 0.3, 0.2],
+        [110, 0, 0.2, 0.5, 0.3],
+        [120, 0.35, 0.25, 0.15, 0.1],
+        [140, 0.3, 0.2, 0.2, 0.15],
+      ] as [number, number, number, number, number][],
+    };
+    const furnace = det("mechanical", 400, 9);
+    const views = new Map<number, FrameView>([
+      [100, { depthM: 1.4, tilt: 0.1, area: 0 }],
+      [120, { depthM: 3.9, tilt: 0.1, area: 0 }],
+      [140, { depthM: 2.2, tilt: 0.1, area: 0 }],
+      [200, { depthM: 5.1, tilt: 0.05, area: 0 }],
+      [230, { depthM: 6.0, tilt: 0.7, area: 0 }], // looking at the ceiling: never a photo
+      [400, { depthM: 4.8, tilt: 0.1, area: 1 }], // the furnace corner
+      [450, { depthM: 3.5, tilt: 0.1, area: 1 }],
+    ]);
+    const picks = pickFrames([window, furnace], null, "unsure", 600, { startS: 0, endS: 60 }, views);
+    expect(picks.map((p) => [p.title, p.frame])).toEqual([
+      ["The bedroom", 120],
+      ["Living and kitchen", 200],
+      ["The other room", 450],
+    ]);
   });
 });

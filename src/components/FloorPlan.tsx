@@ -1,5 +1,5 @@
 // The measured floor plan, drawn like a sheet from a drawing set: walls, openings, dimensions, labels.
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import type { Layout, Plan, PlanSide } from "../api";
 
 export type Units = "m" | "ft";
@@ -18,9 +18,7 @@ const W = 1000; // drawing width in SVG units
 const M = 96; // margin for dimension lines
 
 // Where along a side an opening sits, as SVG points from one end to the other.
-function sideLine(side: PlanSide, b: Plan["box"], s: number, ox: number, oz: number) {
-  const X = (x: number) => ox + (x - b.minX) * s;
-  const Z = (z: number) => oz + (z - b.minZ) * s;
+function sideLine(side: PlanSide, b: Plan["box"], X: (x: number) => number, Z: (z: number) => number) {
   switch (side) {
     case "minZ":
       return { x0: X(b.minX), y0: Z(b.minZ), x1: X(b.maxX), y1: Z(b.minZ), inward: [0, 1] };
@@ -33,54 +31,14 @@ function sideLine(side: PlanSide, b: Plan["box"], s: number, ox: number, oz: num
   }
 }
 
-export function FloorPlan({ plan, units, name = "Main room", layout = null }: { plan: Plan; units: Units; name?: string; layout?: Layout | null }) {
-  const svgRef = useRef<SVGSVGElement>(null);
+// One room's walls, stairs, openings, fixtures and label, drawn with the sheet's mapping (X, Z, s).
+function RoomShape(props: { plan: Plan; units: Units; name: string; X: (x: number) => number; Z: (z: number) => number; s: number; showLabel: boolean }) {
+  const { plan, units, name, X, Z, s, showLabel } = props;
   const b = plan.box;
-  const s = (W - 2 * M) / Math.max(plan.widthM, plan.depthM * 1.2);
-  const ox = M + (W - 2 * M - plan.widthM * s) / 2;
-  const oz = M;
-  const H = oz + plan.depthM * s + M;
-  const X = (x: number) => ox + (x - b.minX) * s;
-  const Z = (z: number) => oz + (z - b.minZ) * s;
   const wallW = Math.max(6, 0.12 * s);
-
-  const sides = useMemo(() => (["minZ", "maxX", "maxZ", "minX"] as PlanSide[]).map((side) => ({ side, ...sideLine(side, b, s, ox, oz) })), [b, s, ox, oz]);
-  const estimated = plan.scaleSource !== "user_measurement" || !plan.trusted;
-
+  const sides = (["minZ", "maxX", "maxZ", "minX"] as PlanSide[]).map((side) => ({ side, ...sideLine(side, b, X, Z) }));
   return (
-    <svg ref={svgRef} className="plan" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Floor plan, ${fmtLength(plan.widthM, units)} by ${fmtLength(plan.depthM, units)}`}>
-      <rect x={0} y={0} width={W} height={H} className="plan-paper" />
-
-      {/* the suggested layout: rooms as soft fills with their names, new walls as thin lines */}
-      {layout && (
-        <g className="plan-layout">
-          {layout.zones
-            .filter((z) => z.kind !== "stairs")
-            .map((z, i) => (
-              <g key={i} className="plan-zone" data-kind={z.kind}>
-                <rect x={X(z.x0)} y={Z(z.z0)} width={(z.x1 - z.x0) * s} height={(z.z1 - z.z0) * s} />
-                {(z.x1 - z.x0) * s > 70 && (z.z1 - z.z0) * s > 34 && (
-                  <text x={X((z.x0 + z.x1) / 2)} y={Z((z.z0 + z.z1) / 2) + 4} textAnchor="middle" className="plan-zone-name">
-                    {z.name}
-                    {z.areaM2 >= 2 && <tspan className="plan-zone-area"> {fmtArea(z.areaM2, units)}</tspan>}
-                  </text>
-                )}
-              </g>
-            ))}
-          {layout.walls.map((w, i) => (
-            <line key={`w${i}`} x1={X(w.x0)} y1={Z(w.z0)} x2={X(w.x1)} y2={Z(w.z1)} className="plan-partition" strokeWidth={Math.max(4, wallW * 0.6)} />
-          ))}
-          {layout.doors.map((d, i) => {
-            const half = (d.widthM / 2) * s;
-            return d.along === "x" ? (
-              <line key={`d${i}`} x1={X(d.x) - half} y1={Z(d.z)} x2={X(d.x) + half} y2={Z(d.z)} className="plan-cut" strokeWidth={Math.max(4, wallW * 0.6) + 2} />
-            ) : (
-              <line key={`d${i}`} x1={X(d.x)} y1={Z(d.z) - half} x2={X(d.x)} y2={Z(d.z) + half} className="plan-cut" strokeWidth={Math.max(4, wallW * 0.6) + 2} />
-            );
-          })}
-        </g>
-      )}
-
+    <g className="plan-room-shape">
       {/* walls: solid where the scan saw one, dashed where it never did */}
       {sides.map((l) => (
         <line
@@ -154,51 +112,149 @@ export function FloorPlan({ plan, units, name = "Main room", layout = null }: { 
 
       {/* furnace and panel */}
       {plan.fixtures.map((f) => {
-        const x = X(f.x), y = Z(f.z), size = Math.max(22, 0.5 * s);
-        const inX = Math.min(Math.max(x, ox + size / 2 + wallW), ox + plan.widthM * s - size / 2 - wallW);
-        const inY = Math.min(Math.max(y, oz + size / 2 + wallW), oz + plan.depthM * s - size / 2 - wallW);
+        const size = Math.max(22, 0.5 * s);
+        const x = Math.min(Math.max(X(f.x), X(b.minX) + size / 2 + wallW), X(b.maxX) - size / 2 - wallW);
+        const y = Math.min(Math.max(Z(f.z), Z(b.minZ) + size / 2 + wallW), Z(b.maxZ) - size / 2 - wallW);
         return (
           <g key={f.detectionId} className="plan-fixture">
-            <rect x={inX - size / 2} y={inY - size / 2} width={size} height={size} />
-            <line x1={inX - size / 2} y1={inY - size / 2} x2={inX + size / 2} y2={inY + size / 2} />
-            <text x={inX} y={inY + size / 2 + 18} textAnchor="middle" className="plan-tag">
+            <rect x={x - size / 2} y={y - size / 2} width={size} height={size} />
+            <line x1={x - size / 2} y1={y - size / 2} x2={x + size / 2} y2={y + size / 2} />
+            <text x={x} y={y + size / 2 + 18} textAnchor="middle" className="plan-tag">
               {f.kind === "panel" ? "PANEL" : "FURNACE"}
             </text>
           </g>
         );
       })}
 
-      {/* dimension lines */}
-      <g className="plan-dim">
-        <line x1={X(b.minX)} y1={oz - 44} x2={X(b.maxX)} y2={oz - 44} />
-        <line x1={X(b.minX)} y1={oz - 56} x2={X(b.minX)} y2={oz - 32} />
-        <line x1={X(b.maxX)} y1={oz - 56} x2={X(b.maxX)} y2={oz - 32} />
-        <text x={(X(b.minX) + X(b.maxX)) / 2} y={oz - 54} textAnchor="middle">
-          {fmtLength(plan.widthM, units)}
-        </text>
-        <line x1={ox - 44} y1={Z(b.minZ)} x2={ox - 44} y2={Z(b.maxZ)} />
-        <line x1={ox - 56} y1={Z(b.minZ)} x2={ox - 32} y2={Z(b.minZ)} />
-        <line x1={ox - 56} y1={Z(b.maxZ)} x2={ox - 32} y2={Z(b.maxZ)} />
-        <text x={ox - 54} y={(Z(b.minZ) + Z(b.maxZ)) / 2} textAnchor="middle" transform={`rotate(-90 ${ox - 54} ${(Z(b.minZ) + Z(b.maxZ)) / 2})`}>
-          {fmtLength(plan.depthM, units)}
-        </text>
-      </g>
-
       {/* room label */}
-      <g className="plan-room" display={layout ? "none" : undefined}>
-        <text x={X((b.minX + b.maxX) / 2)} y={Z((b.minZ + b.maxZ) / 2) - 8} textAnchor="middle" className="plan-room-name">
-          {name}
-        </text>
-        <text x={X((b.minX + b.maxX) / 2)} y={Z((b.minZ + b.maxZ) / 2) + 22} textAnchor="middle" className="plan-room-meta">
-          {fmtArea(plan.areaM2, units)}
-          {plan.ceilingHeightM != null && ` · ceiling ${fmtLength(plan.ceilingHeightM, units)}`}
-        </text>
-      </g>
+      {showLabel && (
+        <g className="plan-room">
+          <text x={X((b.minX + b.maxX) / 2)} y={Z((b.minZ + b.maxZ) / 2) - 8} textAnchor="middle" className="plan-room-name">
+            {name}
+          </text>
+          <text x={X((b.minX + b.maxX) / 2)} y={Z((b.minZ + b.maxZ) / 2) + 22} textAnchor="middle" className="plan-room-meta">
+            {fmtArea(plan.areaM2, units)}
+            {plan.ceilingHeightM != null && ` · ceiling ${fmtLength(plan.ceilingHeightM, units)}`}
+          </text>
+        </g>
+      )}
+    </g>
+  );
+}
 
-      {/* the stamp: how far to trust these numbers */}
-      <g className="plan-stamp" transform={`translate(${W - 24} ${H - 22})`}>
-        <text textAnchor="end">{estimated ? "ESTIMATED FROM VIDEO · CONFIRM WITH A TAPE" : "SCALED TO YOUR TAPE MEASUREMENT"}</text>
-      </g>
+function LayoutShapes({ layout, units, X, Z, s }: { layout: Layout; units: Units; X: (x: number) => number; Z: (z: number) => number; s: number }) {
+  const wallW = Math.max(6, 0.12 * s);
+  return (
+    <g className="plan-layout">
+      {layout.zones
+        .filter((z) => z.kind !== "stairs")
+        .map((z, i) => (
+          <g key={i} className="plan-zone" data-kind={z.kind}>
+            <rect x={X(z.x0)} y={Z(z.z0)} width={(z.x1 - z.x0) * s} height={(z.z1 - z.z0) * s} />
+            {(z.x1 - z.x0) * s > 70 && (z.z1 - z.z0) * s > 34 && (
+              <text x={X((z.x0 + z.x1) / 2)} y={Z((z.z0 + z.z1) / 2) + 4} textAnchor="middle" className="plan-zone-name">
+                {z.name}
+                {z.areaM2 >= 2 && <tspan className="plan-zone-area"> {fmtArea(z.areaM2, units)}</tspan>}
+              </text>
+            )}
+          </g>
+        ))}
+      {layout.walls.map((w, i) => (
+        <line key={`w${i}`} x1={X(w.x0)} y1={Z(w.z0)} x2={X(w.x1)} y2={Z(w.z1)} className="plan-partition" strokeWidth={Math.max(4, wallW * 0.6)} />
+      ))}
+      {layout.doors.map((d, i) => {
+        const half = (d.widthM / 2) * s;
+        return d.along === "x" ? (
+          <line key={`d${i}`} x1={X(d.x) - half} y1={Z(d.z)} x2={X(d.x) + half} y2={Z(d.z)} className="plan-cut" strokeWidth={Math.max(4, wallW * 0.6) + 2} />
+        ) : (
+          <line key={`d${i}`} x1={X(d.x)} y1={Z(d.z) - half} x2={X(d.x)} y2={Z(d.z) + half} className="plan-cut" strokeWidth={Math.max(4, wallW * 0.6) + 2} />
+        );
+      })}
+    </g>
+  );
+}
+
+function Dimensions({ box, units, X, Z }: { box: Plan["box"]; units: Units; X: (x: number) => number; Z: (z: number) => number }) {
+  const top = Z(box.minZ), left = X(box.minX);
+  return (
+    <g className="plan-dim">
+      <line x1={X(box.minX)} y1={top - 44} x2={X(box.maxX)} y2={top - 44} />
+      <line x1={X(box.minX)} y1={top - 56} x2={X(box.minX)} y2={top - 32} />
+      <line x1={X(box.maxX)} y1={top - 56} x2={X(box.maxX)} y2={top - 32} />
+      <text x={(X(box.minX) + X(box.maxX)) / 2} y={top - 54} textAnchor="middle">
+        {fmtLength(box.maxX - box.minX, units)}
+      </text>
+      <line x1={left - 44} y1={Z(box.minZ)} x2={left - 44} y2={Z(box.maxZ)} />
+      <line x1={left - 56} y1={Z(box.minZ)} x2={left - 32} y2={Z(box.minZ)} />
+      <line x1={left - 56} y1={Z(box.maxZ)} x2={left - 32} y2={Z(box.maxZ)} />
+      <text x={left - 54} y={(Z(box.minZ) + Z(box.maxZ)) / 2} textAnchor="middle" transform={`rotate(-90 ${left - 54} ${(Z(box.minZ) + Z(box.maxZ)) / 2})`}>
+        {fmtLength(box.maxZ - box.minZ, units)}
+      </text>
+    </g>
+  );
+}
+
+function Stamp({ estimated, W, H }: { estimated: boolean; W: number; H: number }) {
+  return (
+    <g className="plan-stamp" transform={`translate(${W - 24} ${H - 22})`}>
+      <text textAnchor="end">{estimated ? "ESTIMATED FROM VIDEO · CONFIRM WITH A TAPE" : "SCALED TO YOUR TAPE MEASUREMENT"}</text>
+    </g>
+  );
+}
+
+export function FloorPlan({ plan, units, name = "Main room", layout = null }: { plan: Plan; units: Units; name?: string; layout?: Layout | null }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const b = plan.box;
+  const s = (W - 2 * M) / Math.max(plan.widthM, plan.depthM * 1.2);
+  const ox = M + (W - 2 * M - plan.widthM * s) / 2;
+  const oz = M;
+  const H = oz + plan.depthM * s + M;
+  const X = (x: number) => ox + (x - b.minX) * s;
+  const Z = (z: number) => oz + (z - b.minZ) * s;
+  const estimated = plan.scaleSource !== "user_measurement" || !plan.trusted;
+
+  return (
+    <svg ref={svgRef} className="plan" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Floor plan, ${fmtLength(plan.widthM, units)} by ${fmtLength(plan.depthM, units)}`}>
+      <rect x={0} y={0} width={W} height={H} className="plan-paper" />
+      {/* the suggested layout: rooms as soft fills with their names, new walls as thin lines */}
+      {layout && <LayoutShapes layout={layout} units={units} X={X} Z={Z} s={s} />}
+      <RoomShape plan={plan} units={units} name={name} X={X} Z={Z} s={s} showLabel={!layout} />
+      <Dimensions box={b} units={units} X={X} Z={Z} />
+      <Stamp estimated={estimated} W={W} H={H} />
+    </svg>
+  );
+}
+
+const layoutInside = (layout: Layout, plan: Plan) =>
+  layout.zones.some((z) => (z.x0 + z.x1) / 2 > plan.box.minX && (z.x0 + z.x1) / 2 < plan.box.maxX && (z.z0 + z.z1) / 2 > plan.box.minZ && (z.z0 + z.z1) / 2 < plan.box.maxZ);
+
+// The whole basement on one sheet: every room in its place, overall dimensions, each room labelled.
+export function BasementFloorPlan({ rooms, units, layout = null }: { rooms: { name: string; plan: Plan }[]; units: Units; layout?: Layout | null }) {
+  const box = {
+    minX: Math.min(...rooms.map((r) => r.plan.box.minX)),
+    maxX: Math.max(...rooms.map((r) => r.plan.box.maxX)),
+    minZ: Math.min(...rooms.map((r) => r.plan.box.minZ)),
+    maxZ: Math.max(...rooms.map((r) => r.plan.box.maxZ)),
+  };
+  const width = box.maxX - box.minX, depth = box.maxZ - box.minZ;
+  const s = (W - 2 * M) / Math.max(width, depth * 1.2);
+  const ox = M + (W - 2 * M - width * s) / 2;
+  const oz = M;
+  const H = oz + depth * s + M;
+  const X = (x: number) => ox + (x - box.minX) * s;
+  const Z = (z: number) => oz + (z - box.minZ) * s;
+  const area = rooms.reduce((a, r) => a + r.plan.areaM2, 0);
+  const estimated = rooms.some((r) => r.plan.scaleSource !== "user_measurement" || !r.plan.trusted);
+  return (
+    <svg className="plan" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Floor plan of the basement, ${rooms.length} rooms, ${fmtArea(area, units)}`}>
+      <rect x={0} y={0} width={W} height={H} className="plan-paper" />
+      {layout && <LayoutShapes layout={layout} units={units} X={X} Z={Z} s={s} />}
+      {rooms.map((r, i) => (
+        // With a layout, its zones name the main room; the other rooms keep their own labels.
+        <RoomShape key={r.name} plan={r.plan} units={units} name={r.name} X={X} Z={Z} s={s} showLabel={!layout || !layoutInside(layout, r.plan)} />
+      ))}
+      <Dimensions box={box} units={units} X={X} Z={Z} />
+      <Stamp estimated={estimated} W={W} H={H} />
     </svg>
   );
 }

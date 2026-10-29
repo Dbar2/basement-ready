@@ -1,4 +1,4 @@
-// "What it could look like" as photos: one or two of the homeowner's own frames, finished by Muse
+// "What it could look like" as photos: up to four of the homeowner's own frames, finished by Muse
 // Image, then checked by SAM 3.1 so a window or the stairs never move in the picture. Runs as its
 // own job after the answer, so nobody waits for it. Every picture is labelled "virtually staged".
 import { execFile } from "node:child_process";
@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import { museEdit, samImage } from "./meta";
 import type { Detection } from "./pipeline";
 import { parseSam } from "./sam";
+import { half } from "./scan3d";
 import { keys, storage } from "./storage";
 
 const run = promisify(execFile);
@@ -18,50 +19,108 @@ export type Concept = { n: number; frame: number; title: string; kept: boolean; 
 
 type Box = { x: number; y: number; w: number; h: number };
 type FramePick = { frame: number; title: string; space: string };
+// What the 3D says about a frame: how far it sees (median depth), how level the phone was (0 level,
+// 1 straight up or down) and which area of the basement it's in.
+export type FrameView = { depthM: number; tilt: number; area: number };
 
-// Which frames to finish: where they said what they want, else the room with the window, and a wide view.
+export const MAX_PHOTOS = 4;
+const LEVEL = 0.35; // |forward.y| under this: a normal photo, not the ceiling or the floor
+
+// Which frames to finish: where they said what they want, the room with the window as a bedroom, a wide
+// view of the main living space, and another room or angle. With the 3D, each pick is the widest level
+// frame near it (the one that sees farthest), so photos show the room, not a close-up.
 export function pickFrames(
   detections: Pick<Detection, "kind" | "frame" | "framesSeen" | "box" | "track">[],
   vision: { rooms: { room: string; atSeconds: number | null }[] } | null | undefined,
   household: string,
   frameCount: number,
   mainRoom: { startS: number; endS: number } | null = null,
+  views: Map<number, FrameView> | null = null,
 ): FramePick[] {
   const picks: FramePick[] = [];
   const far = (f: number) => picks.every((p) => Math.abs(p.frame - f) >= 25);
+  const widest = (frames: number[]) =>
+    frames.filter((f) => far(f) && (views?.get(f)?.tilt ?? 1) < LEVEL).sort((a, b) => views!.get(b)!.depthM - views!.get(a)!.depthM)[0];
   for (const w of vision?.rooms ?? []) {
     if (w.atSeconds == null || picks.length >= 2) continue;
-    const frame = Math.min(frameCount - 1, Math.round(w.atSeconds * FPS));
+    const said = Math.min(frameCount - 1, Math.round(w.atSeconds * FPS));
+    const frame = (views && widest([...views.keys()].filter((f) => Math.abs(f - said) <= 12))) ?? said;
     if (far(frame)) picks.push({ frame, title: w.room.charAt(0).toUpperCase() + w.room.slice(1), space: w.room });
   }
-  // A window in clear view: the room becomes the bedroom, which needs that window.
+  // A window in clear view: the room becomes the bedroom, which needs that window. Its photo is the
+  // frame that shows the whole window from farthest back.
   const window = detections
     .filter((d) => d.kind === "window" && d.box.w > 0.06 && d.box.w < 0.6)
     .sort((a, b) => b.framesSeen - a.framesSeen)[0];
-  if (picks.length < 2 && window && far(window.frame)) {
-    const forParent = household === "relative";
-    picks.push({ frame: window.frame, title: forParent ? "A bedroom for your parent" : "The bedroom", space: forParent ? "calm bedroom for an older parent" : "bedroom" });
-  }
-  // A wide look at the main living space: several things in view, none of them filling the frame,
-  // and not the furnace corner (that stays a service room).
-  if (picks.length < 2) {
-    const inView = new Map<number, { kinds: Set<string>; close: boolean; service: boolean }>();
-    for (const d of detections) {
-      for (const t of d.track) {
-        const v = inView.get(t[0]) ?? { kinds: new Set<string>(), close: false, service: false };
-        v.kinds.add(d.kind);
-        if (t[3] * t[4] > 0.2) v.close = true;
-        if (d.kind === "mechanical") v.service = true;
-        inView.set(t[0], v);
-      }
+  if (window) {
+    const whole = window.track.filter((t) => t[1] > 0.01 && t[2] > 0.01 && t[1] + t[3] < 0.99 && t[2] + t[4] < 0.99);
+    const frame =
+      (views && widest(whole.map((t) => t[0]).filter((f) => views.has(f)))) ??
+      [...whole].sort((a, b) => a[3] * a[4] - b[3] * b[4]).find((t) => far(t[0]) && t[3] > 0.06)?.[0] ??
+      window.frame;
+    if (far(frame)) {
+      const forParent = household === "relative";
+      picks.push({ frame, title: forParent ? "A bedroom for your parent" : "The bedroom", space: forParent ? "calm bedroom for an older parent" : "bedroom" });
     }
-    const inMain = (f: number) => !mainRoom || (f / FPS >= mainRoom.startS && f / FPS < mainRoom.endS);
-    const wide = [...inView.entries()]
-      .filter(([f, v]) => !v.close && !v.service && far(f))
-      .sort((a, b) => Number(inMain(b[0])) - Number(inMain(a[0])) || b[1].kinds.size - a[1].kinds.size)[0];
+  }
+  const inMain = (f: number) => !mainRoom || (f / FPS >= mainRoom.startS && f / FPS < mainRoom.endS);
+  // Frames with the furnace or panel in them stay a service room; frames with something filling the
+  // picture are close-ups.
+  const busy = new Set<number>();
+  const kinds = new Map<number, Set<string>>();
+  for (const d of detections) {
+    for (const t of d.track) {
+      if (d.kind === "mechanical" || t[3] * t[4] > 0.2) busy.add(t[0]);
+      kinds.set(t[0], (kinds.get(t[0]) ?? new Set()).add(d.kind));
+    }
+  }
+  if (views) {
+    const open = [...views.keys()].filter((f) => !busy.has(f));
+    const living = widest(open.filter(inMain)) ?? widest(open);
+    if (living != null) picks.push({ frame: living, title: "Living and kitchen", space: "open living room with a small modern kitchen" });
+    // Another area if there is one, else the main room from another side.
+    const areas = new Set(picks.map((p) => views.get(p.frame)?.area));
+    const other = widest(open.filter((f) => !areas.has(views.get(f)!.area))) ?? widest(open);
+    if (other != null) {
+      const elsewhere = !areas.has(views.get(other)!.area);
+      picks.push(
+        elsewhere
+          ? { frame: other, title: "The other room", space: "cosy den with a small home office" }
+          : { frame: other, title: "Another angle", space: "open living room with a small modern kitchen" },
+      );
+    }
+  } else if (picks.length < MAX_PHOTOS) {
+    // Without the 3D: several things in view, none of them filling the frame, in the main room first.
+    const wide = [...kinds.entries()]
+      .filter(([f]) => !busy.has(f) && far(f))
+      .sort((a, b) => Number(inMain(b[0])) - Number(inMain(a[0])) || b[1].size - a[1].size)[0];
     if (wide) picks.push({ frame: wide[0], title: "Living and kitchen", space: "open living room with a small modern kitchen" });
   }
-  return picks.slice(0, 2);
+  return picks.slice(0, MAX_PHOTOS);
+}
+
+// How far each kept frame of the 3D sees and how level it is, from the stored scans.
+export async function frameViews(scanId: string, rooms: { index: number; has3d: boolean }[]): Promise<Map<number, FrameView> | null> {
+  const views = new Map<number, FrameView>();
+  for (const room of rooms.filter((r) => r.has3d)) {
+    const [json, depth] = await Promise.all([read(keys.scan3d(scanId, "scan.json", room.index)), read(keys.scan3d(scanId, "depth.bin", room.index))]);
+    if (!json || !depth) continue;
+    const scan = JSON.parse(json.toString("utf8"));
+    const [, H, W] = scan.files.depth.shape as number[];
+    for (const f of scan.frames as { sourceIndex: number; depthOffset: number; pose: number[][] }[]) {
+      const ours = scan.sentFrames?.[f.sourceIndex];
+      if (ours == null) continue;
+      const z: number[] = [];
+      for (let i = 0; i < H * W; i += 7) {
+        const v = half(depth.readUInt16LE(f.depthOffset + i * 2));
+        if (v > 0) z.push(v);
+      }
+      if (z.length < 50) continue;
+      z.sort((a, b) => a - b);
+      views.set(ours, { depthM: z[Math.floor(z.length / 2)], tilt: Math.abs(f.pose[1][2]), area: room.index });
+    }
+  }
+  return views.size ? views : null;
 }
 
 export function conceptPrompt(space: string, style: string) {
@@ -105,7 +164,8 @@ async function read(key: string) {
 
 export async function renderConcepts(scanId: string, result: any): Promise<Concept[]> {
   const main = (result.rooms ?? []).find((r: { index: number }) => r.index === result.mainRoom) ?? null;
-  const picks = pickFrames(result.detections ?? [], result.vision, result.household ?? "unsure", result.frameCount ?? 0, main);
+  const views = await frameViews(scanId, result.rooms ?? []).catch(() => null);
+  const picks = pickFrames(result.detections ?? [], result.vision, result.household ?? "unsure", result.frameCount ?? 0, main, views);
   const work = join(tmpdir(), "basement-ready", `concepts-${scanId}`);
   mkdirSync(work, { recursive: true });
   const out: Concept[] = [];
