@@ -41,7 +41,8 @@ export function Review({ take, busy, onUse, onRetake, onClose }: Props) {
 
   useEffect(() => {
     const u = URL.createObjectURL(take.file);
-    setUrl(u);
+    // "#t=0.1" makes phones show the first frame instead of a black box before play.
+    setUrl(`${u}#t=0.1`);
     setUnplayable(false);
     setTime(0);
     setPlaying(false);

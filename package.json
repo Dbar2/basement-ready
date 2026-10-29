@@ -8,6 +8,7 @@
     "dev": "concurrently -k -n api,web -c blue,green \"pnpm dev:api\" \"pnpm dev:web\"",
     "dev:web": "vite",
     "dev:phone": "sh scripts/dev-phone.sh",
+    "voice": "sh tools/voice/make.sh",
     "dev:api": "API_PORT=8787 SCAN3D_URL=http://127.0.0.1:8790 SCAN3D_TOKEN=dev tsx watch --env-file=.env server/index.ts",
     "build": "tsc -b && vite build",
     "start": "tsx server/index.ts",

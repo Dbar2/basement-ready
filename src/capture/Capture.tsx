@@ -193,7 +193,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     setNudge(false);
     setConfirmDiscard(false);
     setPhase({ name: "recording" });
-    setAnnounce("Recording. Start at the bottom of the stairs.");
+    setAnnounce("Recording. Film the stairs on your way down.");
   }
 
   function stopRecording(reason: StopReason) {
@@ -588,7 +588,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
               )}
             </div>
             <VoiceBubble
-              text={recording ? (voice.caption?.text ?? null) : "Hi! I'll guide you with my voice. Tap Start, then begin at the bottom of the stairs."}
+              text={recording ? (voice.caption?.text ?? null) : "Hi! I'll guide you with my voice. Stand at the top of the stairs, tap Start, and film them on your way down."}
               speaking={voice.speaking}
               muted={voice.muted}
               onMute={() => voice.setMuted((m) => !m)}
@@ -649,7 +649,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
             ) : (
               <div className="guide-card guide-card--start">
                 <h2 className="guide-task" data-focus tabIndex={-1}>
-                  Start at the bottom of the stairs
+                  Start at the top of the stairs
                 </h2>
                 <p className="guide-tips">{TIPS.map((t) => t.label).join(" · ")}</p>
                 <button className="cap-btn cap-btn--primary guide-start" onClick={startRecording} disabled={!stream}>
