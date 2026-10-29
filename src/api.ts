@@ -270,6 +270,8 @@ export function startScan(
     rooms?: { startS: number }[];
     ideas?: { room: number; idea: string; sec: number }[];
     spoken?: { id: string; startMs: number; endMs: number }[];
+    lens?: "ultrawide" | "wide" | null; // which camera filmed it
+    wideAt?: number | null; // seconds into the take of the still wide shot from a corner
   },
   onProgress: (fraction: number) => void,
 ): Promise<string> {
@@ -284,6 +286,8 @@ export function startScan(
     if (input.rooms && input.rooms.length > 1) form.append("rooms", JSON.stringify(input.rooms));
     if (input.ideas?.length) form.append("ideas", JSON.stringify(input.ideas));
     if (input.spoken?.length) form.append("spoken", JSON.stringify(input.spoken));
+    if (input.lens) form.append("lens", input.lens);
+    if (input.wideAt != null) form.append("wideAt", String(input.wideAt));
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/scans");
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);

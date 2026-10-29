@@ -36,6 +36,7 @@ export function pickFrames(
   frameCount: number,
   mainRoom: { startS: number; endS: number } | null = null,
   views: Map<number, FrameView> | null = null,
+  wideAt: number | null = null, // seconds: when they held still in a corner for a wide shot
 ): FramePick[] {
   const picks: FramePick[] = [];
   const far = (f: number) => picks.every((p) => Math.abs(p.frame - f) >= 25);
@@ -76,7 +77,9 @@ export function pickFrames(
   }
   if (views) {
     const open = [...views.keys()].filter((f) => !busy.has(f));
-    const living = widest(open.filter(inMain)) ?? widest(open);
+    // The still wide shot from a corner is made for this photo.
+    const still = wideAt == null ? null : widest(open.filter((f) => Math.abs(f / FPS - wideAt) <= 1.5));
+    const living = still ?? widest(open.filter(inMain)) ?? widest(open);
     if (living != null) picks.push({ frame: living, title: "Living and kitchen", space: "open living room with a small modern kitchen" });
     // Another area if there is one, else the main room from another side.
     const areas = new Set(picks.map((p) => views.get(p.frame)?.area));
@@ -165,7 +168,7 @@ async function read(key: string) {
 export async function renderConcepts(scanId: string, result: any): Promise<Concept[]> {
   const main = (result.rooms ?? []).find((r: { index: number }) => r.index === result.mainRoom) ?? null;
   const views = await frameViews(scanId, result.rooms ?? []).catch(() => null);
-  const picks = pickFrames(result.detections ?? [], result.vision, result.household ?? "unsure", result.frameCount ?? 0, main, views);
+  const picks = pickFrames(result.detections ?? [], result.vision, result.household ?? "unsure", result.frameCount ?? 0, main, views, result.capture?.wideAt ?? null);
   const work = join(tmpdir(), "basement-ready", `concepts-${scanId}`);
   mkdirSync(work, { recursive: true });
   const out: Concept[] = [];

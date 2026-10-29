@@ -138,11 +138,16 @@ app.post("/api/scans", async (c) => {
   const rooms = cleanRooms(body.rooms);
   const ideas = cleanIdeas(body.ideas);
   const spoken = cleanSpoken(body.spoken);
+  // Which camera filmed it (the 0.5x ultra-wide or the main one), and when they held still for the wide shot.
+  const lens = body.lens === "ultrawide" || body.lens === "wide" ? body.lens : null;
+  const wideAt = Number(body.wideAt);
   const inputs = {
     ...(Number.isFinite(tape) && tape >= 1 && tape <= 4 ? { floorToJoistsM: tape } : {}),
     ...(rooms ? { rooms } : {}),
     ...(ideas ? { ideas } : {}),
     ...(spoken ? { spoken } : {}),
+    ...(lens ? { lens } : {}),
+    ...(body.wideAt != null && Number.isFinite(wideAt) && wideAt >= 0 && wideAt <= 130 ? { wideAt } : {}),
   };
   const [scan] = await db
     .insert(schema.scans)

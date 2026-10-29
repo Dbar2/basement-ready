@@ -72,4 +72,14 @@ describe("photos of what it could look like", () => {
       ["The other room", 450],
     ]);
   });
+
+  it("uses the still wide shot from a corner for the living space when there is one", () => {
+    const views = new Map<number, FrameView>([
+      [200, { depthM: 6.0, tilt: 0.05, area: 0 }],
+      [301, { depthM: 4.2, tilt: 0.1, area: 0 }],
+      [305, { depthM: 4.5, tilt: 0.1, area: 0 }],
+    ]);
+    const picks = pickFrames([], null, "unsure", 600, null, views, 60.5);
+    expect(picks[0]).toMatchObject({ title: "Living and kitchen", frame: 305 });
+  });
 });
