@@ -1,14 +1,15 @@
 // "Where's the house?": type-ahead from the Region's own address list, then the house from above
 // and what public records already say. Every fact here is a question nobody has to answer later.
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { aerialUrl, getProperty, searchAddress, type AddressHit, type Property } from "../api";
 
-export function AddressField({ picked, onPick }: { picked: AddressHit | null; onPick: (a: AddressHit | null) => void }) {
+export function AddressField({ picked, onPick, help }: { picked: AddressHit | null; onPick: (a: AddressHit | null) => void; help?: ReactNode }) {
   const [text, setText] = useState(picked ? `${picked.address}, ${picked.municipality}` : "");
   const [hits, setHits] = useState<AddressHit[]>([]);
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const seq = useRef(0);
+  const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (picked && text === `${picked.address}, ${picked.municipality}`) return;
@@ -32,55 +33,69 @@ export function AddressField({ picked, onPick }: { picked: AddressHit | null; on
   const choose = (a: AddressHit) => {
     setText(`${a.address}, ${a.municipality}`);
     setOpen(false);
+    // Put the keyboard away so the house card and the next question have the screen.
+    input.current?.blur();
     onPick(a);
   };
 
   return (
     <div className="addr" data-open={open && hits.length > 0}>
       <label htmlFor="addr-input">Your address</label>
-      <input
-        id="addr-input"
-        className="input"
-        placeholder="Start typing, e.g. 120 Avondale"
-        value={text}
-        autoComplete="off"
-        role="combobox"
-        aria-expanded={open && hits.length > 0}
-        aria-controls="addr-list"
-        aria-activedescendant={open && hits[active] ? `addr-${active}` : undefined}
-        onChange={(e) => {
-          setText(e.target.value);
-          if (picked) onPick(null);
-        }}
-        onFocus={() => hits.length && setOpen(true)}
-        onBlur={() => window.setTimeout(() => setOpen(false), 150)}
-        onKeyDown={(e) => {
-          if (!open || !hits.length) return;
-          if (e.key === "ArrowDown") setActive((i) => Math.min(hits.length - 1, i + 1));
-          else if (e.key === "ArrowUp") setActive((i) => Math.max(0, i - 1));
-          else if (e.key === "Enter") {
-            e.preventDefault();
-            choose(hits[active]);
-          } else if (e.key === "Escape") setOpen(false);
-        }}
-      />
-      {open && hits.length > 0 && (
-        <ul className="addr-list" id="addr-list" role="listbox">
-          {hits.map((a, i) => (
-            <li
-              key={`${a.address}|${a.municipality}`}
-              id={`addr-${i}`}
-              role="option"
-              aria-selected={i === active}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(a);
-              }}
-            >
-              <b>{a.address}</b> <span>{a.municipality}</span>
-            </li>
-          ))}
-        </ul>
+      <div className="addr-box">
+        <input
+          ref={input}
+          id="addr-input"
+          className="input"
+          placeholder="Start typing, e.g. 120 Avondale"
+          value={text}
+          autoComplete="off"
+          role="combobox"
+          aria-expanded={open && hits.length > 0}
+          aria-controls="addr-list"
+          aria-activedescendant={open && hits[active] ? `addr-${active}` : undefined}
+          aria-describedby={help ? "addr-help" : undefined}
+          onChange={(e) => {
+            setText(e.target.value);
+            if (picked) onPick(null);
+          }}
+          onFocus={() => hits.length && setOpen(true)}
+          onBlur={() => window.setTimeout(() => setOpen(false), 150)}
+          onKeyDown={(e) => {
+            if (!open || !hits.length) return;
+            if (e.key === "ArrowDown") setActive((i) => Math.min(hits.length - 1, i + 1));
+            else if (e.key === "ArrowUp") setActive((i) => Math.max(0, i - 1));
+            else if (e.key === "Enter") {
+              e.preventDefault();
+              choose(hits[active]);
+            } else if (e.key === "Escape") {
+              e.stopPropagation();
+              setOpen(false);
+            }
+          }}
+        />
+        {open && hits.length > 0 && (
+          <ul className="addr-list" id="addr-list" role="listbox">
+            {hits.map((a, i) => (
+              <li
+                key={`${a.address}|${a.municipality}`}
+                id={`addr-${i}`}
+                role="option"
+                aria-selected={i === active}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  choose(a);
+                }}
+              >
+                <b>{a.address}</b> <span>{a.municipality}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {help && (
+        <p className="field-help" id="addr-help">
+          {help}
+        </p>
       )}
     </div>
   );
@@ -92,12 +107,16 @@ function headline(p: Property) {
   return "We'll check the zoning for this address.";
 }
 
-export function PropertyCard({ address }: { address: AddressHit }) {
+export function PropertyCard({ address, onLoad }: { address: AddressHit; onLoad?: () => void }) {
   const [p, setP] = useState<Property | null | undefined>(undefined);
   useEffect(() => {
     setP(undefined);
     void getProperty(address).then(setP);
   }, [address]);
+  // The card grows once the records arrive; let the sheet bring what's below it back into view.
+  useEffect(() => {
+    if (p !== undefined) onLoad?.();
+  }, [p]);
   const b = p?.building;
   return (
     <div className="prop" aria-live="polite">
