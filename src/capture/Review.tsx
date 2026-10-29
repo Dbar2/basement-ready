@@ -4,15 +4,17 @@ import { MIN_SEC } from "./checklist";
 import { NEEDS, type Need } from "./script";
 import type { Spoken } from "./voice";
 import { CornerTicks, Dimension, Icon } from "./drawing";
-import { formatBytes, formatLabel, formatTime, settleDuration } from "./media";
+import { formatBytes, formatLabel, formatTime, settleDuration, type Lens } from "./media";
 
 export type Take = {
   file: File;
   durationSec: number;
   checklist: Need[];
-  rooms: number[]; // start of each room, seconds into the take
+  rooms: number[]; // where the picture changed to another part of the basement, seconds into the take
   ideas: { room: number; idea: string; sec: number }[];
   spoken: Spoken[];
+  lens: Lens | null;
+  wideAt: number | null; // seconds into the take of the wide shot from a corner
   source: "camera" | "upload";
   note?: "max" | "interrupted" | "short";
 };
@@ -132,10 +134,10 @@ export function Review({ take, busy, onUse, onRetake, onClose }: Props) {
             <dt>Length</dt>
             <dd>{length > 0 ? formatTime(length) : "Unknown"}</dd>
           </div>
-          {fromCamera && take.rooms.length > 1 && (
+          {fromCamera && take.lens && (
             <div>
-              <dt>Rooms</dt>
-              <dd>{take.rooms.length}, each scanned on its own</dd>
+              <dt>Lens</dt>
+              <dd>{take.lens === "ultrawide" ? "0.5× ultra-wide" : "1× wide"}</dd>
             </div>
           )}
           {fromCamera && (

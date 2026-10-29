@@ -42,20 +42,28 @@ page.on("response", (r) => r.url().includes("/api/live/detect") && r.status() !=
 await page.goto(`${base}/`);
 await page.getByRole("button", { name: /Check my basement/ }).click();
 await page.getByRole("button", { name: /Film my basement/ }).click();
+await page.getByRole("button", { name: /Start camera/ }).waitFor();
+await page.screenshot({ path: `${out}/intro.png` });
 await page.getByRole("button", { name: /Start camera/ }).click();
+await page.getByRole("button", { name: "Start", exact: true }).waitFor();
+await page.waitForTimeout(1000);
+await page.screenshot({ path: `${out}/ready.png` });
 await page.getByRole("button", { name: "Start", exact: true }).click();
 
-// A desktop browser has no compass or tilt sensor, so turn a pretend phone slowly round the room,
-// and tilt it up to the ceiling for a few seconds, to exercise the ring's track and the ceiling step.
+// A desktop browser has no compass, tilt sensor or gyro, so a pretend phone turns slowly round the
+// basement (20°/s), and tilts up or down when the guide asks for the ceiling or the floor, so the
+// coverage view paints. When the guide asks for the wide shot, it holds still.
 await page.evaluate(() => {
   let a = 0;
-  const started = performance.now();
   window.setInterval(() => {
-    a = (a + 2) % 360;
-    const t = (performance.now() - started) / 1000;
-    const beta = t > 30 && t < 35 ? 150 : 85;
+    const task = document.querySelector(".cov-panel .guide-task")?.textContent ?? "";
+    const still = task.startsWith("Step back");
+    if (!still) a = (a + 2) % 360;
+    const beta = task.startsWith("Tilt up") ? 140 : task.startsWith("Tilt down") ? 40 : 85;
     window.dispatchEvent(new DeviceOrientationEvent("deviceorientationabsolute", { alpha: a, beta, gamma: 0, absolute: true }));
     window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { alpha: a, beta, gamma: 0 }));
+    const spin = still ? 2 : 20;
+    window.dispatchEvent(new DeviceMotionEvent("devicemotion", { rotationRate: { alpha: spin, beta: 0, gamma: 0 }, interval: 100 }));
   }, 100);
 });
 
@@ -63,17 +71,19 @@ let movedOn = false;
 for (let t = 5; t <= seconds; t += 5) {
   await page.waitForTimeout(5000);
   const state = await page.evaluate(() => ({
-    room: document.querySelector(".guide-room-label")?.textContent ?? null,
-    task: document.querySelector(".guide-task")?.textContent ?? null,
+    task: document.querySelector(".cov-panel .guide-task")?.textContent ?? null,
     voice: document.querySelector(".guide-voice p")?.textContent ?? null,
-    shown: document.querySelector(".guide-count")?.textContent ?? null,
+    shown: document.querySelector(".cov-count")?.textContent ?? null,
+    painted: document.querySelector(".cov-legend")?.textContent ?? null,
     turn: document.querySelector(".guide-turn span")?.textContent ?? null,
-    newRoom: document.querySelector(".guide-notice")?.textContent ?? null,
+    live3d: Boolean(document.querySelector(".cov-3d")),
     flash: document.querySelector(".cap-flash-label")?.textContent ?? null,
   }));
   console.log(`${String(t).padStart(3)}s`, JSON.stringify(state));
+  // Stopped by itself at 2 minutes: that's the review.
+  if (!state.task) break;
   await page.screenshot({ path: `${out}/t${String(t).padStart(3, "0")}.png` });
-  // Answer the "what would you like this room to be?" task once, the way someone would.
+  // Answer the "what would you like this space to be?" task once, the way someone would.
   if (state.task?.startsWith("What would you like") && !movedOn) {
     movedOn = true;
     // The card can close itself first if it already heard talking.
@@ -83,20 +93,20 @@ for (let t = 5; t <= seconds; t += 5) {
   }
 }
 
-// Open the assembling 3D from the little room drawing, the way you'd check coverage before stopping.
-const room = page.locator(".guide-room");
-if ((await room.count()) && (await room.getAttribute("aria-label"))?.includes("Open the 3D")) {
-  await room.click();
+// Open the assembling 3D from the coverage panel, the way you'd check it before stopping.
+const open3d = page.locator(".cov-3d");
+if (await open3d.count()) {
+  await open3d.click();
   await page.waitForTimeout(2500);
   await page.screenshot({ path: `${out}/3d-full.png` });
   await page.locator(".cap-3d-full").getByRole("button", { name: "Keep filming" }).click();
 }
 
 const stop = page.getByRole("button", { name: "Done", exact: true });
-if (await stop.count()) {
-  await stop.click();
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: `${out}/review.png` });
-}
+if (await stop.count()) await stop.click();
+await page.locator(".cap-review").waitFor({ timeout: 10_000 }).catch(() => {});
+await page.waitForTimeout(1500);
+await page.screenshot({ path: `${out}/review.png` });
+console.log("review", JSON.stringify(await page.evaluate(() => document.querySelector(".cap-review-body")?.textContent)));
 await browser.close();
 console.log(`Screenshots in ${out}/`);
