@@ -26,21 +26,57 @@ function Page({ eyebrow, title, onClose, children, actions }: { eyebrow: string;
 
 type Common = { busy: boolean; onUpload: () => void; onClose: () => void };
 
+// The brief, as three line drawings in the brand's plan style: forest lines, mint fills.
 const HOW = [
   {
-    title: "One room at a time",
-    body: "Walk slowly along the walls, about 2 m back, facing into the room.",
-    icon: <path d="M6 30V12h28v18M3 30h34M14 22l4 4 8-8" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />,
+    title: "One take, the whole basement",
+    body: "Walk it all, room to room, in one go. Stay about 2 m from the walls.",
+    // A plan of connected rooms, the stairs in a corner, and one walk through all of it.
+    art: (
+      <>
+        <rect x="10" y="12" width="12" height="16" className="how-fill" />
+        <path d="M10 15.2h12M10 18.4h12M10 21.6h12M10 24.8h12" className="how-thin" />
+        <path d="M6 8h76v48H6zM40 8v16M40 36v20M58 32h6M76 32h6" className="how-line" />
+        <path d="M16 31c0 14 8 18 18 15s10-12 16-12 18 8 24 3-2-16-12-17-16 0-18 6" className="how-path" />
+        <circle cx="44" cy="26" r="3.6" className="how-dot" />
+      </>
+    ),
   },
   {
-    title: "Tilt up once",
-    body: "Show the ceiling in each room. That's where we read its height.",
-    icon: <path d="M5 8h30M20 32V15M13 21l7-7 7 7" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />,
+    title: "Paint it all green",
+    body: "Walls, ceiling and the floor by the walls fill in on screen as you film. Tilt up and down to finish them.",
+    // The unrolled basement from the filming screen: ceiling above, three wall bands, floor below.
+    art: (
+      <>
+        {Array.from({ length: 8 }, (_, c) => {
+          const x = 4 + c * 10;
+          const on = (row: number) => (row === 0 ? c >= 1 && c <= 3 : row === 4 ? c <= 2 : c <= 4);
+          return (
+            <g key={c}>
+              <path d={`M${x} 14h9l-1.5-9h-6z`} className={on(0) ? "how-fill" : "how-empty"} />
+              {[16, 27, 38].map((y, i) => (
+                <rect key={y} x={x} y={y} width="9" height="9.5" className={on(i + 1) ? "how-fill" : "how-empty"} />
+              ))}
+              <path d={`M${x} 49h9l-1.5 9h-6z`} className={on(4) ? "how-fill" : "how-empty"} />
+            </g>
+          );
+        })}
+        <path d="M32 19v-5h5M50 14h5v5M32 44v5h5M50 49h5v-5" className="how-line" />
+      </>
+    ),
   },
   {
     title: "Say what you'd like",
-    body: "A voice guides you and asks as you go. Not sure yet? Tap an idea.",
-    icon: <path d="M6 9h28v16H17l-7 6v-6H6z" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" />,
+    body: "The guide talks you through it and asks as you go. Not sure yet? Tap an idea.",
+    // A speech bubble, and a phone listening.
+    art: (
+      <>
+        <path d="M8 10h50v28H28l-10 10V38H8z" className="how-fill how-line" />
+        <path d="M16 19h34M16 27h22" className="how-line" />
+        <rect x="64" y="14" width="16" height="38" rx="3" className="how-line" />
+        <path d="M68.5 38v4M72 34v8M75.5 36v6" className="how-line" />
+      </>
+    ),
   },
 ];
 
@@ -55,7 +91,9 @@ export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Comm
         recordable ? (
           <>
             <p className="cap-fine" aria-live="polite">
-              {busy ? "Tap Allow when your phone asks." : `Allow the camera and mic${ios ? ", and motion so we know when you tilt up" : ""}. Turn your sound on to hear the guide.`}
+              {busy
+                ? "Tap Allow each time your phone asks."
+                : `${ios ? "Allow the camera, mic and motion when your phone asks: motion is how we see what's filmed." : "Allow the camera and mic when your browser asks."} Turn your sound on to hear the guide. We use the 0.5× lens if your phone has one.`}
             </p>
             <button className="cap-btn cap-btn--primary" onClick={onStart} disabled={busy}>
               {busy ? "Waiting for the camera…" : "Start camera"} {!busy && <Icon.arrow />}
@@ -77,8 +115,8 @@ export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Comm
       <ol className="cap-how">
         {HOW.map((h) => (
           <li key={h.title}>
-            <svg viewBox="0 0 40 40" aria-hidden>
-              {h.icon}
+            <svg viewBox="0 0 88 64" aria-hidden>
+              {h.art}
             </svg>
             <span>
               <b>{h.title}</b>
