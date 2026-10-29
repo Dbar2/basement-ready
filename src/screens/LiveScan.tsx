@@ -1,8 +1,21 @@
 // While we check it (brand/explorations/M2-while-we-check.png): your own video plays with SAM's finds
 // locked on, a progress bar says how long is left, and the only questions a homeowner can answer are
-// asked here, so the answer arrives already using them.
+// asked here, so the answer arrives already using them. After the basement questions come the money
+// questions that still change a program (server/eligibility.ts), one at a time.
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ANALYSIS_FPS, answerEarly, localVideos, replaySample, setHousehold, subscribe, type AnswerValue, type Household, type ScanEvent } from "../api";
+import {
+  ANALYSIS_FPS,
+  answerEarly,
+  localVideos,
+  openMoneyQuestions,
+  replaySample,
+  setHousehold,
+  subscribe,
+  type AnyAnswer,
+  type Household,
+  type MoneyQuestion,
+  type ScanEvent,
+} from "../api";
 import { Logo } from "../components/Logo";
 
 type Props = {
@@ -18,7 +31,8 @@ const STAGES = [
 ];
 
 // Asked while the scan runs. Same wording as the rules triage (server/triage.ts).
-type Ask = { id: string; question: string; hint: string; options: { label: string; value: AnswerValue | Household }[]; picture: "door" | "pipes" | "people" };
+type Picture = "door" | "pipes" | "people" | "house" | "houses" | "bill" | "rent" | "tools";
+type Ask = { id: string; question: string; hint: string; options: { label: string; value: AnyAnswer }[]; picture: Picture };
 const ASKS: Ask[] = [
   {
     id: "household",
@@ -55,8 +69,20 @@ const ASKS: Ask[] = [
   },
 ];
 
+// The money questions come from the server, worded there; each gets a drawing here.
+const MONEY_PICTURES: Record<string, Picture> = {
+  rent: "rent",
+  lives_there: "house",
+  other_home: "houses",
+  house_value: "bill",
+  senior: "people",
+  work_started: "tools",
+};
+
+const moneyAsk = (q: MoneyQuestion): Ask => ({ id: q.id, question: q.question, hint: q.hint, options: q.options, picture: MONEY_PICTURES[q.id] ?? "house" });
+
 // Simple line drawings, so the question reads at a glance.
-const PICTURES: Record<Ask["picture"], ReactNode> = {
+const PICTURES: Record<Picture, ReactNode> = {
   door: (
     <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
       <path d="M8 70h104M30 70V18h34v52M64 18l20 8v52l-20-8" />
@@ -79,6 +105,38 @@ const PICTURES: Record<Ask["picture"], ReactNode> = {
       <path d="M26 66c0-12 8-20 18-20s18 8 18 20" />
       <circle cx="80" cy="32" r="7" />
       <path d="M66 66c0-9 6-15 14-15s14 6 14 15" />
+    </g>
+  ),
+  house: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M8 70h104M30 70V38L60 14l30 24v32" />
+      <path d="M52 70V52h16v18" />
+    </g>
+  ),
+  houses: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M8 70h104M16 70V44l22-18 22 18v26" />
+      <path d="M66 70V50l18-14 18 14v20" />
+    </g>
+  ),
+  bill: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M36 8h48v64l-8-5-8 5-8-5-8 5-8-5-8 5z" />
+      <path d="M46 24h28M46 34h28M46 50h12M66 50h8" />
+    </g>
+  ),
+  rent: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+      <circle cx="44" cy="40" r="14" />
+      <path d="M58 40h50M96 40v12M106 40v8" />
+      <circle cx="44" cy="40" r="4" />
+    </g>
+  ),
+  tools: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M8 70h104" />
+      <path d="M40 62l30-30M64 26l12-12 10 10-12 12z" />
+      <path d="M82 62V40M76 40h12" />
     </g>
   ),
 };
@@ -137,12 +195,24 @@ export function LiveScan({ scanId, onDone }: Props) {
 
   // The questions, one at a time. Answers go to the server now and apply when the scan finishes.
   const [answered, setAnswered] = useState<Record<string, string>>({});
-  const pending = ASKS.filter((a) => !(a.id in answered));
+  // Money questions that still change a program, fetched again after each answer.
+  const [money, setMoney] = useState<Ask[]>([]);
+  const refreshMoney = () =>
+    openMoneyQuestions(scanId)
+      .then((qs) => setMoney(qs.filter((q) => q.id !== "household" && q.answer === null).map(moneyAsk)))
+      .catch(() => {});
+  useEffect(() => {
+    void refreshMoney();
+  }, [scanId]);
+  const asks = [...ASKS, ...money.filter((m) => !ASKS.some((a) => a.id === m.id))];
+  const pending = asks.filter((a) => !(a.id in answered));
   const ask = pending[0] ?? null;
-  const pick = (a: Ask, o: Ask["options"][number]) => {
+  const pick = async (a: Ask, o: Ask["options"][number]) => {
     setAnswered((prev) => ({ ...prev, [a.id]: o.label }));
-    if (a.id === "household") void setHousehold(scanId, o.value as Household);
-    else void answerEarly(scanId, a.id, o.value as AnswerValue);
+    if (a.id === "household") await setHousehold(scanId, o.value as Household);
+    else await answerEarly(scanId, a.id, o.value);
+    // Who it's for, and each money answer, change which money questions are left.
+    if (a.id === "household" || a.id in MONEY_PICTURES) await refreshMoney();
   };
 
   // Ready and nothing left to ask: open the answer on its own after a moment.
@@ -258,7 +328,7 @@ export function LiveScan({ scanId, onDone }: Props) {
           ) : ask ? (
             <div className="live-ask" key={ask.id}>
               <span className="mono">
-                {ASKS.length - pending.length + 1} of {ASKS.length} · while we check
+                {asks.length - pending.length + 1} of {asks.length} · while we check
               </span>
               <h2>{ask.question}</h2>
               <svg viewBox="0 0 120 80" className="live-ask-pic" aria-hidden>
@@ -267,7 +337,7 @@ export function LiveScan({ scanId, onDone }: Props) {
               <p className="muted">{ask.hint}</p>
               <div className="live-ask-options">
                 {ask.options.map((o) => (
-                  <button key={o.label} className="btn btn-ghost" onClick={() => pick(ask, o)}>
+                  <button key={o.label} className="btn btn-ghost" onClick={() => void pick(ask, o)}>
                     {o.label}
                   </button>
                 ))}

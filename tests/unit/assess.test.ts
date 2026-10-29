@@ -56,18 +56,17 @@ describe("buildResult: the trust rule", () => {
 });
 
 describe("money and coverage", () => {
-  it("matches grants to who the unit is for", () => {
+  it("decides the money in code, and never says yes before the deciding question is answered", () => {
     const forMom = buildResult({ ...ctx, household: "relative" }, waterloo, { findings: [] }, []);
     const rental = buildResult({ ...ctx, household: "renter" }, waterloo, { findings: [] }, []);
-    expect(forMom.grants.find((g) => g.id === "federal_mhrtc")!.fit).toBe("fits");
-    expect(rental.grants.find((g) => g.id === "city_waterloo_aru_grant_interior")!.fit).toBe("fits");
     // Cancelled programs never reach the homeowner.
     expect(forMom.grants.some((g) => g.id === "canada_secondary_suite_loan_program")).toBe(false);
-    // A suite for Mom: the tax credit fits; the city grant and Region loan depend on renting it affordably.
-    expect(forMom.money.fits).toBe(7000);
-    expect(forMom.money.possible).toBe(7000 + 20000 + 25000);
-    expect(rental.money.fits).toBe(20000 + 25000);
-    expect(rental.grants.find((g) => g.id === "federal_mhrtc")!.fit).toBe("no");
+    // A suite for Mom: the tax credit waits on her age; the rental programs wait on the rent.
+    expect(forMom.grants.find((g) => g.id === "federal_mhrtc")).toMatchObject({ qualify: "ask", question: "senior" });
+    expect(forMom.grants.find((g) => g.id === "city_waterloo_aru_grant_interior")).toMatchObject({ qualify: "ask", question: "rent" });
+    expect(rental.grants.find((g) => g.id === "federal_mhrtc")!.qualify).toBe("no");
+    expect(forMom.money.total).toBe(0);
+    expect(forMom.moneyQuestions.map((q) => q.id)).toEqual(expect.arrayContaining(["rent", "senior", "work_started"]));
   });
 
   it("falls back to provincial rules outside covered cities", () => {

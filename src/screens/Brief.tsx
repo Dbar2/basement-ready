@@ -1,12 +1,13 @@
 // The one-page plan to hand a designer: the decision, the suggested layout on the floor plan, what
-// has to change and what it costs, what the homeowner wants, and what's still to confirm.
-// Laid out for paper: "Save as PDF" is the browser's print dialog.
+// has to change and what it costs, what the homeowner wants, what's still to confirm, the money they
+// qualify for and how to apply. Laid out for paper: "Save as PDF" is the browser's print dialog.
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { aerialUrl, getScan, type ScanResult } from "../api";
 import { FloorPlan } from "../components/FloorPlan";
 import { Logo } from "../components/Logo";
 import { conceptUrl } from "../components/StagedViews";
+import { worth } from "../components/Money";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const range = (lo: number | null | undefined, hi: number | null | undefined) => (lo == null || hi == null ? null : lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`);
@@ -27,7 +28,11 @@ export function Brief() {
   const designer = r.findings.filter((f) => f.status === "designer_checks" || f.status === "needs_measurement" || f.status === "needs_answer");
   const photos = (r.concepts?.items ?? []).filter((c) => c.kept);
   const wants = r.vision?.rooms ?? [];
-  const upTo = r.money ? r.money.fits || r.money.possible : 0;
+  const upTo = r.money?.total ?? 0;
+  const yes = (r.grants ?? []).filter((g) => g.qualify === "yes");
+  const open = (r.grants ?? []).filter((g) => g.qualify === "ask");
+  // Links stay clickable in a saved PDF; on paper the site name says where to go.
+  const site = (url: string) => (/^https?:/.test(url) ? new URL(url).host.replace(/^www\./, "") : null);
 
   return (
     <main className="brief">
@@ -56,7 +61,7 @@ export function Brief() {
           </div>
           {upTo > 0 && (
             <div>
-              <dt>Money they may get</dt>
+              <dt>They qualify for</dt>
               <dd>up to {money(upTo)}</dd>
             </div>
           )}
@@ -148,11 +153,54 @@ export function Brief() {
               </li>
             ))}
           </ul>
-          <h2>Next steps</h2>
+        </section>
+      </div>
+
+      <div className="brief-grid">
+        <section>
+          <h2>Money they qualify for</h2>
+          <ul className="brief-list">
+            {yes.map((g) => (
+              <li key={g.id}>
+                <span>
+                  {g.shortName}
+                  <span className="muted"> · {g.reason}</span>
+                </span>
+                <span className="mono">{worth(g)}</span>
+              </li>
+            ))}
+            {open.map((g) => (
+              <li key={g.id}>
+                <span>
+                  {g.shortName}
+                  <span className="muted"> · not decided: {g.reason.toLowerCase()}</span>
+                </span>
+                <span className="mono">{worth(g)}</span>
+              </li>
+            ))}
+            {!yes.length && !open.length && <li className="muted">No grants fit this plan.</li>}
+          </ul>
+        </section>
+        <section>
+          <h2>How to apply</h2>
           <ol className="brief-steps">
-            {(r.steps ?? []).map((s) => (
+            {(r.steps ?? []).filter((s) => Array.isArray(s.tasks)).map((s) => (
               <li key={s.id}>
-                <b>{s.title}</b> <span className="muted">{[s.who, s.time, range(s.costLow, s.costHigh)].filter(Boolean).join(" · ")}</span>
+                <b>{s.title}</b> <span className="muted">{[s.when, s.who, s.time, range(s.costLow, s.costHigh)].filter(Boolean).join(" · ")}</span>
+                <ul className="brief-tasks">
+                  {s.tasks.map((t) => (
+                    <li key={t.title}>
+                      {t.title}
+                      {t.links.map((l) => (
+                        <span key={l.url} className="brief-link">
+                          {" · "}
+                          <a href={l.url}>{l.label}</a>
+                          {site(l.url) && <span className="mono"> ({site(l.url)})</span>}
+                        </span>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
               </li>
             ))}
           </ol>

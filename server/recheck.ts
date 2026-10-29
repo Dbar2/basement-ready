@@ -1,17 +1,20 @@
 // Answers in, verdict out. Each answered rule is decided in code against the rules pack;
 // the scan's own reading is kept underneath, so clearing an answer puts it back.
 import { verdictFrom } from "./assess";
-import { packFor, type Rule } from "./rules";
+import { evaluateMoney, type MoneyAnswers } from "./eligibility";
+import type { Property } from "./property";
+import { packFor, type Household, type Pack, type Rule } from "./rules";
 import { planSteps } from "./steps";
 
 // "unsure": the homeowner doesn't know. The designer checks it instead; it stops being a question.
-export type AnswerValue = number | boolean | "unsure";
+// Money questions (server/eligibility.ts) share the same store, and rent can be "none" or "market".
+export type AnswerValue = number | boolean | string;
 export type Answers = Record<string, AnswerValue | null | undefined>;
 
 type Check = Rule["check"];
 
 export function evaluate(check: Check, value: AnswerValue): "pass" | "fail" | "unknown" {
-  if (value === "unsure") return "unknown";
+  if (typeof value === "string") return "unknown";
   const target = check.value;
   switch (check.operator) {
     case "exists":
@@ -32,7 +35,7 @@ export function evaluate(check: Check, value: AnswerValue): "pass" | "fail" | "u
 const UNIT: Record<string, string> = { m: "m", mm: "mm", m2: "m²", units: "homes", spaces: "parking spaces", STC: "STC" };
 
 function show(value: AnswerValue, unit: string | null) {
-  if (value === "unsure") return "not sure";
+  if (typeof value === "string") return value === "unsure" ? "not sure" : value;
   if (typeof value === "boolean") return value ? "yes" : "no";
   const n = unit === "m" ? value.toFixed(2) : String(Math.round(value * 100) / 100);
   return unit ? `${n} ${UNIT[unit] ?? unit}` : n;
@@ -48,6 +51,34 @@ export function explain(check: Check, value: AnswerValue, outcome: "pass" | "fai
 }
 
 type AnyFinding = Record<string, any> & { ruleId: string; status: string; check: Check; evidence: string[] };
+
+type MoneyContext = {
+  household?: Household;
+  property?: Pick<Property, "unitsRegistered" | "building"> | null;
+  plan?: { areaM2?: number | null } | null;
+  city?: string;
+};
+
+// The money they qualify for and the road to it, from who it's for, their answers and the plan.
+export function moneyAndSteps(
+  r: MoneyContext,
+  verdict: Pick<ReturnType<typeof verdictFrom>, "fixGroups" | "standard" | "cost">,
+  answers: Answers,
+  pack: Pack,
+) {
+  const household = r.household ?? "unsure";
+  const money = evaluateMoney(pack, { household, answers: answers as MoneyAnswers, property: r.property ?? null, costHigh: verdict.cost.high });
+  // The floor being finished: the scan's plan, or failing that the house's footprint.
+  const areaM2 = r.plan?.areaM2 ?? r.property?.building?.footprintM2 ?? null;
+  const steps = planSteps({ city: r.city ?? "your city", household, programs: money.programs, ...verdict, areaM2 }, pack);
+  return {
+    grants: money.programs,
+    money: { total: money.total, ifYes: money.ifYes },
+    moneyQuestions: money.questions,
+    moneyAnswered: money.answered,
+    steps,
+  };
+}
 
 export function recheck<R extends { municipality?: string; findings: AnyFinding[]; baseFindings?: AnyFinding[] }>(result: R, answers: Answers) {
   const { pack } = packFor(result.municipality ?? "waterloo-on");
@@ -74,7 +105,6 @@ export function recheck<R extends { municipality?: string; findings: AnyFinding[
   });
 
   const verdict = verdictFrom(findings as any);
-  const r = result as R & { city?: string; grants?: any[]; plan?: { areaM2: number } | null };
-  const steps = planSteps({ city: r.city ?? "your city", ...verdict, grants: r.grants ?? [], plan: r.plan ?? null }, pack);
-  return { ...result, baseFindings: base, findings, ...verdict, steps, answeredCount: findings.filter((f) => f.answer).length };
+  const money = moneyAndSteps(result as R & MoneyContext, verdict, answers, pack);
+  return { ...result, baseFindings: base, findings, ...verdict, ...money, answeredCount: findings.filter((f) => f.answer).length };
 }

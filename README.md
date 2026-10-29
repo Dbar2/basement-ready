@@ -49,7 +49,7 @@ No other AI model is called while the app runs.
 
 - **Browser and phone features:** the camera, the compass and tilt (DeviceOrientation), audio playback (Web Audio), the 3D views (WebGL with three.js), and the browser's own speech voice as a fallback (`speechSynthesis`).
 - **The filming guide's voice:** the app plays 21 short MP3 clips from `public/voice`. They were recorded once, before shipping, on a Mac with open-source text-to-speech: [Chatterbox](https://github.com/resemble-ai/chatterbox) (MIT), using a reference voice made with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0). The scripts are in `tools/voice`. The app never calls a voice model.
-- **Rules, costs and grants:** written rules packs for each city (`data/rules`, sources in `data/rules/SOURCES*.md`), checked in code (`server/triage.ts`).
+- **Rules, costs and grants:** written rules packs for each city (`data/rules`, sources in `data/rules/SOURCES*.md`), checked in code (`server/triage.ts`). Which money a homeowner qualifies for is decided in code from each program's written conditions (`server/eligibility.ts`), and "How to apply" is built from the pack's process (`server/steps.ts`).
 - **The suggested layout and 3D staging:** worked out in code from the measured room (`server/layout.ts`, `src/three/StagedBasement.tsx`).
 - **Brand concept boards:** the images in `brand/explorations` were made with an image model while designing the look. The app doesn't use them.
 
@@ -69,7 +69,7 @@ No other AI model is called while the app runs.
 - **Guided filming in the browser:** a voice guide, one task at a time, a small room view that fills in wall by wall, a direction arrow to the part not filmed yet, live SAM finds, new rooms detected automatically at doorways, and idea chips for saying what each room should become.
 - **The scan pipeline:** SAM tracks and MapAnything combined into one room model, a scale set from door heights (no tape measure), and per-room plans.
 - **Rules checking:** Waterloo, Kitchener and Cambridge second-unit rules sorted into what the video settles, what public records settle, what to ask the homeowner (a few plain questions, each with "Not sure") and what a designer confirms.
-- **The answer:** a decision, a numbered plan with who to call, time and rough cost, and only the grants that are open and fit.
+- **The answer:** a decision, the money they qualify for (yes, no with the reason, or one plain question away), and "How to apply" in the order it happens: where to go, what to bring, who does it, time and cost, with public registries for designers and trades.
 - **What it could look like:** a suggested layout that respects the rules, an explorable 3D staging of the real room, and staged photos checked by SAM.
 - **A one-page plan for a designer**, to print or save as a PDF.
 
