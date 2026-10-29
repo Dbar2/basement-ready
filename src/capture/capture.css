@@ -173,8 +173,16 @@
 .cap-num { font-family: var(--font-mono); font-size: 13px; color: var(--color-ink-muted); padding-top: 3px; }
 
 .cap-how { display: grid; gap: 4px; border-top: 1px solid var(--color-ink); }
-.cap-how li { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
-.cap-how svg { width: 40px; height: 40px; padding: 6px; border-radius: var(--cap-r); background: var(--color-mint); color: var(--color-mint-ink); }
+.cap-how li { display: grid; grid-template-columns: 88px minmax(0, 1fr); gap: 16px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--color-border); }
+.cap-how svg { width: 88px; height: 64px; border-radius: var(--cap-r); background: var(--color-surface); overflow: visible; }
+/* the drawings: forest lines, mint fills only */
+.how-line { fill: none; stroke: var(--color-ink); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.how-thin { fill: none; stroke: var(--color-ink); stroke-width: 1; }
+.how-fill { fill: var(--color-mint); }
+.how-fill.how-line { fill: var(--color-mint); }
+.how-empty { fill: none; stroke: color-mix(in srgb, var(--color-ink) 30%, transparent); stroke-width: 1; }
+.how-path { fill: none; stroke: var(--color-ink); stroke-width: 1.6; stroke-dasharray: 2.5 3; stroke-linecap: round; }
+.how-dot { fill: var(--color-mint); stroke: var(--color-ink); stroke-width: 1.6; }
 .cap-how b { display: block; font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; line-height: 1.15; }
 .cap-how .cap-muted { display: block; margin-top: 2px; font-size: 15px; line-height: 1.35; }
 .cap-fine--left { text-align: left; font-family: var(--font-mono); font-size: 12px; }
@@ -357,7 +365,7 @@
   }
 }
 
-/* this room in 3D, opened from the little room drawing */
+/* the basement in 3D so far, opened from the coverage panel */
 /* the full view covers everything else on the picture, and takes drags to orbit */
 .cap-frame:has(.cap-3d-full) :is(.guide-top, .guide-bottom, .guide-turn) { display: none; }
 .cap-3d-full { position: fixed; inset: 0; z-index: 20; pointer-events: auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: color-mix(in srgb, var(--color-ink) 92%, var(--color-mint) 8%); /* a scan reads best on dark */ }
@@ -365,7 +373,8 @@
 .cap-3d-full-bar p { margin: 0; font-size: 14px; line-height: 1.35; }
 
 @media (prefers-reduced-motion: reduce) {
-  .cap-flash, .guide-voice p, .guide-task, .guide-turn, .guide-notice { animation-duration: 1ms !important; }
+  .cap-flash, .guide-voice p, .guide-task, .guide-turn { animation-duration: 1ms !important; }
+  .cov-cell { transition: none !important; }
   .guide-bars i { animation: none !important; }
 }
 
@@ -410,53 +419,65 @@
 @keyframes guide-bar { 0%, 100% { height: 25%; } 50% { height: 100%; } }
 @keyframes guide-in { from { opacity: 0; translate: 0 6px; } to { opacity: 1; translate: 0 0; } }
 
-/* which way to turn for the wall that isn't filmed yet */
-.guide-turn { position: absolute; z-index: 4; top: 46%; display: grid; justify-items: center; gap: 4px; color: var(--color-mint); filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--color-ink) 50%, transparent)); animation: guide-in var(--dur-2) var(--ease-out) both; pointer-events: none; }
+/* which way to turn or tilt for the part that isn't filmed yet */
+.guide-turn { position: absolute; z-index: 4; top: 40%; display: grid; justify-items: center; gap: 6px; color: var(--color-mint); filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--color-ink) 50%, transparent)); animation: guide-in var(--dur-2) var(--ease-out) both; pointer-events: none; }
 .guide-turn svg { width: 72px; height: 72px; animation: guide-nudge 1.4s var(--ease-out) infinite; }
-.guide-turn span { padding: 3px 9px; border-radius: var(--radius-pill); background: var(--color-ink); color: var(--color-card); font-weight: 700; font-size: 13px; }
-.guide-turn[data-dir="left"] { left: 14px; }
-.guide-turn[data-dir="right"] { right: 14px; }
-.guide-turn[data-dir="right"] svg { scale: -1 1; }
+.guide-turn span { display: grid; justify-items: center; max-width: 170px; padding: 5px 10px; border-radius: 10px; background: var(--color-ink); color: var(--color-card); text-align: center; line-height: 1.2; }
+.guide-turn b { font-weight: 800; font-size: 14px; }
+.guide-turn em { font-style: normal; font-size: 12px; opacity: 0.8; }
+.guide-turn[data-dir="left"] { left: 12px; }
+.guide-turn[data-dir="right"] { right: 12px; }
+.guide-turn[data-dir="right"] svg { scale: -1 1; animation-name: guide-nudge-r; }
 .guide-turn[data-dir="around"] { left: 50%; translate: -50% 0; }
+.guide-turn[data-dir="up"] { top: 24%; left: 50%; translate: -50% 0; }
+.guide-turn[data-dir="up"] svg { rotate: 90deg; animation-name: guide-nudge-up; }
+.guide-turn[data-dir="down"] { top: 34%; left: 50%; translate: -50% 0; grid-template-areas: "label" "arrow"; }
+.guide-turn[data-dir="down"] svg { grid-area: arrow; rotate: -90deg; animation-name: guide-nudge-down; }
+.guide-turn[data-dir="down"] span { grid-area: label; }
 @keyframes guide-nudge { 0%, 100% { translate: 0 0; } 50% { translate: -8px 0; } }
-.guide-turn[data-dir="right"] svg { animation-name: guide-nudge-r; }
 @keyframes guide-nudge-r { 0%, 100% { translate: 0 0; } 50% { translate: 8px 0; } }
+@keyframes guide-nudge-up { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
+@keyframes guide-nudge-down { 0%, 100% { translate: 0 0; } 50% { translate: 0 8px; } }
 
-/* bottom: the little room, then the one task */
-.guide-bottom { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; justify-items: start; gap: 10px; padding: 0 12px max(12px, env(safe-area-inset-bottom)); }
-.guide-room { position: relative; width: 132px; padding: 6px 6px 22px; border: 0; border-radius: 10px; background: color-mix(in srgb, var(--color-ink) 90%, transparent); }
-.guide-room svg { display: block; width: 100%; height: auto; overflow: visible; }
-.guide-floor { fill: color-mix(in srgb, var(--color-mint) 10%, transparent); stroke: color-mix(in srgb, var(--color-mint) 40%, transparent); stroke-width: 0.8; }
-.guide-wall { fill: transparent; stroke: color-mix(in srgb, var(--color-card) 55%, transparent); stroke-width: 1; stroke-dasharray: 3 2.5; transition: fill var(--dur-3) var(--ease-out), stroke var(--dur-3) var(--ease-out); }
-.guide-wall[data-filmed="true"] { fill: url(#guide-dots); stroke: var(--color-mint); stroke-dasharray: none; }
-.guide-wall[data-filmed="true"][data-near="true"] { fill-opacity: 0.55; }
-.guide-dot { fill: var(--color-mint); }
-.guide-cone { fill: color-mix(in srgb, var(--color-card) 85%, transparent); }
-.guide-room-label { position: absolute; left: 8px; right: 8px; bottom: 5px; color: var(--color-card); font-family: var(--font-mono); font-size: 11px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* bottom: one panel with the task, the painted basement and the 3D so far */
+.guide-bottom { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; gap: 10px; padding: 0 10px max(10px, env(safe-area-inset-bottom)); }
+
+.cov-panel { display: grid; gap: 10px; padding: 14px 14px 12px; border-radius: 12px; background: color-mix(in srgb, var(--color-ink) 93%, transparent); color: var(--color-card); }
+.cov-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.cov-task { display: grid; gap: 8px; min-width: 0; }
+.cov-panel .guide-task { font-size: 22px; }
+.cov-count { display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 12px; color: color-mix(in srgb, var(--color-card) 72%, transparent); }
+.cov-skip { min-height: 32px; margin: -6px 0; padding: 0 4px; border: 0; background: none; color: var(--color-card); font-family: var(--font-body); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.cov-3d { position: relative; display: block; width: 104px; height: 68px; padding: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--color-mint) 40%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--color-ink) 88%, var(--color-mint)); animation: guide-in var(--dur-2) var(--ease-out) both; }
+.cov-3d canvas { position: absolute; inset: 0; }
+.cov-3d span { position: absolute; left: 6px; bottom: 4px; padding: 1px 5px; border-radius: 3px; background: var(--color-mint); color: var(--color-mint-ink); font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
+.cov-figure { display: grid; gap: 6px; margin: 0; }
+.cov-strip { display: block; width: 100%; height: auto; overflow: visible; }
+.cov-cell { fill: var(--color-mint); fill-opacity: calc(var(--f) * 0.92); stroke: color-mix(in srgb, var(--color-card) 20%, transparent); stroke-width: 0.6; transition: fill-opacity var(--dur-2) var(--ease-out); }
+.cov-cell[data-target] { stroke: var(--color-mint); stroke-width: 1.6; stroke-dasharray: 3 2; }
+.cov-frame path { fill: none; stroke: var(--color-card); stroke-width: 2.2; stroke-linecap: square; }
+.cov-legend { display: flex; justify-content: space-between; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: color-mix(in srgb, var(--color-card) 75%, transparent); }
+.cov-none { font-size: 14px; color: color-mix(in srgb, var(--color-card) 80%, transparent); }
+.guide-lens { padding: 1px 6px; border-radius: var(--radius-pill); background: var(--color-mint); color: var(--color-mint-ink); font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
 
 .guide-card { justify-self: stretch; display: grid; gap: 12px; padding: 16px 18px 14px; border-radius: 12px; background: var(--color-card); color: var(--color-ink); box-shadow: var(--shadow-card); }
 .guide-task { font-family: var(--font-display); font-weight: 800; font-size: 24px; letter-spacing: -0.025em; line-height: 1.08; animation: guide-in var(--dur-2) var(--ease-out) both; }
-.guide-progress { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.guide-dots { display: flex; gap: 8px; }
-.guide-dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-border); transition: background-color var(--dur-2) var(--ease-out), scale var(--dur-2) var(--ease-out); }
-.guide-dots i[data-done="true"] { background: var(--color-mint-line); scale: 1.15; }
-.guide-count { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
 .guide-ideas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .guide-ideas button { min-height: 44px; padding: 8px 10px; border: 1px solid var(--color-ink); border-radius: var(--cap-r); background: var(--color-card); color: var(--color-ink); font-weight: 700; font-size: 14px; line-height: 1.15; }
 .guide-ideas button:active { background: var(--color-mint); }
 .guide-listening { grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
-.guide-notice { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: -4px 0 0; padding: 8px 10px; border-radius: var(--cap-r-sm); background: var(--color-mint); color: var(--color-mint-ink); font-size: 14px; animation: guide-in var(--dur-2) var(--ease-out) both; }
-.guide-notice button { padding: 4px 0; border: 0; background: none; font-weight: 700; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 .guide-link { justify-self: start; padding: 2px 0; border: 0; background: none; color: var(--color-ink-muted); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
-.guide-nudge { font-size: 14px; color: var(--color-fix); }
+.guide-nudge { font-size: 14px; font-weight: 600; }
+.cov-panel .guide-ideas button { border-color: color-mix(in srgb, var(--color-card) 60%, transparent); background: transparent; color: var(--color-card); }
+.cov-panel .guide-ideas button:active { background: var(--color-mint); color: var(--color-mint-ink); }
+.cov-panel .guide-listening { color: color-mix(in srgb, var(--color-card) 72%, transparent); }
 .guide-card--start { gap: 10px; }
 .guide-tips { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
 .guide-start { min-height: 56px; font-size: 18px; }
 
 @media (min-width: 900px) {
   .guide-bottom { justify-items: center; }
-  .guide-bottom > .guide-room { justify-self: start; }
-  .guide-card { justify-self: center; width: min(460px, 100%); }
+  .guide-card, .cov-panel { justify-self: center; width: min(520px, 100%); }
   .guide-top { justify-items: center; }
   .guide-bar, .guide-voice { width: min(560px, 100%); }
 }

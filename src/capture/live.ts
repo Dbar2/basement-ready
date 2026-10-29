@@ -1,8 +1,7 @@
-// Live guidance while filming: SAM finds, on-phone coaching and room coverage.
+// Live guidance while filming: SAM finds, on-phone coaching and the 3D assembling on the server.
 // Everything here is best-effort: if a sensor or the network isn't there, recording still works.
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Need } from "./script";
-import { cameraLift } from "./media";
 import { lookOf, type Look } from "./rooms";
 
 // ---------- live finds (SAM 3.1 on one frame at a time) ----------
@@ -74,20 +73,18 @@ export function useLiveFinds(opts: {
   videoRef: RefObject<HTMLVideoElement | null>;
   headingRef: RefObject<number | null>;
   startedAt: number;
-  // Every frame sent, for spotting a walk into another room.
-  onFrame?: (f: { sec: number; look: Look; doorWidth: number }) => void;
+  // How wide the widest door in each answer was (0 for none): a doorway helps mark where one part of
+  // the basement gives way to another.
+  onDoor?: (sec: number, width: number) => void;
 }) {
   const { active, session, videoRef, headingRef, startedAt } = opts;
-  const onFrameRef = useRef(opts.onFrame);
-  onFrameRef.current = opts.onFrame;
+  const onDoorRef = useRef(opts.onDoor);
+  onDoorRef.current = opts.onDoor;
   const [finds, setFinds] = useState<LiveFind[]>([]);
   const [flash, setFlash] = useState<{ find: LiveFind; heading: number | null; seq: number } | null>(null);
   const [offline, setOffline] = useState(false);
   const findsRef = useRef<LiveFind[]>([]);
   findsRef.current = finds;
-  // Each room sends under its own session, so its 3D builds alone; finds carry on across rooms.
-  const sessionRef = useRef(session);
-  sessionRef.current = session;
 
   useEffect(() => {
     if (!active) return;
@@ -100,7 +97,7 @@ export function useLiveFinds(opts: {
     let failures = 0;
     let seq = 0;
 
-    // Doors every round (they mark the way into another room), then what's still missing, then an extra.
+    // Doors every round (they mark a way through), then what's still missing, then an extra.
     const plan = (): FindKey[] => {
       const have = new Set(findsRef.current.map((f) => f.key));
       const missing = (["stairs", "window", "furnace", "panel"] as FindKey[]).filter((k) => !have.has(k));
@@ -109,10 +106,6 @@ export function useLiveFinds(opts: {
       const extra = extras[turn++ % extras.length];
       return [...new Set<FindKey>(["door", ...missing.slice(0, 1), extra, ...missing.slice(1)])].slice(0, 3);
     };
-    const tiny = document.createElement("canvas");
-    tiny.width = tiny.height = 16;
-    const tinyCtx = tiny.getContext("2d", { willReadFrequently: true })!;
-
     const tick = async () => {
       while (!stopped) {
         const video = videoRef.current;
@@ -123,7 +116,7 @@ export function useLiveFinds(opts: {
           if (blob && !stopped) {
             const form = new FormData();
             form.append("frame", blob, "frame.jpg");
-            form.append("session", sessionRef.current);
+            form.append("session", session);
             form.append("concepts", JSON.stringify(plan()));
             try {
               const res = await fetch("/api/live/detect", { method: "POST", body: form });
@@ -136,12 +129,10 @@ export function useLiveFinds(opts: {
               } else if (res.ok) {
                 failures = 0;
                 const { finds: got } = (await res.json()) as { finds: { key: FindKey; label: string; boxes: LiveBox[] }[] };
-                tinyCtx.drawImage(frame, 0, 0, 16, 16);
-                onFrameRef.current?.({
-                  sec: (performance.now() - startedAt) / 1000,
-                  look: lookOf(tinyCtx.getImageData(0, 0, 16, 16).data),
-                  doorWidth: Math.max(0, ...got.filter((f) => f.key === "door").flatMap((f) => f.boxes.map((b) => b.w))),
-                });
+                onDoorRef.current?.(
+                  (performance.now() - startedAt) / 1000,
+                  Math.max(0, ...got.filter((f) => f.key === "door").flatMap((f) => f.boxes.map((b) => b.w))),
+                );
                 const fresh: LiveFind[] = [];
                 for (const f of got) {
                   const box = [...f.boxes].sort((a, b) => b.w * b.h - a.w * a.h)[0];
@@ -179,7 +170,7 @@ export function useLiveFinds(opts: {
     return () => {
       stopped = true;
     };
-  }, [active, videoRef, headingRef, startedAt]);
+  }, [active, session, videoRef, headingRef, startedAt]);
 
   return { finds, flash, offline };
 }
@@ -187,22 +178,35 @@ export function useLiveFinds(opts: {
 // ---------- coaching that runs on the phone ----------
 
 export type Coach = { id: "dark" | "fast"; text: string } | null;
+// The latest look at the picture, for painting coverage only while it's any use, and for the wide shot.
+export type Steadiness = { bright: boolean; steady: boolean; still: boolean };
 
 const DARK_LUMA = 42;
 const FAST_DEG_PER_S = 75;
+// Held still: barely turning, by the gyro; without one, a picture that hardly changes.
+const STILL_DEG_PER_S = 12;
+const STILL_DIFF = 6;
+// The colour signature for spotting another part of the basement, every third look (1.2 s).
+const LOOK_EVERY = 3;
 
-export function useCoaching(active: boolean, videoRef: RefObject<HTMLVideoElement | null>) {
+export function useCoaching(active: boolean, videoRef: RefObject<HTMLVideoElement | null>, onLook?: (sec: number, look: Look) => void, startedAt = 0) {
   const [issue, setIssue] = useState<Coach>(null);
+  const stateRef = useRef<Steadiness>({ bright: true, steady: true, still: false });
+  const onLookRef = useRef(onLook);
+  onLookRef.current = onLook;
 
   useEffect(() => {
+    stateRef.current = { bright: true, steady: true, still: false };
     if (!active) {
       setIssue(null);
       return;
     }
     let spin = 0;
+    let gyro = false;
     const onMotion = (e: DeviceMotionEvent) => {
       const r = e.rotationRate;
-      if (!r) return;
+      if (!r || r.alpha == null) return;
+      gyro = true;
       spin = Math.max(spin * 0.8, Math.hypot(r.alpha ?? 0, r.beta ?? 0, r.gamma ?? 0));
     };
     window.addEventListener("devicemotion", onMotion);
@@ -213,6 +217,7 @@ export function useCoaching(active: boolean, videoRef: RefObject<HTMLVideoElemen
     let prev: Uint8ClampedArray | null = null;
     let shown: Coach = null;
     let shownAt = 0;
+    let looks = 0;
 
     const id = window.setInterval(() => {
       const v = videoRef.current;
@@ -229,9 +234,13 @@ export function useCoaching(active: boolean, videoRef: RefObject<HTMLVideoElemen
       const n = px.length / 4;
       luma /= n;
       diff /= n;
+      const first = !prev;
       prev = px;
+      if (++looks % LOOK_EVERY === 0) onLookRef.current?.((performance.now() - startedAt) / 1000, lookOf(px));
       // Gyro when we have it; otherwise how much the picture changed since the last look.
-      const fast = spin > FAST_DEG_PER_S || (spin === 0 && diff > 50);
+      const fast = gyro ? spin > FAST_DEG_PER_S : !first && diff > 50;
+      const still = gyro ? spin < STILL_DEG_PER_S : !first && diff < STILL_DIFF;
+      stateRef.current = { bright: luma >= DARK_LUMA, steady: !fast, still };
       const next: Coach = luma < DARK_LUMA ? { id: "dark", text: "Turn on more lights" } : fast ? { id: "fast", text: "Slow down a little" } : null;
       const now = performance.now();
       // Hold a message for at least 1.6 s so it can be read.
@@ -246,77 +255,9 @@ export function useCoaching(active: boolean, videoRef: RefObject<HTMLVideoElemen
       clearInterval(id);
       window.removeEventListener("devicemotion", onMotion);
     };
-  }, [active, videoRef]);
+  }, [active, videoRef, startedAt]);
 
-  return issue;
-}
-
-// ---------- coverage: which directions the phone has pointed ----------
-
-const BINS = 36; // 10° each
-
-type OrientationEventWithCompass = DeviceOrientationEvent & { webkitCompassHeading?: number };
-
-// Resets for each room: the track shows this room's walls, not the whole basement's.
-export function useCoverage(active: boolean, room: number) {
-  const headingRef = useRef<number | null>(null);
-  const [state, setState] = useState<{ heading: number | null; covered: boolean[]; supported: boolean }>({
-    heading: null,
-    covered: Array(BINS).fill(false),
-    supported: false,
-  });
-
-  useEffect(() => {
-    if (!active) return;
-    const covered: boolean[] = Array(BINS).fill(false);
-    headingRef.current = null;
-    setState({ heading: null, covered: [...covered], supported: false });
-    let last = 0;
-
-    const onOrient = (e: OrientationEventWithCompass) => {
-      // iOS gives a true compass heading; elsewhere absolute alpha runs counter-clockwise from north.
-      const h = typeof e.webkitCompassHeading === "number" ? e.webkitCompassHeading : e.absolute && e.alpha != null ? (360 - e.alpha) % 360 : null;
-      if (h == null) return;
-      headingRef.current = h;
-      covered[Math.floor(h / (360 / BINS)) % BINS] = true;
-      const now = performance.now();
-      if (now - last > 120) {
-        last = now;
-        setState({ heading: h, covered: [...covered], supported: true });
-      }
-    };
-    const absoluteEvent = "ondeviceorientationabsolute" in window ? "deviceorientationabsolute" : "deviceorientation";
-    window.addEventListener(absoluteEvent, onOrient as EventListener);
-    return () => window.removeEventListener(absoluteEvent, onOrient as EventListener);
-  }, [active, room]);
-
-  const percent = Math.round((state.covered.filter(Boolean).length / BINS) * 100);
-  return { ...state, percent, headingRef };
-}
-
-// ---------- tilt: has this room's ceiling been in the picture? ----------
-
-// sin(35°): enough tilt that the top of the frame is ceiling. The 3D needs floor and ceiling in each room.
-const UP_ENOUGH = 0.57;
-
-export function useRoomTilt(active: boolean, room: number) {
-  const [state, setState] = useState({ sawUp: false, sensed: false });
-  useEffect(() => {
-    setState((s) => ({ sawUp: false, sensed: s.sensed }));
-    if (!active || typeof DeviceOrientationEvent === "undefined") return;
-    let saw = false;
-    const onOrient = (e: DeviceOrientationEvent) => {
-      if (e.beta == null || e.gamma == null) return;
-      const up = cameraLift(e.beta, e.gamma) > UP_ENOUGH;
-      if (up && !saw) {
-        saw = true;
-        setState({ sawUp: true, sensed: true });
-      } else setState((s) => (s.sensed ? s : { ...s, sensed: true }));
-    };
-    window.addEventListener("deviceorientation", onOrient);
-    return () => window.removeEventListener("deviceorientation", onOrient);
-  }, [active, room]);
-  return state;
+  return { issue, stateRef };
 }
 
 // ---------- the 3D scan, assembling while you film ----------
@@ -328,7 +269,6 @@ export type Preview3d = {
   colors: Uint8Array;
   views: number;
   framesSeen: number;
-  wallsSeen: number;
   ceilingHeightM: number | null;
   widthM: number | null;
   depthM: number | null;

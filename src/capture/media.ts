@@ -35,9 +35,11 @@ const VIDEO: MediaTrackConstraints = {
   frameRate: { ideal: 60 },
 };
 
-export type Camera = { stream: MediaStream; hasAudio: boolean };
+// "ultrawide" is the 0.5x lens: a basement's walls, ceiling and floor fit in far fewer frames.
+export type Lens = "ultrawide" | "wide";
+export type Camera = { stream: MediaStream; hasAudio: boolean; lens: Lens };
 
-// Keep focus, exposure and white balance adjusting as you walk from room to room, where the browser
+// Keep focus, exposure and white balance adjusting as you walk through the basement, where the browser
 // allows it (Chrome on Android). Safari manages this itself and ignores the request.
 async function tuneTrack(track: MediaStreamTrack | undefined) {
   if (!track || typeof track.getCapabilities !== "function") return;
@@ -48,28 +50,67 @@ async function tuneTrack(track: MediaStreamTrack | undefined) {
   if (modes.length) await track.applyConstraints({ advanced: modes as unknown as MediaTrackConstraintSet[] }).catch(() => {});
 }
 
+const ULTRA_WIDE = /ultra ?wide/i;
+
+// Swap to the 0.5x lens once permission is granted (device labels are only readable then).
+//  - iPhone: a separate "Back Ultra Wide Camera" device, reopened by its id at the same 1080p / 60 fps;
+//  - some Android phones: one camera whose zoom goes below 1.
+// Anything that fails leaves the normal lens running. No new permission prompt: the camera is already allowed.
+async function widest(stream: MediaStream): Promise<{ stream: MediaStream; lens: Lens; label: string }> {
+  const track = stream.getVideoTracks()[0];
+  if (!track) return { stream, lens: "wide", label: "" };
+  const devices = await navigator.mediaDevices.enumerateDevices().catch(() => [] as MediaDeviceInfo[]);
+  const ultra = devices.find((d) => d.kind === "videoinput" && ULTRA_WIDE.test(d.label));
+  if (ultra && track.getSettings().deviceId !== ultra.deviceId) {
+    // A phone runs one camera at a time: let go of this one first, and keep the mic as it is.
+    track.stop();
+    const audio = stream.getAudioTracks();
+    const reopen = (video: MediaTrackConstraints) =>
+      navigator.mediaDevices.getUserMedia({ video }).then((v) => new MediaStream([...v.getVideoTracks(), ...audio]));
+    try {
+      const exact = { width: VIDEO.width, height: VIDEO.height, frameRate: VIDEO.frameRate, deviceId: { exact: ultra.deviceId } };
+      return { stream: await reopen(exact), lens: "ultrawide", label: ultra.label };
+    } catch (err) {
+      console.warn("[camera] the 0.5x lens wouldn't open, using the normal one", err);
+      const back = await reopen(VIDEO);
+      return { stream: back, lens: "wide", label: back.getVideoTracks()[0]?.label ?? "" };
+    }
+  }
+  const zoom = (typeof track.getCapabilities === "function" ? (track.getCapabilities() as { zoom?: { min?: number } }).zoom : undefined) ?? undefined;
+  if (zoom?.min != null && zoom.min < 1) {
+    const ok = await track
+      .applyConstraints({ advanced: [{ zoom: Math.max(zoom.min, 0.5) } as MediaTrackConstraintSet] })
+      .then(() => true, () => false);
+    if (ok) return { stream, lens: "ultrawide", label: `${track.label} at zoom ${Math.max(zoom.min, 0.5)}` };
+  }
+  return { stream, lens: "wide", label: track.label };
+}
+
 export async function openCamera(): Promise<Camera> {
   if (!navigator.mediaDevices?.getUserMedia) {
     if (!window.isSecureContext) console.warn("[capture] getUserMedia needs HTTPS (or localhost). Falling back to upload.");
     throw new CameraProblem("unsupported");
   }
+  let first: MediaStream;
+  let hasAudio = true;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: true });
-    await tuneTrack(stream.getVideoTracks()[0]);
-    const got = stream.getVideoTracks()[0]?.getSettings();
-    if (got) console.info(`[camera] ${got.width}×${got.height} at ${got.frameRate} fps`);
-    return { stream, hasAudio: stream.getAudioTracks().length > 0 };
+    first = await navigator.mediaDevices.getUserMedia({ video: VIDEO, audio: true });
   } catch (err) {
     // A laptop with no microphone still has a camera: film without sound rather than fail.
-    if (err instanceof DOMException && err.name === "NotFoundError") {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: VIDEO }).catch((e) => {
-        throw toProblem(e);
-      });
-      await tuneTrack(stream.getVideoTracks()[0]);
-      return { stream, hasAudio: false };
-    }
-    throw toProblem(err);
+    if (!(err instanceof DOMException && err.name === "NotFoundError")) throw toProblem(err);
+    first = await navigator.mediaDevices.getUserMedia({ video: VIDEO }).catch((e) => {
+      throw toProblem(e);
+    });
+    hasAudio = false;
   }
+  const { stream, lens, label } = await widest(first).catch((err) => {
+    stopStream(first);
+    throw toProblem(err);
+  });
+  await tuneTrack(stream.getVideoTracks()[0]);
+  const got = stream.getVideoTracks()[0]?.getSettings();
+  console.info(`[camera] ${lens === "ultrawide" ? "0.5x ultra-wide" : "1x wide"} lens (${label || "unnamed"}), ${got?.width}×${got?.height} at ${got?.frameRate} fps`);
+  return { stream, hasAudio: hasAudio && stream.getAudioTracks().length > 0, lens };
 }
 
 export function stopStream(stream: MediaStream | null) {
