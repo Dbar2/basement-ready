@@ -1,8 +1,9 @@
 // The answer (brand/explorations/M3-decision-plan.png): a decision first, then the plan to get there,
 // the money, and only then the detail behind it. Nothing here asks a homeowner what a designer knows.
 import { useEffect, useState } from "react";
-import { ANALYSIS_FPS, aerialUrl, answerQuestion, frameUrl, getScan, sampleEarlyAnswers, type AnswerValue, type Detection, type ScanResult } from "../api";
+import { ANALYSIS_FPS, aerialUrl, answerQuestion, frameUrl, getScan, sampleEarlyAnswers, type AnyAnswer, type Detection, type ScanResult } from "../api";
 import { Answered, Questions } from "../components/Questions";
+import { GetItDone, HowToApply, MoneySection } from "../components/Money";
 import { AccountNav, SaveCta } from "../auth";
 import { Logo } from "../components/Logo";
 import { SiteFooter } from "../marketing/parts";
@@ -15,7 +16,6 @@ const range = (lo: number | null | undefined, hi: number | null | undefined) =>
 const two = (n: number) => String(n).padStart(2, "0");
 const checkedOn = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", { month: "short", year: "numeric" });
 
-const FIT_TEXT = { fits: "Fits your plan", depends: "Depends", no: "Doesn't fit", cancelled: "Cancelled" } as const;
 const STATUS = {
   likely_ok: "looks right",
   likely_fix: "needs work",
@@ -50,13 +50,20 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
   const [changes, setChanges] = useState<{ before: string; after: string; lines: string[] } | null>(null);
   const [answerError, setAnswerError] = useState<string | null>(null);
   // The sample isn't saved anywhere, so its answers live here.
-  const [sampleAnswers, setSampleAnswers] = useState<Record<string, AnswerValue | null>>({});
+  const [sampleAnswers, setSampleAnswers] = useState<Record<string, AnyAnswer | null>>({});
   useEffect(() => {
     void getScan(scanId).then(async (s) => {
-      // The sample's answers from the wait screen, applied the way a real scan applies them.
-      const early = scanId === "sample" ? sampleEarlyAnswers() : {};
+      // The sample's answers from the wait screen, applied the way a real scan applies them, over
+      // the money answers the sample comes with.
+      const told = Object.fromEntries((s.result?.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer]));
+      const early = scanId === "sample" ? { ...told, ...sampleEarlyAnswers() } : {};
       if (s.result && Object.keys(early).length) {
-        const res = await fetch("/api/recheck", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ result: s.result, answers: early }) });
+        const { household, ...answers } = early;
+        const res = await fetch("/api/recheck", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ result: s.result, answers, household: household ?? s.result.household }),
+        });
         if (res.ok) {
           setSampleAnswers(early);
           return setR((await res.json()).result);
@@ -66,7 +73,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
     });
   }, [scanId]);
 
-  const answer = async (ruleId: string, value: AnswerValue | null) => {
+  const answer = async (ruleId: string, value: AnyAnswer | null) => {
     if (!r) return;
     setBusyRule(ruleId);
     setAnswerError(null);
@@ -77,6 +84,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
       const lines = next.findings
         .filter((f) => r.findings.find((o) => o.ruleId === f.ruleId)?.status !== f.status)
         .map((f) => `${f.title} → ${STATUS[f.status]}`);
+      if ((next.money?.total ?? 0) !== (r.money?.total ?? 0)) lines.push(`You qualify for up to ${money(next.money?.total ?? 0)}`);
       setChanges({ before: r.headline, after: next.headline, lines });
       setR(next);
     } catch (err) {
@@ -105,8 +113,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
   const designer = r.findings.filter((f) => (f.status === "designer_checks" || f.status === "needs_measurement") && !f.answer);
   const fine = r.findings.filter((f) => f.status === "likely_ok" && !f.answer);
   const standard = r.standard ?? [];
-  const grants = r.grants.filter((g) => g.fit === "fits" || g.fit === "depends").sort((a, b) => (a.fit === b.fit ? 0 : a.fit === "fits" ? -1 : 1));
-  const upTo = r.money ? r.money.fits || r.money.possible : 0;
+  const upTo = r.money?.total ?? 0;
   const rooms = (r.rooms ?? []).filter((x) => x.has3d || x.plan);
   // Filmed room by room, the rules use one room's numbers: say which.
   const mainRoomName = (r.rooms?.length ?? 0) > 1 ? r.rooms!.find((x) => x.index === r.mainRoom)?.name : undefined;
@@ -143,7 +150,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
           </div>
           {upTo > 0 && (
             <div>
-              <dt>Money you may get</dt>
+              <dt>You qualify for</dt>
               <dd className="mono">up to {money(upTo)}</dd>
             </div>
           )}
@@ -170,65 +177,9 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
 
       <StagedViews scanId={scanId} plan={r.plan ?? null} layout={r.layout ?? null} concepts={r.concepts ?? null} />
 
-      {r.steps && r.steps.length > 0 && (
-        <section className="block plan-steps">
-          <h2>Your plan</h2>
-          <ol className="timeline">
-            {r.steps.map((s, i) => (
-              <li key={s.id}>
-                <span className="timeline-num">{i + 1}</span>
-                <div>
-                  <h3>{s.title}</h3>
-                  <p className="timeline-meta mono">{[s.who, s.time, range(s.costLow, s.costHigh)].filter(Boolean).join(" · ")}</p>
-                  <p className="muted">{s.detail}</p>
-                  {s.items && s.items.length > 0 && (
-                    <ul className="timeline-items">
-                      {s.items.map((it) => (
-                        <li key={it}>{it}</li>
-                      ))}
-                    </ul>
-                  )}
-                  {s.source?.url && (
-                    <a className="timeline-source" href={s.source.url} target="_blank" rel="noreferrer">
-                      Source
-                    </a>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
+      <MoneySection r={r} busy={busyRule} onAnswer={(id, v) => void answer(id, v)} />
 
-      <section className="block">
-        <h2>Money you can get</h2>
-        {upTo > 0 && (
-          <div className="money-total">
-            <span className="mono">Up to</span>
-            <strong>{money(upTo)}</strong>
-            <span>{r.money?.fits ? "from programs that fit your plan" : "if your plan fits these programs"}</span>
-          </div>
-        )}
-        {r.household === "unsure" && <p className="lede">Tell us who it's for and we'll show only what fits.</p>}
-        <ul className="ruled grants">
-          {grants.map((g) => (
-            <li key={g.id} data-fit={g.fit}>
-              <span className="fit">{FIT_TEXT[g.fit]}</span>
-              <div>
-                <h3>{g.name}</h3>
-                <p>{g.amount}</p>
-                {g.nextStep && <p className="muted">Next: {g.nextStep}</p>}
-                {g.source?.url && (
-                  <a href={g.source.url} target="_blank" rel="noreferrer">
-                    Source
-                  </a>
-                )}
-              </div>
-            </li>
-          ))}
-        </ul>
-        <p className="note">Checked {r.compiledAt}. “Fits” means it looks eligible, not that it's approved.</p>
-      </section>
+      {r.steps && <HowToApply steps={r.steps} />}
 
       {r.fixGroups.length > 0 && (
         <section className="block">
@@ -370,23 +321,13 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
         </section>
       )}
 
-      <section className="block" id="get-it-done">
-        <h2>Get it done</h2>
-        <p className="lede">Step 2 of your plan is a registered designer. Ontario's public registry lists them: filter by “House” and your city.</p>
-        <div className="actions">
-          <a className="btn btn-primary" href={r.pros.registry.url} target="_blank" rel="noreferrer">
-            Find a registered designer <span className="arrow" aria-hidden>→</span>
-          </a>
-          <a className="btn btn-ghost" href={`/scans/${scanId}/brief`}>One-page plan (PDF)</a>
-          <button className="link-quiet" onClick={() => void sharePlan()}>Share my plan</button>
-        </div>
-      </section>
+      <GetItDone r={r} scanId={scanId} onShare={() => void sharePlan()} />
 
       {r.heldBack > 0 && <p className="note">We held back {r.heldBack} claim{r.heldBack === 1 ? "" : "s"} the video couldn't prove.</p>}
       <SiteFooter />
 
       <div className="result-bar">
-        <a className="btn btn-primary" href={r.pros.registry.url} target="_blank" rel="noreferrer">
+        <a className="btn btn-primary" href={r.pros.registry.searchUrl ?? r.pros.registry.url} target="_blank" rel="noreferrer">
           Get a designer
         </a>
         <button className="btn btn-ghost" onClick={() => void sharePlan()}>

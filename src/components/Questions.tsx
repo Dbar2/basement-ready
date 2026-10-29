@@ -1,7 +1,7 @@
 // The few questions left after the video and public records: plain words, a tap to answer, and
 // "Not sure" always allowed (then the designer checks it). The verdict re-checks on every answer.
 import { useState } from "react";
-import type { AnswerValue, Finding } from "../api";
+import type { AnswerValue, Finding, Grant, MoneyQuestion, MoneyValue } from "../api";
 import { parseLength } from "../units";
 
 const YES_NO: { label: string; value: AnswerValue }[] = [
@@ -90,5 +90,41 @@ export function Answered({ findings, busyRule, onClear }: { findings: Finding[];
         </li>
       ))}
     </ul>
+  );
+}
+
+const dollars = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
+
+// A money question (server/eligibility.ts): the options it offers, the current answer pressed, and
+// which programs (and how much) the answer settles. `label` shows an answer already given.
+export function MoneyQuestionCard({
+  q,
+  busy,
+  decides,
+  onAnswer,
+  label,
+}: {
+  q: MoneyQuestion;
+  busy: boolean;
+  decides: Grant[];
+  onAnswer: (value: MoneyValue | null) => void;
+  label?: string;
+}) {
+  const at = decides.map((g) => (g.value === "cash" && g.amountCAD ? `${g.shortName} (${dollars(g.amountCAD)})` : g.shortName));
+  return (
+    <li className="q-item money-q">
+      <div className="q-body">
+        <p className="q">{q.question}</p>
+        {label ? <p className="muted">You said: {label}</p> : <p className="muted">{q.hint}</p>}
+        <div className="q-actions" role="group" aria-label={q.question}>
+          {q.options.map((o) => (
+            <button key={o.label} className="chip" disabled={busy} aria-pressed={q.answer === o.value} onClick={() => onAnswer(o.value)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+        {at.length > 0 && <p className="q-decides mono">Decides: {at.join(" · ")}</p>}
+      </div>
+    </li>
   );
 }
