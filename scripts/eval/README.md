@@ -25,7 +25,7 @@ Every basement has stairs (filmed first, on the way down) and a furnace. Walls a
 
 - each room's start time in the video, interior size, ceiling height (the joists' underside, or the drywall) and lowest duct, beam or bulkhead
 - each window's clear opening, whether it meets the 0.35 m² / 380 mm escape rule, and its box on every 5 fps analysis frame where it's in view (occlusion checked by ray casts)
-- the expected rule results and verdict. Open joists and a furnace with no door count as expected fire fixes, because the assessment agent is told to flag them on sight (`server/assess.ts`); so b2 and b5 are the only basements where "yes" is the right answer
+- the expected rule results and verdict. Open joists and a furnace with no door count as expected fire fixes, because `fireRules` in `server/assess.ts` makes them fixes from what the scan found, whatever Spark reads; so b2 and b5 are the only basements where "yes" is the right answer
 
 ## Run it
 

@@ -3,10 +3,11 @@ import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { dataUrl, outputText, responses, tokenCost } from "./meta";
+import { dataUrl, readReply, responses, tokenCost } from "./meta";
 import type { Detection } from "./pipeline";
 import type { Measurements } from "./scan3d";
 import type { Property } from "./property";
+import type { Watch } from "./watch";
 import { evaluate, moneyAndSteps } from "./recheck";
 import { coreRules, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
 import { ASK_OPTIONS, fromRecords, TRIAGE } from "./triage";
@@ -19,8 +20,9 @@ export type Status = "likely_ok" | "likely_fix" | "needs_measurement" | "needs_a
 type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?: string; question?: string };
 
 // `photos`: a photo take of that many photos, not a video (server/photoInput.ts). `model`: who reads the
-// evidence, for comparing models; the app uses ASSESS_MODEL.
-export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number; model?: string };
+// evidence, for comparing models; the app uses ASSESS_MODEL. `watch`: what Muse Wonder saw in the whole
+// take (server/watch.ts), which settles the fire rules in code (fireRules).
+export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number; model?: string; watch?: Pick<Watch, "rooms" | "doors"> | null };
 
 // The verdict agent's model: Muse Spark 1.3 unless ASSESS_MODEL says otherwise (scripts/eval/assess-ab.ts compares).
 export const ASSESS_MODEL = process.env.ASSESS_MODEL || "muse-spark-1.3";
@@ -37,7 +39,7 @@ Trust rules, follow them exactly:
 1. Only claim something about the basement if a detection supports it, and cite the detection ids in "evidence".
 2. Never invent measurements. If a rule needs a number (ceiling height, window opening size, headroom), use "needs_measurement" and write one short tape-measure question.
 3. If a rule depends on facts a video can't show (zoning, parking, how many units exist), use "needs_answer" with a plain question.
-4. Use "likely_fix" only when the proof frames clearly show a problem, for example a small high basement window, exposed joists with no fire-rated ceiling, or a furnace open to the space.
+4. Use "likely_fix" only when the proof frames clearly show a problem, for example exposed joists with no fire-rated ceiling, or a furnace open to the space. Never judge by eye whether a window is big enough to escape through: that comes from its measured size, so use "needs_measurement".
 5. Use "likely_ok" only when the frames clearly show it complies.
 Write plain, short sentences a homeowner understands. Never say "you qualify" or "approved".
 
@@ -113,7 +115,8 @@ async function askSpark(ctx: AssessContext, place: Coverage, rules: Rule[], dete
         ...(/wonder/.test(model) ? { reasoning: { effort: "medium" } } : {}),
       });
       costUsd += tokenCost(model, r.usage)?.usd ?? 0;
-      return { model: parseJson(outputText(r)), costUsd };
+      // A reply cut off partway and then sent again whole is read from the whole one.
+      return { model: readReply(r, parseJson), costUsd };
     } catch (err) {
       lastErr = err;
     }
@@ -332,11 +335,45 @@ export function triage<F extends Triageable>(f: F, rule: Rule, property?: Proper
 }
 
 // Pure: turns Spark's reading into the answer. The trust rule, grouping and money all live here.
+// The two fire rules, decided in code from what the scan found, the same way on every take of a basement:
+// open joists or exposed ducts over the suite mean a fire-rated ceiling is a fix; a furnace with no door to
+// close means fire-rated walls and a door around it. A finished ceiling, or a furnace room with a door, is
+// the designer's to confirm. Spark's reading doesn't decide them: whether it was handed a frame of the
+// ceiling to cite changes from take to take. Read from the watch pass (each room's ceiling, what hangs
+// below it, its fixtures and doors) and SAM's finds (an exposed ceiling duct, a furnace).
+type Decided = { status: Status; why: string; evidence: string[] };
+export function fireRules(watch: AssessContext["watch"], detections: { id: string; label?: string }[]): Record<string, Decided> {
+  const rooms = watch?.rooms ?? [];
+  const inside = rooms.filter((r) => r.entered);
+  const named = (rs: typeof rooms) => rs.map((r) => r.name).join(" and ");
+  const open = inside.filter((r) => r.ceiling === "exposed_joists" || r.ceiling === "mixed");
+  const ducted = inside.filter((r) => r.low.some((l) => l.kind === "duct"));
+  const ducts = detections.filter((d) => d.label === "Duct").map((d) => d.id);
+  const fire: Decided = open.length
+    ? { status: "likely_fix", why: `Open joists over the ${named(open)}: the ceiling between the two homes needs fire-rated drywall.`, evidence: ["watch"] }
+    : ducted.length || ducts.length
+      ? { status: "likely_fix", why: `Exposed ductwork${ducted.length ? ` in the ${named(ducted)}` : ""}: it gets boxed in with fire-rated drywall to separate the two homes.`, evidence: ducts.length ? ducts : ["watch"] }
+      : inside.length && inside.every((r) => r.ceiling === "drywall")
+        ? { status: "designer_checks", why: "The ceiling is finished drywall. Your designer confirms it's fire-rated between the two homes.", evidence: ["watch"] }
+        : { status: "designer_checks", why: "Your designer confirms the ceiling between the two homes is fire-rated.", evidence: [] };
+
+  const furnaceRooms = rooms.filter((r) => r.fixtures.some((f) => f.kind === "furnace"));
+  const hasDoor = (id: string) => (watch?.doors ?? []).some((d) => (d.from === id || d.to === id) && (d.kind === "door" || d.kind === "exterior_door"));
+  const openFurnace = furnaceRooms.filter((r) => !hasDoor(r.id));
+  const furnaceFound = detections.some((d) => d.label === "Furnace");
+  const service: Decided = openFurnace.length
+    ? { status: "likely_fix", why: `The furnace in the ${named(openFurnace)} has no door to close: it needs fire-rated walls and a door around it.`, evidence: ["watch"] }
+    : furnaceRooms.length || furnaceFound
+      ? { status: "designer_checks", why: "The furnace room has a door. Your designer confirms its walls and door are fire-rated.", evidence: furnaceRooms.length ? ["watch"] : [] }
+      : { status: "standard", why: TRIAGE.service_room_separation.text, evidence: [] };
+  return { fire_separation_between_units: fire, service_room_separation: service };
+}
+
 export function buildResult(
-  ctx: Pick<AssessContext, "household" | "municipality" | "property">,
+  ctx: Pick<AssessContext, "household" | "municipality" | "property" | "watch">,
   { pack, city, coverage, authority, note }: Coverage,
   model: { route?: string; wants?: string; summary?: string; vision?: any; findings?: ModelFinding[] },
-  detections: Pick<Detection, "id">[],
+  detections: (Pick<Detection, "id"> & Partial<Pick<Detection, "label">>)[],
   measurements?: Measurements | null,
 ) {
   const rules = coreRules(pack);
@@ -383,7 +420,12 @@ export function buildResult(
 
   // Who confirms what public records couldn't: "The City", or "The Township of Woolwich".
   const confirms = coverage === "full" ? "The City" : authority === "your municipality" ? "Your municipality" : `The ${authority}`;
-  const triaged = findings.map((f) => triage(f, rules.find((r) => r.id === f.ruleId)!, ctx.property, confirms));
+  const decided = fireRules(ctx.watch, detections);
+  const triaged = findings.map((f) => {
+    const rule = rules.find((r) => r.id === f.ruleId)!;
+    const d = decided[f.ruleId];
+    return d ? { ...f, ...d, question: null, fix: d.status === "likely_fix" || d.status === "standard" ? rule.fix : null } : triage(f, rule, ctx.property, confirms);
+  });
   const { fixGroups, standard, cost, verdict, headline } = verdictFrom(triaged);
 
   return {

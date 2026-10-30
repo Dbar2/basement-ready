@@ -522,7 +522,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     // They may have answered "who's it for" while this ran.
     const [latest] = await db.select().from(schema.basements).where(eq(schema.basements.id, basement.id));
     const household = (latest?.household ?? basement.household) as Household;
-    const assessment = finishAssessment({ ...ctx, household }, await sparkP, detections, measurements);
+    const assessment = finishAssessment({ ...ctx, household, watch: await watching.watch }, await sparkP, detections, measurements);
     await uploads;
 
     const assessed = {
