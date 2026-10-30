@@ -1,5 +1,6 @@
 // Thin client for Meta Model API. Every model call in the app goes through here.
 import { readFileSync } from "node:fs";
+import { serviceFetch } from "./replay";
 
 // META_API_BASE points at the Canada relay in production (see services/meta-relay); direct otherwise.
 const BASE = process.env.META_API_BASE ?? "https://api.meta.ai/v1";
@@ -11,10 +12,13 @@ function auth(): Record<string, string> {
   return { Authorization: `Bearer ${key}` };
 }
 
+// Every call to Meta goes out here, so tests can record and replay them (server/replay.ts).
+const call = (route: string, init: RequestInit = {}) => serviceFetch("meta", BASE, route, init, auth);
+
 export async function responses(body: unknown): Promise<any> {
-  const res = await fetch(`${BASE}/responses`, {
+  const res = await call("/responses", {
     method: "POST",
-    headers: { ...auth(), "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   const text = await res.text();
@@ -37,7 +41,7 @@ export async function uploadFile(path: string, mime: string, name: string): Prom
   const form = new FormData();
   form.append("purpose", "user_data");
   form.append("file", new Blob([readFileSync(path)], { type: mime }), name);
-  const res = await fetch(`${BASE}/files`, { method: "POST", headers: auth(), body: form });
+  const res = await call("/files", { method: "POST", body: form });
   const text = await res.text();
   if (!res.ok) throw new Error(`Upload ${res.status}: ${text.slice(0, 300)}`);
   return JSON.parse(text).id;
@@ -90,7 +94,7 @@ export async function transcribe(wavPath: string): Promise<{ transcript: string;
     }),
   );
   form.append("audio", new Blob([readFileSync(wavPath)], { type: "audio/wav" }), "voice.wav");
-  const res = await fetch(`${BASE}/asr/transcribe`, { method: "POST", headers: auth(), body: form });
+  const res = await call("/asr/transcribe", { method: "POST", body: form });
   const text = await res.text();
   if (!res.ok) throw new Error(`Transcribe ${res.status}: ${text.slice(0, 300)}`);
   const json = JSON.parse(text);
@@ -99,7 +103,7 @@ export async function transcribe(wavPath: string): Promise<{ transcript: string;
 
 // Which models this key can reach from where the server runs. Logged at boot.
 export async function listModels(): Promise<string[]> {
-  const res = await fetch(`${BASE}/models`, { headers: auth() });
+  const res = await call("/models");
   if (!res.ok) throw new Error(`models ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return ((await res.json()).data ?? []).map((m: { id: string }) => m.id);
 }
@@ -116,7 +120,7 @@ export async function museEdit(image: Buffer, mime: string, prompt: string, size
   form.append("n", "1");
   form.append("size", size);
   form.append("image", new Blob([new Uint8Array(image)], { type: mime }), mime === "image/png" ? "frame.png" : "frame.jpg");
-  const res = await fetch(`${BASE}/images/edits`, { method: "POST", headers: auth(), body: form, signal: AbortSignal.timeout(120_000) });
+  const res = await call("/images/edits", { method: "POST", body: form, signal: AbortSignal.timeout(120_000) });
   const text = await res.text();
   if (!res.ok) throw new Error(`Muse Image ${res.status}: ${text.slice(0, 300)}`);
   const b64 = JSON.parse(text).data?.[0]?.b64_json;

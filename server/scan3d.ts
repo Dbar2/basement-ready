@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { liftBox } from "./lift";
 import type { Detection } from "./pipeline";
+import { serviceFetch } from "./replay";
 
 const URL_ = process.env.SCAN3D_URL;
 const TOKEN = process.env.SCAN3D_TOKEN;
@@ -20,6 +21,9 @@ export { half, liftBox } from "./lift";
 
 export const scan3dEnabled = Boolean(URL_ && TOKEN);
 
+// Every call to the 3D service goes out here, so tests can record and replay them (server/replay.ts).
+const call = (route: string, init: RequestInit) => serviceFetch("scan3d", URL_ ?? "", route, init, () => ({ Authorization: `Bearer ${TOKEN}` }));
+
 export type Scan3d = {
   scan: any; // scan.json, see services/scan3d/README.md
   ply: ArrayBuffer;
@@ -32,7 +36,7 @@ export type Scan3d = {
 export async function scan3dReady(timeoutMs = 3000) {
   if (!scan3dEnabled) return false;
   try {
-    const res = await fetch(`${URL_}/health`, { headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(timeoutMs) });
+    const res = await call("/health", { signal: AbortSignal.timeout(timeoutMs) });
     return res.ok;
   } catch {
     return false;
@@ -59,12 +63,7 @@ export async function runScan3d(
   form.append("options", JSON.stringify({ maxFrames, ...(maxFaces != null ? { maxFaces } : {}), ...(known.floorToJoistsM ? { known } : {}) }));
   const cameras = cameraFor ? sentFrames.map(cameraFor) : [];
   if (cameras.some(Boolean)) form.append("cameras", JSON.stringify(cameras));
-  const res = await fetch(`${URL_}/scan`, {
-    method: "POST",
-    body: form,
-    headers: { Authorization: `Bearer ${TOKEN}` },
-    signal: AbortSignal.timeout(10 * 60 * 1000),
-  });
+  const res = await call("/scan", { method: "POST", body: form, signal: AbortSignal.timeout(10 * 60 * 1000) });
   if (!res.ok) throw new Error(`scan3d ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const parts = await res.formData();
   const scan = JSON.parse(await (parts.get("scan") as File).text());
@@ -92,7 +91,7 @@ export async function runFloorPlan(scans: Scan3d[], cameras: number[][]): Promis
   form.append("areas", JSON.stringify(scans.map((s3) => ({ world: s3.scan.world, factor: s3.scan.scale?.factor ?? 1 }))));
   form.append("cameras", JSON.stringify(cameras));
   scans.forEach((s3, i) => form.append("points", new Blob([s3.ply], { type: "application/octet-stream" }), `area-${i}.ply`));
-  const res = await fetch(`${URL_}/floorplan`, { method: "POST", body: form, headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(120_000) });
+  const res = await call("/floorplan", { method: "POST", body: form, signal: AbortSignal.timeout(120_000) });
   if (!res.ok) throw new Error(`floorplan ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res.json();
 }

@@ -288,6 +288,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
         });
       }),
     );
+    // Concept order, not the order SAM answered in: the same video always asks Spark the same thing.
+    detections.sort((a, b) => CONCEPTS.findIndex((c) => c.concept === a.concept) - CONCEPTS.findIndex((c) => c.concept === b.concept));
     // The photos start now, from the finds and the wide shot, and land while the 3D measures.
     void uploads.then(() => enqueuePhotos(scanId)).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
 

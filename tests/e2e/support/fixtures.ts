@@ -1,0 +1,80 @@
+// What every journey gets: named steps with a screenshot each, console errors caught, the browser kept
+// off the internet, and replay misses checked. Journeys import `test` and `expect` from here.
+import { test as base, expect, type Page } from "@playwright/test";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
+import { files, runDir } from "./run";
+
+export type Journey = {
+  // A named step: runs `fn`, then screenshots the page into tmp/e2e/<run>/shots.
+  step: <T>(name: string, fn?: () => Promise<T>) => Promise<T | undefined>;
+  // Stage times for the timing report (support/timing.ts).
+  timing: (row: Record<string, unknown>) => void;
+  // Console messages that are expected in this test (a forced failure logs its 500, say).
+  allowConsole: (pattern: RegExp) => void;
+};
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+const isLocal = (url: string) => /^(https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\/|data:|blob:|about:)/.test(url);
+
+const missCount = () => (existsSync(files.missLog) ? readFileSync(files.missLog, "utf8").split("\n").filter(Boolean).length : 0);
+
+export const test = base.extend<{ journey: Journey }>({
+  journey: [
+    async ({ page }, use, info) => {
+      mkdirSync(runDir, { recursive: true });
+      const errors: string[] = [];
+      const allowed: RegExp[] = [];
+      const external = new Set<string>();
+      const started = Date.now();
+      const misses = missCount();
+
+      page.on("console", (m) => {
+        if (m.type() === "error") errors.push(m.text());
+      });
+      page.on("pageerror", (e) => errors.push(`page error: ${e.message}`));
+      // No network: anything not served by the test servers (web fonts, say) is answered empty, as the
+      // type the page asked for so it doesn't log a parse error.
+      await page.route((url) => !isLocal(url.href), async (route) => {
+        external.add(new URL(route.request().url()).host);
+        const type = route.request().resourceType();
+        await route.fulfill(type === "stylesheet" ? { status: 200, contentType: "text/css", body: "" } : { status: 204, body: "" });
+      });
+
+      const shots = join(runDir, "shots", slug(info.project.name), slug(info.titlePath.slice(1).join(" ")));
+      let n = 0;
+      const step: Journey["step"] = async (name, fn) =>
+        test.step(name, async () => {
+          const out = fn ? await fn() : undefined;
+          const path = join(shots, `${String(++n).padStart(2, "0")}-${slug(name)}.png`);
+          await page.screenshot({ path }).catch(() => {});
+          appendFileSync(
+            files.steps,
+            JSON.stringify({ test: info.titlePath.slice(1).join(" › "), project: info.project.name, n, step: name, shot: relative(runDir, path), ms: Date.now() - started }) + "\n",
+          );
+          return out;
+        });
+
+      await use({
+        step,
+        timing: (row) => appendFileSync(files.timing, JSON.stringify({ project: info.project.name, test: info.title, ...row }) + "\n"),
+        allowConsole: (pattern) => allowed.push(pattern),
+      });
+
+      if (external.size) info.annotations.push({ type: "blocked", description: [...external].join(", ") });
+      const unexpected = errors.filter((e) => !allowed.some((p) => p.test(e)));
+      expect(unexpected, "console errors").toEqual([]);
+      expect(missCount() - misses, `replay misses (see ${relative(process.cwd(), files.missLog)})`).toBe(0);
+    },
+    { auto: true },
+  ],
+});
+
+export { expect };
+
+// The JSON a page fetched from the API, for asserting real outcomes beside what's on screen.
+export async function api<T = any>(page: Page, path: string): Promise<T> {
+  const res = await page.request.get(path);
+  expect(res.ok(), `${path} → ${res.status()}`).toBeTruthy();
+  return res.json();
+}
