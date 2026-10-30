@@ -241,9 +241,13 @@ class LaneRun {
   async journey(scan: string) {
     const p = this.page;
     if (this.wants("home").length || this.wants("home-story").length) {
-      await this.goto("/");
       const home = this.one("home", scan);
-      if (home) await this.pageShot(home);
+      try {
+        await this.goto("/");
+        if (home) await this.pageShot(home);
+      } catch (e) {
+        if (home) await this.failed(home, e);
+      }
       if (this.wants("home-story").length) await this.story(scan);
     }
 
