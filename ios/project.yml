@@ -1,0 +1,76 @@
+# The iPhone app's Xcode project. Run `make generate` (or `xcodegen generate`) after editing this:
+# BasementReady.xcodeproj and BasementReady/Info.plist are generated from here and not committed.
+name: BasementReady
+options:
+  bundleIdPrefix: com.davidbarry
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    DEVELOPMENT_TEAM: 2G25S646LN # Apple Development: David Barry
+    CODE_SIGN_STYLE: Automatic
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    ENABLE_USER_SCRIPT_SANDBOXING: NO
+    DEAD_CODE_STRIPPING: YES
+targets:
+  BasementReady:
+    type: application
+    platform: iOS
+    sources:
+      - path: BasementReady
+      # The guide's voice clips, straight from the web app's folder: whatever clips exist when you build.
+      - path: ../public/voice
+        type: folder
+        buildPhase: resources
+    info:
+      path: BasementReady/Info.plist
+      properties:
+        CFBundleDisplayName: Basement Ready
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIRequiredDeviceCapabilities: [arkit]
+        ITSAppUsesNonExemptEncryption: false
+        NSCameraUsageDescription: Basement Ready films your basement to measure it and check if it can become a second unit.
+        NSLocalNetworkUsageDescription: To send your video to the Basement Ready server running on your Mac while testing.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.davidbarry.basementready
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    postCompileScripts:
+      # Debug builds only: the Mac's Wi-Fi address at build time, so "Mac (dev)" points at this Mac.
+      - name: Dev server address
+        script: sh "$SRCROOT/scripts/dev-server.sh"
+        outputFiles:
+          - $(TARGET_BUILD_DIR)/$(UNLOCALIZED_RESOURCES_FOLDER_PATH)/dev-server.json
+        basedOnDependencyAnalysis: false
+  BasementReadyTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources: [BasementReadyTests]
+    dependencies:
+      - target: BasementReady
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.davidbarry.basementready.tests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  BasementReady:
+    build:
+      targets:
+        BasementReady: all
+        BasementReadyTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets: [BasementReadyTests]
+    archive:
+      config: Release
