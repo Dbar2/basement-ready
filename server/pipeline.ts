@@ -37,11 +37,13 @@ const run = promisify(execFile);
 export const ANALYSIS_FPS = 5;
 const SAM_USD_PER_FRAME = 0.2 / 1000; // Meta pricing, 50-frame minimum per request
 
-// What SAM looks for. One concept per request, per the SAM docs.
-export const CONCEPTS: { concept: string; kind: string; label: string }[] = [
+// What SAM looks for. One concept per request, per the SAM docs. `video`: other words for a whole video,
+// where they track better (scripts/practice: "metal duct" finds the round ducts and plenums that "ceiling
+// duct" misses in a walk, but outlines flues and window wells in a single photo).
+export const CONCEPTS: { concept: string; kind: string; label: string; video?: string }[] = [
   { concept: "basement window", kind: "window", label: "Window" },
   { concept: "staircase", kind: "stairs", label: "Stairs" },
-  { concept: "ceiling duct", kind: "duct", label: "Duct" },
+  { concept: "ceiling duct", video: "metal duct", kind: "duct", label: "Duct" },
   { concept: "support beam", kind: "beam", label: "Beam" },
   { concept: "furnace", kind: "mechanical", label: "Furnace" },
   { concept: "electrical panel", kind: "mechanical", label: "Electrical panel" },
@@ -303,7 +305,7 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   const detections: Detection[] = [];
   await Promise.all(
     CONCEPTS.map(async (c) => {
-      const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
+      const raw = await samVideo(c.video ?? c.concept, fileId, frameCount).catch(() => "");
       // What holds for half a second, and one long, level beam at a time (server/videoFinds.ts).
       const found = videoFinds(c, raw, ANALYSIS_FPS);
       detections.push(...found);

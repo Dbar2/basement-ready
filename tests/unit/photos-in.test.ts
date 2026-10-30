@@ -191,6 +191,15 @@ describe("SAM on each photo", () => {
     expect(photoFinds(0, BEAM, sam([0, 0, 900, 600, 0.9]))).toHaveLength(0);
   });
 
+  it("asks a photo for a ceiling duct; only a whole video asks for a metal duct", async () => {
+    expect(CONCEPTS.find((c) => c.label === "Duct")).toMatchObject({ concept: "ceiling duct", video: "metal duct" });
+    expect(CONCEPTS.filter((c) => c.video).map((c) => c.label)).toEqual(["Duct"]);
+    const asked: string[] = [];
+    await findInPhotos(1, CONCEPTS, async (concept) => (asked.push(concept), ""));
+    expect(asked).toContain("ceiling duct");
+    expect(asked).not.toContain("metal duct");
+  });
+
   it("counts a duct from 0.55 sure", () => {
     const DUCT = CONCEPTS.find((c) => c.label === "Duct")!;
     expect(photoFinds(0, DUCT, sam([0, 0, 900, 200, 0.57]))).toHaveLength(1);
