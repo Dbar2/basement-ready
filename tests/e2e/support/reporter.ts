@@ -11,16 +11,16 @@ const lines = (path: string) => (existsSync(path) ? readFileSync(path, "utf8").s
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const secs = (n: number | null | undefined) => (n == null ? "–" : `${n.toFixed(1)} s`);
 
-// The scans timed by the newest record run (its folder ends in -record).
+// Each take's newest real-service timing, from the record runs (their folders end in -record).
 function lastRecordedScans() {
   const root = join(ROOT, "tmp/e2e");
   if (!existsSync(root)) return [];
+  const byTake = new Map<string, any>();
   for (const dir of readdirSync(root).filter((d) => d.endsWith("-record")).sort().reverse()) {
     // Rows whose calls all came from saved answers aren't real-service times.
-    const rows = lines(join(root, dir, "timing.jsonl")).filter((t) => t.kind === "scan" && t.realCalls !== 0);
-    if (rows.length) return rows.map((t) => ({ ...t, run: "record", runId: dir }));
+    for (const t of lines(join(root, dir, "timing.jsonl"))) if (t.kind === "scan" && t.realCalls !== 0 && !byTake.has(t.take)) byTake.set(t.take, { ...t, run: "record", runId: dir });
   }
-  return [];
+  return [...byTake.values()];
 }
 
 export default class HtmlReport implements Reporter {
@@ -67,7 +67,7 @@ export default class HtmlReport implements Reporter {
       ? `<table><tr><th>Take</th><th>Run</th><th>Project</th><th>Upload</th>${keys.map((k) => `<th>${esc(MILESTONE_LABELS[k])}</th>`).join("")}<th>Upload → answer on screen</th></tr>${scans
           .map(
             (t) =>
-              `<tr><td>${esc(t.take)}</td><td>${esc(t.run === "record" ? `record ${t.runId ?? ""}` : t.run)}</td><td>${esc(t.project)}</td><td>${secs(t.uploadS)}</td>${keys.map((k) => `<td>${secs(t.milestones?.[k])}</td>`).join("")}<td><b>${secs(t.toAnswerS)}</b></td></tr>`,
+              `<tr><td>${esc(t.take)}</td><td>${esc(t.run === "record" ? "record (real services)" : t.run)}</td><td>${esc(t.project)}</td><td>${secs(t.uploadS)}</td>${keys.map((k) => `<td>${secs(t.milestones?.[k])}</td>`).join("")}<td><b>${secs(t.toAnswerS)}</b></td></tr>`,
           )
           .join("")}</table><p class="note">Milestones are seconds after the scan job started (the server's own event log); upload is in the browser. Record rows are the real services; replay rows are our own work (ffmpeg, storage, the database, the browser) with every model answer instant.</p>`
       : "<p>No scans timed in this run.</p>";
@@ -75,7 +75,8 @@ export default class HtmlReport implements Reporter {
     // How long each kind of call took when it was recorded: the real services.
     const byKind = new Map<string, number[]>();
     for (const c of calls.filter((c) => c.ms != null)) {
-      const k = `${c.service} ${c.route}${c.model ? ` · ${c.model}` : ""}`;
+      // Public data by host: its URLs are long and many.
+      const k = c.service === "public" ? `public · ${new URL(c.route).host}` : `${c.service} ${c.route}${c.model ? ` · ${c.model}` : ""}`;
       byKind.set(k, [...(byKind.get(k) ?? []), c.ms]);
     }
     const callTable = [...byKind]
@@ -88,7 +89,11 @@ export default class HtmlReport implements Reporter {
           .map((c) => `<tr><td>${esc(c.take)}</td><td>${c.frames}</td><td>${c.samVideoConcepts}</td><td>${c.samPictureChecks}</td><td>${c.museImages}</td><td>${c.sparkReads}</td><td>${c.voice}</td><td>${c.areas3d}</td><td><b>$${Number(c.usd).toFixed(2)}</b></td></tr>`)
           .join("")}</table><p class="note">Only calls that really went out. SAM $0.20 per 1,000 frames (50-frame minimum per request); Muse Image $0.01 an image; Spark by its token count; about $0.03 an area on Modal; voice not priced.</p>`
       : "";
-    const passed = this.results.filter((r) => r.status === "passed").length;
+    const tally = ["passed", "failed", "timedOut", "skipped", "interrupted"]
+      .map((st) => [st, this.results.filter((r) => r.status === st).length] as const)
+      .filter(([st, n]) => n > 0 || st === "failed")
+      .map(([st, n]) => `${n} ${st === "timedOut" ? "timed out" : st}`)
+      .join(", ");
     const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>E2E ${esc(runId)}</title>
 <style>
@@ -102,7 +107,7 @@ table{border-collapse:collapse;font-size:12px;background:#fff} td,th{border:1px 
 figcaption{font-size:11px} .note{color:#666;font-size:12px} .miss{color:#a11}
 </style>
 <h1>End-to-end run ${esc(runId)}</h1>
-<p>Mode <b>${esc(mode)}</b> · ${passed} of ${this.results.length} passed · ${esc(result.status)} · ${(result.duration / 1000).toFixed(0)} s</p>
+<p>Mode <b>${esc(mode)}</b> · ${tally} · ${(result.duration / 1000).toFixed(0)} s</p>
 <p>Saved answers: ${count("hit")} replayed, ${count("recorded")} recorded from the real services, <span class="${misses.length ? "miss" : ""}">${misses.length} missing</span>.</p>
 ${misses.length ? `<h2 class="miss">Missing saved answers</h2><table><tr><th>Service</th><th>Route</th><th>Model</th><th>About</th><th>Key</th></tr>${misses.map((m) => `<tr><td>${esc(m.service)}</td><td>${esc(m.route)}</td><td>${esc(m.model)}</td><td>${esc(m.about)}</td><td>${esc(m.key)}</td></tr>`).join("")}</table>` : ""}
 <h2>Timing, upload to answer</h2>
