@@ -25,7 +25,7 @@ Node worker ──POST /scan (frames + options)──▶ scan3d ──▶ multip
 | `scan3d/preview.py` | plan + side view PNG for checking a scan by eye |
 | `scan3d/layout.py` | the whole basement's floor plan: floor, wall faces, rooms, doors, fixtures, typed corrections |
 | `scan3d/views.py`, `selfcheck.py`, `plandraw.py`, `planapi.py` | where the floor meets the walls in each frame, each wall checked against the depth, the pictures Spark reads, `/floorplan` |
-| `plan_eval.py` | scores a plan against the truth or a homeowner's sketch ([`docs/research/plan-eval.md`](../../docs/research/plan-eval.md)) |
+| `plan_eval.py` | scores a plan against the truth or a homeowner's sketch |
 
 Pinned: model revision `00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a`, MapAnything code `v1.1.3` (commit `9d1db2d`), torch 2.14.1, DINOv2 hub code `7764ea0` (baked into the Modal image).
 
