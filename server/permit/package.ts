@@ -6,7 +6,7 @@ import { permitFee } from "../steps";
 import { packFor } from "../rules";
 import type { SiteGeometry } from "../property";
 import type { Profile, StoredState } from "../workspace";
-import { cityPermit, ontarioDiy, type CityForm } from "./data";
+import { cityPermit, DEMO_ADDRESS, ontarioDiy, type CityForm } from "./data";
 import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm, permitRows, summarySheet, type FormValues } from "./forms";
 import { embedFonts, INK, LETTER, MUTED, newDoc, type Project, Sheet } from "./pdf";
 import { basementGeometry } from "./plans";
@@ -69,7 +69,7 @@ export function formValues(
     owners: p?.owners ?? [],
     phone: p?.phone ?? "",
     email: p?.email ?? "",
-    street: input.address,
+    street: input.result?.demo ? DEMO_ADDRESS : input.address,
     municipality,
     postalCode: p?.postalCode ?? "",
     mailing: p?.mailingAddress || null,
@@ -98,14 +98,15 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
   const { city, authority, permit } = cityPermit(input.municipality);
   const place = formPlace(input.municipality, input.state);
   const diy = ontarioDiy();
-  const doc = await newDoc(`Permit package: ${input.address}`);
+  const demo = Boolean(input.result?.demo);
+  const doc = await newDoc(`Permit package: ${demo ? DEMO_ADDRESS : input.address}`);
   const fonts = await embedFonts(doc);
   const geo = basementGeometry(input.result, input.state);
   const profile = input.share ? null : input.profile;
   const ownerNames = input.profile?.owners.map((o) => `${o.first} ${o.last}`.trim()).join(" and ") || null;
   const signer = place.signer;
   const project: Project = {
-    address: input.address || input.result?.property?.address || "Address to add",
+    address: demo ? DEMO_ADDRESS : input.address || input.result?.property?.address || "Address to add",
     municipality: input.result?.property?.municipality ?? city,
     legal: input.profile?.legalDescription || null,
     pin: input.profile?.pin || null,

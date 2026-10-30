@@ -5,6 +5,9 @@
 import { readFileSync } from "node:fs";
 import { packFor } from "../rules";
 
+// What the papers say instead of an address for the labelled demo house (a Waterloo house, no address).
+export const DEMO_ADDRESS = "Demo house (not a real address)";
+
 export type Cite = { title: string; url: string; section?: string | null; retrieved: string };
 export type Link = { label: string; url: string };
 

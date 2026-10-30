@@ -3,6 +3,7 @@
 // email to the right address with what to attach, or the online form's answers laid out to copy.
 // The documents checklist ticks off what the workspace already holds. Nothing here re-asks a
 // question: rent, who lives there and the rest come from the answers already given.
+import { DEMO_ADDRESS } from "../permit/data";
 import type { Profile, StoredState } from "../workspace";
 
 export type Doc = { label: string; have: boolean; how: string };
@@ -70,7 +71,9 @@ export function holdingsOf(input: ApplyInput) {
   };
 }
 
-export function applications(input: ApplyInput): Application[] {
+export function applications(given: ApplyInput): Application[] {
+  // The demo house has no address: its papers say so instead of printing a blank.
+  const input = given.result?.demo ? { ...given, address: DEMO_ADDRESS } : given;
   const r = input.result;
   const a = answers(r);
   const has = holdingsOf(input);
