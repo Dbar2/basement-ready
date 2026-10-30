@@ -1,8 +1,6 @@
 // Client for the swipe deck and the board (server/ideas/routes.ts). The example ("sample") reads its
 // deck from public/samples/sample/cards and keeps its board in this browser.
 import type { BoardMood, Card, Deck, Slot } from "../../server/ideas/deck";
-import type { Design, Finishes } from "../../server/model/types";
-import type { Plan } from "../api";
 import { getWorkspace, saveWorkspace } from "../workspaceApi";
 
 // The board's read: the model's Mood plus the furniture colours it sets.
