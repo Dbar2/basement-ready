@@ -187,9 +187,9 @@ export function cleanWatch(raw: any, take: Take): Omit<Watch, "model" | "costUsd
 
 // ---- Watching ----
 
-// Wonder first; Spark when Wonder errors, times out or answers with nothing usable. Both cost what they
-// cost, used or not.
-export async function watchWith(content: any[], take: Take, opts: { ask?: typeof responses } = {}): Promise<Watch> {
+// Wonder first; Spark when Wonder errors, times out or answers with nothing usable (`read` throws). Both
+// cost what they cost, used or not. Shared by the watch pass and the plan check (server/planCheck.ts).
+export async function wonderThenSpark<T>(developer: string, content: any[], read: (text: string) => T, opts: { ask?: typeof responses } = {}) {
   const ask = opts.ask ?? responses;
   const started = Date.now();
   let costUsd = 0;
@@ -202,7 +202,7 @@ export async function watchWith(content: any[], take: Take, opts: { ask?: typeof
         {
           model,
           input: [
-            { role: "developer", content: instructions(take) },
+            { role: "developer", content: developer },
             { role: "user", content },
           ],
           ...(wonder ? { reasoning: { effort: "medium" } } : {}),
@@ -212,13 +212,18 @@ export async function watchWith(content: any[], take: Take, opts: { ask?: typeof
       costUsd += tokenCost(model, r.usage)?.usd ?? 0;
       tokens.in += r.usage?.input_tokens ?? 0;
       tokens.out += r.usage?.output_tokens ?? 0;
-      return { model, ...cleanWatch(parseJson(outputText(r)), take), costUsd, tokens, ms: Date.now() - started };
+      return { model, value: read(outputText(r)), costUsd, tokens, ms: Date.now() - started };
     } catch (err) {
       lastErr = err;
-      console.error(`[watch] ${model}: ${err instanceof Error ? err.message : err}`);
+      console.error(`[wonder] ${model}: ${err instanceof Error ? err.message : err}`);
     }
   }
   throw lastErr;
+}
+
+export async function watchWith(content: any[], take: Take, opts: { ask?: typeof responses } = {}): Promise<Watch> {
+  const { model, value, costUsd, tokens, ms } = await wonderThenSpark(instructions(take), content, (text) => cleanWatch(parseJson(text), take), opts);
+  return { model, ...value, costUsd, tokens, ms };
 }
 
 // The take's video with its sound: the analysis video (5 fps, the frames SAM and the 3D read, so a second

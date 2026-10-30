@@ -18,8 +18,12 @@ const run = promisify(execFile);
 export type Status = "likely_ok" | "likely_fix" | "needs_measurement" | "needs_answer" | "standard" | "designer_checks";
 type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?: string; question?: string };
 
-// `photos`: a photo take of that many photos, not a video (server/photoInput.ts).
-export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number };
+// `photos`: a photo take of that many photos, not a video (server/photoInput.ts). `model`: who reads the
+// evidence, for comparing models; the app uses ASSESS_MODEL.
+export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number; model?: string };
+
+// The verdict agent's model: Muse Spark 1.3 unless ASSESS_MODEL says otherwise (scripts/eval/assess-ab.ts compares).
+export const ASSESS_MODEL = process.env.ASSESS_MODEL || "muse-spark-1.3";
 
 // Where the house is, for the model: "Toronto, Ontario", or "Ontario" when we don't know.
 const where = (c: Pick<Coverage, "city" | "coverage" | "authority">) => (c.city === "Ontario" ? "Ontario" : `${c.city}, Ontario`);
@@ -97,16 +101,18 @@ async function askSpark(ctx: AssessContext, place: Coverage, rules: Rule[], dete
   }
   let lastErr: unknown;
   let costUsd = 0;
+  const model = ctx.model ?? ASSESS_MODEL;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const r = await responses({
-        model: "muse-spark-1.3",
+        model,
         input: [
           { role: "developer", content: instructions(place) },
           { role: "user", content },
         ],
+        ...(/wonder/.test(model) ? { reasoning: { effort: "medium" } } : {}),
       });
-      costUsd += tokenCost("muse-spark-1.3", r.usage)!.usd;
+      costUsd += tokenCost(model, r.usage)?.usd ?? 0;
       return { model: parseJson(outputText(r)), costUsd };
     } catch (err) {
       lastErr = err;
