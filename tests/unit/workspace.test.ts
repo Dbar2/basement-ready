@@ -106,22 +106,26 @@ describe("permit package", () => {
     ]);
     expect(out.pages).toBe(8 + 2 + 1);
     expect(out.signer).toBe("owner");
-    const notes = out.sheets.find((s) => s.number === "A6")!.notes.join(" ");
-    for (const n of ["Fire separation between the homes", "Smoke alarms", "Bedroom escape window", "Heating and air", "Sound between the homes", "Ceiling heights"]) expect(notes).toContain(n);
-    const text = (await pageTexts(out.bytes)).join(" ");
-    expect(text).toContain("FIRE SEPARATION BETWEEN THE HOMES");
+    const notes = out.sheets.find((s) => s.number === "A7")!.notes.join(" ");
+    for (const n of ["Fire separation between the units", "Smoke alarms", "Bedroom escape window", "Heating", "Ceiling heights"]) expect(notes).toContain(n);
+    const pages = await pageTexts(out.bytes);
+    const text = pages.join(" ");
+    expect(text).toContain("FIRE SEPARATION BETWEEN THE UNITS");
     expect(text).toContain("15.9 mm (5/8\") Type X");
     expect(text).toContain("SMOKE ALARMS");
-    expect(text).toContain("PROPOSED BASEMENT PLAN");
-    expect(text).toContain("Sam Rivera");
+    expect(text).toContain("BASEMENT PLAN: UNIT 2");
     expect(text).toContain("3.2.5.1.(3)(b)");
     expect(text).toContain("How to submit".toUpperCase());
+    // The drawings carry the property's address, never the owner's name or phone.
+    const drawings = pages.slice(0, 8).join(" ");
+    expect(drawings).not.toContain("Sam Rivera");
+    expect(drawings).not.toContain("519-555-0100");
   });
 
   it("leaves out the forms and the owner's contact details in the copy shared with builders", async () => {
     const out = await buildPermitPackage({ result: sample, municipality: "waterloo-on", address: "45 Avondale Ave S", profile, state: {}, site: null, aerialJpeg: null, favourites: [], share: true, today: "2026-10-29", fetchPdf: async () => null });
     expect(out.forms).toEqual([]);
-    expect(out.pages).toBe(8 + 1);
+    expect(out.pages).toBe(8);
     const text = (await pageTexts(out.bytes)).join(" ");
     expect(text).not.toContain("519-555-0100");
     expect(text).not.toContain("sam@example.com");

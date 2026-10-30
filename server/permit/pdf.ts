@@ -1,7 +1,7 @@
 // Drawing on PDF pages with pdf-lib (MIT): the sheet frame and title block every drawing carries,
 // real architectural scales, lines, text that wraps, and lengths in metres with feet and inches.
 // The standard PDF fonts only cover Windows-1252 text, so everything drawn goes through `safe`.
-import { degrees, LineCapStyle, PDFDocument, rgb, StandardFonts, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
+import { clip, degrees, endPath, LineCapStyle, PDFDocument, popGraphicsState, pushGraphicsState, rectangle, rgb, StandardFonts, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 
 // Black and white only: cities ask for legible black-and-white drawings (Kitchener's Project
 // Information form, Section G). Greys stand in for fills.
@@ -56,13 +56,26 @@ export const metres = (m: number) => `${m.toFixed(2)} m`;
 export const both = (m: number) => `${metres(m)} (${ftIn(m)})`;
 export const mmBoth = (mm: number) => `${Math.round(mm)} mm (${ftIn(mm / 1000)})`;
 export const area = (m2: number) => `${m2.toFixed(1)} m² (${Math.round(m2 * 10.7639)} sq ft)`;
+// Feet and inches first, then millimetres: how a dimension string reads on the plans.
+export const dimText = (m: number) => `${ftIn(m)} (${Math.round(m * 1000)})`;
+// A window or door size, width by height, in inches and millimetres: 24"x30" (610x760).
+export const sizeText = (w: number, h: number | null) => (h == null ? `${Math.round(w / 0.0254)}" (${Math.round(w * 1000)})` : `${Math.round(w / 0.0254)}"x${Math.round(h / 0.0254)}" (${Math.round(w * 1000)}x${Math.round(h * 1000)})`);
 
-// Architectural scales, largest first. `ratio` is real size over paper size.
+// Floor plans: metric scales of 1:50 or larger, largest first. `ratio` is real size over paper size.
 export const PLAN_SCALES = [
-  { label: '1/4" = 1\'-0"', ratio: 48 },
-  { label: '3/16" = 1\'-0"', ratio: 64 },
-  { label: '1/8" = 1\'-0"', ratio: 96 },
-  { label: '1/16" = 1\'-0"', ratio: 192 },
+  { label: "1:20", ratio: 20 },
+  { label: "1:25", ratio: 25 },
+  { label: "1:30", ratio: 30 },
+  { label: "1:40", ratio: 40 },
+  { label: "1:50", ratio: 50 },
+];
+// Schematic views (the house above, the key plan): smaller scales are fine.
+export const SMALL_SCALES = [...PLAN_SCALES, { label: "1:75", ratio: 75 }, { label: "1:100", ratio: 100 }, { label: "1:150", ratio: 150 }, { label: "1:200", ratio: 200 }];
+export const DETAIL_SCALES = [
+  { label: "1:5", ratio: 5 },
+  { label: "1:10", ratio: 10 },
+  { label: "1:20", ratio: 20 },
+  { label: "1:25", ratio: 25 },
 ];
 export const SITE_SCALES = [
   { label: '1" = 10\'', ratio: 120 },
@@ -75,7 +88,11 @@ export const ptPerMetre = (ratio: number) => (1000 / ratio) * (72 / 25.4);
 
 // The largest scale at which a `w` x `h` metre drawing fits in a `boxW` x `boxH` point box.
 export function fitScale(scales: { label: string; ratio: number }[], w: number, h: number, boxW: number, boxH: number) {
-  return scales.find((s) => w * ptPerMetre(s.ratio) <= boxW && h * ptPerMetre(s.ratio) <= boxH) ?? scales[scales.length - 1];
+  return largestFit(scales, w, h, boxW, boxH) ?? scales[scales.length - 1];
+}
+// The same, or null when it doesn't fit even at the smallest of these scales.
+export function largestFit(scales: { label: string; ratio: number }[], w: number, h: number, boxW: number, boxH: number) {
+  return scales.find((s) => w * ptPerMetre(s.ratio) <= boxW && h * ptPerMetre(s.ratio) <= boxH) ?? null;
 }
 
 // ---- Drawing ----------------------------------------------------------------------------
@@ -174,6 +191,32 @@ export class Sheet {
   circle(x: number, y: number, r: number, o: Stroke & { fill?: RGB } = {}) {
     this.page.drawCircle({ x, y, size: r, color: o.fill, borderColor: o.color ?? INK, borderWidth: o.width ?? 0.75 });
   }
+  // Draws `fn` clipped to a rectangle (a plan cut into two sheets at a match line).
+  clipped(x: number, y: number, w: number, h: number, fn: () => void) {
+    this.page.pushOperators(pushGraphicsState(), rectangle(x, y, w, h), clip(), endPath());
+    fn();
+    this.page.pushOperators(popGraphicsState());
+  }
+  // Diagonal hatching inside a convex polygon (new walls, the rated ceiling).
+  hatch(points: [number, number][], spacing = 3, o: Stroke = {}) {
+    if (points.length < 3) return;
+    const xs = points.map((p) => p[0]), ys = points.map((p) => p[1]);
+    const lo = Math.min(...xs) - Math.max(...ys), hi = Math.max(...xs) - Math.min(...ys);
+    // Lines x - y = c, clipped to the polygon.
+    for (let c = Math.ceil(lo / spacing) * spacing; c <= hi; c += spacing) {
+      const hits: [number, number][] = [];
+      for (let i = 0; i < points.length; i++) {
+        const [x0, y0] = points[i], [x1, y1] = points[(i + 1) % points.length];
+        const f0 = x0 - y0 - c, f1 = x1 - y1 - c;
+        if ((f0 <= 0 && f1 > 0) || (f0 > 0 && f1 <= 0)) {
+          const t = f0 / (f0 - f1);
+          hits.push([x0 + t * (x1 - x0), y0 + t * (y1 - y0)]);
+        }
+      }
+      hits.sort((a, b) => a[0] - b[0]);
+      for (let i = 0; i + 1 < hits.length; i += 2) this.line(hits[i][0], hits[i][1], hits[i + 1][0], hits[i + 1][1], { width: o.width ?? 0.35, color: o.color ?? INK, dash: o.dash });
+    }
+  }
   // A dimension string between two points, offset to one side, with ticks and the length.
   dim(x0: number, y0: number, x1: number, y1: number, label: string, offset = 18, size = 7.5) {
     const len = Math.hypot(x1 - x0, y1 - y0) || 1;
@@ -197,85 +240,159 @@ export class Sheet {
     const step = ptPerM >= 40 ? 1 : ptPerM >= 15 ? 2 : 5;
     for (let i = 0; i < 5; i++) this.rect(x + i * step * ptPerM, y, step * ptPerM, 4, { fill: i % 2 ? PAPER : INK, width: 0.5 });
     for (const i of [0, 1, 5]) this.text(`${i * step} m`, x + i * step * ptPerM, y - 9, { size: 6.5, align: "center", color: MUTED });
-    this.text(`Scale ${label} on 11 x 17 paper`, x, y + 9, { size: 7, color: MUTED });
+    this.text(`${label} on 11 x 17`, x, y + 9, { size: 7, color: MUTED });
   }
 }
 
+
 // ---- The sheet frame ----------------------------------------------------------------------
 
+// Who signs the drawings: the owner under the Code's exemption, or a BCIN designer.
+export type Signer = { kind: "owner" } | { kind: "designer"; name: string | null; bcin: string | null; firm: string | null; firmBcin: string | null };
+
 export type Project = {
-  address: string;
+  address: string; // the property only: no owner's name or phone on the drawings
   municipality: string;
-  legal: string | null;
-  pin: string | null;
-  owner: string | null;
-  // "owner": the owner drew it under the code's exemption. "brief": a designer finishes and signs it.
-  signer: "owner" | "brief";
+  // "review": the owner's copy, with a Draft watermark and what's left to do. "submit": the clean set.
+  copy: "review" | "submit";
+  left: number; // things left before the set can be submitted (review copy)
+  estimated: boolean; // sizes still from the video (review copy only says so)
+  signer: Signer;
   date: string;
-  estimated: boolean; // sizes come from the video, not a tape
+  revision: { no: string; date: string; text: string };
   sheets: { number: string; title: string }[];
 };
 
 export const STRIP = 214; // the title strip down the right side
+const M = 22; // page margin
+
+// The 2024 Code's exemption for an owner designing a unit in their own house.
+export const OWNER_EXEMPTION = "Div. C, 3.2.5.1.(3)(b)";
 
 // Border, title strip and the drawing area (returned) for one drawing sheet.
 export function frame(s: Sheet, p: Project, sheet: { number: string; title: string; scale: string | null }) {
-  const W = s.width, H = s.height, m = 22;
-  s.rect(m, m, W - 2 * m, H - 2 * m, { width: 1.2 });
-  const x0 = W - m - STRIP;
-  s.line(x0, m, x0, H - m, { width: 1.2 });
-  // Every sheet says it's a draft, at the top of the title strip.
-  s.rect(x0 + 1, H - m - 34, STRIP - 2, 33, { fill: TONE2, stroke: false });
-  s.wrap("DRAFT, for you or a BCIN designer to check before you submit", x0 + 12, H - m - 12, STRIP - 24, { size: 7.5, font: s.fonts.bold, leading: 9 });
-  let y = H - m - 52;
-  s.text("ADDITIONAL RESIDENTIAL UNIT", x0 + 12, y, { size: 8.5, font: s.fonts.bold });
-  y -= 12;
-  s.text("Basement second unit in an existing house", x0 + 12, y, { size: 7.5, color: MUTED });
-  y -= 22;
-  const row = (label: string, value: string | null, h = 0) => {
-    s.text(label.toUpperCase(), x0 + 12, y, { size: 6, color: MUTED, font: s.fonts.bold });
-    y -= 10;
-    y = s.wrap(value ?? "-", x0 + 12, y, STRIP - 24, { size: 8, leading: 10 }) - 6 - h;
-  };
-  row("Project address", `${p.address}, ${p.municipality}, Ontario`);
-  if (p.legal) row("Legal description", p.legal);
-  if (p.pin) row("PIN", p.pin);
-  row("Owner", p.owner);
-  row(
-    p.signer === "owner" ? "Prepared by" : "Status",
-    p.signer === "owner"
-      ? `${p.owner ? `${p.owner}, owner of the house,` : "The owner of the house,"} under the Building Code's exemption for an owner designing their own house (Div. C 3.2.5.1.(3)(b)).`
-      : "DESIGN BRIEF. Measured and laid out by the owner; to be finished, checked and signed by a qualified BCIN designer before it is submitted.",
-  );
-  if (p.estimated) {
-    s.rect(x0 + 8, y - 30, STRIP - 16, 36, { fill: TONE2, stroke: false });
-    s.wrap("Sizes measured from a phone video (about ±5–20%). Confirm every dimension on site with a tape before building.", x0 + 14, y - 4, STRIP - 28, { size: 7, leading: 8.6 });
-    y -= 44;
+  const W = s.width, H = s.height;
+  s.rect(M, M, W - 2 * M, H - 2 * M, { width: 1.2 });
+  const x0 = W - M - STRIP, L = x0 + 10, R = W - M - 10, inner = R - L;
+  s.line(x0, M, x0, H - M, { width: 1.2 });
+  let y = H - M;
+
+  // Room for the City's stamps.
+  const stampH = 112;
+  s.line(x0, y - stampH, W - M, y - stampH, { width: 0.6 });
+  s.text("FOR CITY USE (STAMPS)", L, y - 10, { size: 5.5, color: FAINT, font: s.fonts.bold });
+  if (p.copy === "review") {
+    s.rect(x0 + 6, y - stampH + 6, STRIP - 12, 40, { fill: TONE2, stroke: false });
+    s.text("DRAFT FOR YOUR REVIEW", L, y - stampH + 32, { size: 9, font: s.fonts.bold });
+    s.text(p.left > 0 ? `${p.left} thing${p.left === 1 ? "" : "s"} left before you can submit: see A0` : "Ready: download the submit copy", L, y - stampH + 18, { size: 7 });
+    if (p.estimated) s.text("Sizes from the video, about ±5-20%, until taped", L, y - stampH + 10, { size: 6, color: MUTED });
   }
-  // Sheet list
+  y -= stampH + 14;
+
+  // The project: the property, nothing about the people.
+  s.text("ADDITIONAL RESIDENTIAL UNIT (UNIT 2)", L, y, { size: 8, font: s.fonts.bold });
+  y -= 10;
+  s.text("in the basement of an existing house", L, y, { size: 7, color: MUTED });
+  y -= 14;
+  s.text("PROPERTY", L, y, { size: 5.5, color: MUTED, font: s.fonts.bold });
+  y = s.wrap(`${p.address}, ${p.municipality}, Ontario`, L, y - 10, inner, { size: 8, leading: 9.5 }) - 8;
+
+  // Revisions.
+  s.text("REVISIONS", L, y, { size: 5.5, color: MUTED, font: s.fonts.bold });
   y -= 4;
-  s.text("SHEETS", x0 + 12, y, { size: 6, color: MUTED, font: s.fonts.bold });
-  y -= 11;
+  const cols = [L, L + 22, L + 74];
+  const rowH = 11;
+  s.line(L, y, R, y, { width: 0.5 });
+  for (const [i, h] of ["NO.", "DATE", "DESCRIPTION"].entries()) s.text(h, cols[i] + 2, y - 8, { size: 5.5, color: MUTED });
+  y -= rowH;
+  for (let r = 0; r < 4; r++) {
+    s.line(L, y, R, y, { width: 0.4, color: FAINT });
+    if (r === 0) {
+      s.text(p.revision.no, cols[0] + 2, y - 8, { size: 6.5 });
+      s.text(p.revision.date, cols[1] + 2, y - 8, { size: 6.5 });
+      s.text(p.revision.text, cols[2] + 2, y - 8, { size: 6.5 });
+    }
+    y -= rowH;
+  }
+  s.line(L, y, R, y, { width: 0.5 });
+  for (const c of cols.slice(1)) s.line(c, y, c, y + rowH * 5, { width: 0.4, color: FAINT });
+  y -= 14;
+
+  // Sheet list.
+  s.text("DRAWINGS", L, y, { size: 5.5, color: MUTED, font: s.fonts.bold });
+  y -= 10;
   for (const it of p.sheets) {
     const on = it.number === sheet.number;
-    s.text(`${it.number}  ${it.title}`, x0 + 12, y, { size: 7, font: on ? s.fonts.bold : s.fonts.regular, color: on ? INK : MUTED });
-    y -= 9.5;
+    s.text(`${it.number}  ${it.title}`, L, y, { size: 6.5, font: on ? s.fonts.bold : s.fonts.regular, color: on ? INK : MUTED });
+    y -= 8.5;
   }
-  // Bottom block: sheet title, number, scale, date.
-  const by = m + 96;
-  s.line(x0, by, W - m, by, { width: 1 });
-  s.text(sheet.title.toUpperCase(), x0 + 12, by - 18, { size: 10, font: s.fonts.bold });
-  s.text(sheet.scale ? `Scale: ${sheet.scale}` : "Not to scale", x0 + 12, by - 32, { size: 7.5, color: MUTED });
-  s.text(`Date: ${p.date}`, x0 + 12, by - 43, { size: 7.5, color: MUTED });
-  s.text("Made with Basement Ready", x0 + 12, by - 54, { size: 6.5, color: FAINT });
-  s.text(sheet.number, W - m - 12, m + 14, { size: 30, font: s.fonts.bold, align: "right" });
-  return { x: m + 14, y: m + 14, w: x0 - m - 28, h: H - 2 * m - 28 };
+
+  // Bottom block: sheet title, scale, date, number.
+  const by = M + 74;
+  s.line(x0, by, W - M, by, { width: 1 });
+  s.wrap(sheet.title.toUpperCase(), L, by - 14, inner - 60, { size: 9.5, font: s.fonts.bold, leading: 11 });
+  s.text(sheet.scale ? `Scale ${sheet.scale} on 11 x 17` : "Not to scale", L, by - 40, { size: 7, color: MUTED });
+  s.text(`Date ${p.date}`, L, by - 50, { size: 7, color: MUTED });
+  if (p.copy === "review") s.text("Made with Basement Ready", L, by - 62, { size: 6, color: FAINT });
+  s.text(sheet.number, R, M + 12, { size: 28, font: s.fonts.bold, align: "right" });
+
+  // The statement box, above the bottom block.
+  statementBox(s, p.signer, { x: x0, y: by, w: STRIP });
+  return { x: M + 14, y: M + 14, w: x0 - M - 28, h: H - 2 * M - 28 };
 }
 
-export async function newDoc(title: string) {
+export const STATEMENT_H = 128;
+
+// Name, signature and date of whoever takes responsibility for the design: the homeowner under the
+// Code's exemption, or the designer with their BCIN.
+function statementBox(s: Sheet, signer: Signer, at: { x: number; y: number; w: number }) {
+  const L = at.x + 10, R = at.x + at.w - 10;
+  const top = at.y + STATEMENT_H;
+  s.line(at.x, top, at.x + at.w, top, { width: 1 });
+  let y = top - 11;
+  const field = (label: string, value: string | null, x: number, width: number, yy: number) => {
+    s.line(x, yy, x + width, yy, { width: 0.5 });
+    if (value) s.text(value, x + 1, yy + 2.5, { size: 7 });
+    s.text(label, x + 1, yy - 7, { size: 5.5, color: MUTED });
+  };
+  if (signer.kind === "owner") {
+    s.text("DESIGNER: HOMEOWNER", L, y, { size: 7.5, font: s.fonts.bold });
+    y = s.wrap(`The owner designed this unit in their own house. Exempt from designer registration under the Building Code, ${OWNER_EXEMPTION}. The owner takes responsibility for this design.`, L, y - 10, R - L, { size: 6.3, leading: 7.6 });
+    y -= 14;
+    field("NAME (HOMEOWNER)", null, L, R - L, y);
+    y -= 26;
+    field("SIGNATURE", null, L, (R - L) * 0.62, y);
+    field("DATE", null, L + (R - L) * 0.68, (R - L) * 0.32, y);
+  } else {
+    s.text("DESIGNER (BCIN)", L, y, { size: 7.5, font: s.fonts.bold });
+    y = s.wrap("I have reviewed this design, take responsibility for it, and am qualified under the Building Code to be its designer.", L, y - 10, R - L, { size: 6.3, leading: 7.6 });
+    y -= 13;
+    field("NAME", signer.name, L, (R - L) * 0.62, y);
+    field("BCIN", signer.bcin, L + (R - L) * 0.68, (R - L) * 0.32, y);
+    y -= 22;
+    field("FIRM", signer.firm, L, (R - L) * 0.62, y);
+    field("FIRM BCIN", signer.firmBcin, L + (R - L) * 0.68, (R - L) * 0.32, y);
+    y -= 22;
+    field("SIGNATURE", null, L, (R - L) * 0.62, y);
+    field("DATE", null, L + (R - L) * 0.68, (R - L) * 0.32, y);
+  }
+}
+
+// The review copy's diagonal "DRAFT", over the drawing area.
+export function watermark(s: Sheet) {
+  const t = "DRAFT";
+  const size = 150;
+  const w = s.fonts.bold.widthOfTextAtSize(t, size);
+  const cx = (s.width - STRIP) / 2, cy = s.height / 2;
+  const a = (30 * Math.PI) / 180;
+  s.page.drawText(t, { x: cx - (w / 2) * Math.cos(a) + (size / 3) * Math.sin(a), y: cy - (w / 2) * Math.sin(a) - (size / 3) * Math.cos(a), size, font: s.fonts.bold, color: rgb(0.5, 0.5, 0.5), opacity: 0.13, rotate: degrees(30) });
+}
+
+export async function newDoc(title: string, branded = true) {
   const doc = await PDFDocument.create();
   doc.setTitle(title);
-  doc.setCreator("Basement Ready");
-  doc.setProducer("Basement Ready (pdf-lib)");
+  // The submit copy carries no app name, not even in the file's properties.
+  doc.setCreator(branded ? "Basement Ready" : "");
+  doc.setProducer(branded ? "Basement Ready (pdf-lib)" : "pdf-lib");
   return doc;
 }

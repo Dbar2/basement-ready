@@ -10,8 +10,10 @@ import { fillRegionForm, REGION_FORM_URL, type RegionValues } from "./apply/regi
 import { diyPlan } from "./diy/plan";
 import { lookKey, renderLook, sourcesFrom, STYLES } from "./ideas/looks";
 import { cityPermit } from "./permit/data";
+import { briefEmail, QUARTS } from "./permit/designer";
 import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm } from "./permit/forms";
-import { buildPermitPackage, formPlace, formValues, localDate } from "./permit/package";
+import { bounds } from "./permit/model";
+import { buildPermitPackage, type Copy, formInputs, formValues, localDate, NotReady, permitStatus } from "./permit/package";
 import { basementGeometry } from "./permit/plans";
 import { scopeOfWork } from "./permit/sheets";
 import { lookupSiteGeometry, type Property, type SiteGeometry } from "./property";
@@ -132,6 +134,51 @@ function settledLooks(scanId: string, looks: StoredState["looks"]) {
 
 const asExample = <T extends object>(apps: T[]) => apps.map((a) => ({ ...a, example: true }));
 
+// The copy a request asks for: ?copy=submit|share|review, or the older ?share=1.
+const copyOf = (c: Context): Copy => {
+  const q = c.req.query("copy");
+  return q === "submit" || q === "share" || q === "review" ? q : c.req.query("share") === "1" ? "share" : "review";
+};
+
+// Where the permit set stands, for the Permit tab: the readiness list, what each item needs, the
+// house's outline for placing the bedrooms upstairs, and the designer route.
+function permitPayload(input: { result: any; municipality: string; state: StoredState; profile: Profile | null }, o: { address: string; packageUrl: string | null }) {
+  const st = permitStatus(input);
+  const m = st.model;
+  const foot = m ? bounds(m.existing.rooms.flatMap((r) => r.polygon)) : null;
+  const stair = m?.design.proposed.fixtures.find((f) => f.kind === "stairs") ?? null;
+  const fw = foot ? foot.maxX - foot.minX : 1, fd = foot ? foot.maxZ - foot.minZ : 1;
+  const { areaM2, bedrooms } = formInputs(input);
+  const units = Math.max(1, input.result?.property?.unitsRegistered ?? 1) + 1;
+  return {
+    left: st.readiness.left,
+    items: st.readiness.items,
+    reviewKey: st.reviewKey,
+    canSubmit: st.readiness.left === 0,
+    sheets: st.sheets,
+    mainWalls: m?.mainWalls ?? [],
+    windows: m?.windows ?? [],
+    overhead: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead")),
+    footprint: foot
+      ? {
+          widthM: fw,
+          depthM: fd,
+          stair: stair?.sizeM ? { u0: (stair.at[0] - stair.sizeM[0] / 2 - foot.minX) / fw, v0: (stair.at[1] - stair.sizeM[1] / 2 - foot.minZ) / fd, u1: (stair.at[0] + stair.sizeM[0] / 2 - foot.minX) / fw, v1: (stair.at[1] + stair.sizeM[1] / 2 - foot.minZ) / fd } : null,
+          storeys: Math.max(1, input.result?.property?.building?.storeys ?? 1),
+        }
+      : null,
+    designer: {
+      needed: st.need.needed,
+      reasons: st.need.reasons,
+      signer: st.place.ownerDraws ? ("owner" as const) : ("designer" as const),
+      ownerAllowed: st.permit?.signer === "owner" && !st.need.needed,
+      quarts: QUARTS,
+      filters: st.quarts,
+      email: o.packageUrl ? briefEmail({ address: o.address, city: st.city, packageUrl: o.packageUrl, reasons: st.need.reasons, units, areaM2, bedrooms }) : null,
+    },
+  };
+}
+
 export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<string | null>) {
   async function access(c: Context) {
     const id = c.req.param("id") ?? "";
@@ -181,23 +228,39 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
   app.get("/api/scans/:id/permit.pdf", async (c) => {
     const a = await access(c);
     if (!a?.result) return c.json({ error: "Not found" }, 404);
-    // The share copy (drawings only) is for the people the owner sends it to; the full one is theirs.
-    const share = c.req.query("share") === "1";
-    if (!share && !a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
+    // The share copy (drawings only) is for the people the owner sends it to; the others are theirs.
+    const copy = copyOf(c);
+    if (copy !== "share" && !a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
     const w = await loadWorkspace(a.basement.id);
     const property = a.basement.property as Property | null;
-    const out = await buildPermitPackage({
-      result: a.result,
-      municipality: a.basement.municipality,
-      address: property?.address ?? a.basement.address,
-      profile: w.profile,
-      state: w.state,
-      site: await siteFor(property),
-      aerialJpeg: null,
-      favourites: await favouriteImages(a.id, w.state),
-      share,
-    });
-    return pdf(out.bytes, `permit-package-${slugOf(property?.address ?? a.basement.address)}${share ? "-drawings" : ""}.pdf`);
+    try {
+      const out = await buildPermitPackage({
+        result: a.result,
+        municipality: a.basement.municipality,
+        address: property?.address ?? a.basement.address,
+        profile: w.profile,
+        state: w.state,
+        site: await siteFor(property),
+        aerialJpeg: null,
+        favourites: copy === "review" ? await favouriteImages(a.id, w.state) : [],
+        copy,
+      });
+      return pdf(out.bytes, `permit-${copy === "submit" ? "submit" : copy === "share" ? "drawings" : "review"}-${slugOf(property?.address ?? a.basement.address)}.pdf`);
+    } catch (err) {
+      if (err instanceof NotReady) return c.json({ error: err.message, left: err.left }, 409);
+      throw err;
+    }
+  });
+
+  app.get("/api/scans/:id/permit/status", async (c) => {
+    const a = await access(c);
+    if (!a?.result) return c.json({ error: "Not found" }, 404);
+    if (!a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
+    const w = await loadWorkspace(a.basement.id);
+    const property = a.basement.property as Property | null;
+    const address = property?.address ?? a.basement.address;
+    const packageUrl = a.result?.demo ? null : `${new URL(c.req.url).origin}/api/scans/${a.id}/permit.pdf?copy=share`;
+    return c.json(permitPayload({ result: a.result, municipality: a.basement.municipality, state: w.state, profile: w.profile }, { address, packageUrl }));
   });
 
   // One of the city's forms on its own, filled and still editable for signing.
@@ -214,8 +277,8 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     if (!bytes) return c.json({ error: "The City's form didn't download. Try again later." }, 502);
     const w = await loadWorkspace(a.basement.id);
     const property = a.basement.property as Property | null;
-    const { areaM2, bedrooms, scope } = project(a.result, w.state);
-    const values = formValues({ profile: w.profile, address: property?.address ?? a.basement.address, result: a.result, site: await siteFor(property), state: w.state }, property?.municipality ?? cityPermit(a.basement.municipality).city, scope, areaM2, bedrooms, localDate(), formPlace(a.basement.municipality, w.state));
+    const { status, areaM2, bedrooms, scope } = formInputs({ result: a.result, municipality: a.basement.municipality, state: w.state, profile: w.profile });
+    const values = formValues({ profile: w.profile, address: property?.address ?? a.basement.address, result: a.result, site: await siteFor(property), state: w.state }, property?.municipality ?? cityPermit(a.basement.municipality).city, scope, areaM2, bedrooms, localDate(), status.place);
     const filled = await fillAcroForm(bytes, map, values);
     return pdf(filled.bytes, `${formId}.pdf`);
   });
@@ -306,10 +369,21 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
   // ---- The sample basement: the same documents, nothing saved ----
 
   app.post("/api/sample/permit.pdf", async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const b = sampleBody(body);
+    const copy: Copy = body?.copy === "submit" || body?.copy === "share" ? body.copy : "review";
+    try {
+      const out = await buildPermitPackage({ result: sampleResult(), municipality: "waterloo-on", address: "The sample basement", profile: b.profile, state: b.state, site: null, aerialJpeg: null, favourites: copy === "review" ? await favouriteImages("sample", b.state) : [], copy });
+      return pdf(out.bytes, `permit-${copy}-sample.pdf`);
+    } catch (err) {
+      if (err instanceof NotReady) return c.json({ error: err.message, left: err.left }, 409);
+      throw err;
+    }
+  });
+
+  app.post("/api/sample/permit/status", async (c) => {
     const b = sampleBody(await c.req.json().catch(() => ({})));
-    const result = sampleResult();
-    const out = await buildPermitPackage({ result, municipality: "waterloo-on", address: "The sample basement", profile: b.profile, state: b.state, site: null, aerialJpeg: null, favourites: await favouriteImages("sample", b.state), share: false });
-    return pdf(out.bytes, "permit-package-sample.pdf");
+    return c.json(permitPayload({ result: sampleResult(), municipality: "waterloo-on", state: b.state, profile: b.profile }, { address: "The sample basement", packageUrl: null }));
   });
 
   app.post("/api/sample/diy", async (c) => {
