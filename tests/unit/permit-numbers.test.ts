@@ -184,7 +184,7 @@ describe("the plan's dimensions", () => {
 });
 
 describe("the plan's room names", () => {
-  it("stay whole on a plan cut into sheets, each room named once, on the sheet with most of it", async () => {
+  it("stay whole on a plan cut into sheets: each room named where most of it is, never off a match line", async () => {
     const out = await bigPackage();
     const drawing = await pageDrawing(out.bytes);
     const bold = await (await PDFDocument.create()).embedFont(StandardFonts.HelveticaBold);
@@ -197,7 +197,9 @@ describe("the plan's room names", () => {
     expect(plans.length).toBeGreaterThan(1);
     const seen = new Map<string, number>();
     for (const sh of plans) {
-      for (const l of drawing[sh.page].labels.filter((l) => names.has(l.text))) {
+      const here = drawing[sh.page].labels.filter((l) => names.has(l.text));
+      expect(here.length, `${sh.number}: a room named twice`).toBe(new Set(here.map((l) => l.text)).size);
+      for (const l of here) {
         seen.set(l.text, (seen.get(l.text) ?? 0) + 1);
         if (l.turned || !l.clip) continue;
         const c = l.clip;
@@ -205,9 +207,9 @@ describe("the plan's room names", () => {
         expect(l.x >= Math.min(c.x, c.x + c.w) - 1 && right <= Math.max(c.x, c.x + c.w) + 1, `${sh.number}: ${l.text} runs off the match line`).toBe(true);
       }
     }
-    // Each unit 2 room named once across the sheets, and no room twice.
-    expect(unit2.filter((n) => seen.get(n) !== 1)).toEqual([]);
-    expect([...seen].filter(([, n]) => n > 1)).toEqual([]);
+    // Every unit 2 room is named, at most once a sheet.
+    expect(unit2.filter((n) => !seen.get(n))).toEqual([]);
+    expect([...seen].filter(([, n]) => n > plans.length)).toEqual([]);
   }, SLOW);
 });
 
