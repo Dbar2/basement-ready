@@ -65,7 +65,8 @@ export async function areasOf(scanId: string, result: any): Promise<Area[]> {
   return out;
 }
 
-// Room frame -> basement frame (server/basement.ts basementViewpoints), then their tape's scale.
+// Room frame -> basement frame (server/basement.ts basementViewpoints: a quarter turn, a shift on the
+// floor, and `y`, the lift that puts the area's floor at 0), then their tape's scale.
 function placePose(P: number[][], p: RoomPlacement, areaScale: number, k: number): number[][] {
   const t = (p.turn * Math.PI) / 2;
   const c = Math.round(Math.cos(t)), s = Math.round(Math.sin(t));
@@ -76,7 +77,7 @@ function placePose(P: number[][], p: RoomPlacement, areaScale: number, k: number
   ];
   const rows = [0, 1, 2].map((r) => [
     ...[0, 1, 2].map((col) => M[r][0] * P[0][col] + M[r][1] * P[1][col] + M[r][2] * P[2][col]),
-    (M[r][0] * P[0][3] * areaScale + M[r][1] * P[1][3] * areaScale + M[r][2] * P[2][3] * areaScale + (r === 0 ? p.x : r === 2 ? p.z : 0)) * k,
+    (M[r][0] * P[0][3] * areaScale + M[r][1] * P[1][3] * areaScale + M[r][2] * P[2][3] * areaScale + (r === 0 ? p.x : r === 2 ? p.z : (p.y ?? 0))) * k,
   ]);
   return [...rows, [0, 0, 0, 1]];
 }

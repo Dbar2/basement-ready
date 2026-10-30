@@ -214,7 +214,7 @@ describe("the painter's cameras (server/asBuilt.ts paintRequest)", () => {
     const pose = [[1, 0, 0, 1], [0, 1, 0, 1.4], [0, 0, 1, 0], [0, 0, 0, 1]];
     const frame = { sourceIndex: 0, width: 1280, height: 720, sharpness: 50, pose, intrinsics: [[300, 0, 259], [0, 300, 146], [0, 0, 1]], model: { resizedWidth: 518, resizedHeight: 291, cropLeft: 0, cropTop: 0 } };
     const depth = Buffer.alloc(1 * 292 * 518 * 2);
-    const area = { room: { index: 0, name: "", startS: 0, endS: 1, has3d: true, plan: null, measurements: null }, placement: { turn: 1 as const, x: 4, z: 2 }, scan: { frames: [frame], sentFrames: [7], files: { depth: { shape: [1, 292, 518] } } }, depth, areaScale: 1 };
+    const area = { room: { index: 0, name: "", startS: 0, endS: 1, has3d: true, plan: null, measurements: null }, placement: { turn: 1 as const, x: 4, z: 2, y: 0.12 }, scan: { frames: [frame], sentFrames: [7], files: { depth: { shape: [1, 292, 518] } } }, depth, areaScale: 1 };
     const model = buildAsBuilt(existing);
     const asked: number[] = [];
     const { job, frames, depths } = await paintRequest({ model, existing, areas: [area] }, async (n) => (asked.push(n), Buffer.from("jpg")));
@@ -224,7 +224,8 @@ describe("the painter's cameras (server/asBuilt.ts paintRequest)", () => {
     // A quarter turn: x' = −z, z' = x, then the shift. The lens points along the area's +z: now −x.
     expect(cam.pose[0][3]).toBeCloseTo(4);
     expect(cam.pose[2][3]).toBeCloseTo(3);
-    expect(cam.pose[1][3]).toBeCloseTo(1.4);
+    // Lifted with its area, so its floor is the plan's.
+    expect(cam.pose[1][3]).toBeCloseTo(1.52);
     expect([cam.pose[0][2], cam.pose[2][2]].map((v) => Math.round(v))).toEqual([-1, 0]);
     // Model pixels (518 wide) -> the frame's (1280 wide).
     const r = 518 / 1280;
@@ -236,4 +237,14 @@ describe("the painter's cameras (server/asBuilt.ts paintRequest)", () => {
     expect(job.surfaces.length).toBe(model.surfaces.length);
     // Importing the server starts its in-memory database: slow on a busy machine.
   }, 60_000);
+});
+
+describe("the studio's overhead labels", () => {
+  it("say each kind once, at the lowest one", async () => {
+    const { overheadTags } = await import("../../src/studio/stage");
+    const beam = (id: string, heightM: number, x: number) => ({ id, kind: "beam" as const, at: [x, 1] as [number, number], heightM });
+    const tags = overheadTags([beam("b1", 2.5, 0), beam("b2", 1.43, 3), beam("b3", 1.69, 5), { id: "d1", kind: "duct", at: [1, 1], heightM: 1.9 }, { id: "f1", kind: "furnace", at: [2, 2] }]);
+    expect(tags.map((t) => t.text)).toEqual(["3 beams · lowest 1.43 m clear", "Duct · 1.90 m clear"]);
+    expect(tags[0].at).toEqual([3, 1]);
+  });
 });

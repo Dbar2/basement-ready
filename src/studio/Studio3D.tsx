@@ -14,7 +14,7 @@ import { parseMesh, type Solid } from "../three/RealScan";
 import { Tag, TagRoot, TagTracker } from "../three/Tags";
 import type { Picked } from "./PlanSvg";
 import { css, DesignScene, wallHeight, WallBox, type Finish } from "./DesignScene";
-import { mainRect, suiteArea, walkStep } from "./stage";
+import { mainRect, overheadTags, suiteArea, walkStep } from "./stage";
 
 export type View = "walk" | "overview";
 
@@ -93,7 +93,8 @@ export function Studio3D(props: {
   );
 }
 
-const OVERHEAD_NAME: Record<string, string> = { beam: "Beam", duct: "Duct", bulkhead: "Bulkhead" };
+// Which label stays when two would overlap: what to fix, then rooms (the bigger first), then overhead finds.
+const PRIORITY = { marker: 3, room: 2, overhead: 1 };
 
 // What's picked, labels, a marker for a failing check, and the grab handles.
 function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { design: Design; h: number; selected: Picked; marker: Pt | null; view: View; handles: RefObject<THREE.Group | null>; canDragWall: (w: Wall) => boolean }) {
@@ -115,7 +116,7 @@ function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { 
             <ringGeometry args={[0.32, 0.4, 40]} />
             <meshBasicMaterial color={red} />
           </mesh>
-          <Tag position={[marker[0], 1.2, marker[1]]}>
+          <Tag position={[marker[0], 1.2, marker[1]]} priority={PRIORITY.marker}>
             <span className="viewer-tag studio-flag">To fix</span>
           </Tag>
         </>
@@ -126,17 +127,17 @@ function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { 
           .map((r) => {
             const c = mainRect(r.polygon);
             return (
-              <Tag key={r.id} position={[(c.x0 + c.x1) / 2, 0.3, (c.z0 + c.z1) / 2]}>
+              <Tag key={r.id} position={[(c.x0 + c.x1) / 2, 0.3, (c.z0 + c.z1) / 2]} priority={PRIORITY.room + Math.min(0.99, polygonArea(r.polygon) / 1000)}>
                 <span className="stage-tag">
                   <b>{r.name}</b> {polygonArea(r.polygon) >= 2 && <span>{polygonArea(r.polygon).toFixed(1)} m²</span>}
                 </span>
               </Tag>
             );
           })}
-      {fixtures.filter((f) => f.heightM != null && OVERHEAD_NAME[f.kind]).map((f) => (
-        <Tag key={f.id} position={[f.at[0], Math.min(f.heightM!, 2.2), f.at[1]]}>
+      {overheadTags(fixtures).map((t) => (
+        <Tag key={t.id} position={[t.at[0], Math.min(t.heightM, 2.2), t.at[1]]} priority={PRIORITY.overhead}>
           <span className="viewer-tag" data-kind="mechanical">
-            <i /> {OVERHEAD_NAME[f.kind]} · {f.heightM!.toFixed(2)} m clear
+            <i /> {t.text}
           </span>
         </Tag>
       ))}
