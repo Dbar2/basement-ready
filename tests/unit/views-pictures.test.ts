@@ -169,6 +169,27 @@ describe("the photo of an angle", () => {
     expect((await makePicture({ ...input, items: [bed, sofa, kitchen] }, withKitchen)).kind).toBe("photo");
   });
 
+  it("turns down a photo that lost a new wall (no door where the render drew one), telling the second try", async () => {
+    // The stair room's door, as the render drew it, and where SAM finds it in a photo that kept the wall.
+    const door = { x: 0.46, y: 0.15, w: 0.07, h: 0.67 };
+    const ok = { "basement window": [input.anchors[0].box], bed: [bed.box], sofa: [sofa.box] };
+    const prompts: string[] = [];
+    const lost = work({
+      found: ok,
+      edit: async (_g, prompt) => {
+        prompts.push(prompt);
+        return Buffer.from("photo");
+      },
+    });
+    const m = await makePicture({ ...input, doors: [door] }, lost);
+    expect(m.kind).toBe("render");
+    expect(m.checked).toMatch(/a new wall or its door is missing/);
+    expect(prompts[1]).toMatch(/Above all, keep every plain wall drawn in, and the door drawn in it, exactly where they are drawn\./);
+    const kept = await makePicture({ ...input, doors: [door] }, work({ found: { ...ok, door: [{ x: 0.47, y: 0.13, w: 0.07, h: 0.52 }] } }));
+    expect(kept.kind).toBe("photo");
+    expect(kept.checked).toMatch(/the new door where the design puts it/);
+  });
+
   it("shows the render without spending when the day's budget is used up", async () => {
     const w = work({ canSpend: async () => false });
     const m = await makePicture(input, w);

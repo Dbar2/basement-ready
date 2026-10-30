@@ -59,7 +59,7 @@ export function finishWords(f: Partial<Finishes>) {
     walls,
     ceiling: openCeiling
       ? "the open ceiling's joists, ducts and pipes all painted one dark charcoal, with black pendant lights"
-      : "a flat, smooth white drywall ceiling with slim recessed pot lights; ducts, pipes and beams boxed into smooth white drywall bulkheads",
+      : "a flat, smooth white drywall ceiling with slim recessed pot lights only, no hanging lights; ducts, pipes and beams boxed into smooth white drywall bulkheads",
     feel: style?.feel ?? KEY_WORDS[key].feel,
     colour: (kind: string) => KEY_WORDS[key].colours[kind as FurnitureKind] ?? null,
   };
