@@ -54,3 +54,11 @@ One JSON file per city, e.g. `waterloo-on.json`. The agent reads only this file 
 - Cost sources add `publisher`, `pageDate` and `sourceType` (`government`, `regulator` or `non-government`). Show every cost as an estimate, not a quote.
 - Lengths are in `m` or `mm`, areas in `m2` or `sqft`, money in CAD.
 - To add a city, copy this shape to `<city>-<prov>.json` and replace the contents. Keep the ids where the rule is the same provincial rule.
+
+## Permit package and do-it-yourself (added 2026-10-29)
+
+| File or field | Meaning |
+|---|---|
+| `<city>-on.json` → `permitPackage` | `signer` (`owner` or `brief`), `signerNote`, `signerSource`, `signerVerified`; the city's `drawings` checklist and `drawingsSource`; `scaleRule`; `forms[]` (`id`, `title`, `url` or null, `fill`: `acroform` or `summary`, `who`, `when`, `required`: `always` / `owner_designer` / `designer` / `owner_builder` / `if_asked`, `source`, `verified`); `portal`; `upload[]` (what goes where); `ownerBuilder`; `inspections[]` in order with `inspectionsSource`; `plumbing` fees. Sources in `SOURCES-diy.md`. |
+| `ontario-diy.json` | Ontario-wide: `notes[]` printed on sheet A6 (`when`: `always`, `fuel_burning`, `egress_new`), `alarms[]`, `trades[]` (`owner`: `yes`, `with_permit`, `ask`, `no`), `needsPro[]` (`when`: `egress_cut`, `separate_heating`, `gas_work`, `beam_change`, `always`), `electrical` (receptacle spacing, ESA homeowner fee bands). Every item has a `source` and `verified`. |
+| `prices-on.json` | `items[]`: one store product per takeoff line (`id` matches `server/diy/takeoff.ts`), with `priceCAD`, `unit`, `per` (what one unit covers, in the line's own unit), `retailer`, `store`, `url`, `checked`; `services[]`: published ranges for the pros a do-it-yourselfer still pays. Sources in `SOURCES-prices.md`. |

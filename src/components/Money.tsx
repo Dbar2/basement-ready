@@ -1,7 +1,9 @@
 // The money and the road to it, on the answer page: what they qualify for (decided in code from
 // each program's written conditions), the one answer that settles the rest, "How to apply" in the
 // order it happens, and who draws and builds it. Never a recommended business: public registries only.
+import { useEffect, useState } from "react";
 import type { Grant, MoneyQuestion, MoneyValue, PlanStep, ScanResult } from "../api";
+import { downloadApplication, getApplications, mailto, type Application, type Profile, type WorkspaceState } from "../workspaceApi";
 import { MoneyQuestionCard } from "./Questions";
 import "../styles/money.css";
 
@@ -287,6 +289,136 @@ export function GetItDone({ r, scanId, onShare }: { r: ScanResult; scanId: strin
         </>
       )}
       <p className="note">{cityNote ? `${cityNote} ` : ""}We don't recommend businesses either: these are public registries, so you can check anyone you hire.</p>
+    </section>
+  );
+}
+
+// One-click applications (server/apply/applications.ts): for each program they qualify for, the
+// filled PDF, a ready email, or the online form's answers to copy, with the documents ticked off.
+export function Applications({ scanId, r, profile, state, onSent }: { scanId: string; r: ScanResult; profile: Profile | null; state: WorkspaceState; onSent: (id: string) => void }) {
+  const [apps, setApps] = useState<Application[] | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const money = { grants: r.grants ?? [], moneyAnswered: r.moneyAnswered ?? [] };
+  const key = JSON.stringify([r.grants?.map((g) => [g.id, g.qualify]), profile, state.build?.pros?.length, state.build?.path]);
+  useEffect(() => {
+    void getApplications(scanId, money).then(setApps);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scanId, key]);
+  if (!apps?.length) return null;
+  const copy = async (label: string, value: string) => {
+    await navigator.clipboard?.writeText(value).catch(() => {});
+    setCopied(label);
+    setTimeout(() => setCopied((c) => (c === label ? null : c)), 1500);
+  };
+  return (
+    <section className="block apps" id="apply">
+      <h2>Apply in a click or two</h2>
+      <p className="lede">Filled in from what you've told us. You check it, sign it and send it.</p>
+      {error && <p className="error" role="alert">{error}</p>}
+      <ul className="ruled">
+        {apps.map((a) => {
+          const sent = state.apply?.[a.id]?.sentAt;
+          return (
+            <li key={a.id} className="app" data-qualify={a.qualify}>
+              <div className="program-head">
+                <h3>{a.shortName}</h3>
+                <span className="program-worth mono">{a.worth}</span>
+              </div>
+              <p className="mono app-when">
+                {a.when}
+                {a.qualify === "ask" ? " · if you qualify" : ""}
+                {sent ? ` · sent ${new Date(sent).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}` : ""}
+              </p>
+              <ol className="app-steps">
+                {a.steps.map((st) => (
+                  <li key={st}>{st}</li>
+                ))}
+              </ol>
+              <div className="app-actions">
+                {a.pdf && (
+                  <button
+                    className="btn btn-primary"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setBusy(a.id);
+                      setError(null);
+                      void downloadApplication(scanId, a.id, money)
+                        .catch((err) => setError(err instanceof Error ? err.message : "That didn't download."))
+                        .finally(() => setBusy(null));
+                    }}
+                  >
+                    {busy === a.id ? "Filling it in…" : "Download the filled form"}
+                  </button>
+                )}
+                {a.email && a.email.to && (
+                  <a className={a.pdf ? "btn btn-ghost" : "btn btn-primary"} href={mailto(a.email.to, a.email.subject, a.email.body)} onClick={() => onSent(a.id)}>
+                    Write the email
+                  </a>
+                )}
+                {a.email && !a.email.to && (
+                  <button className="btn btn-ghost" onClick={() => void copy(a.id, `${a.email!.subject}\n\n${a.email!.body}`)}>
+                    {copied === a.id ? "Copied" : "Copy the email for your lender"}
+                  </button>
+                )}
+                {a.link && (
+                  <a className={a.pdf || a.email ? "link-quiet" : "btn btn-primary"} href={a.link.url} target="_blank" rel="noreferrer" onClick={() => a.kind === "online_form" && onSent(a.id)}>
+                    {a.link.label}
+                  </a>
+                )}
+              </div>
+              {a.form && (
+                <details className="app-form" open>
+                  <summary>Your answers for the form</summary>
+                  {a.form.sections.map((sec) => (
+                    <div key={sec.title}>
+                      <p className="mono app-section">{sec.title}</p>
+                      <dl>
+                        {sec.fields.map((f) => (
+                          <div key={f.label}>
+                            <dt>{f.label}</dt>
+                            <dd>
+                              {f.value ? (
+                                <button className="app-copy" onClick={() => void copy(f.label, f.value!)} title="Copy">
+                                  {f.value} <span className="mono">{copied === f.label ? "copied" : "copy"}</span>
+                                </button>
+                              ) : (
+                                <span className="muted">Fill in yourself</span>
+                              )}
+                              {f.note && <span className="muted app-note">{f.note}</span>}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  ))}
+                </details>
+              )}
+              {a.documents.length > 0 && (
+                <ul className="app-docs">
+                  {a.documents.map((d) => (
+                    <li key={d.label} data-have={d.have || undefined}>
+                      <span aria-hidden>{d.have ? "✓" : "○"}</span>
+                      <span>
+                        <b>{d.label}</b> <span className="muted">{d.how}</span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {a.warnings.map((w) => (
+                <p key={w} className="note-inline">
+                  {w}
+                </p>
+              ))}
+              <a className="program-source" href={a.source.url} target="_blank" rel="noreferrer">
+                Source
+              </a>
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

@@ -2869,7 +2869,7 @@
     "trades": [
       {
         "title": "Electrician",
-        "detail": "Must hold an ESA licence; they take out the ESA permit for the electrical work.",
+        "detail": "Hire one with an ESA licence, who takes out the ESA permit; or do the wiring yourself in your own house, including a unit you'll rent, after filing an ESA homeowner notification (O. Reg. 570/05, s. 2).",
         "label": "ESA contractor locator",
         "url": "https://licensing.esasafe.com/contractor-locator-tool/"
       },
@@ -3407,6 +3407,170 @@
       "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
       "section": "Duplex: '$0.37 per square foot of finished space (or $163 minimum)'",
       "retrieved": "2026-10-29"
+    }
+  },
+  "permitPackage": {
+    "signer": "owner",
+    "signerNote": "Drawn by the owner of the house. Kitchener's duplex guide says the drawings for a duplex may be done by the homeowner or a qualified BCIN designer, with the name, designer statement and signature on the plans.",
+    "signerSource": {
+      "title": "Process Guide: Duplex (City of Kitchener, modified 2025-04-01)",
+      "url": "https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf",
+      "section": "p. 1-2",
+      "retrieved": "2026-10-28"
+    },
+    "signerVerified": true,
+    "drawings": [
+      "Site plan: lot lines, buildings, existing and proposed entrances, setbacks, driveway and required parking, the 1.1 m walkway, window wells and escape windows, stairs and ramps",
+      "Floor plans of both units: windows and doors with glass area, room names, kitchen and bath layout, beams, ceiling heights, where the units are separated and the fire separation assembly",
+      "A separate heating system: Schedule 1 from a BCIN HVAC designer and heat loss/gain calculations"
+    ],
+    "drawingsSource": {
+      "title": "Process Guide: Duplex (City of Kitchener, modified 2025-04-01)",
+      "url": "https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf",
+      "section": "p. 1-2",
+      "retrieved": "2026-10-28"
+    },
+    "scaleRule": null,
+    "forms": [
+      {
+        "id": "on_application",
+        "title": "Application for a Permit to Construct or Demolish (with Schedule 1)",
+        "url": "https://www.ontario.ca/files/2026-01/mmah-building-development-application-for-a-permit-to-construct-or-demolish-2026-en-2026-01-27.pdf",
+        "fill": "acroform",
+        "who": "You sign it as the applicant and the exempt designer",
+        "when": "Upload it with your application",
+        "required": "always",
+        "source": {
+          "title": "Building Code forms (Government of Ontario)",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/building-code-forms",
+          "section": "Application for a Permit to Construct or Demolish, effective 2026-02-16",
+          "retrieved": "2026-10-29"
+        },
+        "verified": true
+      },
+      {
+        "id": "kitchener_project_info",
+        "title": "Project Information: Residential (City of Kitchener)",
+        "url": "https://www.kitchener.ca/media/b1elhjjb/dsd_build_project_information_residential.pdf",
+        "fill": "acroform",
+        "who": "You",
+        "when": "Upload it with your application",
+        "required": "always",
+        "source": {
+          "title": "Residential building permits (City of Kitchener)",
+          "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
+          "section": "Adding a duplex or granny flat: Forms",
+          "retrieved": "2026-10-29"
+        },
+        "verified": true
+      },
+      {
+        "id": "kitchener_water_capacity",
+        "title": "Water Capacity Application Form (City of Kitchener, online)",
+        "url": null,
+        "fill": "summary",
+        "who": "You",
+        "when": "Filled online at form.kitchener.ca/DSD/PLAN/Water-Capacity-Application-Form when you apply; ask whether a basement unit is exempt",
+        "required": "always",
+        "source": {
+          "title": "Kitchener Water Allocation Policy (City of Kitchener)",
+          "url": "https://www.kitchener.ca/development-and-construction/kitchener-water-allocation-policy/",
+          "section": null,
+          "retrieved": "2026-10-29"
+        },
+        "verified": false,
+        "notes": "Whether a basement unit in an existing house is exempt was not confirmed."
+      }
+    ],
+    "portal": {
+      "label": "City of Kitchener online service portal",
+      "url": "https://onlineserviceportal2.kitchener.ca/citizenportal/"
+    },
+    "upload": [
+      {
+        "what": "Drawings",
+        "where": "This package's sheets A0 to A7, with your name and designer statement."
+      },
+      {
+        "what": "Application with Schedule 1",
+        "where": "Filled in this package: sign page 1 and Schedule 1."
+      },
+      {
+        "what": "Project Information: Residential",
+        "where": "Filled in this package."
+      },
+      {
+        "what": "Water Capacity Application",
+        "where": "The City's online form (link on the Permit tab)."
+      }
+    ],
+    "ownerBuilder": {
+      "allowed": true,
+      "detail": "Kitchener's duplex guides are written for homeowners as well as contractors, and an owner who lives at the house may do the suite's plumbing. No separate owner-builder form was found.",
+      "source": {
+        "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+        "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+        "section": "p. 3; p. 28",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    "inspections": [
+      {
+        "id": "pre",
+        "title": "Pre-construction meeting (optional)",
+        "when": "Before you start",
+        "who": "building"
+      },
+      {
+        "id": "underground_plumbing",
+        "title": "Underground plumbing",
+        "when": "Drains under the slab, before it's covered",
+        "who": "plumbing"
+      },
+      {
+        "id": "framing",
+        "title": "Framing, above-ground plumbing and HVAC rough-in",
+        "when": "Walls framed and roughed in, before insulation (ESA inspects the wiring separately)",
+        "who": "building"
+      },
+      {
+        "id": "insulation",
+        "title": "Insulation and fire-separation preparation",
+        "when": "Before drywall",
+        "who": "building"
+      },
+      {
+        "id": "occupancy",
+        "title": "Occupancy: plumbing, HVAC and fire-separation finals",
+        "when": "Bring the ESA letter, and the duct detector form if you used one",
+        "who": "building"
+      },
+      {
+        "id": "final",
+        "title": "Final inspection",
+        "when": "Once any outside work is done; the $250 rebate follows",
+        "who": "building"
+      }
+    ],
+    "inspectionsSource": {
+      "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+      "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+      "section": "p. 4 'Typical Inspections'",
+      "retrieved": "2026-10-29"
+    },
+    "plumbing": {
+      "separatePermit": false,
+      "detail": "A duplex conversion is billed at $0.37 per sq ft and the fee covers the inspections, plumbing included; a stand-alone plumbing permit is $11 a fixture, $95 minimum.",
+      "perFixtureCAD": 11,
+      "minimumCAD": 95,
+      "source": {
+        "title": "Permit Fee Schedule 2026 (City of Kitchener)",
+        "url": "https://www.kitchener.ca/media/kbkdq0kj/dsd_build_2026-permit-fee-schedule-aoda.pdf",
+        "section": null,
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
     }
   }
 }
