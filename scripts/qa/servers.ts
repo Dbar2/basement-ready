@@ -48,6 +48,9 @@ function apiEnv(runDir: string, takes: boolean): NodeJS.ProcessEnv {
     DAILY_COST_CAP_USD: "1000",
     CLERK_SECRET_KEY: "",
     CLERK_PUBLISHABLE_KEY: "",
+    // The as-built 3D's painting isn't recorded: QA_SCAN3D_TEXTURE_URL points it at a local paint-only
+    // service (services/scan3d `run_local.py serve --no-model`, free, token "qa"). Without it, plain colours.
+    ...(process.env.QA_SCAN3D_TEXTURE_URL ? { SCAN3D_TEXTURE_URL: process.env.QA_SCAN3D_TEXTURE_URL } : {}),
   };
 }
 

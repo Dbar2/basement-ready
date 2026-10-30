@@ -1,5 +1,6 @@
-// "What it could look like": the real room finished in 3D to a starting layout, and photos of the
-// homeowner's own frames finished by Muse Image (always labelled virtually staged, checked by SAM).
+// "What it could look like": the real room finished in 3D to the design they picked (its rooms and
+// checks, server/priced.ts; a starting layout before there's one), and photos of the homeowner's own
+// frames finished by Muse Image (always labelled virtually staged, checked by SAM).
 import { Suspense, useState } from "react";
 import type { Concept, Layout, Plan } from "../api";
 import { lazy3d, View3DBoundary } from "./View3D";
@@ -12,9 +13,10 @@ export function StagedViews(props: {
   scanId: string;
   plan: Plan | null;
   layout: Layout | null;
+  designName?: string | null; // the design the plan and layout are of, once they've picked one
   concepts: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
 }) {
-  const { scanId, plan, layout, concepts } = props;
+  const { scanId, plan, layout, designName, concepts } = props;
   const has3d = Boolean(plan && layout);
   const photos = concepts?.items ?? [];
   const [view, setView] = useState<"3d" | "photos">(has3d ? "3d" : "photos");
@@ -38,7 +40,7 @@ export function StagedViews(props: {
       </div>
       <p className="lede">
         {shown === "3d"
-          ? "Your real room, at its measured size, with its windows, door and stairs where they are: finished to a starting layout a designer can build from."
+          ? `Your real room, at its measured size, with its windows, door and stairs where they are: finished to ${designName ? `your design, ${designName.toLowerCase()}` : "a starting layout a designer can build from"}.`
           : "Your own footage, finished. Virtually staged: the room shape, windows and stairs are yours, the finishes are a suggestion."}
       </p>
 

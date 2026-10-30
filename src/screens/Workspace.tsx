@@ -107,22 +107,8 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
         void getWorkspace(scanId)
           .then(setWs)
           .catch(() => setWs({ profile: null, state: {}, prefill: { legalDescription: null, pin: null, rollNumber: null, fromOtherBasement: null }, site: null, locked: "We couldn't open your workspace. Try again in a moment." }));
-      // The sample's answers from the wait screen, applied the way a real scan applies them, over
-      // the money answers the sample comes with.
-      const told = Object.fromEntries((s.result?.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer]));
-      const early = scanId === "sample" ? { ...told, ...sampleEarlyAnswers() } : {};
-      if (s.result && Object.keys(early).length) {
-        const { household, ...answers } = early;
-        const res = await fetch("/api/recheck", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ result: s.result, answers, household: household ?? s.result.household }),
-        });
-        if (res.ok) {
-          setSampleAnswers(early);
-          return setR((await res.json()).result);
-        }
-      }
+      // The sample's answers (it comes with some; the wait screen adds more): getScan applied them.
+      if (scanId === "sample") setSampleAnswers({ ...Object.fromEntries((s.result?.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer])), ...sampleEarlyAnswers() });
       setR(s.result);
     });
   }, [scanId]);

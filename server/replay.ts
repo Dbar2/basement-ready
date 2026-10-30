@@ -9,7 +9,7 @@
 // REPLAY_DIR lists where answers live, colon-separated: replay reads them all, record writes the first.
 // See tests/e2e/README.md.
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
 
@@ -143,6 +143,59 @@ function find(key: string): { entry: Entry; dir: string } | null {
   return null;
 }
 
+// ---- Pictures: a recorded answer to a like request, when there's none to this exact one ----
+// What a picture is made from can differ from run to run for reasons that aren't the product's to fix:
+// the design pictures start from the browser's own render of the 3D (other pixels in another browser or
+// size), and the staged photos and the swipe deck pick their frames by what the 3D has measured so far.
+// With REPLAY_LOOSE=pictures, a Muse Image edit with no exact answer gets a recorded one asked with the
+// same prompt and size (or, failing that, the same kind of prompt), and a SAM check of one picture gets a
+// recorded one for the same concept: in replay, and in record mode too, so only a new kind of picture is
+// paid for. Each is logged as "loose", never silently, and nothing else is loose: SAM on the video,
+// Spark, the 3D and public data stay exact.
+type Loose = { exact: string; kind: string };
+function looseKeys(route: string, request: any): Loose | null {
+  if (!(process.env.REPLAY_LOOSE ?? "").split(",").includes("pictures")) return null;
+  if (route === "/images/edits") {
+    const form: any[] = request?.form ?? [];
+    const v = (f: string) => String(form.find((p) => p.field === f)?.value ?? "");
+    const prompt = v("prompt");
+    return { exact: `edit|${v("model")}|${v("size")}|${prompt}`, kind: `edit|${v("model")}|${prompt.slice(0, 48)}` };
+  }
+  const parts: any[] = Array.isArray(request?.json?.input?.[0]?.content) ? request.json.input[0].content : [];
+  if (request?.json?.model === "sam-3.1" && parts.some((c) => c?.type === "input_image")) {
+    const concept = String(parts.find((c) => c?.type === "input_text")?.text ?? "");
+    return { exact: `sam-image|${concept}`, kind: `sam-image|${concept}` };
+  }
+  return null;
+}
+
+let looseIndex: Map<string, { entry: Entry; dir: string }[]> | null = null;
+const looseTurn = new Map<string, number>();
+function looseFind(keys: Loose): { entry: Entry; dir: string; level: string } | null {
+  if (!looseIndex) {
+    looseIndex = new Map();
+    for (const dir of dirs()) {
+      if (!existsSync(dir)) continue;
+      for (const f of readdirSync(dir).filter((x) => x.endsWith(".json"))) {
+        const entry = JSON.parse(readFileSync(join(dir, f), "utf8")) as Entry;
+        const k = looseKeys(entry.route, entry.request);
+        if (!k) continue;
+        for (const lk of new Set([k.exact, k.kind])) looseIndex.set(lk, [...(looseIndex.get(lk) ?? []), { entry, dir }]);
+      }
+    }
+    for (const list of looseIndex.values()) list.sort((a, b) => a.entry.recordedAt.localeCompare(b.entry.recordedAt) || a.entry.key.localeCompare(b.entry.key));
+  }
+  for (const [level, lk] of [["prompt", keys.exact], ["kind", keys.kind]] as const) {
+    const list = looseIndex.get(lk);
+    if (!list?.length) continue;
+    // Taken in turn, so asking for several pictures of one kind doesn't give the same one every time.
+    const n = looseTurn.get(lk) ?? 0;
+    looseTurn.set(lk, n + 1);
+    return { ...list[n % list.length], level };
+  }
+  return null;
+}
+
 function toResponse(entry: Entry, dir: string): Response {
   const body = entry.bodyFile ? gunzipSync(readFileSync(join(dir, entry.bodyFile))) : Buffer.from(entry.body ?? "", "utf8");
   return new Response(entry.status === 204 ? null : new Uint8Array(body), {
@@ -178,6 +231,18 @@ export async function serviceFetch(
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
     log(process.env.REPLAY_LOG, { event: "hit", key, service, route, model, about, input, ms: saved.entry.ms });
     return toResponse(saved.entry, saved.dir);
+  }
+  // Pictures: a recorded one of the same kind instead of a miss in replay, and instead of paying again
+  // in record mode for a picture that differs only by timing or the browser's render.
+  {
+    const loose = looseKeys(route, request);
+    const like = loose ? looseFind(loose) : null;
+    if (like) {
+      const wait = like.entry.ms * pace();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      log(process.env.REPLAY_LOG, { event: "loose", level: like.level, key, served: like.entry.key, service, route, model, about, input, ms: like.entry.ms });
+      return toResponse(like.entry, like.dir);
+    }
   }
   if (mode === "replay") {
     log(process.env.REPLAY_LOG, { event: "miss", key, service, route, model, about });

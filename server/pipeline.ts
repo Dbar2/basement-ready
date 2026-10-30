@@ -565,6 +565,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd + ((await watching.watch)?.costUsd ?? 0), finishedAt: new Date() })
       .where(eq(schema.scans.id, scanId));
     await emit("done", "Your answer is ready");
+    // The as-built 3D: the plan painted with the video (server/asBuilt.ts), in the background.
+    void import("./asBuilt").then((m) => m.paintAsBuiltLater(scanId));
     // Photos that finished while this was written go in now; photos that never started, start.
     await settlePhotos(scanId);
     await enqueuePhotos(scanId);

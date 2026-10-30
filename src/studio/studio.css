@@ -105,7 +105,9 @@
 /* The 3D in a light drawing frame: never a dark slab on the sheet. */
 .studio-3d { position: relative; height: clamp(340px, 60vh, 620px); border: var(--line); border-radius: var(--radius-2); overflow: hidden; background: var(--color-surface); }
 .studio-3d .stage-tools { justify-content: flex-start; }
-
+/* The fire-separation key on the 3D's top edge: a plain tag with a line sample, like a drawing's legend. */
+.studio-key { margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 6px; min-height: 28px; padding: 4px 9px; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); color: var(--color-ink); font-size: 12px; font-weight: 600; }
+.studio-key i { width: 16px; height: 4px; background: var(--color-stop); }
 .studio-flag { background: var(--color-stop); color: var(--color-card); }
 
 .picked { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 0; border-top: var(--line-ink); border-bottom: var(--line); }

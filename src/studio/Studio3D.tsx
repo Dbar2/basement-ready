@@ -1,4 +1,5 @@
-// The studio's 3D: the design inside the real scan (src/studio/DesignScene.tsx draws it), with labels
+// The studio's 3D: the design inside the basement as built (src/three/AsBuilt.tsx), or the raw scan
+// when they ask for it (src/studio/DesignScene.tsx draws either), with labels
 // drawn over the canvas (src/three/Tags.tsx), what's picked, a marker for a failing check and the grab
 // handles. Walk it at eye height without passing through walls, or look from above and drag walls and
 // doors. The canvas is mounted once: an edit changes what's in it, never remounts it.
@@ -8,11 +9,13 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { along, bounds, dot, polygonArea, project, solidPieces, sub, wallNormal } from "../../server/model/geometry";
 import type { Design, Existing, Pt, Wall } from "../../server/model/types";
+import { useAtlas } from "../three/AsBuilt";
+import { bestView, spotsOf, type Spot } from "../three/AsBuiltView";
 import { parseMesh, type Solid } from "../three/RealScan";
 import { Tag, TagRoot, TagTracker } from "../three/Tags";
 import type { Picked } from "./PlanSvg";
 import { css, DesignScene, wallHeight, WallBox, type Finish } from "./DesignScene";
-import { mainRect, suiteArea, walkStep } from "./stage";
+import { mainRect, overheadTags, suiteArea, walkStep } from "./stage";
 
 export type View = "walk" | "overview";
 
@@ -22,9 +25,27 @@ export function meshUrls(scanId: string) {
   return scanId === "sample" ? ["/samples/sample/3d/mesh.bin"] : [`/api/scans/${scanId}/3d/mesh.bin?room=all`, `/api/scans/${scanId}/3d/mesh.bin`];
 }
 
-function useSolid(scanId: string) {
+// Where they filmed from (the scan's camera spots), in plan metres, for where the walk starts.
+function useSpots(scanId: string, k: number) {
+  const [spots, setSpots] = useState<Spot[]>([]);
+  useEffect(() => {
+    let gone = false;
+    fetch(scanId === "sample" ? "/samples/sample/3d/scan.json" : `/api/scans/${scanId}/3d/scan.json?room=all`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((scan) => !gone && setSpots(spotsOf(scan, k)))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [scanId, k]);
+  return spots;
+}
+
+// The raw scan's solid surface, once `scanId` is given (it's big: only when they ask for it).
+function useSolid(scanId: string | null) {
   const [solid, setSolid] = useState<Solid | null | "none">(null);
   useEffect(() => {
+    if (!scanId) return;
     let gone = false;
     (async () => {
       for (const url of meshUrls(scanId)) {
@@ -52,6 +73,7 @@ export function Studio3D(props: {
   existing: Existing;
   design: Design;
   view: View;
+  layer?: "built" | "scan"; // the basement as built (default), or the raw scan
   finish: Finish;
   selected: Picked;
   marker: Pt | null;
@@ -62,20 +84,24 @@ export function Studio3D(props: {
   onOpening: (id: string, offsetM: number, done: boolean) => void;
 }) {
   const { existing, design, view } = props;
-  const solid = useSolid(props.scanId);
+  const wantScan = props.layer === "scan";
+  const solid = useSolid(wantScan ? props.scanId : null);
+  const { atlas } = useAtlas(props.scanId, existing);
+  const spots = useSpots(props.scanId, existing.scale.factor ?? 1);
   const phone = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   const area = useMemo(() => suiteArea(existing, design), [existing, design]);
   const handles = useRef<THREE.Group>(null);
-  if (solid === null) return <p className="viewer-empty">Loading your basement in 3D…</p>;
+  // The as-built model stays up while the scan downloads, and when there's no scan to show.
+  const scan = wantScan && solid && solid !== "none" ? solid : null;
   return (
     <TagRoot>
       <Canvas className="viewer-canvas" camera={{ fov: 62, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
         <TagTracker />
         <color attach="background" args={[css("--color-surface", "#E6EBE4")]} />
-        <DesignScene existing={existing} design={design} finish={props.finish} scan={solid === "none" ? null : solid} overview={view === "overview"} shell={solid === "none"} />
+        <DesignScene existing={existing} design={design} finish={props.finish} built={scan ? null : { atlas }} scan={scan} overview={view === "overview"} />
         <Overlay design={design} h={wallHeight(existing)} selected={props.selected} marker={props.marker} view={view} handles={handles} canDragWall={props.canDragWall} />
         {view === "walk" ? (
-          <Walker design={design} existing={existing} start={area ? mainRect(area.polygon) : null} reduced={props.reduced} />
+          <Walker design={design} existing={existing} start={area ? mainRect(area.polygon) : null} spots={spots} reduced={props.reduced} />
         ) : (
           <Overview existing={existing} reduced={props.reduced} />
         )}
@@ -85,7 +111,8 @@ export function Studio3D(props: {
   );
 }
 
-const OVERHEAD_NAME: Record<string, string> = { beam: "Beam", duct: "Duct", bulkhead: "Bulkhead" };
+// Which label stays when two would overlap: what to fix, then rooms (the bigger first), then overhead finds.
+const PRIORITY = { marker: 3, room: 2, overhead: 1 };
 
 // What's picked, labels, a marker for a failing check, and the grab handles.
 function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { design: Design; h: number; selected: Picked; marker: Pt | null; view: View; handles: RefObject<THREE.Group | null>; canDragWall: (w: Wall) => boolean }) {
@@ -107,7 +134,7 @@ function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { 
             <ringGeometry args={[0.32, 0.4, 40]} />
             <meshBasicMaterial color={red} />
           </mesh>
-          <Tag position={[marker[0], 1.2, marker[1]]}>
+          <Tag position={[marker[0], 1.2, marker[1]]} priority={PRIORITY.marker}>
             <span className="viewer-tag studio-flag">To fix</span>
           </Tag>
         </>
@@ -118,17 +145,17 @@ function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { 
           .map((r) => {
             const c = mainRect(r.polygon);
             return (
-              <Tag key={r.id} position={[(c.x0 + c.x1) / 2, 0.3, (c.z0 + c.z1) / 2]}>
+              <Tag key={r.id} position={[(c.x0 + c.x1) / 2, 0.3, (c.z0 + c.z1) / 2]} priority={PRIORITY.room + Math.min(0.99, polygonArea(r.polygon) / 1000)}>
                 <span className="stage-tag">
                   <b>{r.name}</b> {polygonArea(r.polygon) >= 2 && <span>{polygonArea(r.polygon).toFixed(1)} m²</span>}
                 </span>
               </Tag>
             );
           })}
-      {fixtures.filter((f) => f.heightM != null && OVERHEAD_NAME[f.kind]).map((f) => (
-        <Tag key={f.id} position={[f.at[0], Math.min(f.heightM!, 2.2), f.at[1]]}>
+      {overheadTags(fixtures).map((t) => (
+        <Tag key={t.id} position={[t.at[0], Math.min(t.heightM, 2.2), t.at[1]]} priority={PRIORITY.overhead}>
           <span className="viewer-tag" data-kind="mechanical">
-            <i /> {OVERHEAD_NAME[f.kind]} · {f.heightM!.toFixed(2)} m clear
+            <i /> {t.text}
           </span>
         </Tag>
       ))}
@@ -253,7 +280,7 @@ function Overview({ existing, reduced }: { existing: Existing; reduced: boolean 
 
 // Walking at eye height: drag to look, tap the floor to walk there, arrow keys or WASD to step. The
 // design's walls stop you; doors let you through.
-function Walker({ design, existing, start, reduced }: { design: Design; existing: Existing; start: { x0: number; z0: number; x1: number; z1: number } | null; reduced: boolean }) {
+function Walker({ design, existing, start, spots, reduced }: { design: Design; existing: Existing; start: { x0: number; z0: number; x1: number; z1: number } | null; spots: Spot[]; reduced: boolean }) {
   const { camera, gl } = useThree();
   const look = useRef({ yaw: 0, pitch: -0.08 });
   const goal = useRef<THREE.Vector3 | null>(null);
@@ -262,16 +289,28 @@ function Walker({ design, existing, start, reduced }: { design: Design; existing
   const solid = useRef<[Pt, Pt][]>([]);
   solid.current = useMemo(() => [...design.proposed.walls.flatMap((w) => solidPieces(w, design.proposed.openings)), ...existing.walls.filter((w) => !design.proposed.walls.some((x) => x.id === w.id)).map((w): [Pt, Pt] => [w.a, w.b])], [design, existing]);
 
+  // Where the walk starts is set once, before they move; edits don't move you.
+  const placed = useRef<"none" | "middle" | "spot">("none");
   useEffect(() => {
-    // Start in the middle of the suite's main room, looking across it.
+    // From where they filmed that looks furthest into the basement, once the spots are in. Doors count
+    // as shut here: a long view through a doorway is a close-up of the door.
+    const shut = [...design.proposed.walls, ...existing.walls.filter((w) => !design.proposed.walls.some((x) => x.id === w.id))].map((w): [Pt, Pt] => [w.a, w.b]);
+    const view = bestView(spots, shut, existing.rooms.map((r) => r.polygon));
+    if (view && placed.current !== "spot") {
+      camera.position.set(view.at[0], EYE_M, view.at[1]);
+      look.current = { yaw: Math.atan2(-view.dir[0], -view.dir[1]), pitch: -0.08 };
+      placed.current = "spot";
+      return;
+    }
+    if (placed.current !== "none") return;
+    // Meanwhile (or for a scan without spots): the middle of the suite's main room, facing its longest view.
     const c: Pt = start ? [(start.x0 + start.x1) / 2, (start.z0 + start.z1) / 2] : [0, 0];
     camera.position.set(c[0], EYE_M, c[1]);
-    const bed = design.proposed.rooms.find((r) => r.kind === "bedroom" && r.unit === 2);
-    const to = bed ? mainRect(bed.polygon) : null;
-    if (to) look.current.yaw = Math.atan2(-((to.x0 + to.x1) / 2 - c[0]), -((to.z0 + to.z1) / 2 - c[1]));
-    // Where the walk starts is set once; edits don't move you.
+    const middle = bestView([0, 1, 2, 3].map((q): Spot => ({ at: c, dir: [Math.cos((q * Math.PI) / 2), Math.sin((q * Math.PI) / 2)] })), shut, []);
+    if (middle) look.current.yaw = Math.atan2(-middle.dir[0], -middle.dir[1]);
+    placed.current = "middle";
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera]);
+  }, [camera, spots]);
 
   useEffect(() => {
     const el = gl.domElement;

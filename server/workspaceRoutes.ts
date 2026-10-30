@@ -17,7 +17,9 @@ import { buildPermitPackage, type Copy, formInputs, formValues, localDate, NotRe
 import { basementGeometry } from "./permit/plans";
 import { scopeOfWork } from "./permit/sheets";
 import { lookupSiteGeometry, type Property, type SiteGeometry } from "./property";
+import { savedAnswers } from "./answers";
 import { overSpend } from "./limits";
+import { pricedForBasement, pricedSample } from "./priced";
 import { keys, storage } from "./storage";
 import { basementFor, cleanPatch, loadWorkspace, parseClaims, profileFromOtherBasements, saveWorkspace, StateSchema, ProfileSchema, type Profile, type StoredState } from "./workspace";
 
@@ -103,8 +105,9 @@ function regionValues(profile: Profile | null, result: any, address: string, cit
   };
 }
 
-function sampleResult() {
-  return JSON.parse(readFileSync(`${SAMPLE}/result.json`, "utf8"));
+// The example's answer, priced on the design its browser picked (server/priced.ts).
+function sampleResult(state: StoredState = {}) {
+  return pricedSample(JSON.parse(readFileSync(`${SAMPLE}/result.json`, "utf8")), state);
 }
 
 // What the sample's client sends: a workspace (validated) and, for money, its own re-checked grants.
@@ -185,7 +188,10 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     if (!UUID.test(id)) return null;
     const userId = await currentUser(c);
     const a = await basementFor(id, { userId, claims: parseClaims(c.req.header("x-claims")) });
-    return a.basement ? { ...a, userId, id } : null;
+    if (!a.basement) return null;
+    // Every document here is priced on the design they picked: one quote, one list of fixes.
+    const result = a.result?.findings && a.allowed ? await pricedForBasement(id, a.basement.id, { ...a.result, household: a.basement.household ?? a.result.household }, await savedAnswers(a.basement.id)) : a.result;
+    return { ...a, result, userId, id };
   }
 
   // ---- The workspace itself ----
@@ -220,7 +226,10 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     if (!a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
     const patch = cleanPatch(await c.req.json().catch(() => null));
     if ("error" in patch) return c.json({ error: patch.error }, 400);
-    return c.json(await saveWorkspace(a.basement.id, patch));
+    const saved = await saveWorkspace(a.basement.id, patch);
+    // A changed plan is painted again for the as-built 3D (server/asBuilt.ts); an unchanged one is a no-op.
+    if (patch.state?.model) void import("./asBuilt").then((m) => m.paintAsBuiltLater(a.id));
+    return c.json(saved);
   });
 
   // ---- Permit package and forms ----
@@ -373,7 +382,7 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const b = sampleBody(body);
     const copy: Copy = body?.copy === "submit" || body?.copy === "share" ? body.copy : "review";
     try {
-      const out = await buildPermitPackage({ result: sampleResult(), municipality: "waterloo-on", address: "The sample basement", profile: b.profile, state: b.state, site: null, aerialJpeg: null, favourites: copy === "review" ? await favouriteImages("sample", b.state) : [], copy });
+      const out = await buildPermitPackage({ result: sampleResult(b.state), municipality: "waterloo-on", address: "The sample basement", profile: b.profile, state: b.state, site: null, aerialJpeg: null, favourites: copy === "review" ? await favouriteImages("sample", b.state) : [], copy });
       return pdf(out.bytes, `permit-${copy}-sample.pdf`);
     } catch (err) {
       if (err instanceof NotReady) return c.json({ error: err.message, left: err.left }, 409);
@@ -383,16 +392,16 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
 
   app.post("/api/sample/permit/status", async (c) => {
     const b = sampleBody(await c.req.json().catch(() => ({})));
-    return c.json(permitPayload({ result: sampleResult(), municipality: "waterloo-on", state: b.state, profile: b.profile }, { address: "The sample basement", packageUrl: null }));
+    return c.json(permitPayload({ result: sampleResult(b.state), municipality: "waterloo-on", state: b.state, profile: b.profile }, { address: "The sample basement", packageUrl: null }));
   });
 
   app.post("/api/sample/diy", async (c) => {
     const b = sampleBody(await c.req.json().catch(() => ({})));
-    return c.json(diyPlan(sampleResult(), b.state, "waterloo-on"));
+    return c.json(diyPlan(sampleResult(b.state), b.state, "waterloo-on"));
   });
 
   function sampleApplyInput(b: ReturnType<typeof sampleBody>): ApplyInput {
-    const base = sampleResult();
+    const base = sampleResult(b.state);
     const result = { ...base, ...(b.grants ? { grants: b.grants } : {}), ...(b.moneyAnswered ? { moneyAnswered: b.moneyAnswered } : {}) };
     const { areaM2, bedrooms, scope } = project(result, b.state);
     return { scanId: "sample", result, profile: b.profile, state: b.state, address: "The sample basement", municipality: "Waterloo", site: null, areaM2, bedrooms, scope };

@@ -34,10 +34,10 @@ export async function readPdf(bytes: Uint8Array) {
     return { width, height, text };
   });
   // Every drawing's title block lists the whole set ("A0  Cover and key plan") and prints its own number
-  // on a line by itself (server/permit/pdf.ts frame).
+  // on a line by itself (server/permit/pdf.ts frame): "A2", or "A2.1" and "A2.2" when a plan takes two sheets.
   const sheets = pages.flatMap((p, i) => {
     const lines = p.text.split("\n").map((l) => l.trim());
-    const number = lines.find((l) => /^A\d{1,2}$/.test(l));
+    const number = lines.find((l) => /^A\d{1,2}(\.\d+)?$/.test(l));
     return number ? [{ page: i + 1, number }] : [];
   });
   const index = new Map<string, string>();

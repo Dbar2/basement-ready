@@ -2,6 +2,7 @@
 
     python run_local.py scan  FRAMES_DIR_OR_VIDEO --out OUT [--max-frames 16] [--floor-to-joists 2.10] [--preview]
     python run_local.py serve [--port 8790]                     # same HTTP API as Modal, on localhost
+    python run_local.py serve --port 8791 --no-model            # /floorplan and /texture only: no model, no GPU
     python run_local.py post  URL FRAMES_DIR_OR_VIDEO --out OUT  # call any scan3d server, unpack the reply
 
 scan and serve load MapAnything on MPS (or --device cpu). post only needs the frames.
@@ -84,7 +85,7 @@ def main():
     p = sub.add_parser("serve")
     p.add_argument("--port", type=int, default=8790)
     p.add_argument("--device")
-    p.add_argument("--no-model", action="store_true", help="serve /floorplan only, without loading MapAnything (no GPU)")
+    p.add_argument("--no-model", action="store_true", help="serve /floorplan and /texture only, without loading MapAnything (no GPU)")
     args = ap.parse_args()
 
     if args.cmd == "scan":

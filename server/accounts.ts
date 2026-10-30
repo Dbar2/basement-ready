@@ -2,7 +2,9 @@
 // Pure database functions keyed by user id, so they can be tested without Clerk.
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
+import { savedAnswers } from "./answers";
 import { db, schema } from "./db";
+import { pricedForBasement } from "./priced";
 
 export async function ensureUser(id: string, email: string | null) {
   await db.insert(schema.users).values({ id, email }).onConflictDoUpdate({ target: schema.users.id, set: { email } });
@@ -40,9 +42,11 @@ export async function listBasements(userId: string) {
     .from(schema.scans)
     .where(inArray(schema.scans.basementId, basements.map((b) => b.id)))
     .orderBy(desc(schema.scans.createdAt));
-  return basements.map((b) => {
+  return Promise.all(basements.map(async (b) => {
     const latest = scans.find((s) => s.basementId === b.id);
-    const r = latest?.result as { headline?: string; verdict?: string; cost?: { low: number; high: number } } | null;
+    const stored = latest?.result as { headline?: string; verdict?: string; cost?: { low: number; high: number }; findings?: unknown[] } | null;
+    // Priced on the design they picked, as their workspace shows it (server/priced.ts).
+    const r = latest && stored?.findings ? await pricedForBasement(latest.id, b.id, { ...(stored as any), household: b.household ?? (stored as any).household }, await savedAnswers(b.id)) : stored;
     return {
       id: b.id,
       address: b.address,
@@ -51,7 +55,7 @@ export async function listBasements(userId: string) {
       updatedAt: b.updatedAt,
       latestScan: latest ? { id: latest.id, status: latest.status, headline: r?.headline ?? null, verdict: r?.verdict ?? null, cost: r?.cost ?? null, createdAt: latest.createdAt } : null,
     };
-  });
+  }));
 }
 
 // Scan ids under the user's basements, so their stored files can be removed too.
