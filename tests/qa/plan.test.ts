@@ -25,7 +25,7 @@ describe("capture plan", () => {
 
   it("gives each 3D view the three fixed cameras, and the home story its scroll steps", () => {
     const shots = plan({ browsers: ["chromium"], viewports: ["desktop"] });
-    for (const s of SCREENS.filter((x) => x.kind === "3d")) {
+    for (const s of SCREENS.filter((x) => x.kind === "3d" && !x.optIn)) {
       expect(shots.filter((x) => x.screen === s.id && x.camera).map((x) => x.camera)).toEqual(CAMERAS);
     }
     expect(shots.filter((x) => x.screen === "home-story" && x.step).map((x) => x.step)).toEqual(STORY_STEPS);
@@ -43,6 +43,11 @@ describe("capture plan", () => {
     const ids = plan({ all: true, scans: ["sample", "3f2a-take"] }).map((s) => s.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const id of ids) expect(id).toMatch(/^[a-z0-9@.-]+$/i);
+  });
+
+  it("shoots the pictures page's hidden canvas only when asked", () => {
+    expect(plan().some((s) => s.screen === "pictures-3d")).toBe(false);
+    expect(plan({ only: ["pictures-3d"] }).filter((s) => s.camera)).toHaveLength(12);
   });
 
   it("leaves the marketing pages out unless asked", () => {
