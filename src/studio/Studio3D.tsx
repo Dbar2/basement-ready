@@ -66,12 +66,12 @@ export function Studio3D(props: {
   const phone = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   const area = useMemo(() => suiteArea(existing, design), [existing, design]);
   const handles = useRef<THREE.Group>(null);
-  if (solid === null) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
+  if (solid === null) return <p className="viewer-empty">Loading your basement in 3D…</p>;
   return (
     <TagRoot>
       <Canvas className="viewer-canvas" camera={{ fov: 62, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
         <TagTracker />
-        <color attach="background" args={[css("--color-ink", "#0F2A1E")]} />
+        <color attach="background" args={[css("--color-surface", "#E6EBE4")]} />
         <DesignScene existing={existing} design={design} finish={props.finish} scan={solid === "none" ? null : solid} overview={view === "overview"} shell={solid === "none"} />
         <Overlay design={design} h={wallHeight(existing)} selected={props.selected} marker={props.marker} view={view} handles={handles} canDragWall={props.canDragWall} />
         {view === "walk" ? (
