@@ -1,21 +1,21 @@
 // The basement putting itself together while the 3D service works (wait screen). First the camera's
-// walk, drawn on the floor like a line on a plan; then each area's surface points (or its mesh, when
-// the server made one) fading in in filming order, as the server sends them. It turns slowly so it
-// reads as 3D. The scan sends `path` and `model` events; a take without 3D sends neither, and the wait
-// screen never shows this.
-import { Line, useGLTF } from "@react-three/drei";
+// walk, drawn on the floor like a line on a plan; then each area's surface points fading in in filming
+// order, set into the walk where the layout puts them (src/screens/assembly.ts). When the whole
+// basement is done it takes over in its own frame, with the walk re-drawn in it, and its solid surface
+// fades in over the points. It turns slowly so it reads as 3D. A take without 3D sends no `path` or
+// `model` events, and the wait screen never shows this.
+import { Line } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Component, Suspense, useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import * as THREE from "three";
-import { parseSurfels } from "../three/RealScan";
-
-export type AreaModel = { key: string; area: number | "all"; surfels: string; mesh?: string };
-type V2 = [number, number];
+import { placeGroup, placePoint, type AreaModel, type Place, type V2 } from "../screens/assembly";
+import { parseMesh, parseSurfels } from "../three/RealScan";
 
 const MAX_POINTS = 45_000; // per area, so a phone keeps up
 const DRAW_S = 3.2; // the walk draws itself in this long
 const REVEAL_S = 2.8; // an area assembles in this long
 const SPIN = 0.09; // radians a second
+const FADE = 1.4; // the solid surface takes over from the points at this rate
 
 const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -99,45 +99,72 @@ function AreaPoints({ cloud, hidden }: { cloud: Cloud; hidden: boolean }) {
     born.current ??= clock.elapsedTime;
     const u = material.uniforms;
     u.uReveal.value = still() ? 1.2 : Math.min(1.2, (clock.elapsedTime - born.current) / REVEAL_S);
-    u.uFade.value = THREE.MathUtils.damp(u.uFade.value, hidden ? 0 : 1, 3, dt);
+    u.uFade.value = THREE.MathUtils.damp(u.uFade.value, hidden ? 0 : 1, FADE, dt);
     u.uScale.value = size.height;
   });
   return <points geometry={cloud.geometry} material={material} />;
 }
 
-// A mesh, when the server made one: lit, fading in over its points.
-function AreaMesh({ url, hidden }: { url: string; hidden: boolean }) {
-  const gltf = useGLTF(url, false, true);
-  const scene = useMemo(() => gltf.scene.clone(true), [gltf]);
-  const materials = useMemo(() => {
-    const list: THREE.Material[] = [];
-    scene.traverse((o) => {
-      const m = (o as THREE.Mesh).material;
-      for (const x of Array.isArray(m) ? m : m ? [m] : []) {
-        const c = x.clone();
-        c.transparent = true;
-        c.opacity = 0;
-        (o as THREE.Mesh).material = c;
-        list.push(c);
-      }
-    });
-    return list;
-  }, [scene]);
-  useFrame((_, dt) => {
-    for (const m of materials) m.opacity = THREE.MathUtils.damp(m.opacity, hidden ? 0 : 1, 1.6, dt);
-  });
-  return <primitive object={scene} />;
+const toLinear = Array.from({ length: 256 }, (_, i) => new THREE.Color().setRGB(i / 255, 0, 0, THREE.SRGBColorSpace).r);
+
+// The whole basement's solid surface (BRM1), in the colours the camera saw.
+async function loadSolid(url: string): Promise<THREE.BufferGeometry> {
+  const solid = parseMesh(await fetch(url).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status))))));
+  const g = new THREE.BufferGeometry();
+  const pos = new Float32Array(solid.pos.length), col = new Float32Array(solid.color.length);
+  for (let i = 0; i < pos.length; i++) {
+    pos[i] = solid.pos[i] / 1000;
+    col[i] = toLinear[solid.color[i]];
+  }
+  g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+  g.setIndex(new THREE.BufferAttribute(solid.faces, 1));
+  g.computeVertexNormals();
+  return g;
 }
 
-// A mesh that won't load leaves the points showing.
-class Quietly extends Component<{ children: ReactNode }, { failed: boolean }> {
-  state = { failed: false };
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-  render() {
-    return this.state.failed ? null : this.props.children;
-  }
+// Fading in over the points, with the ceiling cut at the same height as theirs.
+function SolidSurface({ geometry, cutY }: { geometry: THREE.BufferGeometry; cutY: number }) {
+  const { gl } = useThree();
+  const material = useMemo(() => {
+    const cut = new THREE.Plane(new THREE.Vector3(0, -1, 0), cutY);
+    return new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, clippingPlanes: [cut], toneMapped: false, transparent: true, opacity: 0, depthWrite: false });
+  }, [cutY]);
+  useEffect(() => {
+    gl.localClippingEnabled = true;
+    return () => material.dispose();
+  }, [gl, material]);
+  useFrame((_, dt) => {
+    if (!material.transparent) return;
+    material.opacity = still() ? 1 : THREE.MathUtils.damp(material.opacity, 1, FADE, dt);
+    if (material.opacity < 0.98) return;
+    // Fully in: draw it as the solid it is.
+    material.opacity = 1;
+    material.transparent = false;
+    material.depthWrite = true;
+    material.needsUpdate = true;
+  });
+  return <mesh geometry={geometry} material={material} frustumCulled={false} />;
+}
+
+// An area set into the walk. The layout is provisional, so a later placement eases it to where it settles.
+function Placed({ place, children }: { place: Place | null; children: ReactNode }) {
+  const group = useRef<THREE.Group>(null);
+  const target = placeGroup(place);
+  const [x, , z] = target.position;
+  const to = useMemo(() => new THREE.Vector3(x, 0, z), [x, z]);
+  const ready = useRef(false);
+  useFrame((_, dt) => {
+    const g = group.current;
+    if (!g) return;
+    const k = ready.current && !still() ? 1 - Math.exp(-3 * dt) : 1;
+    ready.current = true;
+    g.position.lerp(to, k);
+    const turn = target.rotationY - g.rotation.y;
+    g.rotation.y += Math.atan2(Math.sin(turn), Math.cos(turn)) * k;
+    g.scale.setScalar(g.scale.x + (target.scale - g.scale.x) * k);
+  });
+  return <group ref={group}>{children}</group>;
 }
 
 function Walk({ path, color, y }: { path: V2[]; color: string; y: number }) {
@@ -202,10 +229,13 @@ export default function Assembling({ path, models }: { path: V2[] | null; models
   const [clouds, setClouds] = useState<Record<string, Cloud>>({});
   const loaded = useRef(clouds);
   loaded.current = clouds;
+  const final = models.find((m) => m.area === "all");
+  const finalCloud = final ? clouds[final.key] : undefined;
   useEffect(() => {
     let live = true;
     for (const m of models) {
-      if (clouds[m.key]) continue;
+      // Once the whole basement is in, the areas left over aren't needed.
+      if (clouds[m.key] || (finalCloud && m !== final)) continue;
       loadCloud(m.surfels)
         .then((c) => live && setClouds((prev) => ({ ...prev, [m.key]: c })))
         .catch(() => {});
@@ -215,56 +245,89 @@ export default function Assembling({ path, models }: { path: V2[] | null; models
     };
     // Each model loads once; clouds only grows.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [models]);
+  }, [models, Boolean(finalCloud)]);
   useEffect(() => () => Object.values(loaded.current).forEach((c) => c.geometry.dispose()), []);
 
-  // The whole basement, once it's here, stands in for the areas.
-  const whole = models.find((m) => m.area === "all" && clouds[m.key]);
-  const shown = models.filter((m) => clouds[m.key]);
+  // The solid surface, once the whole basement's points have assembled. If it won't load, the points stay.
+  const [solid, setSolid] = useState<THREE.BufferGeometry | null>(null);
+  const meshUrl = finalCloud ? final?.mesh : undefined;
+  useEffect(() => {
+    if (!meshUrl) return;
+    let live = true;
+    let made: THREE.BufferGeometry | null = null;
+    Promise.all([loadSolid(meshUrl), new Promise((r) => setTimeout(r, REVEAL_S * 1000))])
+      .then(([g]) => {
+        made = g;
+        if (live) setSolid(g);
+        else g.dispose();
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+      made?.dispose();
+      setSolid(null);
+    };
+  }, [meshUrl]);
+
+  // One frame at a time: the whole basement in its own, or the walk with the areas set into it.
+  const walk = finalCloud ? (final?.path ?? null) : path;
+  const areas = finalCloud ? [] : models.filter((m) => m.area !== "all" && clouds[m.key]);
   const bounds = useMemo(() => {
     const min = new THREE.Vector3(Infinity, Infinity, Infinity);
     const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
-    for (const [x, z] of path ?? []) {
-      min.min(new THREE.Vector3(x, 0, z));
-      max.max(new THREE.Vector3(x, 0, z));
+    const add = (x: number, z: number) => {
+      min.x = Math.min(min.x, x);
+      max.x = Math.max(max.x, x);
+      min.z = Math.min(min.z, z);
+      max.z = Math.max(max.z, z);
+    };
+    for (const [x, z] of walk ?? []) add(x, z);
+    const boxes = finalCloud ? [{ c: finalCloud, place: null }] : areas.map((m) => ({ c: clouds[m.key], place: m.place }));
+    for (const { c, place } of boxes) {
+      for (const x of [c.min.x, c.max.x])
+        for (const z of [c.min.z, c.max.z]) {
+          const [px, , pz] = placePoint(place, x, 0, z);
+          add(px, pz);
+        }
+      min.y = Math.min(min.y, placePoint(place, 0, c.min.y, 0)[1]);
+      max.y = Math.max(max.y, placePoint(place, 0, c.max.y, 0)[1]);
     }
-    for (const m of shown) {
-      min.min(clouds[m.key].min);
-      max.max(clouds[m.key].max);
+    // The floor: the lowest of the points, or the plan's own level before any arrive.
+    if (!Number.isFinite(min.y)) {
+      min.y = 0;
+      max.y = 2.4;
     }
-    // The floor: the lowest of the areas' points, or the plan's own level before any arrive.
-    const floor = shown.length ? Math.min(...shown.map((m) => clouds[m.key].min.y)) : 0;
-    if (!Number.isFinite(min.x)) return { min: new THREE.Vector3(-2, 0, -2), max: new THREE.Vector3(2, 2.4, 2), floor };
-    min.y = Math.min(min.y, floor);
-    return { min, max, floor };
-  }, [path, shown.length, clouds]);
+    if (!Number.isFinite(min.x)) return { min: new THREE.Vector3(-2, 0, -2), max: new THREE.Vector3(2, 2.4, 2), floor: 0 };
+    return { min, max, floor: min.y };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walk, finalCloud, areas.map((m) => `${m.key}@${m.place ? Object.values(m.place).join(",") : ""}`).join("|")]);
   const colors = useMemo(() => ({ walk: cssVar("--color-mint"), grid: cssVar("--color-mint-line") }), []);
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
 
   return (
     <Canvas className="assemble-canvas" camera={{ fov: 40, near: 0.05, far: 200 }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true, alpha: true }}>
-      <ambientLight intensity={0.8} />
+      {/* Lambert divides light by π: these keep the photo's own brightness on the solid surface. */}
+      <ambientLight intensity={2.6} />
       <directionalLight position={[3, 8, 4]} intensity={1.2} />
-      <Rig min={bounds.min} max={bounds.max} tilted={shown.length > 0} />
+      <Rig min={bounds.min} max={bounds.max} tilted={Boolean(finalCloud) || areas.length > 0} />
       <gridHelper
         args={[40, 80, colors.grid, colors.grid]}
         position={[(bounds.min.x + bounds.max.x) / 2, bounds.floor, (bounds.min.z + bounds.max.z) / 2]}
         material-transparent
         material-opacity={0.16}
       />
-      {path && <Walk path={path} color={colors.walk} y={bounds.floor} />}
-      {shown.map((m) => (
-        <group key={m.key}>
-          <AreaPoints cloud={clouds[m.key]} hidden={Boolean(whole && m !== whole)} />
-          {m.mesh && (
-            <Quietly>
-              <Suspense fallback={null}>
-                <AreaMesh url={m.mesh} hidden={Boolean(whole && m !== whole)} />
-              </Suspense>
-            </Quietly>
-          )}
-        </group>
+      {walk && <Walk path={walk} color={colors.walk} y={bounds.floor} />}
+      {areas.map((m) => (
+        <Placed key={m.key} place={m.place}>
+          <AreaPoints cloud={clouds[m.key]} hidden={false} />
+        </Placed>
       ))}
+      {finalCloud && final && (
+        <group key={final.key}>
+          <AreaPoints cloud={finalCloud} hidden={Boolean(solid)} />
+          {solid && <SolidSurface geometry={solid} cutY={finalCloud.cutY} />}
+        </group>
+      )}
     </Canvas>
   );
 }
