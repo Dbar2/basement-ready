@@ -1,0 +1,103 @@
+/* Pictures of a design from the scan's best angles (src/views/DesignPictures.tsx). */
+
+.views { display: grid; gap: var(--space-3); }
+.views-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.views-status { margin: 0; font-size: 13px; color: var(--color-ink-muted); }
+
+.views-strip { display: grid; gap: var(--space-3); }
+.views[data-view="swipe"] .views-strip {
+  grid-auto-flow: column;
+  grid-auto-columns: min(78vw, 340px);
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  padding-bottom: var(--space-2);
+  scrollbar-width: thin;
+}
+.views[data-view="swipe"] .views-card { scroll-snap-align: center; }
+.views[data-view="grid"] .views-strip { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+
+.views-card { margin: 0; display: grid; gap: var(--space-1); min-width: 0; align-content: start; }
+.views-hit {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-2);
+  overflow: hidden;
+  background: var(--color-surface);
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+}
+.views-hit:disabled { cursor: default; }
+.views-hit:focus-visible { outline: 3px solid var(--color-mint-line); outline-offset: 2px; }
+.views-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; user-select: none; }
+.views-img-top { transition: opacity var(--dur-3) var(--ease-out); }
+.views-img-top[data-ready="false"] { opacity: 0; }
+.views-frame { filter: saturate(0.6) brightness(0.92); }
+.views-outline {
+  position: absolute;
+  border: 2px solid var(--color-card);
+  border-radius: var(--radius-1);
+  box-shadow: 0 0 0 2px var(--color-ink), 0 0 0 9999px rgb(15 42 30 / 0.18);
+  pointer-events: none;
+  transition: all var(--dur-2) var(--ease-out);
+}
+
+.views-card figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12px; }
+.views-label {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-ink);
+  color: var(--color-card);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+.views-checked { color: var(--color-ink-muted); font-size: 11px; line-height: 1.35; }
+
+.views-sheet {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-2);
+  background: var(--color-card);
+  box-shadow: var(--shadow-card);
+  animation: views-in var(--dur-2) var(--ease-out);
+}
+.views-sheet-head { display: flex; justify-content: space-between; align-items: center; }
+.views-row { display: grid; gap: 6px; }
+.views-row > span { font-size: 13px; color: var(--color-ink-muted); }
+.views-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 2px solid var(--color-card);
+  box-shadow: 0 0 0 1px var(--color-border);
+  cursor: pointer;
+}
+.views-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--color-ink); }
+.views-notice { margin: 0; font-size: 13px; color: var(--color-fix); }
+.views-hint { margin: 0; font-size: 12px; color: var(--color-ink-muted); }
+.views-empty { color: var(--color-ink-muted); }
+.views-skeleton {
+  height: 420px;
+  border-radius: var(--radius-2);
+  background: linear-gradient(100deg, var(--color-surface) 30%, var(--color-card) 50%, var(--color-surface) 70%) 0 0 / 200% 100%;
+  animation: views-shimmer 1.4s linear infinite;
+}
+
+@keyframes views-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes views-shimmer { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .views-img-top, .views-outline { transition: none; }
+  .views-sheet, .views-skeleton { animation: none; }
+}
+
+.views-page { max-width: 1120px; margin: 0 auto; padding: var(--space-3) 16px var(--space-6); display: grid; gap: var(--space-3); }
+.views-page-head { display: flex; align-items: center; }
+.views-page h1 { margin: var(--space-2) 0 0; font-size: clamp(26px, 5vw, 40px); line-height: 1.1; }
+.views-page-lede { margin: 0; color: var(--color-ink-muted); max-width: 60ch; }

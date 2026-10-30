@@ -8,6 +8,7 @@ import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
 import { ScanPage } from "./screens/ScanPage";
 import { Start } from "./screens/Start";
+import { PicturesPage } from "./views/PicturesPage";
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -17,6 +18,9 @@ export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/
 
 // The one-page plan to hand a designer, made to print or save as a PDF.
 const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
+
+// Pictures of the design from the scan's best real angles, all agreeing (src/views/DesignPictures.tsx).
+const picturesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/pictures", component: PicturesPage });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -57,7 +61,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, picturesRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
