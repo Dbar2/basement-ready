@@ -166,15 +166,15 @@ export async function finishRooms(
   detections: Detection[],
   emit: (type: ScanEventType, text: string, data?: unknown) => Promise<void>,
   placements?: RoomPlacement[],
-  // A photo take's own room names, where they typed one; the others are named here.
-  names?: (string | null)[],
+  // A photo take: its rooms' own names, where they typed one (the others are named here).
+  photos?: { names: (string | null)[] },
 ): Promise<Room[]> {
   const furnaceFrames = detections.filter((d) => d.label === "Furnace").map((d) => d.frame);
   const named = new Set<string>();
   const rooms: Room[] = [];
   for (const r of ranges) {
     const s3 = scans3d[r.index];
-    const typed = names?.[r.index] ?? null;
+    const typed = photos?.names[r.index] ?? null;
     let name = typed ?? (ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named));
     let measurements: Measurements | null = null;
     let plan: Plan | null = null;
@@ -205,7 +205,8 @@ export async function finishRooms(
         measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,
         measurements.widthM != null && measurements.depthM != null && `${measurements.widthM.toFixed(1)} × ${measurements.depthM.toFixed(1)} m`,
       ].filter(Boolean);
-      const caveat = !measurements.trusted ? " (rough: re-film slowly for exact sizes)" : measurements.scaleSource === "model" ? " (estimated)" : "";
+      const rough = photos ? " (rough: a tape measurement fixes it)" : " (rough: re-film slowly for exact sizes)";
+      const caveat = !measurements.trusted ? rough : measurements.scaleSource === "model" ? " (estimated)" : "";
       await emit("measure", `${ranges.length > 1 ? `${name}: ` : "Measured "}${sizes.join(" · ")}${caveat}`, measurements);
     }
     rooms.push({ index: r.index, name, startS: r.from / ANALYSIS_FPS, endS: r.to / ANALYSIS_FPS, has3d: Boolean(s3), plan, measurements, placement: placements?.[r.index] ?? null });
@@ -348,11 +349,12 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost };
 }
 
-// "Found 2 windows and 1 door"
-function findWords(found: Detection[]) {
+// "Found 2 windows, a door and the stairs"
+export function findWords(found: Pick<Detection, "label">[]) {
   const counts = new Map<string, number>();
   for (const d of found) counts.set(d.label, (counts.get(d.label) ?? 0) + 1);
-  const parts = [...counts].map(([label, n]) => plural(n, label));
+  const one = (label: string) => (/s$/i.test(label) ? `the ${label.toLowerCase()}` : `${/^[aeiou]/i.test(label) ? "an" : "a"} ${label.toLowerCase()}`);
+  const parts = [...counts].map(([label, n]) => (n === 1 ? one(label) : plural(n, label)));
   return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
 }
 
@@ -440,11 +442,11 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
 
   await emit("stage", "assess");
   await emit("log", "Checking your city's second-unit rules");
-  const sparkP = readWithSpark(ctx, detections, "", []);
+  const sparkP = readWithSpark({ ...ctx, photos: take.count }, detections, "", []);
   inflight.push(sparkP.catch(() => {}));
   // A room they named keeps its name; "Room 2" may still turn out to be the furnace room.
   const names = take.rooms.map((r) => (/^room \d+$/i.test(r.name) ? null : r.name));
-  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, names);
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names });
   // The 3D's own sense of size, with no walk or tape to check it against.
   if (rooms.some((r) => r.has3d)) await emit("log", "Sizes from photos are a close guess, within about 20%. One tape measurement on the next step makes them true to size.");
   return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage };

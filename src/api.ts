@@ -257,6 +257,8 @@ export type ScanResult = {
   rooms?: RoomResult[];
   mainRoom?: number | null; // the room whose numbers the rules used
   measurements?: Measurements | null;
+  // How it was filmed; `photos`: a photo take of that many photos (its finds are by photo, not second).
+  capture?: { lens: "ultrawide" | "wide" | null; wideAt: number | null; photos?: number };
   vision?: Vision;
   verdict: "yes" | "fix" | "no";
   headline: string;

@@ -16,7 +16,7 @@ vi.hoisted(() => {
 import { pickFrames } from "../../server/concepts";
 import { findInPhotos, mergePhotoFinds, photoFinds } from "../../server/photoFinds";
 import { exifOrientation, MAX_PHOTOS, MIN_PHOTOS, readPhotos, roomOrder, savePhotos, sniffPhoto, uprightFilter, uprightPhoto, type PhotoKind } from "../../server/photoInput";
-import { CONCEPTS, measurePhotoRooms, type Detection } from "../../server/pipeline";
+import { CONCEPTS, findWords, measurePhotoRooms, type Detection } from "../../server/pipeline";
 import type { Scan3d } from "../../server/scan3d";
 import { keys, storage } from "../../server/storage";
 
@@ -198,6 +198,13 @@ describe("SAM on each photo", () => {
     expect(heard).toEqual([[0, ["Window", "Furnace"]], [1, ["Window"]], [2, ["Furnace"]]]);
     expect(all.map((d) => `${d.frame}:${d.label}`)).toEqual(["0:Window", "0:Furnace", "1:Window", "2:Furnace"]);
   });
+
+  it("says what each photo showed in plain words", () => {
+    const labels = (...l: string[]) => l.map((label) => ({ label }));
+    expect(findWords(labels("Window", "Window", "Door", "Stairs"))).toBe("2 windows, a door and the stairs");
+    expect(findWords(labels("Electrical panel"))).toBe("an electrical panel");
+    expect(findWords(labels("Beam", "Beam", "Water heater"))).toBe("2 beams and a water heater");
+  });
 });
 
 const det = (label: string, kind: string, frame: number, w = 0.2, confidence = 0.8): Detection => ({
@@ -308,5 +315,13 @@ describe("staged pictures from a photo take", () => {
     // The window's photo for the bedroom, the photo that sees farthest, then the next farthest.
     expect(photos.map((p) => p.frame)).toEqual([2, 5, 4]);
     expect(new Set(photos.map((p) => p.frame)).size).toBe(photos.length);
+  });
+
+  it("before any 3D is saved, also starts from the photo furthest from the first, likely another room", () => {
+    // Photos 0–3 are one room, 4–7 another; the doors are in photo 2, the furnace fills photo 6.
+    const door = { kind: "exit", frame: 2, framesSeen: 1, box: { x: 0.4, y: 0.2, w: 0.15, h: 0.5 }, track: [[2, 0.4, 0.2, 0.15, 0.5]] as [number, number, number, number, number][] };
+    const furnace = { kind: "mechanical", frame: 7, framesSeen: 1, box: { x: 0.2, y: 0.2, w: 0.3, h: 0.6 }, track: [[7, 0.2, 0.2, 0.3, 0.6]] as [number, number, number, number, number][] };
+    expect(pickFrames([door, furnace], null, "unsure", 8, null, null, null, undefined, 1).map((p) => `${p.frame} ${p.title}`)).toEqual(["2 Living and kitchen", "6 Another angle"]);
+    expect(pickFrames([door, furnace], null, "unsure", 8, null, null, null).map((p) => p.frame)).toEqual([2]);
   });
 });

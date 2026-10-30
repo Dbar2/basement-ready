@@ -61,8 +61,8 @@ export function PhotoCarousel({ scanId, take, detections, landed, done }: Props)
   return (
     <div className="photo-carousel">
       <div className="photo-stage" ref={stageRef}>
+        {/* The last photo stays up until the next one has loaded; its boxes wait for it too. */}
         <img
-          key={current}
           src={frameUrl(scanId, current)}
           alt={`Photo ${current + 1} of ${take.count}${roomOf(current) ? `, ${roomOf(current)}` : ""}`}
           onLoad={(e) => setNatural({ n: current, w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })}
