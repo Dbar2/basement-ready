@@ -1,0 +1,148 @@
+/* "Is this your basement?" and the 3D studio (src/studio). Tokens only; mint is a fill, never text or
+   thin lines on light. */
+
+.studio-page { min-height: 100dvh; background: var(--color-bg); }
+.studio-head { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px clamp(16px, 4vw, 56px); background: var(--color-bg); border-bottom: 1px solid var(--color-ink); }
+.studio-wait { margin: 32px clamp(16px, 4vw, 56px); }
+.skeleton { border-radius: var(--radius-2); background: linear-gradient(100deg, var(--color-surface) 30%, var(--color-card) 50%, var(--color-surface) 70%) 0 0 / 300% 100%; animation: skeleton 1.4s ease-in-out infinite; }
+.skeleton-plan { height: min(60vh, 520px); }
+.skeleton-3d { height: min(70vh, 640px); }
+@keyframes skeleton { to { background-position: -150% 0; } }
+
+.studio-body { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; padding: 20px clamp(16px, 4vw, 56px) 48px; align-items: start; }
+.studio-main { display: grid; gap: 16px; min-width: 0; }
+.studio-title { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px 24px; }
+.studio-title h1 { font-size: clamp(30px, 3.4vw, 44px); letter-spacing: -0.03em; margin: 0; }
+.studio-title .lede { margin: 6px 0 0; color: var(--color-ink-muted); max-width: 62ch; }
+.studio-title .ws-chips { margin: 0; }
+.studio-side { position: sticky; top: 76px; display: grid; gap: 12px; }
+.side-card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-2); padding: 18px 20px; display: grid; gap: 10px; }
+.side-card h2 { font-size: 20px; letter-spacing: -0.02em; margin: 0; }
+.side-card p { margin: 0; }
+.side-eyebrow { font-size: 12px; color: var(--color-ink-muted); letter-spacing: 0.04em; text-transform: uppercase; }
+.side-big { font-family: var(--font-display); font-weight: 800; font-size: 34px; letter-spacing: -0.03em; }
+.side-cta { display: grid; gap: 12px; justify-items: start; padding: 4px 2px; }
+.small { font-size: 13px; }
+.ws-chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.field { display: grid; gap: 6px; }
+.field > span:first-child { font-weight: 600; font-size: 15px; }
+
+/* What we found */
+.finds { list-style: none; margin: 0; padding: 0; display: grid; }
+.find-pick { width: 100%; display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center; min-height: 44px; padding: 6px 0; border: 0; border-top: 1px solid var(--color-border); background: none; color: var(--color-ink); font: inherit; text-align: left; }
+.finds li:first-child .find-pick { border-top: 0; }
+.find-pick i { width: 10px; height: 10px; border-radius: 50%; background: var(--find-mechanical); }
+.find-pick i[data-kind="window"] { background: var(--find-window); }
+.find-pick i[data-kind="exit"] { background: var(--find-exit); }
+.find-pick i[data-kind="stairs"] { background: var(--find-stairs); }
+.find-pick i[data-kind="duct"], .find-pick i[data-kind="bulkhead"] { background: var(--find-duct); }
+.find-pick i[data-kind="beam"] { background: var(--find-beam); }
+.find-pick .mono { font-size: 12px; }
+
+.length-input { display: grid; gap: 6px; }
+.length-input label { font-weight: 600; font-size: 14px; }
+.length-input > div { display: flex; gap: 8px; }
+.length-input .input { padding: 10px 12px; }
+.length-input .btn { white-space: nowrap; padding: 10px 14px; }
+
+/* The plan */
+.plan-stage, .studio-plan { position: relative; display: flex; flex-direction: column; background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-2); overflow: hidden; }
+.plan-tools { order: -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 10px 0; }
+.plan-tools .chip { min-height: 36px; padding: 4px 14px; }
+.history { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
+.history .chip:disabled { opacity: 0.45; }
+.model-plan { display: block; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
+.model-plan:focus { outline: none; }
+.model-plan:focus-visible { outline: 2px solid var(--color-mint-line); outline-offset: -3px; }
+.model-plan.is-drawing { cursor: crosshair; }
+.model-plan .plan-zone-name { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; paint-order: stroke; stroke: var(--color-card); stroke-width: 5px; stroke-linejoin: round; }
+.model-plan .plan-zone-area { font-size: 19px; font-weight: 400; stroke-width: 4px; }
+.model-plan .plan-tag { font-size: 16px; paint-order: stroke; stroke: var(--color-card); stroke-width: 4px; stroke-linejoin: round; }
+.model-plan .plan-dim text { font-size: 22px; }
+.model-room { fill: transparent; stroke: none; }
+.model-room[data-unit="2"] { fill: color-mix(in srgb, var(--color-surface) 70%, transparent); }
+.model-room[data-kind="bedroom"] { fill: color-mix(in srgb, var(--color-mint) 26%, transparent); }
+.model-room[data-kind="bathroom"] { fill: color-mix(in srgb, var(--color-border) 80%, transparent); }
+.model-room[data-kind="kitchen"] { fill: color-mix(in srgb, var(--color-ink) 12%, transparent); }
+.model-room[data-kind="stairs"], .model-room[data-kind="mechanical"] { fill: color-mix(in srgb, var(--color-stop) 7%, transparent); }
+.model-room[data-selected] { stroke: var(--color-mint-line); stroke-width: 4; }
+.model-wall line { stroke: var(--color-ink); }
+.model-wall[data-kind="new"] line:first-child { stroke: var(--color-ink-muted); }
+.model-wall[data-guess] line:first-child { stroke: var(--color-ink-muted); stroke-dasharray: 10 8; }
+.model-wall[data-selected] line:first-child { stroke: var(--color-mint-line); }
+.model-rated { stroke: var(--color-stop) !important; stroke-width: 3; stroke-dasharray: 12 6; fill: none; }
+.plan-window[data-status="new"] line:not(.plan-cut) { stroke-width: 4; }
+.plan-door[data-selected] line:not(.plan-cut), .plan-window[data-selected] line:not(.plan-cut) { stroke: var(--color-mint-line); }
+.model-alarm circle { fill: var(--color-card); stroke: var(--color-ink); stroke-width: 2; }
+.model-alarm[data-kind="co"] circle, .model-alarm[data-kind="combo"] circle { stroke: var(--color-stop); }
+.model-alarm text { font-family: var(--font-mono); font-size: 11px; font-weight: 600; fill: var(--color-ink); }
+.model-overhead rect { fill: color-mix(in srgb, var(--find-duct) 10%, transparent); stroke: var(--find-duct); stroke-width: 2; stroke-dasharray: 8 6; }
+.model-overhead[data-kind="beam"] rect { stroke: var(--find-beam); fill: color-mix(in srgb, var(--find-beam) 10%, transparent); }
+.model-overhead[data-guess] { opacity: 0.75; }
+.model-overhead text { font-size: 14px; }
+.plan-stairs[data-selected] rect, .plan-fixture[data-selected] rect, .model-overhead[data-selected] rect { stroke: var(--color-mint-line); stroke-width: 4; }
+.model-length { font-family: var(--font-mono); font-size: 18px; font-weight: 600; fill: var(--color-ink); paint-order: stroke; stroke: var(--color-card); stroke-width: 6; }
+.model-handles line { stroke: transparent; stroke-width: 26; cursor: pointer; }
+.model-handles line[data-drag] { cursor: grab; }
+.model-handles line[data-drag]:hover { stroke: color-mix(in srgb, var(--color-mint) 35%, transparent); }
+.model-handle { fill: var(--color-mint); stroke: var(--color-ink); stroke-width: 2; cursor: grab; }
+.model-fixture-hit { fill: transparent; cursor: pointer; }
+.model-fixture-hit[data-drag] { cursor: grab; }
+.model-sketch { stroke: var(--color-mint-line); stroke-width: 6; stroke-dasharray: 10 6; }
+.model-marker { fill: none; stroke: var(--color-stop); stroke-width: 4; animation: marker 1.2s var(--ease-out) infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes marker { from { opacity: 1; transform: scale(0.7); } to { opacity: 0.2; transform: scale(1.25); } }
+.model-legend text { font-family: var(--font-mono); font-size: 13px; fill: var(--color-ink-muted); letter-spacing: 0.06em; }
+
+/* The 3D and the plan side by side; on a phone, one at a time */
+.studio-panes { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (min-width: 1440px) { .studio-panes { grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); } }
+.studio-panes > .pane-switch { display: none; }
+.studio-3d { position: relative; height: clamp(340px, 60vh, 620px); border-radius: var(--radius-2); overflow: hidden; background: var(--color-ink); }
+.studio-3d .stage-tools { justify-content: flex-start; }
+.studio-3d .segmented { border-color: var(--color-card); }
+.studio-flag { background: var(--color-stop); color: var(--color-card); }
+
+.picked { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 10px 14px; background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-2); }
+.picked .chip { min-height: 36px; padding: 4px 14px; }
+
+/* Checks, cost and a described change */
+.studio-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.studio-bar .status-chip { flex: 1 1 auto; justify-content: center; }
+.status-chip { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 16px; border: 1px solid var(--color-ink); border-radius: var(--radius-pill); background: var(--color-card); color: var(--color-ink); font: inherit; font-weight: 700; font-size: 15px; }
+.status-chip[aria-expanded="true"] { background: var(--color-ink); color: var(--color-card); }
+.status-chip .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--color-ok); }
+.status-chip[data-state="fix"] .dot { background: var(--color-fix); }
+.status-chip[data-state="cost"] { font-family: var(--font-mono); font-weight: 500; }
+.studio-bar .history { margin-left: 0; }
+.save-state { font-size: 12px; min-width: 6ch; }
+.check-group summary { cursor: pointer; font-weight: 700; padding: 6px 0; list-style-position: inside; }
+.checks { list-style: none; margin: 0 0 6px; padding: 0; display: grid; gap: 2px; }
+.checks li { display: grid; gap: 2px; padding: 10px 0 10px 14px; border-left: 3px solid var(--color-ok); }
+.checks li[data-state="fix"] { border-left-color: var(--color-fix); }
+.checks li[data-state="check"] { border-left-color: var(--color-border); }
+.checks li .muted { font-size: 14px; }
+.check-actions { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-top: 6px; }
+.btn-small { padding: 8px 14px; font-size: 14px; }
+.trades { list-style: none; margin: 0; padding: 0; display: grid; }
+.trades li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--color-border); }
+.trades li:first-child { border-top: 0; }
+.trades .mono { font-size: 14px; }
+.describe { display: grid; gap: 8px; justify-items: start; }
+.describe textarea { resize: vertical; min-height: 72px; }
+.proposal { display: grid; gap: 8px; padding: 12px 14px; border-left: 3px solid var(--color-mint-line); background: var(--color-bg); border-radius: 0 var(--radius-1) var(--radius-1) 0; }
+
+@media (max-width: 1099px) {
+  .studio-body { grid-template-columns: minmax(0, 1fr) 320px; }
+}
+@media (max-width: 899px) {
+  .studio-body { grid-template-columns: minmax(0, 1fr); padding-top: 14px; }
+  .studio-side { position: static; }
+  .studio-panes { grid-template-columns: minmax(0, 1fr); }
+  .studio-panes > .pane-switch { display: inline-flex; justify-self: start; }
+  .studio-panes > [data-shown="false"] { display: none; }
+  .studio-3d { height: min(62vh, 520px); }
+  .studio-title .ws-chips { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton, .model-marker { animation: none; }
+}

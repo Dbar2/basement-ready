@@ -7,6 +7,7 @@ import { and, desc, eq, isNotNull, ne } from "drizzle-orm";
 import { timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import { db, schema } from "./db";
+import { ModelSchema } from "./model/schema";
 
 const text = (max: number) => z.string().trim().max(max);
 const optText = (max: number) => text(max).nullable().optional();
@@ -70,6 +71,8 @@ export const StateSchema = z.object({
     .optional(),
   apply: z.record(z.string().max(80), z.object({ sentAt: optText(30) })).optional(),
   permit: z.object({ submittedAt: optText(30), permitNumber: optText(40), signer: z.enum(["owner", "designer"]).nullable().optional() }).optional(),
+  // The one model of the basement and its designs (server/model/types.ts), saved by the studio.
+  model: ModelSchema.optional(),
 });
 export type WorkspaceState = z.infer<typeof StateSchema>;
 
