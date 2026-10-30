@@ -31,7 +31,9 @@ type ScanResultLike = {
   floorPlan?: BasementPlan | null;
   mainRoom?: number | null;
   measurements?: { ceilingHeightM: number | null; clearances: { detectionId: string; label: string; clearanceM: number }[] } | null;
-  detections?: { id: string; framesSeen?: number }[];
+  detections?: { id: string; label?: string; framesSeen?: number }[];
+  // What a model that watched the whole take saw (server/watch.ts): only each room's windows are read here.
+  watch?: { rooms: { name: string; spokenName?: string | null; windows?: { atS: number | null; note: string }[] }[] } | null;
 };
 
 const SIDES: Side[] = ["minZ", "maxX", "maxZ", "minX"];
@@ -44,6 +46,71 @@ function sideWall(b: Box, side: Side): { a: Pt; b: Pt } {
 }
 
 // ---- The basement as it is ----
+
+const SAME_WALL_M = 0.35; // two areas' sides closer than this, along most of their length, are one wall
+
+// One of each thing. Each area places what it saw itself, and on a video take the areas sit only roughly
+// where they belong, so the stairs filmed going down and seen again later, or a water heater tracked twice,
+// land as two. A basement has one staircase, one furnace, one water heater, one panel, one rough-in and
+// one floor drain: keep the one SAM followed through the most frames. Beams, ducts and bulkheads only seen
+// on video (not placed by the 3D) of one kind with the same headroom (within 3 cm) are one too, the lowest
+// kept; ones the 3D placed are where they are.
+export function oneOfEach(fixtures: Fixture[], detections: ScanResultLike["detections"] = []): Fixture[] {
+  const det = (f: Fixture) => detections?.find((d) => d.id === f.detectionId);
+  const seen = (f: Fixture) => det(f)?.framesSeen ?? 0;
+  const keep: Fixture[] = [];
+  for (const f of fixtures) {
+    if (OVERHEAD.has(f.kind)) {
+      const same = f.guess ? keep.find((k) => k.guess && k.kind === f.kind && k.heightM != null && f.heightM != null && Math.abs(k.heightM - f.heightM) <= 0.03) : undefined;
+      if (!same) keep.push(f);
+      else if ((f.heightM ?? Infinity) < (same.heightM ?? Infinity)) keep.splice(keep.indexOf(same), 1, f);
+      continue;
+    }
+    // A rough-in and a floor drain are both plumbing: told apart by what SAM was asked for.
+    const what = (x: Fixture) => `${x.kind}:${det(x)?.label ?? ""}`;
+    const same = keep.find((k) => what(k) === what(f));
+    if (!same) keep.push(f);
+    else if (seen(f) > seen(same)) keep.splice(keep.indexOf(same), 1, f);
+  }
+  return keep;
+}
+
+const OVERHEAD = new Set<FixtureKind>(["beam", "duct", "bulkhead"]);
+
+// Windows the whole-take watch saw in a room that SAM didn't find there: on that room's longest outside
+// wall, the usual basement window's size, marked a guess for them to drag where it is.
+export function watchedWindows(rooms: Room[], walls: Wall[], openings: Opening[], watch: ScanResultLike["watch"]): Opening[] {
+  const out: Opening[] = [];
+  for (const w of watch?.rooms ?? []) {
+    const seen = w.windows?.length ?? 0;
+    const room = rooms.find((r) => r.name === w.name || (w.spokenName && r.name === w.spokenName));
+    if (!seen || !room) continue;
+    const near = (x: Wall) => [x.a, x.b].every((p) => inPolygon(p, room.polygon) || room.polygon.some((q) => dist(p, q) < 0.4) || edgeDist(room.polygon, p) < 0.4);
+    const mine = walls.filter(near);
+    const have = openings.filter((o) => o.kind === "window" && mine.some((x) => x.id === o.wallId)).length + out.filter((o) => mine.some((x) => x.id === o.wallId)).length;
+    const outside = mine.filter((x) => x.kind === "foundation").sort((a, b) => wallLength(b) - wallLength(a));
+    for (let k = have; k < seen && outside.length; k++) {
+      const host = outside[k % outside.length];
+      const taken = [...openings, ...out].filter((o) => o.wallId === host.id);
+      const L = wallLength(host);
+      // Spread along the wall, clear of the doors and windows already on it.
+      const spot = [0.5, 0.3, 0.7, 0.15, 0.85].map((f) => f * L).find((t) => taken.every((o) => Math.abs(o.offsetM - t) > (o.widthM + WINDOW_GUESS_M) / 2 + 0.1)) ?? L / 2;
+      out.push({ id: nextId("window", [...openings, ...out]), wallId: host.id, kind: "window", offsetM: r3(spot), widthM: WINDOW_GUESS_M, heightM: null, sillM: null, status: "existing", guess: true });
+    }
+  }
+  return out;
+}
+
+const WINDOW_GUESS_M = 0.8; // a basement window, before anyone measures it
+
+function edgeDist(poly: Pt[], p: Pt) {
+  let best = Infinity;
+  poly.forEach((a, i) => {
+    const b = poly[(i + 1) % poly.length];
+    best = Math.min(best, Math.abs(project({ a, b }, p).off) + Math.max(0, -project({ a, b }, p).t, project({ a, b }, p).t - dist(a, b)));
+  });
+  return best;
+}
 
 export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Existing | null {
   if (result.floorPlan?.rooms.length) return existingFromPlan(result.floorPlan, result, tape);
@@ -71,19 +138,34 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
       const s = sideWall(b, side);
       const coord = side === "minX" ? b.minX : side === "maxX" ? b.maxX : side === "minZ" ? b.minZ : b.maxZ;
       const outer = Math.abs(coord - all[side]) < 0.3;
-      // Two areas that share a wall: keep the one already drawn when it covers this one.
+      // Two areas that share a wall: one wall, where the area drawn first put it. Each area's own box
+      // sits only roughly where it belongs on a video take, so a side running alongside an earlier wall,
+      // close by and along most of either, is that wall; it grows to cover both.
       const host = walls.find((w) => {
         const P = project(w, s.a), Q = project(w, s.b);
-        return Math.abs(P.off) < 0.15 && Math.abs(Q.off) < 0.15 && Math.min(P.t, Q.t) > -0.15 && Math.max(P.t, Q.t) < wallLength(w) + 0.15;
+        const lo = Math.max(0, Math.min(P.t, Q.t)), hi = Math.min(wallLength(w), Math.max(P.t, Q.t));
+        return Math.abs(P.off) < SAME_WALL_M && Math.abs(Q.off) < SAME_WALL_M && hi - lo >= 0.6 * Math.min(wallLength(w), wallLength(s));
       });
+      if (host) {
+        const P = project(host, s.a).t, Q = project(host, s.b).t;
+        const lo = Math.min(P, Q), hi = Math.max(P, Q);
+        if (hi > wallLength(host)) host.b = along(host, hi).map(r3) as Pt;
+        if (lo < 0) {
+          host.a = along(host, lo).map(r3) as Pt;
+          for (const o of openings) if (o.wallId === host.id) o.offsetM = r3(o.offsetM - lo);
+        }
+        if (outer && host.kind !== "foundation") Object.assign(host, { kind: "foundation", thicknessM: 0.2 });
+      }
       const wall: Wall = host ?? { id: `${id}-${side}`, a: s.a, b: s.b, thicknessM: outer ? 0.2 : NEW_WALL_M, kind: outer ? "foundation" : "existing", rating: null, ...(area.plan.sides[side] !== "wall" ? { guess: true } : {}) };
       if (!host) walls.push(wall);
       else if (host.guess && area.plan.sides[side] === "wall") host.guess = false;
       const shift = host ? project(host, s.a).t : 0;
       for (const o of area.plan.openings.filter((x) => x.side === side)) {
         const offsetM = r3(shift + o.atM);
+        // The same door seen from two areas lands on each one's wall: the first one placed stays.
+        if (o.detectionId && openings.some((x) => x.detectionId === o.detectionId)) continue;
         if (openings.some((x) => x.wallId === wall.id && x.kind === o.kind && Math.abs(x.offsetM - offsetM) < Math.max(x.widthM, o.widthM) * 0.75)) continue;
-        openings.push({ id: nextId(o.kind, openings), wallId: wall.id, kind: o.kind, offsetM, widthM: o.widthM, heightM: null, status: "existing", detectionId: o.detectionId });
+        openings.push({ id: nextId(o.kind, openings), wallId: wall.id, kind: o.kind, offsetM, widthM: o.widthM, heightM: null, status: "existing", detectionId: o.detectionId, ...(o.guess ? { guess: true } : {}) });
       }
     }
     for (const st of area.plan.stairs) {
@@ -91,7 +173,7 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
       fixtures.push({ id: nextId("stairs", fixtures), kind: "stairs", at: [r3((st.x0 + st.x1) / 2), r3((st.z0 + st.z1) / 2)], sizeM: [r3(st.x1 - st.x0), r3(st.z1 - st.z0)], detectionId: st.detectionId });
     }
     for (const f of area.plan.fixtures) {
-      if (fixtures.some((x) => x.kind === f.kind && dist(x.at, [f.x, f.z]) < 1)) continue;
+      if (fixtures.some((x) => (f.detectionId && x.detectionId === f.detectionId) || (x.kind === f.kind && dist(x.at, [f.x, f.z]) < 1))) continue;
       fixtures.push({ id: nextId(f.kind, fixtures), kind: f.kind, at: [r3(f.x), r3(f.z)], sizeM: FIXTURE_SIZE[f.kind], detectionId: f.detectionId });
     }
     // Beams, ducts and bulkheads: the scan measured the headroom under them but not where they run.
@@ -120,15 +202,8 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
     rooms.push({ id, polygon: poly, kind, name: area.name, unit: 1, ceilingM: area.plan.ceilingHeightM });
   }
 
-  // One staircase. Each area places what it saw itself, and on a video take the areas sit only roughly
-  // where they belong, so the stairs filmed going down and seen again later land as two: keep the one
-  // SAM followed through the most frames.
-  const stairs = fixtures.filter((f) => f.kind === "stairs");
-  if (stairs.length > 1) {
-    const seen = (f: Fixture) => result.detections?.find((d) => d.id === f.detectionId)?.framesSeen ?? 0;
-    const keep = stairs.reduce((a, b) => (seen(b) > seen(a) ? b : a));
-    fixtures.splice(0, fixtures.length, ...fixtures.filter((f) => f.kind !== "stairs" || f === keep));
-  }
+  fixtures.splice(0, fixtures.length, ...oneOfEach(fixtures, result.detections));
+  openings.push(...watchedWindows(rooms, walls, openings, result.watch));
 
   // Their tape on the escape window goes on the biggest window: that's the one the bedroom gets.
   const big = openings.filter((o) => o.kind === "window").sort((a, b) => b.widthM - a.widthM)[0];
@@ -177,6 +252,7 @@ export function existingFromPlan(plan: BasementPlan, result: ScanResultLike, tap
       ...(o.kind === "window" ? { sillM: o.sillM ?? null } : {}),
       status: "existing" as const,
       ...(o.detectionId ? { detectionId: o.detectionId } : {}),
+      ...((o as { guess?: boolean }).guess ? { guess: true } : {}),
     }));
   const fixtures: Fixture[] = plan.fixtures.map((f) => ({
     id: f.id,
@@ -211,6 +287,7 @@ export function existingFromPlan(plan: BasementPlan, result: ScanResultLike, tap
       guess: true,
     });
   }
+  openings.push(...watchedWindows(rooms, walls, openings, result.watch));
   const big = openings.filter((o) => o.kind === "window").sort((a, b) => b.widthM - a.widthM)[0];
   if (big && (tape.egressWidthMm || tape.egressHeightMm)) {
     if (tape.egressWidthMm) big.widthM = tape.egressWidthMm / 1000;
@@ -221,7 +298,7 @@ export function existingFromPlan(plan: BasementPlan, result: ScanResultLike, tap
     walls,
     openings,
     rooms,
-    fixtures,
+    fixtures: oneOfEach(fixtures, result.detections),
     ceilingM: tape.ceilingMm ? tape.ceilingMm / 1000 : (biggest.ceilingM ?? plan.ceilingM ?? result.measurements?.ceilingHeightM ?? null),
     scale: { source: "arkit", factor: 1 },
     confirmedAt: null,
