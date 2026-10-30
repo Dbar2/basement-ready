@@ -26,8 +26,8 @@ The review reads `ANTHROPIC_API_KEY` from the environment or from the checkout's
 
 ## What it captures
 
-- Every journey screen (`plan.ts`): home, the wait screen, the five workspace tabs, plan confirm, studio, pictures, swipe your style, the book, the designer brief. At 390×844 and 1280×800, in Chromium and WebKit, full page (up to 7–8 screens tall).
-- The 3D views (home story, the starting layout, the raw scan, studio, pictures) from three fixed cameras: eye level, straight down with the ceiling cut away, and a corner. `three.ts` does this without touching the app: three.js announces its renderers to `window.__THREE_DEVTOOLS__`, and the hook puts the camera where we want it.
+- Every journey screen (`plan.ts`): home, the wait screen, the five workspace tabs (Your book, The answer, Permit, Money, Build), and the flow's style, plan, layouts, studio and pictures steps, plus the designer brief. At 390×844 and 1280×800, in Chromium and WebKit, full page (up to 7–8 screens tall).
+- The 3D views (home story, the starting layout, the raw scan, studio; the pictures page's hidden canvas with `--only pictures-3d`) from three fixed cameras: eye level, straight down with the ceiling cut away, and a corner. `three.ts` does this without touching the app: three.js announces its renderers to `window.__THREE_DEVTOOLS__`, and the hook puts the camera where we want it.
 - The plan over the scan: the confirmed plan's walls, openings and fixtures drawn over a top-down render of the raw scan, cut at about 1.2 m.
 - Every page of the permit set (review copy) and the book PDF, drawn with macOS `sips`.
 - A recorded take with `--take b2-family`. It's posted the way the iPhone app sends a take, and the recorded Meta and 3D answers replay (`server/replay.ts`). Only then does the server get a placeholder Meta key, because uploads are refused without one. The placeholder can't reach anything: Meta's address is set to one that doesn't exist, and replay answers first.
