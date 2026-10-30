@@ -57,7 +57,9 @@ def download_weights():
     secrets=[modal.Secret.from_name("scan3d-token")],
     scaledown_window=60,  # idle seconds before scaling to zero; every idle second is billed GPU time
     timeout=600,
-    max_containers=3,
+    max_containers=3,  # a basement's areas run side by side
+    cpu=8.0,  # the solid surface (mesh.py) is fused on the CPU
+    memory=32768,
 )
 class Scan3D:
     @modal.enter()
@@ -71,4 +73,5 @@ class Scan3D:
     def web(self):
         from scan3d.api import create_app
 
-        return create_app(lambda: self.scanner, token=os.environ["SCAN3D_TOKEN"], max_frames_cap=64)
+        # 48 GB holds about 150 views at once.
+        return create_app(lambda: self.scanner, token=os.environ["SCAN3D_TOKEN"], max_frames_cap=150)
