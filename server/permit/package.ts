@@ -12,7 +12,7 @@ import { embedFonts, INK, LETTER, MUTED, newDoc, type Project, Sheet } from "./p
 import { basementGeometry } from "./plans";
 import { coverSheet, crossSection, egressDetail, floorPlan, generalNotes, needsPro, type Printed, scopeOfWork, type SheetCtx, sitePlan } from "./sheets";
 
-// Today in Waterloo Region, as the forms want it: YYYY-MM-DD.
+// Today in Ontario, as the forms want it: YYYY-MM-DD.
 export const localDate = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Toronto" });
 
 export type PackageInput = {
@@ -43,7 +43,24 @@ const SHEETS = [
   { number: "A7", title: "Work that needs a pro" },
 ];
 
-export function formValues(input: Pick<PackageInput, "profile" | "address" | "result" | "site" | "state">, municipality: string, scope: string, areaM2: number | null, bedrooms: number, today: string): FormValues {
+// Who the application goes to, and whether the owner signs the drawings as their designer: only
+// where that city's own pages accept owner-drawn plans (its pack says signer "owner"), and only
+// when the owner hasn't handed them to a designer.
+export function formPlace(municipality: string, state: StoredState) {
+  const { authority, permit } = cityPermit(municipality);
+  const signer: "owner" | "brief" = state.permit?.signer === "designer" ? "brief" : (permit?.signer ?? "brief");
+  return { authority, signer, ownerDraws: signer === "owner" };
+}
+
+export function formValues(
+  input: Pick<PackageInput, "profile" | "address" | "result" | "site" | "state">,
+  municipality: string,
+  scope: string,
+  areaM2: number | null,
+  bedrooms: number,
+  today: string,
+  place: { authority: string; ownerDraws: boolean } = { authority: `City of ${municipality}`, ownerDraws: false },
+): FormValues {
   const cost = input.result?.cost;
   const p = input.profile;
   const names = p?.owners.map((o) => `${o.first} ${o.last}`.trim()).filter(Boolean) ?? [];
@@ -56,17 +73,18 @@ export function formValues(input: Pick<PackageInput, "profile" | "address" | "re
     municipality,
     postalCode: p?.postalCode ?? "",
     mailing: p?.mailingAddress || null,
-    legal: p?.legalDescription || input.site?.legalDescription || null,
-    pin: p?.pin || input.site?.pin || null,
-    roll: p?.rollNumber || input.site?.rollNumber || null,
+    legal: p?.legalDescription || null,
+    pin: p?.pin || null,
+    roll: p?.rollNumber || null,
     date: today,
     permitNumber: input.state.permit?.permitNumber ?? null,
     scope,
     areaM2,
     bedrooms,
-    city: `City of ${municipality}`,
+    city: place.authority === "your municipality" ? "" : place.authority,
     valueCAD: cost?.low != null && cost?.high != null ? Math.round((cost.low + cost.high) / 2 / 1000) * 1000 : null,
     ownerBuilds: input.state.build?.path === "diy" || input.state.build?.path === "mix",
+    ownerDraws: place.ownerDraws,
   };
 }
 
@@ -77,19 +95,20 @@ export function formsNeeded(forms: CityForm[], o: { ownerDraws: boolean; ownerBu
 
 export async function buildPermitPackage(input: PackageInput): Promise<PackageOut> {
   const today = input.today ?? localDate();
-  const { city, permit } = cityPermit(input.municipality);
+  const { city, authority, permit } = cityPermit(input.municipality);
+  const place = formPlace(input.municipality, input.state);
   const diy = ontarioDiy();
   const doc = await newDoc(`Permit package: ${input.address}`);
   const fonts = await embedFonts(doc);
   const geo = basementGeometry(input.result, input.state);
   const profile = input.share ? null : input.profile;
   const ownerNames = input.profile?.owners.map((o) => `${o.first} ${o.last}`.trim()).join(" and ") || null;
-  const signer = input.state.permit?.signer === "designer" ? "brief" : (permit?.signer ?? "owner");
+  const signer = place.signer;
   const project: Project = {
     address: input.address || input.result?.property?.address || "Address to add",
     municipality: input.result?.property?.municipality ?? city,
-    legal: input.profile?.legalDescription || input.site?.legalDescription || null,
-    pin: input.profile?.pin || input.site?.pin || null,
+    legal: input.profile?.legalDescription || null,
+    pin: input.profile?.pin || null,
     owner: input.share ? null : ownerNames,
     signer,
     date: today,
@@ -115,7 +134,7 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
   // The forms.
   const outcomes: FormOutcome[] = [];
   const areaM2 = (geo?.layout?.zones ?? []).filter((z) => z.kind !== "stairs" && z.kind !== "mechanical").reduce((s, z) => s + z.areaM2, 0) || geo?.main?.plan.areaM2 || null;
-  const values = formValues(input, project.municipality, scopeOfWork(ctx), areaM2, geo?.layout?.kind === "studio" ? 0 : 1, today);
+  const values = formValues(input, project.municipality, scopeOfWork(ctx), areaM2, geo?.layout?.kind === "studio" ? 0 : 1, today, place);
   if (!input.share && permit) {
     const needed = formsNeeded(permit.forms, { ownerDraws: signer === "owner", ownerBuilds: input.state.build?.path !== "hire" });
     for (const form of needed) {
@@ -132,30 +151,31 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
           // A form that won't load falls back to the summary below.
         }
       }
-      await summarySheet(doc, form, permitRows(values), form.url ? `We couldn't fill this form's PDF here. Copy these answers into it, or into the City's online form.` : "This form is filled in online or at the counter. Copy these answers into it.");
+      await summarySheet(doc, form, permitRows(values), form.url ? `We couldn't fill this form's PDF here. Copy these answers into it, or into the online form.` : "This form is filled in online or at the counter. Copy these answers into it.");
       outcomes.push({ id: form.id, title: form.title, status: form.url ? "unavailable" : "summary", set: [] });
     }
   }
 
-  await submitPage(doc, input, permit, city);
+  await submitPage(doc, input, permit, authority);
   if (input.favourites.length) await lookPage(doc, input.favourites, input.state);
   const bytes = await doc.save();
   return { bytes, sheets, forms: outcomes, pages: doc.getPageCount(), signer };
 }
 
-async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnType<typeof cityPermit>["permit"], city: string) {
+async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnType<typeof cityPermit>["permit"], authority: string) {
   const fonts = await embedFonts(doc);
   const s = new Sheet(doc.addPage(LETTER), fonts);
   const { pack } = packFor(input.municipality);
   let y = s.height - 54;
   s.text("HOW TO SUBMIT", 48, y, { size: 8, color: MUTED, font: fonts.bold });
   y -= 24;
-  y = s.wrap(`Apply to the City of ${city}`, 48, y, s.width - 96, { size: 18, font: fonts.bold, leading: 21 }) - 6;
+  y = s.wrap(authority === "your municipality" ? "Apply to your municipality's building department" : `Apply to the ${authority}`, 48, y, s.width - 96, { size: 18, font: fonts.bold, leading: 21 }) - 6;
+  y = s.wrap(`The drawings are a draft: check every size with a tape, or have a BCIN designer check them, before you submit.`, 48, y, s.width - 96, { size: 10 }) - 8;
   if (!permit) {
-    s.wrap("Your city isn't researched yet: ask its building department which forms and drawings it needs.", 48, y, s.width - 96, { size: 10 });
+    s.wrap("Ask the building department which forms and drawings it needs.", 48, y, s.width - 96, { size: 10 });
     return;
   }
-  y = s.wrap(`Online: ${permit.portal.label}, ${permit.portal.url}`, 48, y, s.width - 96, { size: 10 }) - 10;
+  y = s.wrap(`${/^find/i.test(permit.portal.label) ? "" : "Online: "}${permit.portal.label}, ${permit.portal.url}`, 48, y, s.width - 96, { size: 10 }) - 10;
   s.text("WHAT TO UPLOAD", 48, y, { size: 8, color: MUTED, font: fonts.bold });
   y -= 14;
   for (const u of permit.upload) {

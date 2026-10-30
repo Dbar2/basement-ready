@@ -1,12 +1,13 @@
-// What public data already says about a house, from its address point: zoning, lot size, the
-// building, and registered units. Each answer is one less question for the homeowner.
-// Sources (credited on screen):
-// - Region of Waterloo Open Data: addresses, building footprints, 2026 aerial imagery.
-// - City of Waterloo: Zoning By-law 2018-050 and property fabric map services.
-// - City of Kitchener: zoning by address map service. Not open data (Teranet-derived parcels); used
-//   with permission pending, and switched off with PROPERTY_KITCHENER=0.
-// - City of Cambridge: open zoning by-law layer and parcel map service.
+// What open public data already says about a house, from its address point: the zone (where an
+// open zoning layer exists), the building, and registered units. Each answer is one less question.
+// Only layers published under an open licence are used; each is cited in data/rules/SOURCES.md:
+// - Region of Waterloo Open Data Licence v2.0: addresses, building footprints, aerial photos (2024).
+// - City of Cambridge Open Data Licence v2.1: the hybrid zoning by-law layer.
+// Not used, because no open licence covers them: parcels anywhere in the Region (Teranet-derived),
+// and the Cities of Waterloo and Kitchener's zoning layers. Those cities' zoning is "check the map".
 import type { Address } from "./address";
+
+type Link = { label: string; url: string };
 
 export type Property = {
   address: string;
@@ -16,9 +17,11 @@ export type Property = {
   lat: number;
   zone: { code: string; label: string | null; bylaw: string | null } | null;
   residential: boolean | null; // the zone allows houses, so an ARU is allowed in principle
-  lotAreaM2: number | null;
+  lotAreaM2: number | null; // no open parcel data, so this stays empty for now
   building: { storeys: number | null; footprintM2: number | null; floorAreaM2: number | null } | null;
   unitsRegistered: number; // unit addresses at this house: an existing apartment shows up here
+  inRegion: boolean; // Waterloo Region's open data covers this house
+  zoningMap: Link | null; // where to look up the zone ourselves when there's no open layer
   sources: string[];
   fetchedAt: string;
 };
@@ -37,13 +40,18 @@ async function query(layer: string, a: Address, outFields: string, extra = ""): 
   }
 }
 
-const LAYERS = {
-  footprints: "https://utility.arcgis.com/usrsvcs/servers/d4d0c6dedec14e59930688f3830776c6/rest/services/OpenData/OpenData/MapServer/11",
-  waterlooZoning: "https://gis.waterloo.ca/maps/rest/services/Public/Public_Operations/MapServer/49",
-  waterlooParcels: "https://services.arcgis.com/ZpeBVw5o1kjit7LT/arcgis/rest/services/Property_Fabric/FeatureServer/1358",
-  kitchenerZoning: "https://utility.arcgis.com/usrsvcs/servers/cf51b9b72889410cb9ed4a6017ed0433/rest/services/OnPoint_Int_Ext/Zoning/MapServer/28",
+export const LAYERS = {
+  // Region of Waterloo Open Data: "Building Footprints".
+  footprints: "https://utility.arcgis.com/usrsvcs/servers/12d17585568d410fb3b6cca6fdc44c70/rest/services/OpenData/OpenData/MapServer/11",
+  // City of Cambridge Open Data: "Hybrid Zoning Bylaw".
   cambridgeZoning: "https://services5.arcgis.com/LTaPSxJTf948f8sm/arcgis/rest/services/HybridZoningBylaw/FeatureServer/0",
-  cambridgeParcels: "https://maps.cambridge.ca/arcgispub03/rest/services/Zoning/MapServer/0",
+};
+
+// Each city's own zoning map, for the cities whose zoning layer isn't open data.
+export const ZONING_MAPS: Record<string, Link> = {
+  Waterloo: { label: "City of Waterloo zoning map", url: "https://maps.waterloo.ca/Html5Viewer/?viewer=waterlooviewer&LayerTheme=Zoning&runWorkflow=ZoningSearch" },
+  Kitchener: { label: "City of Kitchener zoning map", url: "https://experience.arcgis.com/experience/c870484f904744b8bb4f1bdecf18dddb" },
+  Cambridge: { label: "City of Cambridge zoning map", url: "https://experience.arcgis.com/experience/c9f28e5db04e4ff487cd62229dff156b" },
 };
 
 // Low-density residential zones in each by-law, where a house (and so an ARU) is allowed.
@@ -51,47 +59,19 @@ export function isResidentialZone(code: string) {
   return /^(\(H\))?\s*(R|RN|RES|RS|RM)[-\d\s.A-Z]*$/i.test(code.trim()) && !/^(RC|RMU)/i.test(code.trim());
 }
 
-async function zoning(a: Address): Promise<{ zone: Property["zone"]; lotAreaM2: number | null; sources: string[] }> {
-  const round = (n: unknown) => (typeof n === "number" && n > 0 ? Math.round(n) : null);
-  if (a.municipality === "Waterloo") {
-    const [z, p] = await Promise.all([
-      query(LAYERS.waterlooZoning, a, "ZONE_CODE,ZONE_LABEL,BYLAW"),
-      query(LAYERS.waterlooParcels, a, "AREA_SQM,PARCELTYPE"),
-    ]);
-    return {
-      zone: z[0]?.ZONE_CODE ? { code: z[0].ZONE_CODE, label: z[0].ZONE_LABEL ?? null, bylaw: z[0].BYLAW ? `By-law ${z[0].BYLAW}` : null } : null,
-      lotAreaM2: round(p[0]?.AREA_SQM),
-      sources: ["City of Waterloo zoning and property maps"],
-    };
-  }
-  if (a.municipality === "Kitchener") {
-    if (process.env.PROPERTY_KITCHENER === "0") return { zone: null, lotAreaM2: null, sources: [] };
-    const z = await query(LAYERS.kitchenerZoning, a, "ZONE_LABEL,BASE_BYLAW,SHAPE.AREA");
-    return {
-      zone: z[0]?.ZONE_LABEL ? { code: z[0].ZONE_LABEL, label: null, bylaw: z[0].BASE_BYLAW ?? null } : null,
-      lotAreaM2: round(z[0]?.["SHAPE.AREA"]),
-      sources: ["City of Kitchener zoning map"],
-    };
-  }
-  if (a.municipality === "Cambridge") {
-    const [z, p] = await Promise.all([
-      query(LAYERS.cambridgeZoning, a, "ZONING_CODE,ZONING_TYPE,ZONING_BYLAW"),
-      query(LAYERS.cambridgeParcels, a, "HOUSE_NUMBER,SHAPE.AREA"),
-    ]);
-    // The point can sit on a shared line; prefer the parcel with this house number.
-    const number = a.address.split(" ")[0];
-    const parcel = p.find((x) => String(x.HOUSE_NUMBER) === number) ?? (p.length === 1 ? p[0] : null);
-    return {
-      zone: z[0]?.ZONING_CODE ? { code: z[0].ZONING_CODE, label: z[0].ZONING_TYPE ?? null, bylaw: z[0].ZONING_BYLAW ? `By-law ${z[0].ZONING_BYLAW}` : null } : null,
-      lotAreaM2: round(parcel?.["SHAPE.AREA"]),
-      sources: ["City of Cambridge open data (zoning) and parcel map"],
-    };
-  }
-  return { zone: null, lotAreaM2: null, sources: [] };
+// The zone, where an open layer has it: Cambridge only.
+async function zoning(a: Address): Promise<{ zone: Property["zone"]; sources: string[] }> {
+  if (a.source === "ontario" || a.municipality !== "Cambridge") return { zone: null, sources: [] };
+  const z = await query(LAYERS.cambridgeZoning, a, "ZONING_CODE,ZONING_TYPE,ZONING_BYLAW");
+  return {
+    zone: z[0]?.ZONING_CODE ? { code: z[0].ZONING_CODE, label: z[0].ZONING_TYPE ?? null, bylaw: z[0].ZONING_BYLAW ? `By-law ${z[0].ZONING_BYLAW}` : null } : null,
+    sources: ["City of Cambridge open data (zoning)"],
+  };
 }
 
 // The house itself: the biggest residential footprint within a few metres of the address point.
 async function building(a: Address): Promise<Property["building"]> {
+  if (a.source === "ontario") return null;
   const rows = await query(LAYERS.footprints, a, "FootprintSqft,Storeys,TotalSqft,BuildingType", "&distance=12&units=esriSRUnit_Meter");
   const house = rows.filter((r) => !r.BuildingType || /resid/i.test(r.BuildingType)).sort((x, y) => (y.FootprintSqft ?? 0) - (x.FootprintSqft ?? 0))[0];
   if (!house) return null;
@@ -105,6 +85,7 @@ export async function lookupProperty(a: Address): Promise<Property> {
   const key = `${a.address}|${a.municipality}`;
   const hit = cache.get(key);
   if (hit) return hit;
+  const inRegion = a.source !== "ontario"; // no source: an older Region address
   const [z, b] = await Promise.all([zoning(a), building(a)]);
   const property: Property = {
     address: a.address,
@@ -114,10 +95,12 @@ export async function lookupProperty(a: Address): Promise<Property> {
     lat: a.lat,
     zone: z.zone,
     residential: z.zone ? isResidentialZone(z.zone.code) : null,
-    lotAreaM2: z.lotAreaM2,
+    lotAreaM2: null,
     building: b,
     unitsRegistered: a.units,
-    sources: ["Region of Waterloo open data (addresses, buildings)", ...z.sources],
+    inRegion,
+    zoningMap: z.zone ? null : (ZONING_MAPS[a.municipality] ?? null),
+    sources: inRegion ? ["Region of Waterloo open data (addresses, buildings)", ...z.sources] : ["Natural Resources Canada geolocation (address)"],
     fetchedAt: new Date().toISOString(),
   };
   if (cache.size > 2000) cache.clear();
@@ -125,18 +108,16 @@ export async function lookupProperty(a: Address): Promise<Property> {
   return property;
 }
 
-// ---- The lot and the house as shapes, for the permit's site plan ----------------------------
-// Same layers as above, asked for their outlines (WGS 84) and turned into metres around the address
-// point: x east, y north. Good to a few centimetres over a lot; it's GIS data, not a survey.
+// ---- The house as a shape, for the permit's site plan ----------------------------------------
+// The Region's building footprints, asked for their outlines (WGS 84) and turned into metres around
+// the address point: x east, y north. GIS data, not a survey. There's no open parcel layer, so the
+// lot lines are drawn by hand; `parcel` is only filled if a licensed source is added later.
 
 export type SiteGeometry = {
   origin: { lon: number; lat: number };
   parcel: [number, number][] | null;
   footprint: [number, number][] | null; // the house
-  others: [number, number][][]; // garages and sheds on the lot
-  pin: string | null;
-  legalDescription: string | null;
-  rollNumber: string | null;
+  others: [number, number][][]; // garages and sheds on the lot (only knowable with lot lines)
   // The aerial photo's half size in metres, so a point traced on it maps to the same frame.
   aerial: { halfWidthM: number; halfHeightM: number };
   sources: string[];
@@ -174,60 +155,38 @@ export function ringArea(r: Ring) {
   return Math.abs(s) / 2;
 }
 
-export async function lookupSiteGeometry(a: Address): Promise<SiteGeometry> {
+export async function lookupSiteGeometry(a: Address): Promise<SiteGeometry | null> {
+  if (a.source === "ontario") return null; // outside Waterloo Region: no open footprints or photo
   const m = metresPerDegree(a.lat);
   const local = (r: Ring): Ring => r.map(([lon, lat]) => [Math.round((lon - a.lon) * m.lon * 100) / 100, Math.round((lat - a.lat) * m.lat * 100) / 100]);
   // The outer ring: the one with the biggest area.
   const outer = (rings: Ring[]) => rings.map(local).sort((p, q) => ringArea(q) - ringArea(p))[0] ?? null;
-  const sources = ["Region of Waterloo open data (building footprints)"];
-  let parcel: Ring | null = null, pin: string | null = null, legal: string | null = null, roll: string | null = null;
-  if (a.municipality === "Waterloo") {
-    const p = (await shapes(LAYERS.waterlooParcels, a, "PIN,PARCELTYPE"))[0];
-    if (p) {
-      parcel = outer(p.rings);
-      pin = p.attributes.PIN ? String(p.attributes.PIN) : null;
-      sources.push("City of Waterloo property fabric");
-    }
-  } else if (a.municipality === "Cambridge") {
-    const number = a.address.split(" ")[0];
-    const all = await shapes(LAYERS.cambridgeParcels, a, "PIN,HOUSE_NUMBER");
-    const p = all.find((x) => String(x.attributes.HOUSE_NUMBER) === number) ?? (all.length === 1 ? all[0] : null);
-    if (p) {
-      parcel = outer(p.rings);
-      pin = p.attributes.PIN ? String(p.attributes.PIN) : null;
-      sources.push("City of Cambridge parcel map");
-    }
-  } else if (a.municipality === "Kitchener" && process.env.PROPERTY_KITCHENER !== "0") {
-    const p = (await shapes(LAYERS.kitchenerZoning, a, "LEGAL_DESCRIPTION,ROLL_NUMBER"))[0];
-    if (p) {
-      parcel = outer(p.rings);
-      legal = p.attributes.LEGAL_DESCRIPTION ? String(p.attributes.LEGAL_DESCRIPTION).trim() : null;
-      roll = p.attributes.ROLL_NUMBER ? String(p.attributes.ROLL_NUMBER) : null;
-      sources.push("City of Kitchener zoning map");
-    }
-  }
-  // Buildings within a few metres of the point; the biggest residential one is the house.
   const buildings = (await shapes(LAYERS.footprints, a, "FootprintSqft,BuildingType", "&distance=40&units=esriSRUnit_Meter"))
     .map((b) => ({ ring: outer(b.rings), type: String(b.attributes.BuildingType ?? "") }))
     .filter((b): b is { ring: Ring; type: string } => Boolean(b.ring));
-  const onLot = (r: Ring) => {
-    if (!parcel) return true;
-    const cx = r.reduce((s, p) => s + p[0], 0) / r.length, cy = r.reduce((s, p) => s + p[1], 0) / r.length;
-    return pointInRing([cx, cy], parcel);
-  };
-  const near = buildings.filter((b) => onLot(b.ring));
-  const house = near.filter((b) => !b.type || /resid/i.test(b.type)).sort((p, q) => ringArea(q.ring) - ringArea(p.ring))[0] ?? null;
+  // Without lot lines, the house is the home the address point sits in, or the nearest one to it.
+  const homes = buildings.filter((b) => !b.type || /resid/i.test(b.type));
+  const house = homes.find((b) => pointInRing([0, 0], b.ring)) ?? homes.map((b) => ({ b, d: distanceToRing([0, 0], b.ring) })).filter((x) => x.d <= 12).sort((p, q) => p.d - q.d)[0]?.b ?? null;
   return {
     origin: { lon: a.lon, lat: a.lat },
-    parcel,
+    parcel: null,
     footprint: house?.ring ?? null,
-    others: near.filter((b) => b !== house).map((b) => b.ring),
-    pin,
-    legalDescription: legal,
-    rollNumber: roll,
+    others: [],
     aerial: { halfWidthM: Math.round(AERIAL.dx * m.lon * 100) / 100, halfHeightM: Math.round(AERIAL.dy * m.lat * 100) / 100 },
-    sources,
+    sources: ["Region of Waterloo open data (building footprints)"],
   };
+}
+
+// Shortest distance from a point to a ring's edges, in the ring's units.
+export function distanceToRing([x, y]: [number, number], r: Ring) {
+  let best = Infinity;
+  for (let i = 0; i < r.length; i++) {
+    const [x0, y0] = r[i], [x1, y1] = r[(i + 1) % r.length];
+    const dx = x1 - x0, dy = y1 - y0;
+    const t = dx || dy ? Math.max(0, Math.min(1, ((x - x0) * dx + (y - y0) * dy) / (dx * dx + dy * dy))) : 0;
+    best = Math.min(best, Math.hypot(x - (x0 + t * dx), y - (y0 + t * dy)));
+  }
+  return best;
 }
 
 export function pointInRing([x, y]: [number, number], r: Ring) {
@@ -242,11 +201,15 @@ export function pointInRing([x, y]: [number, number], r: Ring) {
 // The aerial photo's reach around the point, in degrees.
 export const AERIAL = { dx: 0.00045, dy: 0.00033 };
 
-// A square of 2026 aerial photo around the house, about 70 m across. Region of Waterloo, 10 cm.
+// A square of aerial photo around the house, about 70 m across: the Region of Waterloo's 2024 photos
+// (10 cm), through the WMS address its open data lists ("WMS_Imagery_Connections"). The 2025 and
+// 2026 photos aren't on that list, so they aren't used.
+export const AERIAL_YEAR = 2024;
 export async function fetchAerial(lon: number, lat: number, size = 720): Promise<Buffer> {
   const { dx, dy } = AERIAL;
-  const bbox = [lon - dx, lat - dy, lon + dx, lat + dy].join(",");
-  const url = `https://gis.regionofwaterloo.ca/waimagery/rest/services/Imagery_2026/ImageServer/exportImage?bbox=${bbox}&bboxSR=4326&imageSR=3857&size=${size},${size}&format=jpg&f=image`;
+  // WMS 1.3.0 in EPSG:4326 takes the box as lat,lon: the picture is linear in degrees, like the site plan.
+  const bbox = [lat - dy, lon - dx, lat + dy, lon + dx].join(",");
+  const url = `https://gis.regionofwaterloo.ca/waimagery/services/Imagery_${AERIAL_YEAR}/ImageServer/WMSServer?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=Imagery_${AERIAL_YEAR}&STYLES=&CRS=EPSG:4326&BBOX=${bbox}&WIDTH=${size}&HEIGHT=${size}&FORMAT=image/jpeg`;
   const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });
   if (!res.ok || !(res.headers.get("content-type") ?? "").includes("image")) throw new Error(`aerial ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
