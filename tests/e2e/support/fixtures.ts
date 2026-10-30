@@ -96,8 +96,10 @@ export async function oneAtATime<T>(name: string, fn: () => Promise<T>): Promise
 }
 
 // The JSON a page fetched from the API, for asserting real outcomes beside what's on screen.
+// A minute's grace: the test server is one process, and while a take finishes (the 3D merge, the permit
+// set) it can be busy for twenty seconds and more.
 export async function api<T = any>(page: Page, path: string): Promise<T> {
-  const res = await page.request.get(path);
+  const res = await page.request.get(path, { timeout: 60_000 });
   expect(res.ok(), `${path} → ${res.status()}`).toBeTruthy();
   return res.json();
 }
