@@ -23,6 +23,9 @@ Node worker ──POST /scan (frames + options)──▶ scan3d ──▶ multip
 | `scan3d/export.py` | PLY and depth writers, reference `lift_box` |
 | `scan3d/api.py` | the HTTP contract below |
 | `scan3d/preview.py` | plan + side view PNG for checking a scan by eye |
+| `scan3d/layout.py` | the whole basement's floor plan: floor, wall faces, rooms, doors, fixtures, typed corrections |
+| `scan3d/views.py`, `selfcheck.py`, `plandraw.py`, `planapi.py` | where the floor meets the walls in each frame, each wall checked against the depth, the pictures Spark reads, `/floorplan` |
+| `plan_eval.py` | scores a plan against the truth or a homeowner's sketch ([`docs/research/plan-eval.md`](../../docs/research/plan-eval.md)) |
 
 Pinned: model revision `00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a`, MapAnything code `v1.1.3` (commit `9d1db2d`), torch 2.14.1, DINOv2 hub code `7764ea0` (baked into the Modal image).
 
@@ -88,6 +91,26 @@ const depth = await (parts.get("depth") as File).arrayBuffer();
 - `500`: anything else
 
 **Timeouts.** Modal cuts an HTTP request at 150 s and answers `303` to a result URL that waits for the job. `fetch` follows that by default (up to 20 redirects), so the Node code doesn't change. The service's own limit is 600 s. A warm scan takes well under 150 s; a cold one can cross it.
+
+### `POST /floorplan`
+
+The whole basement's plan, read from areas already scanned (`scan3d/planapi.py`, `scan3d/layout.py`). It needs no GPU: `run_local.py serve --no-model` serves it alone. The Node side is `server/scan3d.ts` `runFloorPlan` and `server/floorplan.ts`.
+
+| Part | Type | What |
+|---|---|---|
+| `areas` | text (JSON) | One per area. Either `{world: {rotation, origin}, factor}` (from its `scan.json`; world = rotationᵀ·(room / factor) + origin) or `{placement: {turn, x, y, z}}`. With depth, it also needs `frames` (`[{pose, intrinsics}]`, camera-to-room, the lens in the depth's pixels) and `depthShape` `[H, W]` |
+| `points` | file, one per area | That area's `points.ply`, in its room frame |
+| `depth` | file, one per area, optional | float16 `[len(frames), H, W]`. Node sends every other frame at half size. Used for where the floor meets the walls, and for the self-check |
+| `cameras` | text (JSON) | Camera centres along the walk, in the world |
+| `hints` | text (JSON), optional | SAM's finds in the world: `{doors, windows, stairs, fixtures, overhead}`, each `{id, center, low, high}` (`fixtures` and `overhead` also have `kind`) |
+| `edits` | text (JSON), optional | Typed corrections to check against the points: `merge`, `split`, `move_wall`, `kind`, `door`, `no_door` (see `layout.py`) |
+| `render` | text, optional | `1`: also return the pictures Spark reads. Send `keyframes` (JPEG parts) and `keyframeCams` (JSON `[{pose, intrinsics}]`, camera-to-world, the lens in the JPEG's pixels) to have the walls drawn into them |
+
+The reply is JSON:
+
+- `plan`: rooms as polygons, walls with their thickness and `check` (the self-check's confidence), openings, fixtures, each area's floor, and the verdict on every edit. In the plan frame: world (x, z) turned by −`rotation`, the floor at 0.
+- `rooms`: each room's box, the shape `server/basement.ts` places areas by.
+- `floorY`, `ceilingY`, `checked`, and `renders` (`topDown` PNG and `frames` JPEGs, base64) when asked.
 
 ### `GET /health`
 

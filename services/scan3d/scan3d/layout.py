@@ -313,7 +313,11 @@ def find_faces(uv: np.ndarray, free: np.ndarray, grid: Grid, seed: int = 0) -> l
             tt = np.linalg.svd(P - ctr, full_matrices=False)[2][0]
             nk = np.array([-tt[1], tt[0]])
         ck = float(np.median(P @ nk))
+        first = on
         on = np.abs(pool @ nk - ck) < FACE_TOL
+        if on.sum() < 30:  # the refit line lost its points: drop the first fit's and go on
+            pool = pool[~first]
+            continue
         P = pool[on]
         tt = np.array([-nk[1], nk[0]])
         along = np.sort(P @ tt)
@@ -587,26 +591,32 @@ OPEN_GAP = 0.4  # m of open space after a wall ends the search outward
 
 def settle(rooms: list[dict], wall: float = NEW_WALL_M) -> None:
     """Two rooms whose facing edges overlap or touch (closer than a wall) move apart to share one wall,
-    centred where they met."""
-    for x in range(len(rooms)):
-        for y in range(x + 1, len(rooms)):
-            A, B = rooms[x], rooms[y]
-            for ea in _edges(A["polygon"]):
-                for eb in _edges(B["polygon"]):
-                    a0, a1, ta, na, La = ea
-                    b0, b1, tb, nb, Lb = eb
-                    if na @ nb > -0.99:
-                        continue
-                    gap = float((b0 - a0) @ na)
-                    if not (-0.3 <= gap < wall - 0.02):
-                        continue
-                    s0, s1 = sorted([float((b0 - a0) @ ta), float((b1 - a0) @ ta)])
-                    ov = min(La, s1) - max(0.0, s0)
-                    if ov < 0.3 or ov < 0.6 * min(La, Lb):
-                        continue
-                    mid = gap / 2
-                    _move_edge(A, a0, a1, na * (mid - wall / 2))
-                    _move_edge(B, b0, b1, na * (mid + wall / 2 - gap))
+    centred where they met. After each move the outlines are read again."""
+
+    def one_move() -> bool:
+        for x in range(len(rooms)):
+            for y in range(x + 1, len(rooms)):
+                A, B = rooms[x], rooms[y]
+                for a0, a1, ta, na, La in _edges(A["polygon"]):
+                    for b0, b1, tb, nb, Lb in _edges(B["polygon"]):
+                        if na @ nb > -0.99:
+                            continue
+                        gap = float((b0 - a0) @ na)
+                        if not (-0.3 <= gap < wall - 0.02):
+                            continue
+                        s0, s1 = sorted([float((b0 - a0) @ ta), float((b1 - a0) @ ta)])
+                        ov = min(La, s1) - max(0.0, s0)
+                        if ov < 0.3 or ov < 0.6 * min(La, Lb):
+                            continue
+                        mid = gap / 2
+                        _move_edge(A, a0, a1, na * (mid - wall / 2))
+                        _move_edge(B, b0, b1, na * (mid + wall / 2 - gap))
+                        return True
+        return False
+
+    for _ in range(20):
+        if not one_move():
+            break
 
 
 def _move_edge(room: dict, a, b, move) -> None:
@@ -1525,6 +1535,13 @@ def _join_walls(ws: list[dict]) -> list[dict]:
     return out
 
 
+def _seg_point_dist(p, a, b) -> float:
+    d = b - a
+    L2 = float(d @ d)
+    t = 0.0 if L2 == 0 else float(np.clip((p - a) @ d / L2, 0, 1))
+    return float(np.hypot(*(a + t * d - p)))
+
+
 def overheads(uv, h, rooms, grid: Grid, ceiling, hints, turn) -> list[dict]:
     """Beams, ducts and bulkheads: strips where the lowest thing overhead sits well under the room's
     ceiling. Their underside is the headroom under them."""
@@ -1561,8 +1578,10 @@ def overheads(uv, h, rooms, grid: Grid, ceiling, hints, turn) -> list[dict]:
             if l < 1.2 or l / max(w, 0.05) < 2.5:
                 continue
             under_h = float(np.percentile(low[lab == k], 30))
-            kind = "beam" if w <= 0.3 else "duct" if w <= 0.7 else "bulkhead"
             centre = grid.lo + (np.array([cx, cy]) + 0.5) * CELL
+            # Boxed in along a wall (wider than a beam, its long side at the room's edge): a bulkhead.
+            edge = min(_seg_point_dist(centre, a, b) for a, b, *_ in _edges(r["polygon"]))
+            kind = "beam" if w <= 0.3 else "bulkhead" if (w > 0.7 or edge <= w / 2 + 0.25) else "duct"
             along_u = abs(np.cos(np.deg2rad(ang))) > 0.7
             size = [l, w] if (along_u == (rect[1][0] >= rect[1][1])) else [w, l]
             out.append({"id": f"{kind}{len(out) + 1}", "kind": kind, "at": _pt(centre), "sizeM": _pt(size), "heightM": _r(under_h, 2), "source": "geometry", "room": r["id"]})
