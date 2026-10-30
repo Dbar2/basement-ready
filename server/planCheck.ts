@@ -6,7 +6,7 @@
 import { polygonArea, bounds } from "./model/geometry";
 import type { Existing } from "./model/types";
 import { drawPlan, ROOM_COLOURS } from "./planDraw";
-import { parseJson, wonderThenSpark } from "./watch";
+import { parseJson, wonderThenSpark, type TakeView } from "./watch";
 import type { responses } from "./meta";
 
 export const ISSUES = ["missing_room", "merged_rooms", "extra_room", "missing_door", "window", "name", "other"] as const;
@@ -21,8 +21,6 @@ export type PlanQuestion = {
 };
 export type PlanCheck = { model: string; questions: PlanQuestion[]; costUsd: number; ms: number };
 
-// How the plan check sees the take: the uploaded video, or every photo of a photo take.
-export type TakeView = { video: { fileId: string; durationS: number } } | { photos: string[] };
 
 // The plan in words, numbered and coloured as drawn: "2 (green), named "Workshop": 3.5 × 2.9 m, 1 window,
 // doors to 1 and 3".

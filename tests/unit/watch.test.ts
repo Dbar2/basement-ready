@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { tokenCost } from "../../server/meta";
-import { cleanWatch, FALLBACK_MODEL, instructions, WATCH_MODEL, watchedNames, watchVideo, watchWords, type Take, type Watch } from "../../server/watch";
+import { cleanWatch, FALLBACK_MODEL, instructions, roomNames, WATCH_MODEL, watchedNames, watchVideo, watchWords, type Take, type Watch } from "../../server/watch";
 
 const video: Take = { source: "video", durationS: 72, sound: true };
 const room = (id: string, visits: number[][], extra: object = {}) => ({ id, name: `Room ${id}`, visits, ceiling: "drywall", ...extra });
@@ -195,6 +195,12 @@ describe("watchedNames", () => {
   it("never gives two areas the same name", () => {
     const w = watch([{ name: "Storage", visits: [[0, 10]] }, { name: "Storage", visits: [[10, 20]] }]);
     expect(watchedNames([{ from: 0, to: 50 }, { from: 50, to: 100 }], w, fps)).toEqual(["Storage", "Storage 2"]);
+  });
+
+  it("hands each area its name by the area's own index, and names nothing when there's one area", () => {
+    const w = watch([{ name: "Rec room", visits: [[0, 30]] }, { name: "Workshop", visits: [[30, 60]] }]);
+    expect(roomNames([{ index: 1, from: 150, to: 300 }, { index: 0, from: 0, to: 150 }], w, fps)).toEqual(["Rec room", "Workshop"]);
+    expect(roomNames([{ index: 0, from: 0, to: 300 }], w, fps)).toEqual([]);
   });
 
   it("matches a photo take's rooms by photo number", () => {

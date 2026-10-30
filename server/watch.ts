@@ -60,6 +60,9 @@ export type Watch = {
   ms: number;
 };
 
+// How a later look at the same take sees it (server/planCheck.ts): the video already uploaded, or the photos.
+export type TakeView = { video: { fileId: string; durationS: number } } | { photos: string[] };
+
 // What the take is, for the prompt and for cleaning the answer. `durationS` for a video, `photos` for a photo take.
 export type Take = { source: "video"; durationS: number; sound: boolean } | { source: "photos"; photos: number; rooms: PhotoTake["rooms"] };
 
@@ -301,5 +304,14 @@ export function watchedNames(ranges: { from: number; to: number }[], watch: Watc
     for (let k = 2; names.includes(name); k++) name = `${base} ${k}`;
     names[p.i] = name;
   }
+  return names;
+}
+
+// The same names for a scan's areas, by each area's own index; none when there's only one area.
+export function roomNames(ranges: { index: number; from: number; to: number }[], watch: Watch | null, fps: number): (string | null)[] {
+  const names: (string | null)[] = [];
+  if (ranges.length < 2) return names;
+  const watched = watchedNames(ranges, watch, fps);
+  ranges.forEach((r, i) => (names[r.index] = watched[i]));
   return names;
 }

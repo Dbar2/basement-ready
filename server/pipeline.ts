@@ -1,6 +1,6 @@
 // One scan: phone video in, a verdict with proof out. Runs inside a worker job and writes
 // every step to scan_events, so the scan screen (and a refresh) can follow along.
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { execFile } from "node:child_process";
 import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -27,10 +27,8 @@ import { keys, storage } from "./storage";
 import { causeOf, FAILURE, stored } from "./failure";
 import { charge, PRICES } from "./spend";
 import { labelled } from "./demo";
-import { overSpend } from "./limits";
-import { watchedNames, watchPhotos, watchVideo, watchVideoFile, watchWords, type Watch } from "./watch";
-import { checkPlan, type TakeView } from "./planCheck";
-import { existingFromScan } from "./model/seed";
+import { roomNames } from "./watch";
+import { checkPlanLater, startWatch, type Watching } from "./watchScan";
 
 const run = promisify(execFile);
 
@@ -170,16 +168,17 @@ export async function finishRooms(
   detections: Detection[],
   emit: (type: ScanEventType, text: string, data?: unknown) => Promise<void>,
   placements?: RoomPlacement[],
-  // Rooms already named: the ones they typed on a photo take, or what the watch pass saw and heard
-  // (server/watch.ts watchedNames). The others are named here. `photos`: a photo take.
-  given?: { names: (string | null)[]; photos?: boolean },
+  // A photo take: its rooms' own names, where they typed one (the others are named here).
+  photos?: { names: (string | null)[] },
+  // What the watch pass saw and heard in each area ("Mom's room"), when nobody typed a name.
+  watched: (string | null)[] = [],
 ): Promise<Room[]> {
   const furnaceFrames = detections.filter((d) => d.label === "Furnace").map((d) => d.frame);
   const named = new Set<string>();
   const rooms: Room[] = [];
   for (const r of ranges) {
     const s3 = scans3d[r.index];
-    const typed = given?.names[r.index] ?? null;
+    const typed = photos?.names[r.index] ?? watched[r.index] ?? null;
     let name = typed ?? (ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named));
     let measurements: Measurements | null = null;
     let plan: Plan | null = null;
@@ -210,7 +209,7 @@ export async function finishRooms(
         measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,
         measurements.widthM != null && measurements.depthM != null && `${measurements.widthM.toFixed(1)} × ${measurements.depthM.toFixed(1)} m`,
       ].filter(Boolean);
-      const rough = given?.photos ? " (rough: a tape measurement fixes it)" : " (rough: re-film slowly for exact sizes)";
+      const rough = photos ? " (rough: a tape measurement fixes it)" : " (rough: re-film slowly for exact sizes)";
       const caveat = !measurements.trusted ? rough : measurements.scaleSource === "model" ? " (estimated)" : "";
       await emit("measure", `${ranges.length > 1 ? `${name}: ` : "Measured "}${sizes.join(" · ")}${caveat}`, measurements);
     }
@@ -240,25 +239,8 @@ type Stage = {
   sparkP: ReturnType<typeof readWithSpark>;
   uploads: Promise<unknown>;
   samCost: number;
-  watch: Watch | null;
-  // How the plan check sees the take once the answer is written: the video the watch pass uploaded, or
-  // its photos. Null when nothing was watched.
-  view: TakeView | null;
+  watching: Watching;
 };
-
-// The watch pass (server/watch.ts), started early beside SAM and the 3D. It adds to the answer and never
-// holds it up or fails it, and it's skipped once today's spend is used up.
-function watchTake(scanId: string, emit: Emit, watch: () => Promise<Watch>): Promise<Watch | null> {
-  return (async () => {
-    if (await overSpend()) return null;
-    const w = await watch();
-    await emit("log", watchWords(w), { watch: w });
-    return w;
-  })().catch((err) => {
-    console.error(`[watch] ${scanId}: ${err instanceof Error ? err.message : err}`);
-    return null;
-  });
-}
 
 // A video: frames and sound out of it, SAM following each thing through it, and the basement's 3D
 // from the camera's walk.
@@ -272,16 +254,9 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   await emit("log", `Reading ${frameCount} frames from your video`, { frameCount });
   const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
   inflight.push(uploads.catch(() => {}));
-  // Muse Wonder watches the whole take with its sound while SAM and the 3D work.
-  let view: TakeView | null = null;
-  const watchP = watchTake(scanId, emit, async () => {
-    const file = await watchVideoFile(analysis, wav, join(work, "watch.mp4"));
-    const video = { fileId: await uploadFile(file, "video/mp4", "walkthrough.mp4"), durationS: frameCount / ANALYSIS_FPS };
-    const w = await watchVideo(video.fileId, video.durationS, Boolean(wav));
-    view = { video };
-    return w;
-  });
-  inflight.push(watchP);
+  // Muse Wonder watches the whole take with its sound while SAM and the 3D work (server/watch.ts).
+  const watching = startWatch(scanId, emit, { work, analysis, wav, frameCount, fps: ANALYSIS_FPS });
+  inflight.push(watching.watch);
 
   // One retry, and a failure is logged rather than passed off as "you didn't talk".
   const transcriptP = wav
@@ -325,7 +300,25 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   const detections: Detection[] = [];
   await Promise.all(
     CONCEPTS.map(async (c) => {
-      const found = videoFinds(c, await samVideo(c.concept, fileId, frameCount).catch(() => ""));
+      const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
+      // Ignore flickers: an object must hold for half a second to count.
+      const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
+      const found: Detection[] = tracks.map((t, i) => {
+        const b = bestFrame(t);
+        const r = (n: number) => Math.round(n * 1000) / 1000;
+        return {
+          id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
+          kind: c.kind,
+          label: c.label,
+          concept: c.concept,
+          frame: b.frame,
+          seconds: b.frame / ANALYSIS_FPS,
+          box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
+          framesSeen: t.frames.length,
+          confidence: b.box.c ?? null,
+          track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
+        };
+      });
       detections.push(...found);
       await emit("find", found.length ? `Found ${plural(found.length, c.label)}` : `No ${c.label.toLowerCase()} seen`, {
         kind: c.kind,
@@ -367,40 +360,13 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
     for (const d of low) detections.splice(detections.indexOf(d), 1);
     await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
   }
-  // Areas named for the rooms the watch pass saw and heard ("Mom's room"), when there's more than one.
-  const watch = await watchP;
-  const watched = ranges.length > 1 ? watchedNames(ranges, watch, ANALYSIS_FPS) : [];
-  const names: (string | null)[] = [];
-  ranges.forEach((r, i) => (names[r.index] = watched[i] ?? null));
-  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements, { names });
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements, undefined, roomNames(ranges, await watching.watch, ANALYSIS_FPS));
   if (basement3d) {
     await saveBasement3d(scanId, basement3d);
     await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
   }
   const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watch, view };
-}
-
-// SAM's answer on the whole video for one concept, as finds. Flickers are ignored: an object must hold
-// for half a second to count.
-export function videoFinds(c: (typeof CONCEPTS)[number], raw: string): Detection[] {
-  const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
-  return tracks.map((t, i) => {
-    const b = bestFrame(t);
-    const r = (n: number) => Math.round(n * 1000) / 1000;
-    return {
-      id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
-      kind: c.kind,
-      label: c.label,
-      concept: c.concept,
-      frame: b.frame,
-      seconds: b.frame / ANALYSIS_FPS,
-      box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
-      framesSeen: t.frames.length,
-      confidence: b.box.c ?? null,
-      track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
-    };
-  });
+  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watching };
 }
 
 // "Found 2 windows, a door and the stairs"
@@ -455,14 +421,9 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   const framePath = (n: number) => join(work, "frames", `${String(n).padStart(4, "0")}.jpg`);
   await Promise.all(Array.from({ length: frameCount }, (_, n) => storage.download(keys.frame(scanId, n), framePath(n))));
   await emit("log", `Reading ${frameCount} photos of ${take.rooms.length === 1 ? "one room" : `${take.rooms.length} rooms`}`, { frameCount, photos: take.rooms });
-  // Muse Wonder looks at every photo together while SAM and the 3D work.
-  let view: TakeView | null = null;
-  const watchP = watchTake(scanId, emit, async () => {
-    const w = await watchPhotos(framePath, take, work);
-    view = { photos: Array.from({ length: take.count }, (_, n) => dataUrl(join(work, `watch-${n}.jpg`), "image/jpeg")) };
-    return w;
-  });
-  inflight.push(watchP);
+  // Muse Wonder looks at every photo together while SAM and the 3D work (server/watch.ts).
+  const watching = startWatch(scanId, emit, { work, framePath, photos: take });
+  inflight.push(watching.watch);
 
   // Each room's 3D alongside SAM, once the service answers. The wait screen shows each room as it's measured.
   const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
@@ -511,32 +472,12 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   await emit("log", "Checking your city's second-unit rules");
   const sparkP = readWithSpark({ ...ctx, photos: take.count }, [...detections], "", []);
   inflight.push(sparkP.catch(() => {}));
-  // A room they named keeps its name; "Room 2" may still turn out to be the furnace room, or what the
-  // watch pass saw in it.
-  const watch = await watchP;
-  const watched = take.rooms.length > 1 ? watchedNames(ranges, watch, 1) : [];
-  const names = take.rooms.map((r, i) => (/^room \d+$/i.test(r.name) ? (watched[i] ?? null) : r.name));
-  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names, photos: true });
+  // A room they named keeps its name; "Room 2" may still turn out to be the furnace room.
+  const names = take.rooms.map((r) => (/^room \d+$/i.test(r.name) ? null : r.name));
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names }, roomNames(ranges, await watching.watch, 1));
   // The 3D's own sense of size, with no walk or tape to check it against.
   if (rooms.some((r) => r.has3d)) await emit("log", "Sizes from photos are a close guess, within about 20%. One tape measurement on the next step makes them true to size.");
-  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage, watch, view };
-}
-
-// Muse Wonder compares the plan we drew with the take (server/planCheck.ts) and its questions land on the
-// result. A failed or skipped check is written as null, so the plan screen stops waiting for it.
-async function planCheckLater(scanId: string, result: Parameters<typeof existingFromScan>[0], view: TakeView) {
-  let check = null;
-  try {
-    const existing = existingFromScan(result);
-    if (existing && !(await overSpend())) check = await checkPlan(existing, view);
-  } catch (err) {
-    console.error(`[plan check] ${scanId}: ${err instanceof Error ? err.message : err}`);
-  }
-  await db
-    .update(schema.scans)
-    .set({ result: sql`jsonb_set(${schema.scans.result}, '{planCheck}', ${JSON.stringify(check)}::jsonb)` })
-    .where(and(eq(schema.scans.id, scanId), isNotNull(schema.scans.result)))
-    .catch((err) => console.error(`[plan check] ${scanId}: ${err instanceof Error ? err.message : err}`));
+  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage, watching };
 }
 
 export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
@@ -560,7 +501,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const inputs = (scan.inputs ?? {}) as ScanInputs;
     const ctx: AssessContext = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
     const stageInput = { scanId, videoKey: scan.videoKey, inputs, work, ctx, emit, inflight };
-    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watch, view } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
+    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watching } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
 
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
@@ -599,7 +540,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       // says how many photos: its sizes are the 3D's own guess, so the plan asks for a tape measurement.
       capture: { lens: inputs.lens ?? null, wideAt: inputs.wideAt ?? null, ...(inputs.photos ? { photos: inputs.photos.count } : {}) },
       // What Muse Wonder watched and heard: the rooms in order, how they join, what was said (server/watch.ts).
-      watch,
+      watch: await watching.watch,
       layout: plan ? suggestLayout(plan) : null,
       // What they'd like it to be, from the wait screen: their wish when the video didn't say one.
       plans,
@@ -609,14 +550,14 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     }, Boolean(inputs.demo));
     await db
       .update(schema.scans)
-      .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd + (watch?.costUsd ?? 0), finishedAt: new Date() })
+      .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd + ((await watching.watch)?.costUsd ?? 0), finishedAt: new Date() })
       .where(eq(schema.scans.id, scanId));
     await emit("done", "Your answer is ready");
     // Photos that finished while this was written go in now; photos that never started, start.
     await settlePhotos(scanId);
     await enqueuePhotos(scanId);
-    // The plan checked against the take for "Is this your basement?", after the answer so it never holds it up.
-    if (view) inflight.push(planCheckLater(scanId, result, view));
+    // Muse Wonder checks the plan against the take for "Is this your basement?" (server/planCheck.ts).
+    inflight.push(checkPlanLater(scanId, result, watching));
   } catch (err) {
     // The real cause, in plain words; a missing key or an unreadable file won't fix itself on a retry.
     const cause = causeOf(err);
