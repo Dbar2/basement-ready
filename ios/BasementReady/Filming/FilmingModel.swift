@@ -1,5 +1,6 @@
 // One take: the camera, the coverage, the guide's line, the voice and the live finds, wired together.
 import Foundation
+import os
 import QuartzCore
 import UIKit
 import simd
@@ -40,6 +41,7 @@ final class FilmingModel: ObservableObject {
   private var shortNote: (Cue, Double)? // a line shown for a moment (a tap too early)
   private let server: URL
   private let onDone: (Take, String?) -> Void
+  private static let log = Logger(subsystem: "com.davidbarry.basementready", category: "take")
 
   init(server: URL, onDone: @escaping (Take, String?) -> Void) {
     self.server = server
@@ -112,8 +114,10 @@ final class FilmingModel: ObservableObject {
       }
       if u.elapsed >= Guide.maxTake { finish() }
     case .interrupted:
+      Self.log.notice("BRTAKE interrupted at \(self.elapsed, privacy: .public) s")
       if canFinish { finish(note: "Filming stopped early, but there's enough to use.") } else { abandon("Filming stopped. The camera was interrupted before 30 seconds.") }
     case .failed(let why):
+      Self.log.error("BRTAKE failed at \(self.elapsed, privacy: .public) s: \(why, privacy: .public)")
       abandon(why)
     }
   }
@@ -143,6 +147,7 @@ final class FilmingModel: ObservableObject {
 
   private func finish(note: String? = nil) {
     guard phase == .recording else { return }
+    Self.log.notice("BRTAKE finished at \(self.elapsed, privacy: .public) s")
     phase = .saving
     live.stop()
     voice.deactivate()
@@ -172,6 +177,7 @@ final class FilmingModel: ObservableObject {
   }
 
   func discard() {
+    Self.log.notice("BRTAKE thrown away at \(self.elapsed, privacy: .public) s")
     abandon("")
   }
 }

@@ -196,22 +196,23 @@ struct GapArrow: View {
   let reduceMotion: Bool
   @State private var breathe = false
 
-  private var target: (angle: Double, point: CGPoint)? {
+  private var target: (icon: String, angle: Double, point: CGPoint)? {
     let w = size.width, h = size.height
     switch cue {
-    case .ceiling, .tiltUp: return (0, CGPoint(x: w / 2, y: h * 0.2))
-    case .tiltDown: return (180, CGPoint(x: w / 2, y: h * 0.66))
+    case .ceiling, .tiltUp: return ("chevron.up", 0, CGPoint(x: w / 2, y: h * 0.2))
+    case .tiltDown: return ("chevron.up", 180, CGPoint(x: w / 2, y: h * 0.66))
     default: break
     }
     guard let b = bearing.map(Double.init), abs(b) >= 35 else { return nil }
-    if abs(b) > 120 { return (180, CGPoint(x: w / 2, y: h * 0.66)) }
-    return (b < 0 ? -90 : 90, CGPoint(x: b < 0 ? 34 : w - 34, y: h * 0.45))
+    // Behind you: a turn, not a tilt.
+    if abs(b) > 120 { return ("arrow.uturn.down", 0, CGPoint(x: w / 2, y: h * 0.64)) }
+    return ("chevron.up", b < 0 ? -90 : 90, CGPoint(x: b < 0 ? 34 : w - 34, y: h * 0.45))
   }
 
   var body: some View {
     ZStack {
       if let target {
-        Image(systemName: "chevron.up")
+        Image(systemName: target.icon)
           .font(.system(size: 30, weight: .heavy))
           .foregroundStyle(Brand.mint)
           .shadow(color: Brand.mint.opacity(0.9), radius: breathe ? 14 : 6)
