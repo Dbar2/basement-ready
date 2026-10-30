@@ -11,11 +11,13 @@ export function AddressField({
   picked,
   onPick,
   onText,
+  onDemo,
   help,
 }: {
   picked: AddressHit | null;
   onPick: (a: AddressHit | null) => void;
   onText?: (text: string) => void; // what's typed, picked or not
+  onDemo?: () => void; // outside Ontario: offer the labelled demo house right here
   help?: ReactNode;
 }) {
   const [text, setText] = useState(picked ? `${picked.address}, ${picked.municipality}` : "");
@@ -58,7 +60,8 @@ export function AddressField({
   // What to say under the field when nothing is picked.
   const typed = text.trim();
   let status: Status = null;
-  if (!picked && found?.notCovered) status = { tone: "warn", text: found.notCovered.message };
+  const outside = Boolean(!picked && found?.notCovered);
+  if (outside) status = { tone: "warn", text: found!.notCovered!.message };
   else if (!picked && found && !hits.length && typed.length >= 6)
     status = { tone: "warn", text: "We couldn't find that address. Check the number and street, and add the town, like “45 Elm Crescent, Ottawa”." };
   else if (!picked && hits.length && !focused && typed.length >= 2) status = { tone: "warn", text: "Pick your address from the list, so we use your municipality's rules." };
@@ -136,6 +139,14 @@ export function AddressField({
       {(status || help) && (
         <p className="field-help" id="addr-help" role={status ? "status" : undefined} data-tone={status?.tone}>
           {status ? status.text : help}
+          {outside && onDemo && (
+            <>
+              {" "}
+              <button type="button" className="link-quiet" onClick={onDemo}>
+                Use the demo house
+              </button>
+            </>
+          )}
         </p>
       )}
     </div>

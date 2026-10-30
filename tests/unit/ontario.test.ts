@@ -7,8 +7,9 @@ import { fromLocate, outsideOntario, resolveAddress, searchAddresses, searchOnta
 import { buildResult, instructions } from "../../server/assess";
 import { diyPlan } from "../../server/diy/plan";
 import { evaluateMoney } from "../../server/eligibility";
-import { cityPermit } from "../../server/permit/data";
-import { buildPermitPackage } from "../../server/permit/package";
+import { applications } from "../../server/apply/applications";
+import { cityPermit, DEMO_ADDRESS } from "../../server/permit/data";
+import { buildPermitPackage, formValues } from "../../server/permit/package";
 import { LAYERS, lookupProperty, lookupSiteGeometry } from "../../server/property";
 import { cleanAuthority, cleanMunicipality, packFor, shortName } from "../../server/rules";
 
@@ -231,5 +232,17 @@ describe("data licences", () => {
   it("calls none of the removed layers", () => {
     const code = ["server/property.ts", "server/address.ts", "server/index.ts", "server/workspaceRoutes.ts"].map((f) => readFileSync(f, "utf8")).join("\n");
     expect(code).not.toMatch(/OnPoint_Int_Ext|Public_Operations|Property_Fabric|arcgispub03|Imagery_2026|PROPERTY_KITCHENER/);
+  });
+});
+
+describe("the demo house", () => {
+  it("says so on the papers instead of printing a blank address", async () => {
+    const demo = { ...sample, demo: true };
+    const out = await buildPermitPackage({ result: demo, municipality: "waterloo-on", address: "", profile: null, state: {}, site: null, aerialJpeg: null, favourites: [], share: true, today: "2026-10-30" });
+    expect(out.pages).toBeGreaterThan(8);
+    const values = formValues({ profile: null, address: "", result: demo, site: null, state: {} }, "Waterloo", "scope", 30, 1, "2026-10-30");
+    expect(values.street).toBe(DEMO_ADDRESS);
+    const apps = applications({ scanId: "x", result: { ...demo, grants: [{ id: "cmhc_refinance_secondary_suite", shortName: "CMHC refinance", qualify: "ask", status: "open", value: "financing", source: { title: "CMHC", url: "https://example.org" } }] }, profile: null, state: {}, address: "", municipality: "Waterloo", site: null, areaM2: 30, bedrooms: 1, scope: "scope" });
+    expect(apps[0].email?.subject).toContain(DEMO_ADDRESS);
   });
 });
