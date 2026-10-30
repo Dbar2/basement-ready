@@ -19,11 +19,13 @@ export type Room = {
 };
 
 export const MAX_ROOMS = 8;
+// The longest take the app records and the server reads, in seconds (src/capture/checklist.ts MAX_SEC).
+export const MAX_TAKE_S = 180;
 // Under this, a room is a doorway walked through, not a room filmed.
 export const MIN_ROOM_FRAMES = 25;
 
 // From the upload form: room start times in seconds, ascending, first one at 0.
-export function cleanRooms(raw: unknown, maxSec = 120): RoomMark[] | null {
+export function cleanRooms(raw: unknown, maxSec = MAX_TAKE_S): RoomMark[] | null {
   let list: unknown = raw;
   if (typeof raw === "string") {
     try {
@@ -66,7 +68,7 @@ export function cleanSpoken(raw: unknown): Span[] | null {
     if (!Array.isArray(list)) return null;
     const spans = list
       .map((x) => ({ startMs: Number(x?.startMs), endMs: Number(x?.endMs) }))
-      .filter((x) => Number.isFinite(x.startMs) && Number.isFinite(x.endMs) && x.endMs > x.startMs && x.startMs >= 0 && x.endMs < 130_000)
+      .filter((x) => Number.isFinite(x.startMs) && Number.isFinite(x.endMs) && x.endMs > x.startMs && x.startMs >= 0 && x.endMs < (MAX_TAKE_S + 10) * 1000)
       .slice(0, 200);
     return spans.length ? spans : null;
   } catch {
@@ -98,15 +100,27 @@ export function roomRanges(marks: RoomMark[] | null, frameCount: number, fps: nu
     .filter((r) => r.to > r.from);
 }
 
-// The room whose numbers the rules use: a trusted scan first, then the biggest floor.
+// Narrower than this, an area is the stairs or a hall, never the room a suite is planned in.
+export const HALL_WIDTH_M = 1.5;
+const walled = (r: Room) => Object.values(r.plan?.sides ?? {}).filter((s) => s === "wall").length >= 3;
+const hall = (r: Room) => Boolean(r.plan) && Math.min(r.plan!.widthM, r.plan!.depthM) < HALL_WIDTH_M;
+
+// The room whose numbers the rules use and the layout goes in: a real room bounded by its own walls
+// (not a hall, not a box stretched to how far the points reach), then a trusted scan, then the biggest floor.
 export function mainRoom(rooms: Room[]): Room | null {
   const scanned = rooms.filter((r) => r.has3d && r.plan);
   if (!scanned.length) return null;
-  return [...scanned].sort((a, b) => Number(Boolean(b.plan!.trusted)) - Number(Boolean(a.plan!.trusted)) || b.plan!.areaM2 - a.plan!.areaM2)[0];
+  const score = (r: Room) => Number(!hall(r)) * 2 + Number(walled(r));
+  return [...scanned].sort((a, b) => score(b) - score(a) || Number(Boolean(b.plan!.trusted)) - Number(Boolean(a.plan!.trusted)) || b.plan!.areaM2 - a.plan!.areaM2)[0];
 }
 
-// "Furnace room" where the furnace was seen; otherwise its number. An electrical panel alone doesn't
-// make a furnace room.
+// "Stairs" or "Hall" for an area narrower than a room; "Furnace room" where the furnace was seen;
+// otherwise the next room number. An electrical panel alone doesn't make a furnace room.
+export function areaName(plan: Plan | null, number: number, from: number, to: number, furnaceFrames: number[], named: Set<string>) {
+  if (plan && Math.min(plan.widthM, plan.depthM) < HALL_WIDTH_M) return plan.stairs.length ? "Stairs" : "Hall";
+  return roomName(number - 1, from, to, furnaceFrames, named);
+}
+
 export function roomName(index: number, from: number, to: number, furnaceFrames: number[], named: Set<string>) {
   if (!named.has("Furnace room") && furnaceFrames.some((f) => f >= from && f < to)) {
     named.add("Furnace room");

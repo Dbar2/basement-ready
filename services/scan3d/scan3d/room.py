@@ -16,6 +16,7 @@ import numpy as np
 PLANE_THRESH = 0.03  # m. RANSAC inlier distance; the research note suggests 0.02-0.03.
 AXIS_TOL = np.deg2rad(12)  # how far a wall may sit off the main room axes and still count as square
 MIN_WALL_LEN = 0.4  # m
+EXTENT_REACH = 2.5  # m: a side with no wall ends at most this far past the cameras
 SAME_FRAMES = 0.35
 FLAT_FLOOR = 0.04  # m, p5-p95 spread of floor height across the room
 LEVEL_CEILING = 0.05  # m, the research note's "ceiling within 5 cm"  # below this frame overlap, two parallel surfaces were seen by different frames
@@ -254,9 +255,11 @@ def fit_room(pts, frame_ids, n_frames, cam_centers, cam_rots, seed=0) -> RoomFit
         lo = [p for p in pos if p < centre]
         hi = [p for p in pos if p > centre]
         spread = pts[inside] @ axis_vec if inside.any() else cams
+        # With no wall on a side, the spread of points reaches through doorways into the next room;
+        # it can't sit farther than EXTENT_REACH past where the person stood.
         return (
-            (min(lo), "wall") if lo else (min(float(np.percentile(spread, 2)), float(cams.min()) - 0.3), "extent"),
-            (max(hi), "wall") if hi else (max(float(np.percentile(spread, 98)), float(cams.max()) + 0.3), "extent"),
+            (min(lo), "wall") if lo else (max(min(float(np.percentile(spread, 2)), float(cams.min()) - 0.3), float(cams.min()) - EXTENT_REACH), "extent"),
+            (max(hi), "wall") if hi else (min(max(float(np.percentile(spread, 98)), float(cams.max()) + 0.3), float(cams.max()) + EXTENT_REACH), "extent"),
         )
 
     (u_lo, u_hi), (v_lo, v_hi) = bounds(a), bounds(b)

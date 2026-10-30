@@ -22,7 +22,7 @@ export type Take = {
 type Props = { take: Take; busy: boolean; onUse: () => void; onRetake: () => void; onClose: () => void };
 
 const NOTES = {
-  max: "We stopped at 2 minutes, the most we can check.",
+  max: "We stopped at 3 minutes, the most we can check.",
   interrupted: "Filming stopped when the camera was interrupted. What you got is long enough to use.",
   short: `This video is under ${MIN_SEC} seconds, so we may miss things. A longer walk-through helps.`,
 };

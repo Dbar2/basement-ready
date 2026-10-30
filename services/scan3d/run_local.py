@@ -30,7 +30,7 @@ def read_frames(src: str) -> list[tuple[str, bytes]]:
     if path.is_file():
         tmp = Path(tempfile.mkdtemp(prefix="scan3d-frames-"))
         vf = "fps=5,scale='if(gt(iw,ih),1280,-2)':'if(gt(iw,ih),-2,1280)'"
-        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-t", "120", "-vf", vf, "-q:v", "3", "-start_number", "0", str(tmp / "%04d.jpg")], check=True)
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(path), "-t", "180", "-vf", vf, "-q:v", "3", "-start_number", "0", str(tmp / "%04d.jpg")], check=True)
         path = tmp
     files = sorted(p for p in path.iterdir() if p.suffix.lower() in (".jpg", ".jpeg", ".png"))
     if not files:

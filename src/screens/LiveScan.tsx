@@ -174,15 +174,19 @@ export function LiveScan({ scanId, onDone }: Props) {
   );
   const done = events.some((e) => e.type === "done");
   const lastStage = [...events].reverse().find((e) => e.type === "stage")?.text ?? "prepare";
-  // Measuring rooms is under way once the 3D starts, until the rules check begins.
-  const measuring = lastStage === "find" && events.some((e) => e.type === "log" && /in 3D/.test(e.text));
+  // Measuring is under way once the 3D starts and the finds are in, until its sizes arrive. The rules
+  // check starts alongside it, so it only shows once the measuring is done.
+  const measuring =
+    events.some((e) => e.type === "log" && /in 3D|Mapping your whole basement|Measuring (area|your basement)/.test(e.text)) &&
+    !events.some((e) => e.type === "measure");
   const stage = done ? "done" : measuring && events.some((e) => e.type === "find" && /Found|No /.test(e.text)) ? "measure" : lastStage;
   const stageIndex = done ? STAGES.length : Math.max(0, STAGES.findIndex((s) => s.id === stage));
   const finds = events.filter((e) => e.type === "find" || e.type === "measure");
   const found = finds.filter((f) => (f.data?.detections?.length ?? 0) > 0).map((f) => f.data?.label?.toLowerCase()).filter(Boolean) as string[];
   const lastLog = events.filter((e) => e.type === "log").slice(-1)[0];
 
-  // A rough time left: about 2 minutes for a full take, counted from when the scan started.
+  // A rough time left: about 2 minutes for a full take, counted from when the scan started; once the
+  // 3D is measuring area by area, about a minute for each area still to go.
   const [now, setNow] = useState(() => Date.now());
   const startedAt = useRef(Date.now());
   useEffect(() => {
@@ -190,8 +194,22 @@ export function LiveScan({ scanId, onDone }: Props) {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, [done]);
+  const areaStep = events
+    .filter((e) => e.type === "log")
+    .map((e) => /Measuring area (\d+) of (\d+)/.exec(e.text))
+    .filter((m): m is RegExpExecArray => m !== null)
+    .slice(-1)[0];
+  const areasLeft = areaStep ? Number(areaStep[2]) - Number(areaStep[1]) + 1 : 0;
   const leftSec = Math.max(15, 150 - (now - startedAt.current) / 1000);
-  const leftText = done ? "Done" : leftSec > 75 ? "About 2 min left" : leftSec > 40 ? "About 1 min left" : "Almost there";
+  const leftText = done
+    ? "Done"
+    : areasLeft > 1
+      ? `About ${areasLeft} min left`
+      : areasLeft === 1 || leftSec <= 40
+        ? "Almost there"
+        : leftSec > 75
+          ? "About 2 min left"
+          : "About 1 min left";
 
   // The questions, one at a time. Answers go to the server now and apply when the scan finishes.
   const [answered, setAnswered] = useState<Record<string, string>>({});
