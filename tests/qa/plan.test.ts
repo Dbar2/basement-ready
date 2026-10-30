@@ -128,6 +128,12 @@ describe("command line", () => {
     expect(a).toMatchObject({ scans: ["sample"], browsers: ["chromium", "webkit"], viewports: ["phone", "desktop"], budget: 3, effort: "medium", captureOnly: false });
   });
 
+  it("reviews with Opus unless told to use Fable", () => {
+    expect(parseArgs([]).model).toBe("opus");
+    expect(parseArgs(["--model", "fable"]).model).toBe("fable");
+    expect(() => parseArgs(["--model=haiku"])).toThrow(/opus or fable/);
+  });
+
   it("reads lists, numbers and = forms", () => {
     const a = parseArgs(["--only", "studio,book", "--budget=1.5", "--browsers", "chromium", "--viewports=phone"]);
     expect(a.only).toEqual(["studio", "book"]);
