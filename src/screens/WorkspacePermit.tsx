@@ -48,7 +48,7 @@ function MmFields({ fields, onSave }: { fields: { key: string; label: string; va
           </label>
         ))}
       </div>
-      <button className="btn btn-primary" disabled={busy || !ready}>
+      <button className="btn btn-ghost" disabled={busy || !ready}>
         {busy ? "Saving…" : "Save"}
       </button>
     </form>
@@ -105,7 +105,7 @@ function Upstairs({ ws, status, savePermit, done }: EditorProps) {
           ))}
       </svg>
       <div className="ws-actions">
-        <button className="btn btn-primary" disabled={!up.bedrooms.length} onClick={done}>
+        <button className="btn btn-ghost" disabled={!up.bedrooms.length} onClick={done}>
           Done
         </button>
         <label className="ws-check">
@@ -177,7 +177,7 @@ function Designer({ scanId, ws, status, savePermit }: EditorProps) {
           {field("email", "Email", "email")}
           {field("phone", "Phone", "tel")}
         </div>
-        <button className="btn btn-primary" disabled={busy || !draft.name.trim() || !draft.bcin.trim()}>
+        <button className="btn btn-ghost" disabled={busy || !draft.name.trim() || !draft.bcin.trim()}>
           {busy ? "Saving…" : "Put them on the drawings"}
         </button>
       </form>
@@ -248,7 +248,7 @@ function Editor(props: EditorProps) {
         >
           {opening ? "Opening…" : `Open ${id}`}
         </button>
-        <button className="btn btn-primary" onClick={() => void savePermit({ reviewed: [...reviewed.filter((r) => r.sheet !== id), { sheet: id, key: status.reviewKey }] }).then(done)}>
+        <button className="btn btn-ghost" onClick={() => void savePermit({ reviewed: [...reviewed.filter((r) => r.sheet !== id), { sheet: id, key: status.reviewKey }] }).then(done)}>
           It matches my basement
         </button>
         {error && <p className="error" role="alert">{error}</p>}
@@ -373,7 +373,7 @@ function SiteTracer({ ws, save, r }: TabProps) {
               <p>{KINDS.find((k) => k.kind === mode)!.help}</p>
               <div className="ws-actions">
                 {mode !== "entrance" && (
-                  <button className="btn btn-primary" onClick={done}>
+                  <button className="btn btn-ghost" onClick={done}>
                     Done
                   </button>
                 )}
@@ -455,7 +455,7 @@ export function PermitTab(props: TabProps) {
               {busy === "submit" ? "Making the submit copy…" : "Download the submit copy"}
             </button>
           )}
-          <button className={status?.canSubmit ? "btn btn-ghost" : "btn btn-primary"} disabled={busy !== null} onClick={() => void run("review", () => downloadPermit(scanId, "review"))}>
+          <button className="btn btn-ghost" disabled={busy !== null} onClick={() => void run("review", () => downloadPermit(scanId, "review"))}>
             {busy === "review" ? "Making your review copy…" : "Download the review copy"}
           </button>
           {permit && (

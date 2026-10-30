@@ -61,7 +61,7 @@ export function Brief() {
           </div>
           {upTo > 0 && (
             <div>
-              <dt>They qualify for</dt>
+              <dt>Looks eligible for</dt>
               <dd>up to {money(upTo)}</dd>
             </div>
           )}
@@ -158,7 +158,7 @@ export function Brief() {
 
       <div className="brief-grid">
         <section>
-          <h2>Money they qualify for</h2>
+          <h2>Money they may be eligible for</h2>
           <ul className="brief-list">
             {yes.map((g) => (
               <li key={g.id}>
