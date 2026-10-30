@@ -131,6 +131,23 @@ export async function scanBasement(
   };
 }
 
+// The phone's own walk, every third frame, cut where it moved on to a new area. Null when too little of
+// the take was tracked to rely on.
+export function trackedWalk(frameCount: number, cameraFor: (n: number) => KnownCamera | null) {
+  const idx: number[] = [], pos: V2[] = [];
+  for (let n = 0; n < frameCount; n += 3) {
+    const c = cameraFor(n);
+    if (!c) continue;
+    idx.push(n);
+    pos.push([c.pose[0][3], c.pose[2][3]]);
+  }
+  if (idx.length < Math.max(12, (frameCount / 3) * 0.5)) return null;
+  const edges = [0];
+  for (const [a] of splitWalk(pos).slice(1)) if (idx[a] - edges.at(-1)! >= MIN_ROOM_FRAMES) edges.push(idx[a]);
+  if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
+  return { idx, pos, spans: edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount })) };
+}
+
 // Areas from the phone's own path, each measured with its known cameras and placed by the world the
 // phone tracked. Null when too little of the take was tracked to rely on.
 async function scanTracked(
@@ -141,20 +158,10 @@ async function scanTracked(
   cameraFor: (n: number) => KnownCamera | null,
   progress?: BasementProgress,
 ): Promise<BasementScan | null> {
-  const idx: number[] = [], pos: V2[] = [];
-  for (let n = 0; n < frameCount; n += 3) {
-    const c = cameraFor(n);
-    if (!c) continue;
-    idx.push(n);
-    pos.push([c.pose[0][3], c.pose[2][3]]);
-  }
-  if (idx.length < Math.max(12, (frameCount / 3) * 0.5)) return null;
+  const walk = trackedWalk(frameCount, cameraFor);
+  if (!walk) return null;
+  const { idx, pos, spans } = walk;
   await progress?.path(pos);
-
-  const edges = [0];
-  for (const [a] of splitWalk(pos).slice(1)) if (idx[a] - edges.at(-1)! >= MIN_ROOM_FRAMES) edges.push(idx[a]);
-  if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
-  const spans = edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount }));
 
   const scans = await measureAreas(
     spans,
