@@ -17,6 +17,7 @@ pnpm qa:review [options]   review the latest capture again (or --from <run>)
   --web dev|build    the web server to start: Vite dev (default) or the production build
   --from <run>       reuse the shots of an earlier run (a folder in tmp/qa, or "latest")
   --capture-only     never call the model, even with a key
+  --dry-run          build and price every review request (requests.json), send nothing
   --name <label>     added to the run folder's name
   --notes <file>     merge findings written by hand (schema.ts Notes) into the report`;
 
@@ -34,6 +35,7 @@ export type Args = {
   web: "dev" | "build";
   from: string | null;
   captureOnly: boolean;
+  dryRun: boolean;
   reviewOnly: boolean;
   name: string | null;
   notes: string | null;
@@ -57,6 +59,7 @@ export function parseArgs(argv: string[]): Args {
     web: "dev",
     from: null,
     captureOnly: false,
+    dryRun: false,
     reviewOnly: false,
     name: null,
     notes: null,
@@ -120,6 +123,9 @@ export function parseArgs(argv: string[]): Args {
         break;
       case "--capture-only":
         a.captureOnly = true;
+        break;
+      case "--dry-run":
+        a.dryRun = true;
         break;
       case "--review-only":
         a.reviewOnly = true;

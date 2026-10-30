@@ -31,6 +31,8 @@ export class Images {
     const browser = await chromium.launch({ executablePath: chromiumPath() });
     const page = await browser.newPage();
     await page.setContent("<!doctype html><title>qa images</title>");
+    // tsx keeps function names with a __name() helper the page doesn't have.
+    await page.evaluate("window.__name = window.__name || ((f) => f)");
     return new Images(browser, page);
   }
 

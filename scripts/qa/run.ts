@@ -106,7 +106,9 @@ try {
 
 const key = args.captureOnly ? null : anthropicKey();
 let result: ReviewResult | null = null;
-if (key) {
+if (args.dryRun) {
+  await review({ runDir, shots: cap.shots, apiKey: "", budget: new Budget(args.budget), effort: args.effort, concurrency: 1, facts, log, dryRun: true });
+} else if (key) {
   log(`Reviewing with ${MODEL} (effort ${args.effort}, budget $${args.budget.toFixed(2)})…`);
   const budget = new Budget(args.budget);
   result = await review({ runDir, shots: cap.shots, apiKey: key, budget, effort: args.effort, concurrency: args.concurrency, facts, log });
