@@ -68,6 +68,9 @@ function apiEnv(runDir: string, takes: boolean, apiPort: number): NodeJS.Process
     // races (the 3D against the photos) go the way they went when recorded and every call is found.
     REPLAY_PACE: process.env.QA_PACE ?? (takes ? "0.25" : "0"),
     SCAN3D_PARALLEL: "3",
+    // As in the end-to-end tests: a picture with no exact recording (it depends on the browser's render and
+    // on timing) gets a recorded one of the same kind, logged as "loose". Everything else stays exact.
+    REPLAY_LOOSE: process.env.QA_LOOSE ?? "pictures",
     SCANS_PER_IP_PER_HOUR: "1000",
     SCANS_PER_DAY: "1000",
     DAILY_COST_CAP_USD: "1000",

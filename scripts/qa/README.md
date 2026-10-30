@@ -48,6 +48,7 @@ The review reads `ANTHROPIC_API_KEY` from the environment or from the checkout's
 
 - Budget: `--budget` dollars a run (default 3). Each request holds its estimate before it goes, so parallel requests can't overshoot. Requests that don't fit are listed as "skipped (budget)".
 - Images are cut to screen-tall pieces. The first two go sharp and the rest at half detail. PDF pages go at 1800 px. Safari goes only where it differs.
+- Replay: takes replay their recorded Meta and 3D answers exactly, except pictures (`REPLAY_LOOSE=pictures`, as in the end-to-end tests): a design picture or a picture check with no exact recording gets a recorded one of the same kind, logged as "loose" in `server/replay-log.jsonl`. `QA_LOOSE=` turns that off.
 - Cache: a request whose images and text are unchanged (same prompt version, model and effort) reuses its earlier answer from `tmp/qa/cache` for free. Bump `PROMPT_VERSION` in `prompts.ts` when the checklist changes.
 - `--effort` (default medium) trades depth for output tokens.
 - On the full capture of main (Oct 30): 30 requests, 188 images, about $3.10 by the dry run's deliberately high output estimate. A real run should land around $2–3. Re-runs cost only what changed.
