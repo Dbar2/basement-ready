@@ -116,6 +116,13 @@ for (const take of TAKES) {
       await flow.plan().expectOpen();
     });
     if (r.capture?.photos) await journey.step("one tape number", () => flow.plan().tapeIfAsked("7.3"));
+    // Muse Wonder's check of the plan lands after the answer (server/watchScan.ts), and the plan screen
+    // waits a minute for its questions. Read them, as a homeowner would, before saying yes: then the
+    // check is always made (and recorded), and what it adds to the permit list is always there.
+    if (r.watch)
+      await journey.step("the plan check's questions", () =>
+        expect.poll(async () => (await api(page, `/api/scans/${scanId}`)).result?.planCheck !== undefined, { timeout: mode === "record" ? 5 * 60_000 : 2 * 60_000, intervals: [2_000] }).toBe(true),
+      );
     await journey.step("plan confirmed", () => flow.plan().confirm());
     const layouts = flow.layouts();
     await journey.step("layouts, with the decision", async () => {
