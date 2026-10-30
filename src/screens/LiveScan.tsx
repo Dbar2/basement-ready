@@ -8,6 +8,8 @@
 // A scan that fails says why and offers "Try again" (the video is kept); a slow one says so. Only the
 // person who filmed it answers: a shared link watches. The example says it's a recorded scan, replayed.
 // A photo take shows its photos instead of the video, each with its finds boxed as they land.
+// For the person who filmed it, this is step 1 of the flow (src/flow/flow.ts): once it's measured it
+// hands on to "Is this your basement?".
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ANALYSIS_FPS,
@@ -27,6 +29,7 @@ import {
 } from "../api";
 import { Logo } from "../components/Logo";
 import { PhotoCarousel } from "../components/PhotoCarousel";
+import { FlowHead } from "../flow/FlowNav";
 import "../styles/ask.css";
 import "../styles/journey.css";
 import { modelsFrom, walkFrom } from "./assembly";
@@ -158,12 +161,16 @@ export function LiveScan({ scanId, onDone }: Props) {
   const [sentTake, setSentTake] = useState<PhotoTake | null>(() => localPhotoTakes.get(scanId) ?? null);
   // Play the file from this tab if we have it; after a refresh, play the server's copy.
   const local = localVideos.get(scanId);
-  const src = useMemo(
-    () => (scanId === "sample" ? "/samples/sample-basement.mp4" : local ? URL.createObjectURL(local) : `/api/scans/${scanId}/video`),
-    [scanId, local],
-  );
-
-  useEffect(() => () => { if (local) URL.revokeObjectURL(src); }, [src, local]);
+  // Made and revoked in one effect, so dev's double mount gets a fresh URL, not a revoked one.
+  const [blob, setBlob] = useState<{ file: File; url: string } | null>(null);
+  useEffect(() => {
+    if (!local) return;
+    const url = URL.createObjectURL(local);
+    setBlob({ file: local, url });
+    return () => URL.revokeObjectURL(url);
+  }, [local]);
+  const src =
+    scanId === "sample" ? "/samples/sample-basement.mp4" : local ? (blob?.file === local ? blob.url : undefined) : `/api/scans/${scanId}/video`;
 
   useEffect(() => {
     setEvents([]);
@@ -391,9 +398,10 @@ export function LiveScan({ scanId, onDone }: Props) {
   );
 
   return (
-    <main className="live">
+    <main className="live" data-flow={canEdit || undefined}>
+      {canEdit && <FlowHead scanId={scanId} step="style" remember={!done} />}
       <header className="live-top">
-        <Logo />
+        {!canEdit && <Logo />}
         <span className="live-left mono" data-state={failed ? "failed" : wait}>{leftText}</span>
       </header>
       {sample && (
@@ -467,9 +475,10 @@ export function LiveScan({ scanId, onDone }: Props) {
             </div>
           ) : done && !ask && (asks !== null || !canEdit) ? (
             <div className="live-ready">
-              <h2>Your answer is ready</h2>
+              <h2>{canEdit ? "Your basement is measured" : "Your answer is ready"}</h2>
+              {canEdit && <p className="muted">Next, check its floor plan. Everything else is drawn on it.</p>}
               <button className="btn btn-primary" onClick={onDone}>
-                See my plan <span className="arrow" aria-hidden>→</span>
+                {canEdit ? "Is this your basement?" : "See the answer"} <span className="arrow" aria-hidden>→</span>
               </button>
             </div>
           ) : ask ? (
@@ -504,7 +513,7 @@ export function LiveScan({ scanId, onDone }: Props) {
               {ask.decides && ask.decides.length > 0 && <p className="live-ask-decides mono">Decides: {ask.decides.join(" · ")}</p>}
               {done && (
                 <button className="link-quiet" onClick={onDone}>
-                  Skip and see my plan
+                  Skip, check my plan
                 </button>
               )}
             </div>

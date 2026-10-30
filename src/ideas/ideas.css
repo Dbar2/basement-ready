@@ -110,40 +110,43 @@
 .board-colours i { width: 12px; height: 12px; border-radius: 2px; border: 1px solid color-mix(in srgb, var(--color-ink) 25%, transparent); }
 
 /* ---------- pick a layout ---------- */
-.layouts { display: grid; gap: 12px; }
-.layouts h2 { font-size: clamp(30px, 5vw, 44px); }
-.layouts-lede { margin: 0; color: var(--color-ink-muted); max-width: 62ch; }
+.layouts { display: grid; gap: 12px; min-width: 0; }
 .layout-row {
-  list-style: none; margin: 8px -16px 0; padding: 4px 16px 12px; display: flex; gap: 12px;
+  list-style: none; margin: 0 -16px; padding: 4px 16px 12px; display: flex; gap: 12px;
   overflow-x: auto; scroll-snap-type: x mandatory; scroll-padding: 0 16px; overscroll-behavior-x: contain;
 }
-.layout-card {
-  flex: 0 0 min(84%, 340px); scroll-snap-align: start; display: grid; gap: 10px; align-content: start;
-  padding: 12px; background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-1);
+.layout-card { flex: 0 0 min(84%, 340px); scroll-snap-align: start; display: grid; }
+.layout-hit {
+  display: grid; gap: 10px; align-content: start; width: 100%; padding: 12px; text-align: left; color: var(--color-ink);
+  background: var(--color-card); border: 1px solid var(--color-border); border-radius: var(--radius-1);
+  transition: border-color var(--dur-1) var(--ease-out), box-shadow var(--dur-1) var(--ease-out);
 }
-.layout-card[data-chosen] { border-color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-ink); }
-.layout-thumb { height: auto; border-radius: 4px; }
-.layout-thumb-wall { fill: none; stroke: var(--color-ink); stroke-width: 4; }
-.layout-thumb-window { stroke: var(--find-window); stroke-width: 7; }
-.layout-thumb .plan-zone-area { display: none; }
-.layout-corner { margin: 0; }
-/* A portrait take's corner would make the card a tower: it shows its middle, cropped. */
-.layout-corner .pic { max-height: 300px; width: 100%; }
-.layout-corner figcaption { padding-top: 4px; color: var(--color-ink-muted); font-size: 11px; }
+.layout-hit:hover { border-color: color-mix(in srgb, var(--color-ink) 40%, var(--color-border)); }
+.layout-card[data-chosen] .layout-hit { border-color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-ink); }
+.layout-corner { margin: 0; display: grid; gap: 4px; }
+.layout-pic { position: relative; display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 4px; background: linear-gradient(100deg, var(--color-surface) 30%, var(--color-card) 50%, var(--color-surface) 70%) 0 0 / 300% 100%; animation: skeleton 1.4s ease-in-out infinite; }
+.layout-pic[data-ready] { animation: none; background: var(--color-surface); }
+.layout-pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; animation: fade-in var(--dur-2) var(--ease-out); }
+.layout-pic .layout-thumb { position: absolute; inset: 0; width: 100%; height: 100%; padding: 8px; }
+.layout-corner figcaption { color: var(--color-ink-muted); font-size: 11px; }
+.layout-thumb { display: block; width: 100%; height: auto; max-height: 160px; }
+.thumb-room { fill: var(--color-surface); stroke: none; }
+.thumb-room[data-unit="2"] { fill: color-mix(in srgb, var(--color-mint) 16%, var(--color-card)); }
+.thumb-room[data-kind="stairs"], .thumb-room[data-kind="mechanical"] { fill: var(--color-border); }
+.thumb-wall { stroke: var(--color-ink); stroke-width: 0.14; stroke-linecap: square; vector-effect: none; }
+.thumb-wall[data-kind="new"] { stroke-width: 0.08; }
+.thumb-wall[data-rated] { stroke: var(--color-stop); }
+.thumb-window { stroke: var(--find-window); stroke-width: 0.2; }
+.thumb-name { fill: var(--color-ink); font-family: var(--font-body); font-weight: 600; text-anchor: middle; dominant-baseline: middle; }
 .layout-card h3 { font-size: 22px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
-.layout-facts { margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; color: var(--color-ink-muted); }
+.layout-facts { margin: 0; display: grid; gap: 2px; color: var(--color-ink-muted); }
 .layout-facts [data-ok] { color: var(--color-ok); }
-.layout-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 14px; }
-.layout-checks li { display: grid; grid-template-columns: 18px 1fr; gap: 6px; }
-.layout-checks li::before { font-family: var(--font-mono); font-weight: 500; }
-.layout-checks li[data-ok="yes"]::before { content: "✓"; color: var(--color-ok); }
-.layout-checks li[data-ok="no"]::before { content: "✗"; color: var(--color-stop); }
-.layout-checks li[data-ok="ask"]::before { content: "?"; color: var(--color-fix); }
-.layout-card .btn { justify-content: center; padding: 14px 20px; font-size: 16px; }
-.layouts-done { margin: 0; font-weight: 600; }
-.layouts-error { margin: 0; color: var(--color-stop); }
+.layout-pick { justify-content: center; padding: 12px 18px; font-size: 16px; }
 @media (min-width: 900px) {
-  .layout-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); overflow: visible; margin: 8px 0 0; padding: 0; }
+  .layout-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); overflow: visible; margin: 0; padding: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .layout-pic, .layout-pic img { animation: none; }
 }
 
 /* ---------- on the wait screen ---------- */
@@ -151,7 +154,7 @@
 .live-ideas-head h2 { font-size: clamp(30px, 5vw, 44px); }
 .live-ideas-head p { margin: 8px 0 0; max-width: 60ch; }
 
-/* ---------- the standalone page (until the wait screen deals the deck) ---------- */
+/* ---------- the style step once the scan is done (src/flow/StylePage.tsx) ---------- */
 .ideas-page { max-width: 1180px; margin: 0 auto; padding: 18px 16px 72px; display: grid; gap: 28px; }
 .ideas-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .ideas-steps { margin: 0; color: var(--color-ink-muted); }

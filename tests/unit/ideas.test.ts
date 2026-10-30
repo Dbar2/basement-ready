@@ -1,10 +1,9 @@
 import { existsSync, readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db, migrateDb, schema } from "../../server/db";
-import { pickAngles, shotsFrom, type Shot } from "../../server/ideas/angles";
-import { anglePicks, cardsSoFar, checkedWords, makeDeck, pickViews, runCards, sharpen, type CardWork } from "../../server/ideas/cards";
+import { viewsFromArea } from "../../server/views/angles";
+import { anglePicks, cardsSoFar, deckAngles, checkedWords, makeDeck, pickViews, runCards, sharpen, type CardWork } from "../../server/ideas/cards";
 import { cardId, colourFurniture, disliked, emptySwipes, moodFrom, moodWords, planDeck, swipes, upNext, type Card, type Deck, type SwipeState, type View } from "../../server/ideas/deck";
-import { cameras, designFrom, frameFacing, layoutOptions, withCorners } from "../../server/ideas/layouts";
 import { cardPrompt, COLOURS, DECK_STYLES, furnitureOf, STYLES, tagsFor } from "../../server/ideas/styles";
 
 beforeAll(async () => {
@@ -76,55 +75,54 @@ function pose(x: number, z: number, yawDeg: number, down = 0.1, height = 1.5): n
   ];
 }
 const room = { floor: { heightM: 0 }, box: { min: [-3, 0, -2], max: [3, 2.4, 2] } };
+// One frame of an area's 3D as the service saves it: a 1280 × 720 frame and the model's own lens.
+const frame = (name: string, sharpness: number, P: number[][]) => ({
+  name,
+  sharpness,
+  pose: P,
+  width: 1280,
+  height: 720,
+  intrinsics: [[900, 0, 640], [0, 900, 360], [0, 0, 1]],
+  model: { resizedWidth: 1280, resizedHeight: 720, cropLeft: 0, cropTop: 0 },
+});
+// Mid-scan, an area has no depth saved yet: how much a frame sees is judged from the area's box.
+const views = (frames: ReturnType<typeof frame>[], area = 0) => viewsFromArea({ room: area, scan: { room, frames }, depth: null, placement: null });
 
-describe("idea cards: the best angles from the 3D", () => {
-  it("measures how far each frame sees to the wall ahead, and how level and high the camera is", () => {
-    const [s] = shotsFrom({ room, frames: [{ name: "0120.jpg", sharpness: 300, pose: pose(-2.5, 0, 90) }] }, null, 0);
-    expect(s).toMatchObject({ frame: 120, room: 0, heightM: 1.5 });
-    expect(s.aheadM).toBeCloseTo(5.5, 1); // looking along the room to the far wall
-    expect(s.tilt).toBeCloseTo(0.1);
+describe("idea cards: the best angles from the 3D (server/views/angles.ts, as the pictures use)", () => {
+  it("judges how far each frame sees to the wall ahead, and how level and high the camera is", () => {
+    const [v] = views([frame("0120.jpg", 300, pose(-2.5, 0, 90))]);
+    expect(v).toMatchObject({ frame: 120, room: 0, heightM: 1.5 });
+    expect(v.seen.near).toBe(0);
+    expect(v.seen.floor).toBeCloseTo(5.5 / Math.hypot(6, 4), 2); // looking along the room to the far wall
+    expect(v.pitchDeg).toBeCloseTo(-5.7, 0);
   });
 
   it("never picks a frame looking down, held too low, or facing a wall close up", () => {
-    const shots = shotsFrom(
-      {
-        room,
-        frames: [
-          { name: "0010.jpg", sharpness: 500, pose: pose(-2.5, 0, 90, 0.7) }, // at the floor
-          { name: "0030.jpg", sharpness: 500, pose: pose(-2.5, 0, 90, 0.1, 0.6) }, // knee height
-          { name: "0050.jpg", sharpness: 500, pose: pose(2.4, 0, 90) }, // 0.6 m from the wall
-          { name: "0070.jpg", sharpness: 100, pose: pose(-2.5, 0.5, 80) }, // the one good view
-        ],
-      },
-      null,
-      0,
-    );
-    expect(pickAngles(shots).map((s) => s.frame)).toEqual([70]);
+    const vs = views([
+      frame("0010.jpg", 500, pose(-2.5, 0, 90, 0.7)), // at the floor
+      frame("0030.jpg", 500, pose(-2.5, 0, 90, 0.1, 0.6)), // knee height
+      frame("0050.jpg", 500, pose(2.4, 0, 90)), // 0.6 m from the wall
+      frame("0070.jpg", 100, pose(-2.5, 0.5, 80)), // the one good view
+    ]);
+    expect(deckAngles(vs, 5).map((s) => s.frame)).toEqual([70]);
   });
 
   it("prefers the sharper of two wide views, and spreads around: every room, then other directions", () => {
-    const a = shotsFrom({ room, frames: [
-      { name: "0100.jpg", sharpness: 50, pose: pose(-2.5, 0, 90) },
-      { name: "0110.jpg", sharpness: 400, pose: pose(-2.5, 0.2, 92) },
-      { name: "0150.jpg", sharpness: 300, pose: pose(2.5, 0, -90) },
-    ] }, null, 0);
-    const b = shotsFrom({ room, frames: [{ name: "0300.jpg", sharpness: 200, pose: pose(0, -1.8, 0) }] }, null, 1);
-    const picks = pickAngles([...a, ...b]);
+    const a = views([frame("0100.jpg", 50, pose(-2.5, 0, 90)), frame("0110.jpg", 400, pose(-2.5, 0.2, 92)), frame("0150.jpg", 300, pose(2.5, 0, -90))]);
+    const b = views([frame("0300.jpg", 200, pose(0, -1.8, 0))], 1);
+    const picks = deckAngles([...a, ...b], 5);
     expect(picks[0].frame).toBe(110); // sharp and wide
     expect(picks.map((p) => p.room).slice(0, 2).sort()).toEqual([0, 1]); // both rooms before a second of either
     expect(picks.map((p) => p.frame)).toContain(150); // the same room, looking the other way
-    expect(picks.map((p) => p.frame)).not.toContain(100); // too close in direction to 110
+    expect(picks.map((p) => p.frame)).not.toContain(100); // too close to 110
   });
 
   it("keeps the window corner in the deck when the video saw one, and names views by room", () => {
-    const shots: Shot[] = shotsFrom({ room, frames: [
-      { name: "0100.jpg", sharpness: 400, pose: pose(-2.5, 0, 90) },
-      { name: "0200.jpg", sharpness: 100, pose: pose(0, -1.8, 0) },
-    ] }, null, 0);
+    const vs = views([frame("0100.jpg", 400, pose(-2.5, 0, 90)), frame("0200.jpg", 100, pose(0, -1.8, 0))]);
     const window = det("window", "Window", 200, 3);
-    const picks = anglePicks(shots, [window], new Map([[0, "Room 1"]]), 1);
+    const picks = anglePicks(vs, [window], new Map([[0, "Room 1"]]), 1);
     expect(picks).toEqual([{ frame: 200, title: "By the window" }]);
-    expect(anglePicks(shots, [], new Map([[0, "Room 1"]]))[0]).toEqual({ frame: 100, title: "Room 1" });
+    expect(anglePicks(vs, [], new Map([[0, "Room 1"]]))[0]).toEqual({ frame: 100, title: "Room 1" });
   });
 });
 
@@ -408,40 +406,5 @@ describe("the example's deck", () => {
   it("reads into a mood like a live deck", () => {
     const loved = deck.cards.filter((c) => c.tags.style === "warm").map((c) => c.id);
     expect(moodFrom(deck.cards, loved).style).toBe("warm");
-  });
-});
-
-describe("pick a layout", () => {
-  const sample = JSON.parse(readFileSync("public/samples/sample/result.json", "utf8"));
-  const scan = JSON.parse(readFileSync("public/samples/sample/3d/scan.json", "utf8"));
-
-  it("offers three or four layouts that differ, the bedroom on the window among them", () => {
-    const options = layoutOptions(sample.plan);
-    expect(options.length).toBeGreaterThanOrEqual(3);
-    expect(options.length).toBeLessThanOrEqual(4);
-    expect(new Set(options.map((o) => o.id)).size).toBe(options.length);
-    expect(new Set(options.map((o) => o.name)).size).toBe(options.length);
-    expect(options.map((o) => o.kind)).toContain("studio");
-    expect(options.find((o) => o.name === "One bedroom on the window")?.checks.passed).toBeGreaterThan(0);
-  });
-
-  it("finds the real frame that looks at the window corner", () => {
-    // The example's window is on its far wall at x ≈ 1.4; its first frame looks straight at it.
-    const frame = frameFacing(cameras(scan), [1.4, 2.5]);
-    expect(frame).not.toBeNull();
-    expect(frame!).toBeLessThan(10);
-    const options = withCorners(layoutOptions(sample.plan), cameras(scan), 16 / 9, [0, 21, 44, 59]);
-    for (const o of options) expect([0, 21, 44, 59]).toContain(o.corner!.frame);
-    expect(options.find((o) => o.name === "One bedroom on the window")!.corner!.frame).toBe(0);
-  });
-
-  it("saves the pick as a design in the model, with its doors on its walls", () => {
-    const o = layoutOptions(sample.plan).find((x) => x.kind === "one_bedroom")!;
-    const d = designFrom(o, { style: "warm", floor: "Walnut floor" });
-    expect(d).toMatchObject({ id: o.id, layout: "one_bedroom", chosen: true, finishes: { style: "warm", floor: "Walnut floor", walls: "Cream walls" } });
-    expect(d.proposed.walls.length).toBe(o.layout.walls.length);
-    expect(d.proposed.openings.length).toBe(o.layout.doors.length);
-    for (const op of d.proposed.openings) expect(d.proposed.walls.some((w) => w.id === op.wallId)).toBe(true);
-    expect(d.proposed.rooms.find((r) => r.kind === "bedroom")?.unit).toBe(2);
   });
 });

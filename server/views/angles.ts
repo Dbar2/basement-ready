@@ -126,6 +126,16 @@ export function frameIntrinsics(f: any): Intrinsics {
   return { fx: fx * sx, fy: fy * sy, cx: (cx + m.cropLeft) * sx, cy: (cy + m.cropTop) * sy, width: f.width, height: f.height, source: "scan" };
 }
 
+function seenFromBox(box: Box, P: number[][]): View["seen"] {
+  const [x, z, dx, dz] = [P[0][3], P[2][3], P[0][2], P[2][2]];
+  const len = Math.hypot(dx, dz);
+  if (len < 0.05) return { floor: 0, wall: 0, near: 1 }; // looking at the floor or the ceiling
+  const t = (p: number, u: number, lo: number, hi: number) => (u > 1e-6 ? (hi - p) / u : u < -1e-6 ? (lo - p) / u : Infinity);
+  const ahead = Math.max(0, Math.min(t(x, dx / len, box.minX, box.maxX), t(z, dz / len, box.minZ, box.maxZ)));
+  const share = clamp(ahead / Math.max(1, Math.hypot(box.maxX - box.minX, box.maxZ - box.minZ)), 0, 1);
+  return { floor: share, wall: share, near: ahead < NEAR_M ? 1 : 0 };
+}
+
 export function viewsFromArea(a: AreaInput): View[] {
   const scan = a.scan;
   const room = scan.room ?? {};
@@ -165,6 +175,9 @@ export function viewsFromArea(a: AreaInput): View[] {
         depth = grid;
       }
     }
+    // No depth yet (an area measured mid-scan): how much it sees, judged from the area's box, by how
+    // far it is to the box's wall straight ahead.
+    if (!a.depth) seen = seenFromBox(box, P);
     out.push({
       room: a.room,
       frame,
