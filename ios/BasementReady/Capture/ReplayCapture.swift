@@ -7,7 +7,8 @@
 // - sensors.jsonl, which the app writes next to every real take (ARKit's own points and planes)
 // - geometry.json, the open spaces of a Blender test basement (ios/Fixtures/<id>/): points are rays
 //   cast from the true camera path, and walls are "found" once enough rays have hit them
-// Launch with -BRReplay <folder> (and -BRReplayGeometry <file>, -BRReplaySpeed 2 if wanted).
+// Launch with -BRReplay <folder> (and -BRReplayGeometry <file>, -BRReplaySpeed 2, -BRReplayLoop if
+// wanted: a loop plays the take again and again, for long runs that watch memory and frame times).
 #if DEBUG
 import AVFoundation
 import CoreVideo
@@ -23,6 +24,7 @@ final class ReplayCapture: CaptureSource, @unchecked Sendable {
   let perf = CapturePerf()
   let take: URL
   private let speed: Double
+  private let loop = ProcessInfo.processInfo.arguments.contains("-BRReplayLoop")
   private let send: @Sendable (CaptureEvent) -> Void
   private let queue = DispatchQueue(label: "replay", qos: .userInteractive)
 
@@ -30,6 +32,10 @@ final class ReplayCapture: CaptureSource, @unchecked Sendable {
   private var pipeline: CapturePipeline?
   private var reader: AVAssetReader?
   private var output: AVAssetReaderTrackOutput?
+  private var asset: AVAsset?
+  private var track: AVAssetTrack?
+  private var loopOffset: Double = 0
+  private var lastT: Double = 0
   private var timer: DispatchSourceTimer?
   private var poses: ReplayPoses?
   private var sensors: SensorPlayback?
@@ -70,24 +76,31 @@ final class ReplayCapture: CaptureSource, @unchecked Sendable {
       let asset = AVURLAsset(url: videoURL)
       do {
         guard let track = try await asset.loadTracks(withMediaType: .video).first else { throw CaptureError.video("The replay video has no picture.") }
-        let reader = try AVAssetReader(asset: asset)
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
-          kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-          kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
-        ])
-        output.alwaysCopiesSampleData = false
-        reader.add(output)
-        guard reader.startReading() else { throw CaptureError.video(reader.error?.localizedDescription ?? "The replay video can't be read.") }
-        self?.begin(reader: reader, output: output, interval: interval)
+        let (reader, output) = try Self.open(asset, track)
+        self?.begin(asset: asset, track: track, reader: reader, output: output, interval: interval)
       } catch {
         send(.failed(error.localizedDescription))
       }
     }
   }
 
-  private func begin(reader: AVAssetReader, output: AVAssetReaderTrackOutput, interval: Double) {
+  private static func open(_ asset: AVAsset, _ track: AVAssetTrack) throws -> (AVAssetReader, AVAssetReaderTrackOutput) {
+    let reader = try AVAssetReader(asset: asset)
+    let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
+      kCVPixelBufferIOSurfacePropertiesKey as String: [:] as [String: Any],
+    ])
+    output.alwaysCopiesSampleData = false
+    reader.add(output)
+    guard reader.startReading() else { throw CaptureError.video(reader.error?.localizedDescription ?? "The replay video can't be read.") }
+    return (reader, output)
+  }
+
+  private func begin(asset: AVAsset, track: AVAssetTrack, reader: AVAssetReader, output: AVAssetReaderTrackOutput, interval: Double) {
     queue.async { [self] in
       guard !stopped else { return }
+      self.asset = asset
+      self.track = track
       self.reader = reader
       self.output = output
       let timer = DispatchSource.makeTimerSource(queue: queue)
@@ -102,12 +115,21 @@ final class ReplayCapture: CaptureSource, @unchecked Sendable {
     guard !stopped, let pipeline, let output, let poses else { return }
     let began = ProcessInfo.processInfo.systemUptime
     guard let sample = output.copyNextSampleBuffer(), let image = CMSampleBufferGetImageBuffer(sample) else {
+      if loop, let asset, let track, let (reader, output) = try? Self.open(asset, track) {
+        // Again from the top, carrying on the take's clock.
+        self.reader = reader
+        self.output = output
+        loopOffset += lastT + 1 / Double(max(1, poses.fps))
+        if sensors != nil { sensors = SensorPlayback(url: take.appending(path: "sensors.jsonl")) }
+        return
+      }
       // The end of the take: the last picture stays up until Done.
       timer?.cancel()
       finished = true
       return
     }
     let t = CMSampleBufferGetPresentationTimeStamp(sample).seconds
+    lastT = t
     let pose = poses.at(t)
     var g = poses.geometry
     let scale = Float(CVPixelBufferGetWidth(image)) / g.resolution.x
@@ -117,13 +139,13 @@ final class ReplayCapture: CaptureSource, @unchecked Sendable {
     }
     feed.publish(LiveFrame(image: image, cameraToWorld: pose.transform, geometry: g))
     defer { perf.frame(lag: 0, handler: ProcessInfo.processInfo.systemUptime - began) }
-    guard let step = pipeline.frame(image, timestamp: t, cameraToWorld: pose.transform, geometry: g, tracking: pose.tracking) else { return }
+    guard let step = pipeline.frame(image, timestamp: loopOffset + t, cameraToWorld: pose.transform, geometry: g, tracking: pose.tracking) else { return }
     guard step.look else { return }
 
     var points: [SIMD3<Float>] = []
     if sensors != nil {
-      points = sensors!.points(upTo: step.t)
-      for e in sensors!.planes(upTo: step.t) {
+      points = sensors!.points(upTo: t)
+      for e in sensors!.planes(upTo: t) {
         if let p = e.plane { pipeline.plane(p, at: step.t) } else if let id = e.gone { pipeline.removePlane(id, at: step.t) }
       }
     } else if let world, pose.tracking == "normal" {
