@@ -1,6 +1,6 @@
 // One scan: phone video in, a verdict with proof out. Runs inside a worker job and writes
 // every step to scan_events, so the scan screen (and a refresh) can follow along.
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { execFile } from "node:child_process";
 import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -29,6 +29,8 @@ import { charge, PRICES } from "./spend";
 import { labelled } from "./demo";
 import { overSpend } from "./limits";
 import { watchedNames, watchPhotos, watchVideo, watchVideoFile, watchWords, type Watch } from "./watch";
+import { checkPlan, type TakeView } from "./planCheck";
+import { existingFromScan } from "./model/seed";
 
 const run = promisify(execFile);
 
@@ -239,6 +241,9 @@ type Stage = {
   uploads: Promise<unknown>;
   samCost: number;
   watch: Watch | null;
+  // How the plan check sees the take once the answer is written: the video the watch pass uploaded, or
+  // its photos. Null when nothing was watched.
+  view: TakeView | null;
 };
 
 // The watch pass (server/watch.ts), started early beside SAM and the 3D. It adds to the answer and never
@@ -268,9 +273,13 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
   inflight.push(uploads.catch(() => {}));
   // Muse Wonder watches the whole take with its sound while SAM and the 3D work.
+  let view: TakeView | null = null;
   const watchP = watchTake(scanId, emit, async () => {
     const file = await watchVideoFile(analysis, wav, join(work, "watch.mp4"));
-    return watchVideo(await uploadFile(file, "video/mp4", "walkthrough.mp4"), frameCount / ANALYSIS_FPS, Boolean(wav));
+    const video = { fileId: await uploadFile(file, "video/mp4", "walkthrough.mp4"), durationS: frameCount / ANALYSIS_FPS };
+    const w = await watchVideo(video.fileId, video.durationS, Boolean(wav));
+    view = { video };
+    return w;
   });
   inflight.push(watchP);
 
@@ -316,25 +325,7 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   const detections: Detection[] = [];
   await Promise.all(
     CONCEPTS.map(async (c) => {
-      const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
-      // Ignore flickers: an object must hold for half a second to count.
-      const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
-      const found: Detection[] = tracks.map((t, i) => {
-        const b = bestFrame(t);
-        const r = (n: number) => Math.round(n * 1000) / 1000;
-        return {
-          id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
-          kind: c.kind,
-          label: c.label,
-          concept: c.concept,
-          frame: b.frame,
-          seconds: b.frame / ANALYSIS_FPS,
-          box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
-          framesSeen: t.frames.length,
-          confidence: b.box.c ?? null,
-          track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
-        };
-      });
+      const found = videoFinds(c, await samVideo(c.concept, fileId, frameCount).catch(() => ""));
       detections.push(...found);
       await emit("find", found.length ? `Found ${plural(found.length, c.label)}` : `No ${c.label.toLowerCase()} seen`, {
         kind: c.kind,
@@ -385,7 +376,29 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
     await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
   }
   const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watch };
+  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watch, view };
+}
+
+// SAM's answer on the whole video for one concept, as finds. Flickers are ignored: an object must hold
+// for half a second to count.
+export function videoFinds(c: (typeof CONCEPTS)[number], raw: string): Detection[] {
+  const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
+  return tracks.map((t, i) => {
+    const b = bestFrame(t);
+    const r = (n: number) => Math.round(n * 1000) / 1000;
+    return {
+      id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
+      kind: c.kind,
+      label: c.label,
+      concept: c.concept,
+      frame: b.frame,
+      seconds: b.frame / ANALYSIS_FPS,
+      box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
+      framesSeen: t.frames.length,
+      confidence: b.box.c ?? null,
+      track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
+    };
+  });
 }
 
 // "Found 2 windows, a door and the stairs"
@@ -441,7 +454,12 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   await Promise.all(Array.from({ length: frameCount }, (_, n) => storage.download(keys.frame(scanId, n), framePath(n))));
   await emit("log", `Reading ${frameCount} photos of ${take.rooms.length === 1 ? "one room" : `${take.rooms.length} rooms`}`, { frameCount, photos: take.rooms });
   // Muse Wonder looks at every photo together while SAM and the 3D work.
-  const watchP = watchTake(scanId, emit, () => watchPhotos(framePath, take, work));
+  let view: TakeView | null = null;
+  const watchP = watchTake(scanId, emit, async () => {
+    const w = await watchPhotos(framePath, take, work);
+    view = { photos: Array.from({ length: take.count }, (_, n) => dataUrl(join(work, `watch-${n}.jpg`), "image/jpeg")) };
+    return w;
+  });
   inflight.push(watchP);
 
   // Each room's 3D alongside SAM, once the service answers. The wait screen shows each room as it's measured.
@@ -499,7 +517,24 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names, photos: true });
   // The 3D's own sense of size, with no walk or tape to check it against.
   if (rooms.some((r) => r.has3d)) await emit("log", "Sizes from photos are a close guess, within about 20%. One tape measurement on the next step makes them true to size.");
-  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage, watch };
+  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage, watch, view };
+}
+
+// Muse Wonder compares the plan we drew with the take (server/planCheck.ts) and its questions land on the
+// result. A failed or skipped check is written as null, so the plan screen stops waiting for it.
+async function planCheckLater(scanId: string, result: Parameters<typeof existingFromScan>[0], view: TakeView) {
+  let check = null;
+  try {
+    const existing = existingFromScan(result);
+    if (existing && !(await overSpend())) check = await checkPlan(existing, view);
+  } catch (err) {
+    console.error(`[plan check] ${scanId}: ${err instanceof Error ? err.message : err}`);
+  }
+  await db
+    .update(schema.scans)
+    .set({ result: sql`jsonb_set(${schema.scans.result}, '{planCheck}', ${JSON.stringify(check)}::jsonb)` })
+    .where(and(eq(schema.scans.id, scanId), isNotNull(schema.scans.result)))
+    .catch((err) => console.error(`[plan check] ${scanId}: ${err instanceof Error ? err.message : err}`));
 }
 
 export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
@@ -523,7 +558,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const inputs = (scan.inputs ?? {}) as ScanInputs;
     const ctx: AssessContext = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
     const stageInput = { scanId, videoKey: scan.videoKey, inputs, work, ctx, emit, inflight };
-    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watch } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
+    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, watch, view } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
 
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
@@ -578,6 +613,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     // Photos that finished while this was written go in now; photos that never started, start.
     await settlePhotos(scanId);
     await enqueuePhotos(scanId);
+    // The plan checked against the take for "Is this your basement?", after the answer so it never holds it up.
+    if (view) inflight.push(planCheckLater(scanId, result, view));
   } catch (err) {
     // The real cause, in plain words; a missing key or an unreadable file won't fix itself on a retry.
     const cause = causeOf(err);
