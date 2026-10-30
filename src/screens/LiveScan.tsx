@@ -7,6 +7,7 @@
 // When the answer lands, the questions are checked again and anything the video settled is dropped.
 // A scan that fails says why and offers "Try again" (the video is kept); a slow one says so. Only the
 // person who filmed it answers: a shared link watches. The example says it's a recorded scan, replayed.
+// A photo take shows its photos instead of the video, each with its finds boxed as they land.
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ANALYSIS_FPS,
@@ -14,15 +15,18 @@ import {
   DEMO_LABEL,
   EXAMPLE_LABEL,
   getScan,
+  localPhotoTakes,
   localVideos,
   replaySample,
   retryScan,
   subscribe,
   waitAsks,
+  type PhotoTake,
   type ScanEvent,
   type WaitAsk,
 } from "../api";
 import { Logo } from "../components/Logo";
+import { PhotoCarousel } from "../components/PhotoCarousel";
 import "../styles/ask.css";
 import "../styles/journey.css";
 import { modelsFrom, walkFrom } from "./assembly";
@@ -150,6 +154,8 @@ export function LiveScan({ scanId, onDone }: Props) {
   const heardAt = useRef(Date.now());
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // A photo take: known at once in the tab that sent it, else from the server or the scan's first log.
+  const [sentTake, setSentTake] = useState<PhotoTake | null>(() => localPhotoTakes.get(scanId) ?? null);
   // Play the file from this tab if we have it; after a refresh, play the server's copy.
   const local = localVideos.get(scanId);
   const src = useMemo(
@@ -178,6 +184,7 @@ export function LiveScan({ scanId, onDone }: Props) {
       .then((s) => {
         setCanEdit(Boolean(s.canEdit));
         setDemo(Boolean(s.demo));
+        if (s.photos) setSentTake(s.photos);
         if (s.status === "error" && s.error) setFailure({ text: s.error, retry: Boolean(s.failure?.retry) });
       })
       .catch(() => {});
@@ -187,6 +194,13 @@ export function LiveScan({ scanId, onDone }: Props) {
     () => events.flatMap((e) => (e.type === "find" ? e.data?.detections ?? [] : [])),
     [events],
   );
+  const take = useMemo((): PhotoTake | null => {
+    if (sentTake) return sentTake;
+    const first = events.find((e) => e.type === "log" && e.data?.photos);
+    return first?.data?.photos ? { count: first.data.frameCount ?? first.data.photos.at(-1)!.to, rooms: first.data.photos } : null;
+  }, [sentTake, events]);
+  // The photos whose finds are in, in the order they landed.
+  const landed = useMemo(() => events.flatMap((e) => (e.type === "find" && e.data?.photo != null ? [e.data.photo] : [])), [events]);
   const done = events.some((e) => e.type === "done");
   const failed = !done && failure !== null;
   const lastStage = [...events].reverse().find((e) => e.type === "stage")?.text ?? "prepare";
@@ -286,7 +300,7 @@ export function LiveScan({ scanId, onDone }: Props) {
   useEffect(() => {
     const v = videoRef.current;
     const c = canvasRef.current;
-    if (!v || !c) return;
+    if (!v || !c || take) return;
     const index = detections.map((d) => ({ d, byFrame: new Map(d.track.map((t) => [t[0], t])) }));
     let raf = 0;
     const draw = () => {
@@ -338,33 +352,41 @@ export function LiveScan({ scanId, onDone }: Props) {
     };
     draw();
     return () => cancelAnimationFrame(raf);
-  }, [detections]);
+  }, [detections, take]);
 
+  const yours = take ? "photos" : "video";
   const video = (
     <div
       key="video"
       className="live-video live-tile"
+      data-photos={Boolean(take)}
       data-role={has3d && front === "3d" ? "inset" : "main"}
-      {...(has3d && front === "3d" ? { role: "button", tabIndex: 0, "aria-label": "Show your video", "data-label": "Your video", onClick: () => setFront("video"), onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && setFront("video") } : {})}
+      {...(has3d && front === "3d" ? { role: "button", tabIndex: 0, "aria-label": `Show your ${yours}`, "data-label": `Your ${yours}`, onClick: () => setFront("video"), onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && setFront("video") } : {})}
     >
-      <video
-        ref={videoRef}
-        src={src}
-        autoPlay
-        muted
-        loop
-        playsInline
-        // The server's copy appears a few seconds into the scan; keep trying until it does.
-        onError={(e) => {
-          const v = e.currentTarget;
-          if (!local && scanId !== "sample") setTimeout(() => v.load(), 2000);
-        }}
-      />
-      <canvas ref={canvasRef} aria-hidden />
-      {!done && <div className="live-sweep" aria-hidden />}
-      <p className="live-caption" aria-live="polite">
-        {found.length ? `Found ${found.slice(0, 3).join(", ")}${found.length > 3 ? ` and ${found.length - 3} more` : ""}` : (lastLog?.text ?? "Looking through your video…")}
-      </p>
+      {take ? (
+        <PhotoCarousel scanId={scanId} take={take} detections={detections} landed={landed} done={done} />
+      ) : (
+        <>
+          <video
+            ref={videoRef}
+            src={src}
+            autoPlay
+            muted
+            loop
+            playsInline
+            // The server's copy appears a few seconds into the scan; keep trying until it does.
+            onError={(e) => {
+              const v = e.currentTarget;
+              if (!local && scanId !== "sample") setTimeout(() => v.load(), 2000);
+            }}
+          />
+          <canvas ref={canvasRef} aria-hidden />
+          {!done && <div className="live-sweep" aria-hidden />}
+          <p className="live-caption" aria-live="polite">
+            {found.length ? `Found ${found.slice(0, 3).join(", ")}${found.length > 3 ? ` and ${found.length - 3} more` : ""}` : (lastLog?.text ?? "Looking through your video…")}
+          </p>
+        </>
+      )}
     </div>
   );
 
@@ -388,7 +410,7 @@ export function LiveScan({ scanId, onDone }: Props) {
         {STAGES.map((st, i) => (
           <li key={st.id} data-state={i < stageIndex ? "done" : i === stageIndex ? "active" : "todo"}>
             <i aria-hidden />
-            <span>{st.label}</span>
+            <span>{st.id === "prepare" && take ? "Reading photos" : st.label}</span>
           </li>
         ))}
       </ol>

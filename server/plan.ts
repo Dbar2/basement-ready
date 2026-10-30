@@ -53,7 +53,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 // Where an object sits in the room: medians of its lifted points over every scan frame it shows in.
-function locate(s3: Scan3d, d: Detection) {
+export function locate(s3: Scan3d, d: Detection) {
   const byFrame = new Map(d.track.map((t) => [t[0], t]));
   const mids: number[][] = [], lows: number[][] = [], highs: number[][] = [];
   s3.scan.frames.forEach((f: any, i: number) => {

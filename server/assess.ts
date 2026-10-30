@@ -18,7 +18,8 @@ const run = promisify(execFile);
 export type Status = "likely_ok" | "likely_fix" | "needs_measurement" | "needs_answer" | "standard" | "designer_checks";
 type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?: string; question?: string };
 
-export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null };
+// `photos`: a photo take of that many photos, not a video (server/photoInput.ts).
+export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number };
 
 // Meta pricing for Muse Spark (USD per token).
 const SPARK_IN = 1.25 / 1e6;
@@ -90,6 +91,10 @@ async function askSpark(ctx: AssessContext, place: Coverage, rules: Rule[], dete
       }),
     },
   ];
+  // A photo take: the "video" is still photos, one look each, with no sound. Say so in its words too.
+  if (ctx.photos) {
+    content.push({ type: "input_text", text: `This take is ${ctx.photos} still photos of the basement, not a video: each detection's frame is one photo, and there is no speech. When you describe it, say "the photos", never "the video".` });
+  }
   for (const p of proofs) {
     content.push({ type: "input_text", text: `Proof frame for detection ${p.detection.id}:` });
     content.push({ type: "input_image", image_url: dataUrl(p.path, "image/jpeg") });
