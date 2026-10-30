@@ -207,7 +207,7 @@ export type Layout = {
   zones: LayoutZone[];
   walls: { x0: number; z0: number; x1: number; z1: number }[];
   doors: { x: number; z: number; along: "x" | "z"; widthM: number }[];
-  window: { side: PlanSide; atM: number; widthM: number } | null;
+  window: { side: PlanSide; atM: number; widthM: number; inBedroom?: boolean } | null; // inBedroom: see server/layout.ts
   checks: { label: string; ok: boolean | null; detail: string }[];
 };
 

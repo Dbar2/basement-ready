@@ -3,6 +3,7 @@
 // then the looks and the swipes they loved), the mood board, the quote by trade, how ready the permit is, the money they may
 // qualify for, a timeline from applying to moving in, and what to do next. Everything in it comes
 // from the model, the scan's answer and the dated catalog; nothing is made up on the way.
+import { areaText, suiteAreaM2 } from "../model/suite";
 import { PDFDocument, rgb } from "pdf-lib";
 import type { Design, Model } from "../model/types";
 import { cityPermit } from "../permit/data";
@@ -136,8 +137,8 @@ function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design 
 
   const facts: [string, string][] = [];
   if (design) {
-    const area = design.proposed.rooms.filter((r) => r.unit === 2).reduce((t, r) => t + polyArea(r.polygon), 0);
-    facts.push(["The design", `${design.name}, about ${area.toFixed(0)} m² (${Math.round(area * 10.7639)} sq ft)`]);
+    const area = suiteAreaM2(design);
+    facts.push(["The design", area == null ? design.name : `${design.name}, ${areaText(area)}`]);
   }
   if (q) {
     facts.push(["Hired out", `${range(q.totalLow, q.totalHigh)} with contingency and HST`]);
@@ -151,12 +152,6 @@ function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design 
     y = s.wrap(val, M + 130, y, s.width - 2 * M - 130, { size: 11, color: FOREST }) - 12;
   }
   s.wrap("A planning book, not a permit or a contract. Sizes come from your scan; prices are dated shelf prices and published rates. Pictures marked \"virtually staged\" are made by Muse Image from your own photos.", M, 70, s.width - 2 * M, { size: 7.5, color: MOSS });
-}
-
-function polyArea(p: [number, number][]) {
-  let a = 0;
-  for (let i = 0; i < p.length; i++) a += p[i][0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * p[i][1];
-  return Math.abs(a) / 2;
 }
 
 // ---- The design and its alternatives ----

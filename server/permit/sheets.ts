@@ -8,7 +8,12 @@ import { AERIAL_YEAR, type SiteGeometry } from "../property";
 import type { Profile, StoredState } from "../workspace";
 import type { CityPermit } from "./data";
 import { drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type Scale, type View } from "./draw";
-import { bounds, type Box, centroid, dir, escapeOk, type PermitModel, type PWall, unitArea, unitOutline, unitRooms, wallLen } from "./model";
+import { homesAfter } from "../eligibility";
+import { areaText, suiteAreaM2 } from "../model/suite";
+import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, escapeOk, PROPOSED_ESCAPE, type PermitModel, type PermitWindow, type PWall, unitOutline, unitRooms, wallLen } from "./model";
+
+// What a window's tag says about escape: only a size that meets the rule is called an escape window.
+const escapeLabel = (w: PermitWindow) => (!w.escape ? "" : w.meets ? " ESCAPE WINDOW" : w.meets === null ? " WINDOW: ESCAPE SIZE TO BE TAPED" : " WINDOW: TOO SMALL TO ESCAPE");
 import { citeText, notesFor } from "./notes";
 import { area, both, DETAIL_SCALES, dimText, FAINT, fitScale, frame, ftIn, INK, largestFit, mmBoth, MUTED, OWNER_EXEMPTION, PAPER, PLAN_SCALES, type Project, ptPerMetre, Sheet, sizeText, SITE_SCALES, SMALL_SCALES, TABLOID, TONE, TONE2, TONE3, watermark, type Fonts } from "./pdf";
 import type { Geometry } from "./plans";
@@ -93,10 +98,12 @@ export function coverSheet(ctx: SheetCtx): Printed {
   const colW = (a.w - 40) / 2;
   const rows: [string, string][] = [];
   if (p?.zone) rows.push(["Zoning", `${p.zone.code}${p.zone.label ? `, ${p.zone.label}` : ""}${p.zone.bylaw ? ` (${p.zone.bylaw})` : ""}`]);
-  const units = (p?.unitsRegistered ?? 1) + 1;
-  rows.push(["Units after the work", `${units}: the house (unit 1) and the basement unit (unit 2)`]);
+  // The homes there now (at least the house) and the new one: as the forms and the money count them.
+  const units = homesAfter(p);
+  rows.push(["Units after the work", units === 2 ? "2: the house (unit 1) and the basement unit (unit 2)" : `${units}: the ${units - 1} homes there now and the basement unit (unit ${units})`]);
   if (m) {
-    rows.push(["Unit 2 floor area", area(unitArea(m))]);
+    const suite = suiteAreaM2(m.design);
+    if (suite != null) rows.push(["Unit 2 floor area", areaText(suite)]);
     const beds = m.design.layout === "studio" ? 0 : unitRooms(m).filter((r) => r.kind === "bedroom").length;
     rows.push(["Unit 2 bedrooms", beds ? String(beds) : "Studio (no separate bedroom)"]);
     if (m.ceilingM) rows.push(["Finished ceiling in unit 2", `${both(m.ceilingM)} (1.95 m required)`]);
@@ -612,7 +619,7 @@ export function elevations(ctx: SheetCtx): Printed {
     heading(s, a.x + 10, base + (top + houseH) * k + 30, `Elevation ${i + 1}: the wall with ${wins.map((x) => x.tag).join(", ")}`, scale.label);
     // Foundation below grade, the house wall above (schematic).
     const ops = m.design.proposed.openings.filter((o) => o.wallId === w.id && o.kind === "window");
-    const gradeH = Math.max(...wins.map((x) => (x.sillM ?? 0.9) + (x.heightM ?? 0.6)), top - 0.6) + 0.1;
+    const gradeH = Math.max(...wins.map((x) => (x.sillM ?? 0.9) + drawnHeightM(x)), top - 0.6) + 0.1;
     s.rect(X(0), Y(0), L * k, top * k, { fill: TONE2, width: 0.8 });
     s.rect(X(0), Y(top), L * k, houseH * k, { fill: PAPER, width: 0.8 });
     s.text("EXISTING HOUSE WALL ABOVE (NO CHANGE)", X(L / 2), Y(top + houseH / 2), { size: 6.5, align: "center", color: MUTED });
@@ -624,14 +631,15 @@ export function elevations(ctx: SheetCtx): Printed {
     // its well.
     for (const op of ops) {
       const info = m.windows.find((x) => x.id === op.id)!;
-      const wm = info.widthM, hm = info.heightM ?? 0.6, sill = info.sillM ?? 0.9;
+      const wm = info.widthM, hm = drawnHeightM(info), sill = info.sillM ?? 0.9;
       const lx = Math.min(X(op.offsetM - wm / 2), X(op.offsetM + wm / 2)), rx = lx + wm * k;
-      s.rect(lx, Y(sill), wm * k, hm * k, { fill: PAPER, width: info.change === "keep" ? 0.8 : 1.4 });
+      // A height nobody has measured yet is drawn dashed: a placeholder, not a size.
+      s.rect(lx, Y(sill), wm * k, hm * k, { fill: PAPER, width: info.change === "keep" ? 0.8 : 1.4, ...(info.heightM == null ? { dash: [3, 2] } : {}) });
       s.line(lx, Y(sill), rx, Y(sill + hm), { width: 0.3, color: MUTED });
       if (info.was) s.rect(X(op.offsetM) - (info.was.widthM / 2) * k, Y(sill + hm - (info.was.heightM ?? 0.3)), info.was.widthM * k, (info.was.heightM ?? 0.3) * k, { width: 0.6, dash: [3, 2], color: MUTED });
       // The well, behind the grade line.
       s.rect(lx - 0.1 * k, Y(sill - 0.2), (wm + 0.2) * k, (gradeH + 0.1 - sill + 0.2) * k, { width: 0.6, dash: [4, 2] });
-      const tag = [`${info.tag}: ${info.change === "new" ? "NEW" : info.change === "enlarge" ? "ENLARGED" : "EXISTING"}${info.escape ? " ESCAPE WINDOW" : ""}`, sizeText(wm, hm)];
+      const tag = [`${info.tag}: ${info.change === "new" ? "NEW" : info.change === "enlarge" ? "ENLARGED" : "EXISTING"}${escapeLabel(info)}`, info.heightM == null ? `${sizeText(wm, null)} wide, height to be taped` : sizeText(wm, hm)];
       s.text(tag[0], rx + 0.18 * k, Y(sill + hm / 2) + 3, { size: 6.5, font: s.fonts.bold });
       s.text(tag[1], rx + 0.18 * k, Y(sill + hm / 2) - 6, { size: 6.3 });
       s.dim(lx - 6, Y(0), lx - 6, Y(sill), `sill ${dimText(sill)}`, 10, 5.8);
@@ -649,7 +657,7 @@ export function elevations(ctx: SheetCtx): Printed {
       const lot = ctx.state.permit?.lotLines?.find((l) => l.id === x.id)?.mm ?? null;
       const lines = [
         `${x.tag}${x.room ? `, ${x.room.toLowerCase()}` : ""}`,
-        `Clear opening ${sizeText(x.widthM, x.heightM)}: ${x.heightM ? `${(x.widthM * x.heightM).toFixed(2)} m²` : ""}`,
+        x.heightM == null ? `Clear opening ${sizeText(x.widthM, null)} wide, height to be taped${x.escape ? `: an escape window needs it at least ${escapeHeightNeededMm(x.widthM)} mm tall` : ""}` : `Clear opening ${sizeText(x.widthM, x.heightM)}: ${(x.widthM * x.heightM).toFixed(2)} m²${x.escape ? (x.meets ? ", meets 0.35 m²" : ", under 0.35 m²") : ""}`,
         x.was ? `Existing ${sizeText(x.was.widthM, x.was.heightM)} enlarged (dashed)` : x.change === "new" ? "New opening cut in the foundation wall" : "Existing window, no change",
         lot != null ? `To the lot line: ${both(lot / 1000)}` : "",
         x.change !== "keep" ? "Opening and lintel designed by an engineer (A7 note 2)." : "",
@@ -679,7 +687,9 @@ export function details(ctx: SheetCtx): Printed {
   {
     const k = ptPerMetre(20);
     const base = a.y + 200;
-    const sill = esc?.sillM ?? 0.9, h = esc?.heightM ?? 0.76, w = esc?.widthM ?? 0.61;
+    // The bedroom's escape window as A5 draws it; the proposed size only when there isn't one yet.
+    const sill = esc ? (esc.sillM ?? 0.9) : PROPOSED_ESCAPE.sillM, h = esc ? drawnHeightM(esc) : PROPOSED_ESCAPE.heightM, w = esc ? esc.widthM : PROPOSED_ESCAPE.widthM;
+    const heightKnown = !esc || esc.heightM != null;
     const top = Math.max(sill + h + 0.3, (m?.ceilingM ?? 2.1) + 0.1);
     const grade = Math.min(top - 0.15, sill + h + 0.1);
     heading(s, a.x + 10, a.y + a.h - 10, "1. Escape window (bedroom)", "1:20");
@@ -711,13 +721,20 @@ export function details(ctx: SheetCtx): Printed {
     s.text("FINISHED FLOOR", fx - 0.6 * k, Yh(0) - 8, { size: 5.5, color: MUTED });
     s.dim(fx + 0.2 * k, Yh(sill + h / 2), wellIn, Yh(sill + h / 2), "550 (1'-10\") MIN. CLEAR", 8, 5.5);
     s.dim(fx - 0.2 * k, Yh(0), fx - 0.2 * k, Yh(sill), dimText(sill), 10, 5.5);
-    s.dim(fx - 0.2 * k, Yh(sill), fx - 0.2 * k, Yh(sill + h), `${dimText(h)} CLEAR`, 10, 5.5);
+    s.dim(fx - 0.2 * k, Yh(sill), fx - 0.2 * k, Yh(sill + h), heightKnown ? `${dimText(h)} CLEAR` : "HEIGHT TO BE TAPED", 10, 5.5);
     s.text("FOUNDATION", fx + 0.1 * k, Yh(sill / 2), { size: 5.3, rotate: 90, color: PAPER, align: "center" });
     let ty = base - 24;
     const area2 = w * h;
     const checks = [
-      `Clear opening ${sizeText(w, h)} = ${area2.toFixed(2)} m², at least 0.35 m²${escapeOk(w, h) ? " (meets)" : ""}`,
-      `No side under 380 mm: smallest ${Math.round(Math.min(w, h) * 1000)} mm`,
+      ...(heightKnown
+        ? [
+            `Clear opening ${sizeText(w, h)} = ${area2.toFixed(2)} m², at least 0.35 m²: ${escapeOk(w, h) ? "meets" : "does not meet"}`,
+            `No side under 380 mm: smallest ${Math.round(Math.min(w, h) * 1000)} mm`,
+          ]
+        : [
+            `Clear opening ${sizeText(w, null)} wide; its height is to be taped. At least 0.35 m² needs it ${escapeHeightNeededMm(w)} mm tall or more; if it isn't, it's enlarged`,
+            `No side under 380 mm: ${Math.round(w * 1000)} mm wide`,
+          ]),
       `Sill ${Math.round(sill * 1000)} mm above the floor${sill <= 1.0 ? "" : "; a fixed step or built-in below it"} (no Code maximum in a basement, 9.9.10.1.(2); kept at 1.0 m or less where it's new)`,
       "Opens from inside without tools or keys and stays open on its own",
       "Window well 550 mm clear in front; a cover opens from inside without tools",

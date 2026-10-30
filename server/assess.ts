@@ -245,6 +245,8 @@ export type DesignPricing = {
   cost: { low: number; high: number };
   fixes: FixGroup[];
   lineCost: Record<string, { low: number; high: number }>;
+  // Unit 2's floor in that design (server/model/suite.ts): what the permit fee is worked on.
+  suiteAreaM2: number | null;
 };
 
 // Pure: the verdict, the fix list and the cost, from the findings as they stand (and the design, when
