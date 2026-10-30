@@ -1,4 +1,5 @@
 import { ScanSection, StepArt, type StepGlyph } from "./drawings";
+import { EXAMPLE } from "./example";
 import { Cited, MarketingPage, PageHead, Ref, ScanCta, Section, SourceList } from "./parts";
 import { PATHS } from "./site";
 import type { SourceId } from "./sources";
@@ -9,7 +10,7 @@ const STEPS: { glyph: StepGlyph; title: string; spec: string; body: React.ReactN
   {
     glyph: "film",
     title: "Film",
-    spec: "60–90 s",
+    spec: "Up to 5 min",
     body: (
       <>
         Walk your basement with your phone. A checklist on screen reminds you what to get: the stairs, every window,
@@ -21,19 +22,20 @@ const STEPS: { glyph: StepGlyph; title: string; spec: string; body: React.ReactN
   {
     glyph: "scan",
     title: "Scan",
-    spec: "Ceiling 2.10 m",
+    spec: `Ceiling ${EXAMPLE.ceiling}`,
     body: (
       <>
         SAM 3.1 finds the windows, stairs, ducts, beams, furnace and electrical panel in your video. From the same
-        footage we build a measured 3D model, so we can read ceiling heights, the clearance under ducts and the size of
-        each window. If a reading isn't clear, we ask you to check it with a tape.
+        footage, Meta's MapAnything builds a measured 3D model in about 2–3 minutes, so we can read ceiling heights,
+        the clearance under ducts and the size of each window. If a reading isn't clear, we ask you to check it with a
+        tape.
       </>
     ),
   },
   {
     glyph: "answer",
     title: "Answer",
-    spec: "3–5 fixes",
+    spec: "Rule + source",
     body: (
       <>
         Muse Spark checks what was found against Ontario's Building Code and your city's zoning, and gives a straight
@@ -45,11 +47,12 @@ const STEPS: { glyph: StepGlyph; title: string; spec: string; body: React.ReactN
   {
     glyph: "model",
     title: "See it in 3D",
-    spec: "2–3 layouts",
+    spec: "1 starting layout",
     body: (
       <>
-        Walk through your own basement as a finished suite. You get a few layouts that meet the rules, with the real
-        windows and stairs where they are, and what each one roughly costs.
+        See your own basement with a starting layout that meets the rules: a bedroom by an escape window, a bathroom,
+        a kitchen, with the real windows and stairs where they are. It's virtually staged, to show the idea, and a
+        designer turns it into a real plan.
       </>
     ),
   },
@@ -63,20 +66,20 @@ const STEPS: { glyph: StepGlyph; title: string; spec: string; body: React.ReactN
         the date we checked it. A suite for a parent and a rental suite fit different programs: the federal tax
         credit is for a relative who is 65 or older, or eligible for the disability tax credit
         <Ref id="mhrtc" />, while the Region's secondary-suite loan needs a tenant at a capped rent
-        <Ref id="regionLoan" />. We'll say "you look eligible if…", never "you qualify."
+        <Ref id="regionLoan" />. We'll say "you may be eligible if…", and the program decides.
       </>
     ),
   },
   {
     glyph: "build",
     title: "Get it built",
-    spec: "1-page brief",
+    spec: "1-page plan",
     body: (
       <>
-        When you're ready, send a one-page brief to designers and builders nearby: your scan, measurements, fix list
-        and rough cost, so they can quote without a first visit. Designers can be checked on Ontario's public
-        registry
-        <Ref id="quarts" />. Nothing goes to a pro until you choose who and press send.
+        We draft your permit drawings and fill in the forms, for you or a designer to check before you submit them.
+        Save a one-page plan to hand to designers and builders: your scan, measurements, fix list and rough cost.
+        Designers can be checked on Ontario's public registry
+        <Ref id="quarts" />. Sending plans to pros from here is coming.
       </>
     ),
   },
@@ -96,7 +99,7 @@ const CHECKS: { what: string; detail: React.ReactNode }[] = [
 const LIMITS: { what: string; detail: string }[] = [
   { what: "It isn't an approval", detail: "Only your City can issue a building permit, and its inspectors sign off the work." },
   { what: "It can't see inside walls", detail: "Wiring, insulation, pipes and framing behind drywall are marked “confirm on site.”" },
-  { what: "It doesn't draw permit plans", detail: "Drawings and City forms come from you or a qualified designer." },
+  { what: "Its drawings are drafts", detail: "Sizes come from video. You or a designer check them with a tape, and nothing is submitted for you." },
   { what: "It doesn't inspect electrical", detail: "A second unit needs its own electrical permit and inspection." },
   { what: "Two homes in the house, not three", detail: "The Code's secondary-suite rules cover a house with exactly two units." },
   { what: "No garden suites yet", detail: "Backyard and garage homes aren't covered." },
@@ -109,7 +112,7 @@ export function HowItWorks() {
       <Cited ids={CITED}>
         <PageHead
           title="How it works."
-          lede="Film your basement for a minute or two. We measure it, check it against the rules for your address, and tell you plainly what would have to change."
+          lede="Film your basement for up to 5 minutes. We measure it, check it against the rules for your address, and tell you plainly what would have to change."
         >
           <div className="mk-scan-frame" data-reveal>
             <ScanSection />
