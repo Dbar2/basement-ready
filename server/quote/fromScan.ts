@@ -1,8 +1,6 @@
-// A model built from a scan's result and the layout picked on the workspace, through the same
-// geometry the permit drawings use (server/permit/plans.ts). The quote and the book read the model;
-// this is how they get one for scans saved before the model existed, and for the sample. When the
-// workspace carries the homeowner's own model (the plan they confirmed and the design they edited in
-// the 3D studio), that one wins.
+// The model the quote and the book read. It's the shared one (server/model/current.ts); a scan it can't
+// be seeded from gets one built through the same geometry the permit drawings use (server/permit/plans.ts).
+import { currentModel } from "../model/current";
 import type { Design, Fixture, Model, Opening, Pt, Room, RoomKind, Wall } from "../model/types";
 import { basementGeometry, type Box, type Geometry } from "../permit/plans";
 import type { StoredState } from "../workspace";
@@ -121,22 +119,14 @@ function designFromGeometry(geo: Geometry, foundation: Wall[], openings: Opening
   };
 }
 
-// The homeowner's model when the workspace has one; otherwise one built from the scan.
+// The model every page works from (server/model/current.ts): the homeowner's own once saved, else
+// seeded from the scan. Scans the model can't be seeded from fall back to the permit geometry.
 export function modelFor(result: any, state: StoredState | null | undefined): Model | null {
-  const own = (state as { model?: Model } | null | undefined)?.model;
-  if (own?.version === 1 && own.designs?.length) return own;
+  const current = currentModel(result, state);
+  if (current) return current.model;
   const geo = basementGeometry(result, state);
   if (!geo?.main) return null;
-  const finish = state?.ideas?.finish ?? null;
-  const model = modelFromGeometry(geo, "", finish);
-  // The other layout they could have picked, so the book can show what they weighed.
-  const kind = geo.layout?.kind === "studio" ? "one_bedroom" : "studio";
-  const other = basementGeometry(result, { ...(state ?? {}), ideas: { ...(state?.ideas ?? {}), kind } });
-  if (other?.layout && other.layout.kind !== geo.layout?.kind) {
-    const alt = modelFromGeometry(other, "", finish).designs[0];
-    if (alt) model.designs.push({ ...alt, chosen: false });
-  }
-  return model;
+  return modelFromGeometry(geo, "", state?.ideas?.finish ?? null);
 }
 
 export const chosenDesign = (m: Model | null) => m?.designs.find((d) => d.chosen) ?? m?.designs[0] ?? null;

@@ -114,8 +114,9 @@ export type Design = {
   updatedAt: string;
 };
 
-// What they swiped: card ids, and the style and finishes those cards point to.
-export type Mood = { liked: string[]; disliked: string[]; style: string | null; finishes: Partial<Finishes> };
+// What they swiped: card ids, and the style and finishes those cards point to. `colours`: each piece of
+// furniture's colour, from the style the board loved most for its room (server/ideas/deck.ts).
+export type Mood = { liked: string[]; disliked: string[]; style: string | null; finishes: Partial<Finishes>; colours?: Partial<Record<FurnitureKind, string>> };
 
 export type Model = { version: 1; existing: Existing; designs: Design[]; mood: Mood };
 

@@ -47,7 +47,7 @@ const CONCEPT: Record<string, string> = {
   vanity: "bathroom vanity",
   washer_dryer: "washing machine",
 };
-const ANCHOR_CONCEPT: Record<Anchor["kind"], string> = { window: "basement window", door: "door", stairs: "staircase" };
+export const ANCHOR_CONCEPT: Record<Anchor["kind"], string> = { window: "basement window", door: "door", stairs: "staircase" };
 
 // Pieces big enough in the picture to hold it to; at most three kinds, the biggest first. A piece cut
 // off by the edge of the picture is left out unless it fills a lot of it: SAM can't outline half a bed.
@@ -73,12 +73,24 @@ export function foundWhereDrawn(drawn: Box, found: Box[]) {
   });
 }
 
-// Every window, door and stair is still about where it was (as server/concepts.ts keptInPlace).
+// The same thing in two pictures: the boxes overlap by a fifth or more (IoU, as server/concepts.ts keptInPlace).
+export function sameBox(a: Box, b: Box) {
+  const i = inter(a, b);
+  return i / (area(a) + area(b) - i || 1) >= 0.2;
+}
+
+// Every window, door and stair is still about where it was.
 export function anchorsKept(anchors: Anchor[], found: Map<string, Box[]>) {
-  return anchors.every((a) => (found.get(a.kind) ?? []).some((f) => {
-    const i = inter(a.box, f);
-    return i / (area(a.box) + area(f) - i || 1) >= 0.2;
-  }));
+  return anchors.every((a) => (found.get(a.kind) ?? []).some((f) => sameBox(a.box, f)));
+}
+
+// Nothing was added: every window and stair in the picture was in the frame (the same box, or a part of
+// one: the top of the stairs showing over a new wall). Muse Image sometimes turns a box on a cluttered
+// wall into a window, or adds stairs; a window the basement doesn't have is a promise it can't keep.
+// (A new door is fine: the design adds doors.)
+export const ADDED_KINDS = ["window", "stairs"] as const;
+export function nothingAdded(anchors: Anchor[], found: Map<string, Box[]>) {
+  return ADDED_KINDS.every((k) => (found.get(k) ?? []).every((f) => anchors.some((a) => a.kind === k && (sameBox(a.box, f) || inter(f, a.box) / (area(f) || 1) >= 0.6))));
 }
 
 const list = (words: string[]) => (words.length <= 1 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`);
@@ -108,9 +120,24 @@ export type PictureInput = {
   guide: Buffer; // JPEG, the frame's own size
   size: [number, number];
   items: DrawnItem[];
-  anchors: Anchor[];
+  anchors: Anchor[]; // the windows, doors and stairs the video tracked here: they must stay where they are
+  known?: Anchor[]; // everything really in the frame (SAM on the frame itself): nothing else may appear
+  hidden?: Box[]; // where the design's new walls stand: a real door behind one needn't show
   finishes: { style?: string; floor?: string; walls?: string };
 };
+
+// How much of `a` the boxes cover together, sampled on a 10 × 10 grid (a stair walled in on two sides
+// is hidden by both walls, not by either alone).
+export function coveredBy(a: Box, boxes: Box[]) {
+  if (!boxes.length) return 0;
+  let n = 0;
+  for (let i = 0; i < 10; i++)
+    for (let j = 0; j < 10; j++) {
+      const x = a.x + ((i + 0.5) / 10) * a.w, y = a.y + ((j + 0.5) / 10) * a.h;
+      if (boxes.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)) n++;
+    }
+  return n / 100;
+}
 
 // One picture: cached, or made now. Never throws for a model failure: the render is the fallback.
 export async function makePicture(input: PictureInput, work: PictureWork, now = () => new Date().toISOString()): Promise<PictureMeta> {
@@ -127,7 +154,13 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
   const [w, h] = input.size;
   const items = checkedItems(input.items);
   const kinds = [...new Set(items.map((i) => i.kind))];
-  const anchorKinds = [...new Set(input.anchors.map((a) => a.kind))];
+  // What must stay: what the video saw here, less what the design's own new walls stand in front of.
+  // A sliver cut off by the edge of the picture is too unsure to hold it to, as with the furniture.
+  const keep = input.anchors.filter((a) => coveredBy(a.box, input.hidden ?? []) < 0.5 && !(atEdge(a.box) && area(a.box) < 0.05));
+  const known = [...input.anchors, ...(input.known ?? [])];
+  // SAM looks for every window and stair in the picture, not only the ones the frame had.
+  const anchorKinds = [...new Set<Anchor["kind"]>([...ADDED_KINDS, ...keep.map((a) => a.kind)])];
+  const keptKinds = [...new Set(keep.map((a) => a.kind))];
   const prompt = picturePrompt(input.items, input.finishes);
   let last = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -144,12 +177,13 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
       Promise.all(anchorKinds.map(async (k) => [k, await work.boxes(jpeg, ANCHOR_CONCEPT[k]).catch(() => [])] as const)),
       Promise.all(kinds.map(async (k) => [k, await work.boxes(jpeg, CONCEPT[k]).catch(() => [])] as const)),
     ]);
-    const anchorsOk = anchorsKept(input.anchors, new Map(anchorBoxes));
+    const anchorsOk = anchorsKept(keep, new Map(anchorBoxes));
+    const added = !nothingAdded(known, new Map(anchorBoxes));
     const found = new Map(itemBoxes);
     const missing = items.filter((i) => !foundWhereDrawn(i.box, found.get(i.kind) ?? []));
-    if (anchorsOk && !missing.length) {
+    if (anchorsOk && !added && !missing.length) {
       const what = [
-        anchorKinds.length ? `${list(anchorKinds.map((k) => (k === "window" ? "windows" : k === "door" ? "doors" : "stairs")))} kept where they are` : "",
+        keptKinds.length ? `${list(keptKinds.map((k) => (k === "window" ? "windows" : k === "door" ? "doors" : "stairs")))} kept where they are` : "no windows or stairs added",
         items.length ? `${list([...new Set(items.map((i) => i.label.toLowerCase()))])} where the design puts ${items.length > 1 ? "them" : "it"}` : "",
       ].filter(Boolean);
       const meta: PictureMeta = {
@@ -165,7 +199,7 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
       await work.save(jpeg, meta);
       return meta;
     }
-    last = !anchorsOk ? "a window, door or the stairs moved" : `${list(missing.map((i) => i.label.toLowerCase()))} moved`;
+    last = !anchorsOk ? "a window, door or the stairs moved" : added ? "a window or stairs appeared that aren't there" : `${list(missing.map((i) => i.label.toLowerCase()))} moved`;
     console.log(`[views] ${input.angleId} attempt ${attempt}: ${last}`);
   }
   return render(last && !/Muse|Meta|fetch|timed? ?out/i.test(last) ? `The 3D design drawn over your frame (in the photo, ${last})` : "The 3D design drawn over your frame", 2);
