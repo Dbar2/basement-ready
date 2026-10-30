@@ -14,8 +14,7 @@ test("a video it can't read: the wait screen says so", async ({ page, journey },
   mkdirSync(join(runDir, "inputs"), { recursive: true });
   writeFileSync(broken, "this is not a video\n".repeat(64));
   // The wait screen plays the video it was given; this one can't play, and the server never makes a copy.
-  // (WebKit also reports the dev-only revoked blob URL noted in takes.spec.ts.)
-  journey.allowConsole(/Failed to load resource: the server responded with a status of 404|404 \(Not Found\)|WebKitBlobResource error/);
+  journey.allowConsole(/Failed to load resource: the server responded with a status of 404|404 \(Not Found\)/);
 
   const home = new Home(page);
   const wait = new WaitScreen(page);

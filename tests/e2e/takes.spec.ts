@@ -7,7 +7,8 @@ import { Home } from "./pages/Home";
 import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
 import { expectSheets, Workspace } from "./pages/Workspace";
-import { api, expect, test } from "./support/fixtures";
+import type { Page, TestInfo } from "@playwright/test";
+import { api, expect, oneAtATime, test, type Journey } from "./support/fixtures";
 import { costOf, realCalls } from "./support/costs";
 import { mode, runDir } from "./support/run";
 import { recordedOutcome, saveOutcome, TAKES, unavailable, type Outcome } from "./support/takes";
@@ -17,14 +18,14 @@ for (const take of TAKES) {
   test(`${take.label}: film to permit`, async ({ page, journey }, info) => {
     const why = unavailable(take);
     test.skip(why !== null, why ?? "");
-    test.slow(); // a whole scan, then five tabs
+    test.slow(); // a whole scan, then five tabs, and maybe a wait for another take to finish
+    await oneAtATime("takes", () => run(page, journey, info));
+  });
+
+  async function run(page: Page, journey: Journey, info: TestInfo) {
     // Without the file in this tab (the app path), the wait screen asks for the server's copy of the video
     // every 2 s until it's saved (src/screens/LiveScan.tsx): those 404s are expected.
     journey.allowConsole(/status of 404 .*@ .*\/api\/scans\/[0-9a-f-]+\/video$/);
-    // Known, dev only: after an upload the wait screen plays the file through a blob URL that it makes in
-    // useMemo and revokes in an effect cleanup, which React's StrictMode runs once on mount
-    // (src/screens/LiveScan.tsx), so the video is blank under `pnpm dev`. Production builds don't do that.
-    journey.allowConsole(/ERR_FILE_NOT_FOUND @ blob:|WebKitBlobResource error/);
     const home = new Home(page);
     const wait = new WaitScreen(page);
     const ws = new Workspace(page);
@@ -150,5 +151,5 @@ for (const take of TAKES) {
       // What recording it cost: the calls that really went out (saved answers reused are free).
       journey.timing({ kind: "cost", take: take.id, frames, ...costOf(realCalls(started), frames, Boolean(process.env.E2E_SCAN3D_URL?.includes(".modal.run"))) });
     } else expect(outcome, "the same as when it was recorded").toEqual(recordedOutcome(take));
-  });
+  }
 }

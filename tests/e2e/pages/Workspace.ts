@@ -139,12 +139,13 @@ export class PermitTab {
 }
 
 // What every permit set must hold, whatever its sheets are called: at least eight drawings, a cover
-// first, and a page for every sheet the title blocks list (and nothing unlisted).
+// first, and a page for every sheet the title blocks list (and nothing unlisted). A plan too big for
+// one sheet runs over "A2.1", "A2.2": both count as A2.
 export function expectSheets(pdf: Awaited<ReturnType<PermitTab["downloadPackage"]>>) {
   const numbers = Object.keys(pdf.index);
   expect(numbers.length, `sheets listed: ${JSON.stringify(pdf.index)}`).toBeGreaterThanOrEqual(8);
   expect(pdf.index.A0).toMatch(/^Cover/);
-  expect(pdf.sheets.map((x) => x.number)).toEqual(numbers);
+  expect([...new Set(pdf.sheets.map((x) => x.number.split(".")[0]))]).toEqual(numbers);
   expect(pdf.pageCount).toBeGreaterThanOrEqual(numbers.length);
 }
 
