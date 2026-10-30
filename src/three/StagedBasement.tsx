@@ -2,12 +2,13 @@
 // stairs where they are, its ceiling height) finished and furnished to the suggested layout.
 // Furniture is real where a good modern piece exists (CC0 models from Poly Haven, see
 // public/staging/CREDITS.txt) and modelled here for the rest; every surface has a real finish.
-import { Clone, Environment, Html, Lightformer, OrbitControls, RoundedBox, useGLTF, useProgress, useTexture } from "@react-three/drei";
+import { Clone, Environment, Lightformer, OrbitControls, RoundedBox, useGLTF, useProgress, useTexture } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { EffectComposer, N8AO } from "@react-three/postprocessing";
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import type { Layout, LayoutZone, Plan, PlanSide } from "../api";
+import { Tag, TagRoot, TagTracker } from "./Tags";
 
 const T = 0.12; // wall thickness
 const DOOR_H = 2.03;
@@ -804,11 +805,11 @@ function Zone({ z, showLabels }: { z: LayoutZone; showLabels: boolean }) {
       )}
       {/* The kitchen speaks for itself; stairs too. */}
       {showLabels && z.kind !== "stairs" && z.kind !== "kitchen" && (
-        <Html position={[cx, 0.15, cz]} center zIndexRange={[10, 0]}>
+        <Tag position={[cx, 0.15, cz]}>
           <span className="stage-tag">
             <b>{z.name}</b> {z.areaM2 >= 2 && <span>{z.areaM2.toFixed(1)} m²</span>}
           </span>
-        </Html>
+        </Tag>
       )}
     </>
   );
@@ -1015,26 +1016,29 @@ export function StagedBasement({ plan, layout }: { plan: Plan; layout: Layout })
   const b = plan.box;
   return (
     <div className="stage">
-      <Canvas
-        shadows="soft"
-        camera={{ fov: 42, near: 0.05, far: 200, position: [b.maxX + 6, 7, b.maxZ + 7] }}
-        dpr={[1, phone ? 1.6 : 2]}
-        gl={{ antialias: false, toneMappingExposure: 1.05 }}
-      >
-        <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim() || "#E6EBE4"]} />
-        <Suspense fallback={null}>
-          <Scene plan={plan} layout={layout} finish={FINISHES[finishKey]} labels={labels} view={view} h={h} phone={phone} />
-        </Suspense>
-        <OrbitControls
-          makeDefault
-          enablePan
-          target={[(b.minX + b.maxX) / 2, 0.6, (b.minZ + b.maxZ) / 2]}
-          minDistance={0.5}
-          maxDistance={40}
-          maxPolarAngle={Math.PI * 0.49}
-        />
-        <Rig plan={plan} layout={layout} view={view} />
-      </Canvas>
+      <TagRoot>
+        <Canvas
+          shadows="soft"
+          camera={{ fov: 42, near: 0.05, far: 200, position: [b.maxX + 6, 7, b.maxZ + 7] }}
+          dpr={[1, phone ? 1.6 : 2]}
+          gl={{ antialias: false, toneMappingExposure: 1.05 }}
+        >
+          <TagTracker />
+          <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim() || "#E6EBE4"]} />
+          <Suspense fallback={null}>
+            <Scene plan={plan} layout={layout} finish={FINISHES[finishKey]} labels={labels} view={view} h={h} phone={phone} />
+          </Suspense>
+          <OrbitControls
+            makeDefault
+            enablePan
+            target={[(b.minX + b.maxX) / 2, 0.6, (b.minZ + b.maxZ) / 2]}
+            minDistance={0.5}
+            maxDistance={40}
+            maxPolarAngle={Math.PI * 0.49}
+          />
+          <Rig plan={plan} layout={layout} view={view} />
+        </Canvas>
+      </TagRoot>
       <Loading />
       <div className="stage-tools">
         <div className="segmented small" role="group" aria-label="View">

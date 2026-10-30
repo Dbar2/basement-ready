@@ -2,10 +2,11 @@
 // in the colours the camera saw, rising from the floor up. Scans without one show their surface points
 // as soft discs instead. Walk it at eye height (drag to look, tap the floor to go there), jump to the
 // spots where you filmed, or step back for an overview with the ceiling lifted off.
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
+import { Tag, TagRoot, TagTracker } from "./Tags";
 
 const EYE_M = 1.5;
 const REVEAL_S = 2.6;
@@ -384,19 +385,22 @@ export function RealScan(props: {
 
   return (
     <>
-      <Canvas className="viewer-canvas" camera={{ fov: 70, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
-        <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim() || "#0F2A1E"]} />
-        {solid ? <SolidView solid={solid} ceilingY={ceiling} overview={mode === "overview"} floors={props.floors ?? []} /> : surfels && <Cloud surfels={surfels} ceilingY={ceiling} overview={mode === "overview"} />}
-        {ideas && <Suspense fallback={null}>{props.ideas}</Suspense>}
-        {props.labels?.map((l, i) => (
-          <Html key={i} position={l.at} center zIndexRange={[10, 0]}>
-            <span className="viewer-tag" data-kind={l.kind}>
-              <i /> {l.text}
-            </span>
-          </Html>
-        ))}
-        {mode === "walk" ? <Walker target={jump} onArrive={arrived} /> : <Overview center={center} span={span} />}
-      </Canvas>
+      <TagRoot>
+        <Canvas className="viewer-canvas" camera={{ fov: 70, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
+          <TagTracker />
+          <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim() || "#0F2A1E"]} />
+          {solid ? <SolidView solid={solid} ceilingY={ceiling} overview={mode === "overview"} floors={props.floors ?? []} /> : surfels && <Cloud surfels={surfels} ceilingY={ceiling} overview={mode === "overview"} />}
+          {ideas && <Suspense fallback={null}>{props.ideas}</Suspense>}
+          {props.labels?.map((l, i) => (
+            <Tag key={i} position={l.at}>
+              <span className="viewer-tag" data-kind={l.kind}>
+                <i /> {l.text}
+              </span>
+            </Tag>
+          ))}
+          {mode === "walk" ? <Walker target={jump} onArrive={arrived} /> : <Overview center={center} span={span} />}
+        </Canvas>
+      </TagRoot>
       <div className="stage-tools">
         <div className="segmented small" role="group" aria-label="View">
           <button aria-pressed={mode === "walk"} onClick={() => go(spot)}>
