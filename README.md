@@ -43,7 +43,7 @@ Every model the app calls at runtime is Meta's. The hosted ones go through the [
 | **Muse Spark 1.3** (`muse-spark-1.3`) | Reads SAM's finds, the proof frames, what the homeowner said and the rules, and says which rules pass, which need a fix and what to ask. It also reviews the drawn plan over the video's frames, and turns "Describe a change" in the studio into edits to the design. | The trust rule, in code: no proof in the video, no claim. Code does the maths, groups the fixes and prices them. Spark's design edits are validated against the design before the homeowner sees them. | `server/assess.ts`, `server/floorplan.ts`, `server/model/describe.ts` |
 | **Muse Wonder 1.0** (`muse-wonder-1.0`) | Watches the whole take once, with its sound: the rooms in the order they were filmed, which were only seen through a doorway, how they join, ceilings, low ducts and beams, windows, and what the homeowner said about each room. Before "Is this your basement?", it compares the plan with the take. | Its rooms name the 3D areas and decide how they connect on the plan. Each place where the plan and the take disagree becomes one plain yes-or-no question. It describes and never measures. Wonder is in preview, so Spark watches instead if it fails. | `server/watch.ts`, `server/watchScan.ts`, `server/planCheck.ts` |
 | **Muse Image 1.0** (`muse-image-1.0`) | Restyles the homeowner's own frames: the swipe deck, the layout pictures and the pictures of the design. | Each design picture is guided by a render of the 3D design from the camera's real position in the video. Every picture is labelled "Virtually staged". | `server/ideas/cards.ts`, `server/concepts.ts`, `server/views/routes.ts` |
-| **Muse Voice Transcribe 1.0** (`muse-voice-transcribe-1.0`) | Turns what the homeowner says while filming ("this could be Mom's room") into text with timings. | The words go to Spark with the finds, so what they want shapes the answer and the layouts. | `server/pipeline.ts`, `server/meta.ts` |
+| **Muse Voice Transcribe 1.0** (`muse-voice-transcribe-1.0`) | Turns what the homeowner says while filming ("this could be Mom's room") into text with timings. | The words go to Spark with the finds, so what the homeowner wants shapes the answer. | `server/pipeline.ts`, `server/meta.ts` |
 | **MapAnything** ([`facebook/map-anything-apache`](https://huggingface.co/facebook/map-anything-apache), open weights) | Camera position and metric depth for every frame of an ordinary phone video. No LiDAR needed. | A 3D service around it: picking sharp frames, fitting floor, ceiling and walls, measuring each area and joining them into one basement, the floor plan with rooms, doors and fixtures, a check of each wall against the depth, and the as-built model painted with the video. One tape number rescales everything. | `services/scan3d`, `server/scan3d.ts`, `server/basement.ts`, `server/floorplan.ts`, `server/asBuilt.ts` |
 | **DINOv2** (Meta, open weights) | MapAnything's image encoder. | Pinned at a fixed commit and baked into the 3D service's image. | `services/scan3d/app.py` |
 
@@ -120,17 +120,17 @@ Run the unit tests (no keys, about 20 seconds):
 pnpm test
 ```
 
-The end-to-end journeys drive the same flow in real browsers (Chromium and WebKit), replaying saved model answers instead of calling Meta (`server/replay.ts`, with `META_CACHE` and `SCAN3D_CACHE` set to `replay`). The example's journey needs nothing private; journeys of recorded takes skip themselves when their recordings aren't on the machine. Install the browsers once, then run them:
+The end-to-end journeys drive the same flow in real browsers (Chromium and WebKit, phone and desktop sizes), replaying saved model answers instead of calling Meta (`server/replay.ts`, with `META_CACHE` and `SCAN3D_CACHE` set to `replay`). The example's journey needs nothing that isn't in the repo. Install the browsers once, then run it (about a minute):
 
 ```bash
 pnpm exec playwright install chromium webkit
 ```
 
 ```bash
-pnpm test:e2e
+pnpm test:e2e tests/e2e/sample.spec.ts
 ```
 
-How record and replay work: [`tests/e2e/README.md`](tests/e2e/README.md). On every push, CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) typechecks, runs the unit tests, builds the app and runs the 3D service's own tests, all without keys.
+The full `pnpm test:e2e` also replays our own recorded takes, whose saved answers include private footage and aren't in the repo; from a fresh clone, those journeys skip or fail for missing recordings. How record and replay work: [`tests/e2e/README.md`](tests/e2e/README.md). On every push, CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) typechecks, runs the unit tests, builds the app and runs the 3D service's own tests, all without keys.
 
 ### 2. Your own basement: a Meta key and the 3D
 
