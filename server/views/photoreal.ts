@@ -1,7 +1,8 @@
 // A 3D render of the design over a real frame (the guide, made in the browser by src/views/AngleRender.tsx)
 // turned into a photo by Muse Image, then held to it by SAM 3.1: the windows, doors and stairs stay
-// where the frame has them, nothing is added (a window, stairs or a fridge the design doesn't have), and
-// every piece of furniture shows up where the render put it. One retry, told what went wrong;
+// where the frame has them, nothing is added (a window, stairs or a fridge the design doesn't have),
+// every new wall is still there (its door shows where the render drew it), and every piece of
+// furniture shows up where the render put it. One retry, told what went wrong;
 // after that the render itself is the picture, labelled as one. Pictures are cached by angle and
 // design (by what the angle shows of it: a change out of view keeps the picture as it is), so nothing
 // is paid for twice, and every one is labelled "virtually staged".
@@ -146,6 +147,7 @@ export type PictureInput = {
   anchors: Anchor[]; // the windows, doors and stairs the video tracked here: they must stay where they are
   known?: Anchor[]; // everything really in the frame (SAM on the frame itself): nothing else may appear
   hidden?: Box[]; // where the design's new walls stand: a real door behind one needn't show
+  doors?: Box[]; // the design's new doors that show, whole: a photo with no door there lost its wall
   finishes: Partial<Pick<Finishes, "style" | "floor" | "walls">>;
 };
 
@@ -182,7 +184,7 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
   const keep = input.anchors.filter((a) => coveredBy(a.box, input.hidden ?? []) < 0.5 && !(atEdge(a.box) && area(a.box) < 0.05));
   const known = [...input.anchors, ...(input.known ?? [])];
   // SAM looks for every window and stair in the picture, not only the ones the frame had.
-  const anchorKinds = [...new Set<Anchor["kind"]>([...ADDED_KINDS, ...keep.map((a) => a.kind)])];
+  const anchorKinds = [...new Set<Anchor["kind"]>([...ADDED_KINDS, ...keep.map((a) => a.kind), ...(input.doors?.length ? (["door"] as const) : [])])];
   const keptKinds = [...new Set(keep.map((a) => a.kind))];
   let last = "", again = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -203,11 +205,14 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
     const anchorsOk = anchorsKept(keep, new Map(anchorBoxes));
     const added = !nothingAdded(known, new Map(anchorBoxes));
     const extra = piecesAdded(input.items, new Map(pieceBoxes));
+    // A new wall Muse Image took away takes its door with it.
+    const lostDoors = (input.doors ?? []).filter((d) => !foundWhereDrawn(d, new Map(anchorBoxes).get("door") ?? []));
     const found = new Map(itemBoxes);
     const missing = items.filter((i) => !foundWhereDrawn(i.box, found.get(i.kind) ?? []));
-    if (anchorsOk && !added && !extra.length && !missing.length) {
+    if (anchorsOk && !added && !lostDoors.length && !extra.length && !missing.length) {
       const what = [
         keptKinds.length ? `${list(keptKinds.map((k) => (k === "window" ? "windows" : k === "door" ? "doors" : "stairs")))} kept where they are` : "no windows or stairs added",
+        input.doors?.length ? `the new ${input.doors.length > 1 ? "doors" : "door"} where the design puts ${input.doors.length > 1 ? "them" : "it"}` : "",
         items.length ? `${list([...new Set(items.map((i) => i.label.toLowerCase()))])} where the design puts ${items.length > 1 ? "them" : "it"}` : "",
       ].filter(Boolean);
       const meta: PictureMeta = {
@@ -227,17 +232,21 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
       ? "a window, door or the stairs moved"
       : added
         ? "a window or stairs appeared that aren't there"
-        : extra.length
-          ? `${list(extra)} appeared that isn't in the design`
-          : `${list(missing.map((i) => i.label.toLowerCase()))} moved`;
+        : lostDoors.length
+          ? "a new wall or its door is missing"
+          : extra.length
+            ? `${list(extra)} appeared that isn't in the design`
+            : `${list(missing.map((i) => i.label.toLowerCase()))} moved`;
     // The second try is told what went wrong with the first.
     again = !anchorsOk
       ? "Above all, keep every window, door and stair exactly where it is in the photo."
       : added
         ? "Above all, add no window and no stairs anywhere."
-        : extra.length
-          ? `Above all, add no ${list(extra.map((x) => x.replace(/^an? /, "")))}: the tall plain shapes drawn in are walls.`
-          : `Above all, keep ${list(missing.map((i) => `the ${i.label.toLowerCase()}`))} exactly where drawn.`;
+        : lostDoors.length
+          ? "Above all, keep every plain wall drawn in, and the door drawn in it, exactly where they are drawn."
+          : extra.length
+            ? `Above all, add no ${list(extra.map((x) => x.replace(/^an? /, "")))}: the tall plain shapes drawn in are walls.`
+            : `Above all, keep ${list(missing.map((i) => `the ${i.label.toLowerCase()}`))} exactly where drawn.`;
     console.log(`[views] ${input.angleId} attempt ${attempt}: ${last}`);
   }
   return render(last && !/Muse|Meta|fetch|timed? ?out/i.test(last) ? `The 3D design drawn over your frame (in the photo, ${last})` : "The 3D design drawn over your frame", 2);

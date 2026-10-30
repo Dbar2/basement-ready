@@ -193,6 +193,20 @@ export function FurnitureMesh({ f }: { f: Furniture }) {
   );
 }
 
+// Each new door, as the rectangle of its leaf in the basement (x, y, z corners), for the pictures to
+// say where it shows: a door is how a photo shows its wall is still there (AngleRender.tsx).
+export function newDoors(design: Design): { id: string; wallId: string; corners: [number, number, number][] }[] {
+  const walls = new Map(design.proposed.walls.filter((w) => w.kind === "new").map((w) => [w.id, w]));
+  return design.proposed.openings.flatMap((o) => {
+    const w = walls.get(o.wallId);
+    if (o.kind !== "door" || !w) return [];
+    const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]) || 1;
+    const at = (t: number): [number, number] => [w.a[0] + ((w.b[0] - w.a[0]) * t) / len, w.a[1] + ((w.b[1] - w.a[1]) * t) / len];
+    const [p, q] = [at(o.offsetM - o.widthM / 2), at(o.offsetM + o.widthM / 2)];
+    return [{ id: o.id, wallId: w.id, corners: [[p[0], 0, p[1]], [q[0], 0, q[1]], [p[0], DOOR_H, p[1]], [q[0], DOOR_H, q[1]]] }];
+  });
+}
+
 // What a finished wall has that the studio's blocks don't: painted trim (baseboards and door casing),
 // a painted door, a dark handle. Shared by every picture; never disposed.
 const TRIM = new THREE.MeshStandardMaterial({ color: "#FAF9F5", roughness: 0.55 });
