@@ -230,7 +230,7 @@ export function ScanCta({ title = "Could your basement be a home?" }: { title?: 
   return (
     <section className="mk-cta" data-reveal>
       <h2>{title}</h2>
-      <p>Free for homeowners. You film for 60 to 90 seconds.</p>
+      <p>Free for homeowners. You film for up to 5 minutes.</p>
       <a className="btn btn-primary" href={PATHS.home}>
         Scan my basement <span className="arrow" aria-hidden>→</span>
       </a>

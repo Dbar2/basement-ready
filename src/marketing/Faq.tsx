@@ -21,7 +21,7 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
       <>
         <p>
           Nothing, for homeowners. Scanning, the answer, the 3D view and the brief are free. Designers and builders will
-          pay for qualified leads, and that's how it stays free for you. Right now even founding pros use it free.
+          pay for qualified leads once the pro side opens, and that's how it stays free for you. Founding pros start free.
         </p>
       </>
     ),
@@ -122,8 +122,9 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
     q: "Which cities do you cover?",
     a: (
       <p>
-        Waterloo, Kitchener and Cambridge. Anywhere else in Ontario, you get the provincial rules with a note on what to
-        confirm with your City. <a href={PATHS.cities}>See what's covered</a>.
+        All of Ontario, with Waterloo Region in depth. Waterloo, Kitchener and Cambridge get their own zoning rules,
+        permit steps, fees and local money. Anywhere else in Ontario, you get the provincial rules with a note on what
+        to confirm with your City. <a href={PATHS.cities}>See what's covered</a>.
       </p>
     ),
   },
