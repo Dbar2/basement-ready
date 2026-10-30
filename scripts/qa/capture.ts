@@ -8,7 +8,7 @@ import { launch } from "./browsers";
 import { Images, imageSize, sha256, type Box } from "./images";
 import { lint, lintText, numbersOf, type LintIssue } from "./lint";
 import { renderPdf } from "./pdf";
-import { STORY_STEPS, VIEWPORTS, type Browser, type Camera, type Shot, type Viewport } from "./plan";
+import { SCREENS, STORY_STEPS, VIEWPORTS, type Browser, type Camera, type Shot, type Viewport } from "./plan";
 import { cameraPose, eyeCandidates, grab, installThreeHook, mainCanvas, project, sceneBounds, setPose, type Bounds, type CanvasRef, type Pose } from "./three";
 
 export type Captured = Omit<Shot, "id"> & {
@@ -250,22 +250,22 @@ class LaneRun {
     const ws = ["wait", "workspace-plan", "workspace-ideas", "workspace-permit", "workspace-money", "workspace-build", "layout-3d", "scan-3d", "plan-overlay", "permit-pdf"];
     if (ws.some((s) => this.wants(s, scan).length)) await this.workspace(scan);
 
-    for (const [screen, route] of [
-      ["plan-confirm", "plan"],
-      ["studio", "studio"],
-      ["pictures", "pictures"],
-      ["ideas", "ideas"],
-      ["book", "book"],
-      ["brief", "brief"],
-    ] as const) {
+    // Every page with a route of its own under the scan, in plan order.
+    for (const def of SCREENS.filter((d) => d.kind === "page" && d.route.startsWith("/scans/{scan}/"))) {
+      const screen = def.id;
       const shot = this.one(screen, scan);
       const three = this.wants(`${screen}-3d`, scan);
       const pdf = screen === "book" ? this.one("book-pdf", scan) : undefined;
       if (!shot && !three.length && !pdf) continue;
       try {
-        await this.goto(`/scans/${scan}/${route}`);
+        await this.goto(def.route.replace("{scan}", scan));
       } catch (e) {
         if (shot) await this.failed(shot, e);
+        continue;
+      }
+      if (def.ifPresent && (await p.getByText("We couldn't find that page.").isVisible().catch(() => false))) {
+        this.ctx.say(`  ${screen}: not on this build, skipped`);
+        this.errors.splice(0);
         continue;
       }
       if (shot) await this.pageShot(shot);
@@ -290,6 +290,11 @@ class LaneRun {
       const until = Date.now() + 150_000;
       while (!(await tabs.isVisible())) {
         if (Date.now() > until) throw new Error("the workspace didn't open within 150 s");
+        // The one-flow build moves on from the wait screen to the plan step; ?tab= opens the workspace.
+        if (!new URL(p.url()).pathname.endsWith(`/scans/${scan}`)) {
+          await this.goto(`/scans/${scan}?tab=plan`);
+          continue;
+        }
         const go = p.getByRole("button", { name: /^(Skip and see my plan|See my plan)/ });
         if (await go.first().isVisible().catch(() => false)) await go.first().click().catch(() => {});
         await p.waitForTimeout(1000);
