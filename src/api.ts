@@ -1,4 +1,6 @@
 // Client for the scan API, plus the frozen sample that replays the same events.
+import type { PlanCheck } from "../server/planCheck";
+import type { Watch } from "../server/watch";
 
 export type Household = "relative" | "renter" | "unsure";
 
@@ -92,8 +94,41 @@ export type Plan = {
 };
 
 // Where a room sits in the one basement plan: turned by quarter turns about the vertical
-// (x' = c·x − s·z, z' = s·x + c·z), then shifted on the floor (server/basement.ts).
-export type RoomPlacement = { turn: 0 | 1 | 2 | 3; x: number; z: number };
+// (x' = c·x − s·z, z' = s·x + c·z), then shifted on the floor (server/basement.ts). `y`: how far up its
+// own floor sits from the basement's one floor, so every area's 3D stands on the same floor (0 when absent).
+export type RoomPlacement = { turn: 0 | 1 | 2 | 3; x: number; z: number; y?: number };
+
+// The basement's floor plan read from all of the 3D at once (services/scan3d/scan3d/layout.py), in the
+// basement frame (metres, the floor at height 0): rooms as polygons, walls with their thickness, doors and
+// windows on them, and what stands in the rooms. App takes only: their areas share the phone's one world.
+export type BasementPlan = {
+  version: 1;
+  rotation: number; // the phone's world (x, z) turned by -rotation is this frame
+  floor: { y: number; normal: number[]; spreadM: number; tiltDeg: number } | null; // in the phone's world
+  areaFloors?: { area: number; y: number; offsetM: number; spreadM: number }[]; // each area's own floor, same world
+  ceilingM: number | null;
+  footprintM2: number;
+  // entered false: nobody went in; it was drawn from what the camera saw through its door (seenFrom).
+  rooms: { id: string; polygon: [number, number][]; areaM2: number; ceilingM: number | null; low: boolean; cameras: number; entered?: boolean; seenFrom?: string | null; kind: string; name?: string }[];
+  walls: {
+    id: string;
+    a: [number, number];
+    b: [number, number];
+    thicknessM: number;
+    kind: "foundation" | "existing";
+    rooms: string[];
+    seenShare: number;
+    guess?: boolean;
+    seenFromDoor?: boolean; // a wall of a room nobody went into
+    check?: { confidence: number; agree: number; contradict: number; frames: number };
+  }[];
+  openings: { id: string; kind: "door" | "window"; wallId: string; offsetM: number; widthM: number; heightM: number | null; sillM?: number | null; at: [number, number]; rooms: string[]; source: string; detectionId?: string }[];
+  fixtures: { id: string; kind: "stairs" | "furnace" | "water_heater" | "panel" | "plumbing" | "beam" | "duct" | "bulkhead"; at: [number, number]; sizeM?: [number, number]; heightM?: number | null; source: string; detectionId?: string; bottom?: [number, number] }[];
+  // Spark's corrections, each with whether the points agreed and why.
+  edits: ({ op: string; ok: boolean; why: string } & Record<string, unknown>)[];
+  // notPlaced: rooms the whole-take watch saw that the 3D gave no room for.
+  review?: { rounds: number; unsure: string[]; note?: string; notPlaced?: string[] } | null;
+};
 
 // Each area of the basement is measured on its own, then placed in one plan. Older scans have no placement.
 export type RoomResult = {
@@ -255,6 +290,7 @@ export type ScanResult = {
   has3d?: boolean;
   plan?: Plan | null;
   rooms?: RoomResult[];
+  floorPlan?: BasementPlan | null; // the whole basement's plan, for app takes (server/floorplan.ts)
   mainRoom?: number | null; // the room whose numbers the rules used
   measurements?: Measurements | null;
   // How it was filmed; `photos`: a photo take of that many photos (its finds are by photo, not second).
@@ -278,6 +314,10 @@ export type ScanResult = {
   layout?: Layout | null;
   concepts?: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
   plans?: string | null; // what they'd like it to be, from the wait screen
+  watch?: Watch | null; // what Muse Wonder watched and heard in the whole take (server/watch.ts)
+  // Muse Wonder's check of the plan against the take, for "Is this your basement?" (server/planCheck.ts).
+  // Lands a little after the answer; null when it failed or was skipped.
+  planCheck?: PlanCheck | null;
   demo?: boolean; // the demo house: Waterloo's rules, no real address
   disclaimer?: string | null; // the rules pack's own words: a screening aid, not a permit decision
   heldBack: number;

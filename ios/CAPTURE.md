@@ -112,7 +112,7 @@ The guide plays clips from `public/voice/<id>.mp3`, which are bundled at build t
 | Got a wall. | `wall_found` *new* |
 | The walls look good. | `walls_done` |
 | Got the ceiling. | `ceiling_done` |
-| New space. Take it slow. | `new_space` *new* |
+| New space. Take it slow. | `new_space` (that take only: the others ask to walk the walls again) |
 | That's looking good. | `looking_good` *new* |
 | Step back into a corner and hold still. | `wide` |
 | Got the wide shot. | `wide_done` |
@@ -122,7 +122,7 @@ The guide plays clips from `public/voice/<id>.mp3`, which are bundled at build t
 | Found a window. | `window_found` |
 | Found the furnace. | `furnace_found` |
 | Found the electrical panel. | `panel_found` *new* |
-| A door. Film what's through it too. | `door_found` *new* |
+| A door. Pan slowly through it from here. | `door_found` |
 | A duct / a beam. Mind your head. | `mind_head` *new* |
 | One minute left. / 30 seconds left. | `one_minute` *new* / `thirty_seconds` *new* |
 
