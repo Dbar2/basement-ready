@@ -23,7 +23,7 @@ enum WhoFor: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  // The server's household (relative | renter | unsure).
+  // The server's household (relative | renter | unsure), for servers from before `who`.
   var household: String {
     switch self {
     case .family: "relative"
@@ -32,31 +32,15 @@ enum WhoFor: String, CaseIterable, Identifiable, Codable, Sendable {
     }
   }
 
-  // The money question "rent" (server/eligibility.ts): "none", a monthly amount, or "market".
-  var rent: RentAnswer? {
+  // The start sheet's answer as the server takes it (server/eligibility.ts fromWho). The server saves the
+  // rent from it, as the city's own capped amount ($1,198 or $1,236 a month, not a round $1,200), so it's
+  // never asked again.
+  var server: String {
     switch self {
-    case .family: .noRent
-    case .affordable: .amount(1200)
-    case .market: .market
-    case .unsure: nil
-    }
-  }
-}
-
-enum RentAnswer: Equatable, Sendable {
-  case noRent, market, amount(Int)
-  var formValue: String {
-    switch self {
-    case .noRent: "none"
-    case .market: "market"
-    case .amount(let n): String(n)
-    }
-  }
-  var jsonValue: Any {
-    switch self {
-    case .noRent: "none"
-    case .market: "market"
-    case .amount(let n): n
+    case .family: "family"
+    case .affordable: "rental_capped"
+    case .market: "rental_market"
+    case .unsure: "unsure"
     }
   }
 }
@@ -65,15 +49,14 @@ struct StartAnswers: Sendable, Codable {
   var address: AddressHit?
   var who: WhoFor
 
-  // The same fields the web start sheet sends (src/screens/Start.tsx).
+  // The same fields the web start sheet sends (src/screens/StartSheet.tsx).
   var formFields: [(String, String)] {
-    var f: [(String, String)] = [("household", who.household)]
+    var f: [(String, String)] = [("household", who.household), ("who", who.server)]
     if let a = address {
       f += [("address", a.address), ("addressMunicipality", a.municipality), ("municipality", a.city ?? "other-on")]
     } else {
       f += [("address", ""), ("municipality", "other-on")]
     }
-    if let rent = who.rent { f.append(("rent", rent.formValue)) }
     return f
   }
 }

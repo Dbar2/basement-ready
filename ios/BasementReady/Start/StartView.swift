@@ -1,8 +1,11 @@
-// Before filming: the address and who it's for. Nothing else.
+// Before filming: the address and who it's for. Nothing else. The last take this phone sent opens again
+// from here.
 import SwiftUI
 
 struct StartView: View {
   let onStart: (StartAnswers) -> Void
+  var onOpenLast: (ScanCreated) -> Void = { _ in }
+  @State private var last = ScanCreated.last
   @StateObject private var search = AddressSearch()
   @State private var text = ""
   @State private var picked: AddressHit?
@@ -78,6 +81,17 @@ struct StartView: View {
               .foregroundStyle(Brand.inkMuted)
               .multilineTextAlignment(.center)
               .frame(maxWidth: .infinity)
+            if let last, last.resultURL != nil {
+              Button { onOpenLast(last) } label: {
+                Text("Your last scan")
+                  .font(Brand.body(17, .semibold))
+                  .foregroundStyle(Brand.ink)
+                  .frame(maxWidth: .infinity, minHeight: 54)
+                  .background(Brand.card, in: RoundedRectangle(cornerRadius: 14))
+                  .overlay(RoundedRectangle(cornerRadius: 14).stroke(Brand.border))
+              }
+              .accessibilityHint("Opens the answer for the last basement you sent")
+            }
           }
         }
         .padding(.horizontal, 20)
