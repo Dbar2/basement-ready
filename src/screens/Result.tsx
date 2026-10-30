@@ -45,6 +45,9 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
   const { r, scanId, busyRule, changes, answerError, readOnly } = props;
   const sample = scanId === "sample";
   const plansSaid = r.plans ? (PLANS_SAID[r.plans] ?? r.plans) : null;
+  // The server's own sentence for Ontario-only coverage; results from before it get the general one.
+  const coverageNote =
+    r.coverageNote ?? (r.coverage === "provincial" ? "We haven't researched your city's own rules yet, so this uses Ontario's rules, which apply everywhere in the province. Confirm zoning with your city." : null);
   const answer = props.onAnswer;
   const byId = new Map(r.detections.map((d) => [d.id, d]));
   const questions = r.findings.filter((f) => f.status === "needs_answer" && !f.answer);
@@ -62,11 +65,11 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
     <div data-verdict={r.verdict}>
       <section className="decision">
         <p className="eyebrow mono">
-          {r.verdict === "no" ? "Not likely" : "Likely"} · {r.city ?? "Waterloo"} rules checked {checkedOn(r.compiledAt)}
+          {r.verdict === "no" ? "Not likely" : "Likely"} · {r.coverage === "provincial" ? (r.city && r.city !== "Ontario" ? `Ontario rules for ${r.city}` : "Ontario rules") : `${r.city ?? "Waterloo"} rules`} checked {checkedOn(r.compiledAt)}
           {p && ` · ${p.address}`}
         </p>
         {r.demo && <p className="note-inline">Demo house: {DEMO_LABEL}</p>}
-        {r.coverage === "provincial" && <p className="note-inline">We haven't researched your city's own rules yet, so this uses Ontario's building code. Confirm zoning with your city.</p>}
+        {coverageNote && <p className="note-inline">{coverageNote}</p>}
         {changes && (
           <div className="changed" role="status" key={changes.after + changes.lines.join()}>
             <b>{changes.before === changes.after ? "Re-checked with your answer." : "Updated from your answer."}</b>
@@ -206,7 +209,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
               <li>
                 <b>{p.unitsRegistered ? `${p.unitsRegistered} apartment${p.unitsRegistered === 1 ? "" : "s"} registered` : "No apartment registered"}</b>
               </li>
-              <li className="muted">{p.sources.join(" · ")}. Aerial photo: Region of Waterloo, 2026.</li>
+              <li className="muted">{p.sources.join(" · ")}. Aerial photo: Region of Waterloo, 2024.</li>
             </ul>
           </div>
         </section>

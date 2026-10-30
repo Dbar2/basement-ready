@@ -235,7 +235,9 @@ export type ScanResult = {
   id: string;
   household: Household;
   city?: string;
+  authority?: string; // who issues the permit: "City of Waterloo", "Township of Woolwich"
   coverage?: "full" | "provincial";
+  coverageNote?: string | null; // what Ontario-only coverage means for this municipality
   has3d?: boolean;
   plan?: Plan | null;
   rooms?: RoomResult[];
