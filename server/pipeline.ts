@@ -319,6 +319,8 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
       });
     }),
   );
+  // Concept order, not the order SAM answered in: the same video always asks Spark the same thing.
+  detections.sort((a, b) => CONCEPTS.findIndex((c) => c.concept === a.concept) - CONCEPTS.findIndex((c) => c.concept === b.concept));
   // The photos start now, from the finds and the wide shot, and land while the 3D measures.
   void uploads.then(() => enqueuePhotos(scanId)).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
 
@@ -333,7 +335,9 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   };
   await emit("stage", "assess");
   await emit("log", "Checking your city's second-unit rules");
-  const sparkP = readWithSpark(ctx, detections, transcript.transcript, transcript.turns);
+  // A copy: the finds the 3D rules out below are taken from `detections` while Spark is still drawing its
+  // proof frames, and Spark should read every find whether the 3D is fast or slow.
+  const sparkP = readWithSpark(ctx, [...detections], transcript.transcript, transcript.turns);
   // Awaited after the 3D; a Spark failure meanwhile is still this scan's error, never an unhandled one.
   inflight.push(sparkP.catch(() => {}));
 
@@ -455,7 +459,7 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
 
   await emit("stage", "assess");
   await emit("log", "Checking your city's second-unit rules");
-  const sparkP = readWithSpark({ ...ctx, photos: take.count }, detections, "", []);
+  const sparkP = readWithSpark({ ...ctx, photos: take.count }, [...detections], "", []);
   inflight.push(sparkP.catch(() => {}));
   // A room they named keeps its name; "Room 2" may still turn out to be the furnace room.
   const names = take.rooms.map((r) => (/^room \d+$/i.test(r.name) ? null : r.name));
