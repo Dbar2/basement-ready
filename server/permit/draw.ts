@@ -259,23 +259,29 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
 }
 
 // Room names, areas, sizes and ceiling heights.
-export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean }) {
+// tile: on a plan cut into sheets, this sheet's part. A room the match line crosses is labelled in the
+// middle of its part on each sheet, as far as its lines fit there, so no name runs off the cut.
+export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean; tile?: Box }) {
   const rooms = m.design.proposed.rooms;
   for (const r of rooms) {
     if (r.kind === "stairs") continue;
-    const b = bounds(r.polygon);
+    const full = bounds(r.polygon);
+    const t = o.tile;
+    const cut = Boolean(t && (full.minX < t.minX - 0.01 || full.maxX > t.maxX + 0.01 || full.minZ < t.minZ - 0.01 || full.maxZ > t.maxZ + 0.01));
+    const b = cut && t ? { minX: Math.max(full.minX, t.minX), maxX: Math.min(full.maxX, t.maxX), minZ: Math.max(full.minZ, t.minZ), maxZ: Math.min(full.maxZ, t.maxZ) } : full;
+    if (b.maxX - b.minX < 0.3 || b.maxZ - b.minZ < 0.3) continue;
     // A kitchen that's only a counter along the wall: its fixtures say what it is.
-    if (r.kind === "kitchen" && Math.min(b.maxX - b.minX, b.maxZ - b.minZ) < 1.2) continue;
+    if (r.kind === "kitchen" && Math.min(full.maxX - full.minX, full.maxZ - full.minZ) < 1.2) continue;
     // Leave a stair or furnace room drawn inside this one out of where the label goes.
     const inner = rooms.filter((x) => x !== r && (x.kind === "stairs" || x.kind === "mechanical")).map((x) => bounds(x.polygon));
-    let c = centroid(r.polygon);
+    let c: Pt = cut ? [(b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2] : centroid(r.polygon);
     for (const ib of inner) if (c[0] > ib.minX - 0.4 && c[0] < ib.maxX + 0.4 && c[1] > ib.minZ - 0.4 && c[1] < ib.maxZ + 0.4) c = [c[0], ib.maxZ + 0.9 < b.maxZ ? ib.maxZ + 0.9 : ib.minZ - 0.9];
     const [cx, cy] = v.P(c);
     const wide = (b.maxX - b.minX) * v.k;
     const name = (r.unit === 2 ? r.name : `${r.name}${r.unit === 1 ? " (unit 1)" : r.unit === "shared" && r.kind !== "mechanical" ? " (shared)" : ""}`).toUpperCase();
     const lines: [string, number, boolean][] = [[name, 7, true]];
     lines.push([area(roomArea(r, rooms)), 5.8, false]);
-    if (r.unit === 2) lines.push([`${ftIn(b.maxX - b.minX)} x ${ftIn(b.maxZ - b.minZ)}`, 5.5, false]);
+    if (r.unit === 2) lines.push([`${ftIn(full.maxX - full.minX)} x ${ftIn(full.maxZ - full.minZ)}`, 5.5, false]);
     const clg = r.ceilingM ?? m.ceilingM;
     if (o.ceiling && clg) lines.push([`CLG ${ftIn(clg)} (${Math.round(clg * 1000)})`, 5.5, false]);
     const tall = (b.maxZ - b.minZ) * v.k;

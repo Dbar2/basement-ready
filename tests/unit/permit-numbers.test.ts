@@ -4,7 +4,7 @@
 // fee everywhere; and the City form's filled-in values inside their cells.
 import { readdirSync, readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
-import { decodePDFRawStream, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFTextField } from "pdf-lib";
+import { decodePDFRawStream, PDFDict, PDFDocument, PDFName, PDFRawStream, PDFTextField, StandardFonts } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { buildBook } from "../../server/book/book";
 import { diyPlan } from "../../server/diy/plan";
@@ -12,9 +12,10 @@ import { suggestLayout } from "../../server/layout";
 import { currentModel } from "../../server/model/current";
 import { chosenDesign } from "../../server/model/legacy";
 import { areaText, sqftOf, suiteAreaM2 } from "../../server/model/suite";
+import { briefEmail } from "../../server/permit/designer";
 import { FIELD_MAPS, fillAcroForm } from "../../server/permit/forms";
 import { permitModel } from "../../server/permit/model";
-import { buildPermitPackage } from "../../server/permit/package";
+import { buildPermitPackage, formInputs, projectFacts } from "../../server/permit/package";
 import { ptPerMetre } from "../../server/permit/pdf";
 import { pricedSample } from "../../server/priced";
 import { quote } from "../../server/quote/quote";
@@ -49,6 +50,12 @@ function scaled(r: any, k: number) {
   for (const room of out.rooms ?? []) plan(room.plan);
   return out;
 }
+
+// The example at 2.5 times its size, built once: its A2 is cut into several sheets.
+const big = scaled(sample, 2.5);
+let bigSet: ReturnType<typeof buildPermitPackage> | null = null;
+const bigPackage = () => (bigSet ??= buildPermitPackage({ ...base, result: big, state: {}, copy: "review" }));
+const SLOW = 60_000;
 
 describe("the escape window", () => {
   it("is the same window on A5 and A6, and isn't called an escape window before its height is known", async () => {
@@ -108,6 +115,39 @@ describe("the escape window", () => {
   });
 });
 
+describe("a taped window", () => {
+  // The answer, the brief (both show the priced design's checks) and the permit set read one size: the
+  // one taped on the Permit tab, also once the design is saved from the studio (the tape comes later).
+  const escapeCheck = (r: any) => r.design.layout.checks.find((c: { label: string }) => /escape window/i.test(c.label));
+  const saved = { model: currentModel(sample, {}, "sample")!.model };
+  const id = permitModel(sample, saved)!.windows.find((w) => w.escape)!.id;
+  const taped = (widthMm: number, heightMm: number) => ({ ...saved, permit: { windows: [{ id, widthMm, heightMm, sillMm: 1100 }] } });
+
+  it("too small: the answer says so and adds the fix, and the permit set enlarges it", async () => {
+    const state = taped(450, 600);
+    const priced = pricedSample(sample, state) as any;
+    expect(escapeCheck(priced)).toMatchObject({ ok: false });
+    expect(escapeCheck(priced).detail).toContain("too small");
+    expect(priced.fixGroups.some((g: { ruleIds: string[] }) => g.ruleIds.includes("egress_window_bedroom_area"))).toBe(true);
+    const pdf = await pdfOf(sample, state as StoredState);
+    expect(sheet(pdf, "A5")).toContain("W1: ENLARGED ESCAPE WINDOW");
+    expect(sheet(pdf, "A5")).toContain('Existing 18"x24" (450x600) enlarged');
+  });
+
+  it("big enough: the answer ticks it and the permit set calls it an existing escape window", async () => {
+    const state = taped(610, 762);
+    expect(escapeCheck(pricedSample(sample, state))).toMatchObject({ ok: true });
+    const pdf = await pdfOf(sample, state as StoredState);
+    expect(sheet(pdf, "A5")).toContain("W1: EXISTING ESCAPE WINDOW");
+    expect(sheet(pdf, "A6")).toContain('Clear opening 24"x30" (610x762) = 0.46 m², at least 0.35 m²: meets');
+  });
+
+  it("not taped: neither ticks it", async () => {
+    expect(escapeCheck(pricedSample(sample, saved)).ok).toBeNull();
+    expect(sheet(await pdfOf(sample, saved as StoredState), "A5")).toContain("ESCAPE SIZE TO BE TAPED");
+  });
+});
+
 describe("the cover", () => {
   it("counts the homes after the work: the house and the basement unit", async () => {
     for (const [registered, line] of [
@@ -124,8 +164,8 @@ describe("the cover", () => {
 
 describe("the plan's dimensions", () => {
   it("are as long as their labels at the sheet's scale, on one sheet and cut into several", async () => {
-    for (const result of [sample, scaled(sample, 2.5)]) {
-      const out = await buildPermitPackage({ ...base, result, state: {}, copy: "review" });
+    for (const result of [sample, big]) {
+      const out = result === big ? await bigPackage() : await buildPermitPackage({ ...base, result, state: {}, copy: "review" });
       const text = await readPdf(out.bytes);
       const drawing = await pageDrawing(out.bytes);
       const plans = out.sheets.filter((s) => /^A2/.test(s.number));
@@ -140,7 +180,28 @@ describe("the plan's dimensions", () => {
       }
       expect(checked).toBeGreaterThan(5);
     }
-  });
+  }, SLOW);
+});
+
+describe("the plan's room names", () => {
+  it("stay whole on a plan cut into sheets, each in its sheet's part of the room", async () => {
+    const out = await bigPackage();
+    const drawing = await pageDrawing(out.bytes);
+    const bold = await (await PDFDocument.create()).embedFont(StandardFonts.HelveticaBold);
+    const names = new Set(permitModel(big, {})!.design.proposed.rooms.filter((r) => r.unit === 2 && r.kind !== "stairs" && r.kind !== "kitchen").map((r) => r.name.toUpperCase()));
+    const plans = out.sheets.filter((s) => /^A2/.test(s.number));
+    expect(plans.length).toBeGreaterThan(1);
+    const seen = new Set<string>();
+    for (const sh of plans) {
+      for (const l of drawing[sh.page].labels.filter((l) => names.has(l.text) && !l.turned && l.clip)) {
+        const c = l.clip!;
+        const right = l.x + bold.widthOfTextAtSize(l.text, l.size);
+        expect(l.x >= Math.min(c.x, c.x + c.w) - 1 && right <= Math.max(c.x, c.x + c.w) + 1, `${sh.number}: ${l.text} runs off the match line`).toBe(true);
+        seen.add(l.text);
+      }
+    }
+    expect([...names].filter((n) => !seen.has(n))).toEqual([]);
+  }, SLOW);
 });
 
 describe("one unit area and one fee", () => {
@@ -179,6 +240,18 @@ describe("one unit area and one fee", () => {
     // The materials plan's building permit.
     const diy = diyPlan(sample, {}, "waterloo-on");
     expect(diy.permits.find((p) => p.id === "building_permit")?.lowCAD).toBe(fee.amount);
+  });
+});
+
+describe("the papers beside the permit set", () => {
+  it("print the unit's floor, bedrooms and scope as the permit set does", () => {
+    const area = suiteAreaM2(chosenDesign(currentModel(sample, {}, "sample")!.model))!;
+    const facts = projectFacts(sample, permitModel(sample, {}));
+    expect(facts.areaM2).toBe(area);
+    expect(formInputs({ result: sample, municipality: "waterloo-on", state: {}, profile: null })).toMatchObject(facts);
+    // The designer's brief: the same floor, worded the same way, and the homes after the work.
+    const email = briefEmail({ address: "x", city: "Waterloo", packageUrl: "https://x", reasons: [], units: 2, areaM2: area, bedrooms: 1 });
+    expect(JSON.stringify(email)).toContain(areaText(area));
   });
 });
 

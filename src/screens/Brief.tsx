@@ -24,6 +24,10 @@ export function Brief() {
   if (!r) return <main className="result-loading"><Logo /></main>;
 
   const p = r.property;
+  // The design they picked, as the answer shows it (its own checks, from the window's measured size);
+  // before there's one, the starting layout.
+  const plan = r.design?.plan ?? r.plan ?? null;
+  const layout = r.design?.layout ?? r.layout ?? null;
   const today = new Date().toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
   const designer = r.findings.filter((f) => f.status === "designer_checks" || f.status === "needs_measurement" || f.status === "needs_answer");
   const photos = (r.concepts?.items ?? []).filter((c) => c.kept);
@@ -84,10 +88,10 @@ export function Brief() {
       <div className="brief-grid">
         <section>
           <h2>Suggested layout</h2>
-          {r.plan ? <FloorPlan plan={r.plan} units="m" layout={r.layout ?? null} /> : <p className="muted">No floor plan from this video.</p>}
-          {r.layout && (
+          {plan ? <FloorPlan plan={plan} units="m" layout={layout} /> : <p className="muted">No floor plan from this video.</p>}
+          {layout && (
             <ul className="brief-checks">
-              {r.layout.checks.map((c) => (
+              {layout.checks.map((c) => (
                 <li key={c.label} data-ok={c.ok === null ? "unknown" : c.ok}>
                   {c.label}. <span className="muted">{c.detail}</span>
                 </li>

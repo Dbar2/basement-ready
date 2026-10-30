@@ -2,6 +2,7 @@
 // designer, it's a third unit (a Small Buildings BCIN), or the work changes the structure. The
 // province's QuARTS registry lists every qualified designer; it has no links into a search, so we
 // say which filters to pick. The brief email carries the package link.
+import { areaText } from "../model/suite";
 
 export const QUARTS = "https://www.search.quarts.mah.gov.on.ca/en";
 
@@ -32,7 +33,7 @@ export function briefEmail(o: { address: string; city: string; packageUrl: strin
     "",
     `I'm adding a second unit (an additional residential unit) in the basement of my house at ${o.address}, ${o.city}, and I'm looking for a BCIN designer to check, finish and sign the permit drawings.`,
     "",
-    `The unit: about ${o.areaM2 ? Math.round(o.areaM2) : "?"} m², ${o.bedrooms === 0 ? "a studio" : `${o.bedrooms} bedroom${o.bedrooms === 1 ? "" : "s"}`}, ${o.units} units in the house after the work.`,
+    `The unit: ${o.areaM2 ? areaText(o.areaM2) : "its area to be measured"}, ${o.bedrooms === 0 ? "a studio" : `${o.bedrooms} bedroom${o.bedrooms === 1 ? "" : "s"}`}, ${o.units} units in the house after the work.`,
     o.reasons.length ? `Why I need a designer: ${o.reasons.join(" ")}` : "",
     "",
     "The draft set (site plan, basement plan, unit 1 plan, ceiling plan, elevations, details and the Code notes) is here:",
