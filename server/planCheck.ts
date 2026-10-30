@@ -89,12 +89,27 @@ export function cleanCheck(raw: any, e: Existing, view: TakeView): PlanQuestion[
     .slice(0, 4);
 }
 
-export async function checkPlan(e: Existing, view: TakeView, opts?: { ask?: typeof responses }): Promise<PlanCheck> {
+// What the plan screen already says, so the check doesn't ask it again: from the whole basement's plan
+// (result.floorPlan, server/floorplan.ts), a room drawn from what the camera saw through its doorway, and
+// rooms the watch saw that the 3D had no room for. Read by shape, so it works with or without that plan.
+export function alreadyKnown(result: { floorPlan?: unknown }): string[] {
+  const plan = result.floorPlan as { rooms?: { name?: string; entered?: boolean }[]; review?: { notPlaced?: string[] } | null } | null | undefined;
+  const peeked = (plan?.rooms ?? []).filter((r) => r.entered === false && r.name).map((r) => `"${r.name}"`);
+  const notPlaced = (plan?.review?.notPlaced ?? []).filter((n) => typeof n === "string" && n);
+  return [
+    ...(peeked.length ? [`On the plan as seen only through a doorway, with its walls marked as a guess: ${peeked.join(", ")}.`] : []),
+    ...(notPlaced.length ? [`The plan screen already tells them it couldn't place: ${notPlaced.map((n) => `"${n}"`).join(", ")}.`] : []),
+  ];
+}
+
+export async function checkPlan(e: Existing, view: TakeView, opts?: { ask?: typeof responses; known?: string[] }): Promise<PlanCheck> {
   const content: any[] = [
     { type: "input_text", text: "The plan:" },
     { type: "input_image", image_url: `data:image/png;base64,${drawPlan(e).toString("base64")}` },
     { type: "input_text", text: roomList(e) },
   ];
+  // Only when there is something: a take without it asks exactly what it always did.
+  if (opts?.known?.length) content.push({ type: "input_text", text: `Already known, so don't ask about these again:\n${opts.known.join("\n")}` });
   if ("video" in view) {
     content.push({ type: "input_text", text: "The video:" }, { type: "input_video", file_id: view.video.fileId });
   } else {

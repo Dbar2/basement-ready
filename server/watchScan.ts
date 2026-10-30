@@ -8,7 +8,7 @@ import { overSpend } from "./limits";
 import { dataUrl, uploadFile } from "./meta";
 import { existingFromScan } from "./model/seed";
 import type { PhotoTake } from "./photoInput";
-import { checkPlan } from "./planCheck";
+import { alreadyKnown, checkPlan } from "./planCheck";
 import { watchPhotos, watchVideo, watchVideoFile, watchWords, type TakeView, type Watch } from "./watch";
 
 type Emit = (type: "log", text: string, data?: unknown) => Promise<void>;
@@ -44,13 +44,13 @@ export function startWatch(scanId: string, emit: Emit, take: VideoTake | PhotosT
 // After the answer: Wonder compares the plan we drew with the take, and its questions land on the result.
 // A failed or skipped check is written as null, so the plan screen stops waiting for it. Nothing watched,
 // nothing to check against.
-export async function checkPlanLater(scanId: string, result: Parameters<typeof existingFromScan>[0], watching: Watching) {
+export async function checkPlanLater(scanId: string, result: Parameters<typeof existingFromScan>[0] & { floorPlan?: unknown }, watching: Watching) {
   const view = watching.view();
   if (!view) return;
   let check = null;
   try {
     const existing = existingFromScan(result);
-    if (existing && !(await overSpend())) check = await checkPlan(existing, view);
+    if (existing && !(await overSpend())) check = await checkPlan(existing, view, { known: alreadyKnown(result) });
   } catch (err) {
     console.error(`[plan check] ${scanId}: ${err instanceof Error ? err.message : err}`);
   }

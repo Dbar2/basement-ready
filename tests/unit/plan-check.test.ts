@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { inflateSync } from "node:zlib";
 import type { Existing } from "../../server/model/types";
-import { checkInstructions, checkPlan, cleanCheck, roomList } from "../../server/planCheck";
+import { alreadyKnown, checkInstructions, checkPlan, cleanCheck, roomList } from "../../server/planCheck";
 import { drawPlan } from "../../server/planDraw";
 import { FALLBACK_MODEL, WATCH_MODEL } from "../../server/watch";
 
@@ -107,5 +107,26 @@ describe("checkPlan", () => {
 
   it("never asks about sizes, heights or escape windows", () => {
     expect(checkInstructions(video)).toMatch(/never question a size, a ceiling height, or whether a window is big enough/);
+  });
+});
+
+describe("alreadyKnown", () => {
+  it("passes on what the whole basement's plan already says, and nothing without it", () => {
+    const floorPlan = { rooms: [{ name: "Rec room", entered: true }, { name: "Storage nook", entered: false }], review: { notPlaced: ["Mom's room"] } };
+    expect(alreadyKnown({ floorPlan })).toEqual([
+      'On the plan as seen only through a doorway, with its walls marked as a guess: "Storage nook".',
+      'The plan screen already tells them it couldn\'t place: "Mom\'s room".',
+    ]);
+    expect(alreadyKnown({})).toEqual([]);
+    expect(alreadyKnown({ floorPlan: { rooms: [], review: null } })).toEqual([]);
+  });
+
+  it("adds them to the request only when there are some", async () => {
+    const asked: any[] = [];
+    const ask = async (body: any) => (asked.push(body), { output_text: '{"issues":[]}', usage: {} });
+    await checkPlan(existing, video, { ask });
+    await checkPlan(existing, video, { ask, known: ["On the plan as seen only through a doorway: \"Closet\"."] });
+    expect(asked[0].input[1].content).toHaveLength(5);
+    expect(asked[1].input[1].content[3].text).toMatch(/^Already known, so don't ask about these again:\n/);
   });
 });
