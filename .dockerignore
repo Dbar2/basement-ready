@@ -13,3 +13,5 @@ docs
 tests
 *.tsbuildinfo
 services
+# the QA reviewer is a development tool, never part of the app
+scripts/qa

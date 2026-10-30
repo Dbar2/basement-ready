@@ -21,12 +21,16 @@ import { suggestLayout } from "./layout";
 import { buildPlan, locate, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
 import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type BasementProgress, type BasementScan, type RoomPlacement } from "./basement";
+import { readBasementPlan } from "./floorplan";
+import type { BasementPlan } from "../src/api";
 import { cameraLookup } from "./capture";
 import { doorHeights, doorScale, lowOverhead, meshFaces, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 import { causeOf, FAILURE, stored } from "./failure";
 import { charge, PRICES } from "./spend";
 import { labelled } from "./demo";
+import { roomNames } from "./watch";
+import { checkPlanLater, startWatch, type Watching } from "./watchScan";
 
 const run = promisify(execFile);
 
@@ -168,13 +172,15 @@ export async function finishRooms(
   placements?: RoomPlacement[],
   // A photo take: its rooms' own names, where they typed one (the others are named here).
   photos?: { names: (string | null)[] },
+  // What the watch pass saw and heard in each area ("Mom's room"), when nobody typed a name.
+  watched: (string | null)[] = [],
 ): Promise<Room[]> {
   const furnaceFrames = detections.filter((d) => d.label === "Furnace").map((d) => d.frame);
   const named = new Set<string>();
   const rooms: Room[] = [];
   for (const r of ranges) {
     const s3 = scans3d[r.index];
-    const typed = photos?.names[r.index] ?? null;
+    const typed = photos?.names[r.index] ?? watched[r.index] ?? null;
     let name = typed ?? (ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named));
     let measurements: Measurements | null = null;
     let plan: Plan | null = null;
@@ -235,6 +241,8 @@ type Stage = {
   sparkP: ReturnType<typeof readWithSpark>;
   uploads: Promise<unknown>;
   samCost: number;
+  floorPlan?: BasementPlan | null; // app takes: the whole basement's plan (server/floorplan.ts)
+  watching: Watching;
 };
 
 // A video: frames and sound out of it, SAM following each thing through it, and the basement's 3D
@@ -249,6 +257,9 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   await emit("log", `Reading ${frameCount} frames from your video`, { frameCount });
   const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
   inflight.push(uploads.catch(() => {}));
+  // Muse Wonder watches the whole take with its sound while SAM and the 3D work (server/watch.ts).
+  const watching = startWatch(scanId, emit, { work, analysis, wav, frameCount, fps: ANALYSIS_FPS });
+  inflight.push(watching.watch);
 
   // One retry, and a failure is logged rather than passed off as "you didn't talk".
   const transcriptP = wav
@@ -278,7 +289,7 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
       await emit("log", no3d);
       return null;
     }
-    return scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS), progress3d(scanId, emit)).catch(async (err) => {
+    return scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS), progress3d(scanId, emit), watching.watch).catch(async (err) => {
       console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
       await emit("log", no3d);
       return null;
@@ -352,13 +363,21 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
     for (const d of low) detections.splice(detections.indexOf(d), 1);
     await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
   }
-  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements);
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements, undefined, roomNames(ranges, await watching.watch, ANALYSIS_FPS));
   if (basement3d) {
     await saveBasement3d(scanId, basement3d);
     await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
   }
+  // An app take's areas share the phone's world: one plan of the whole basement, with SAM's finds in it,
+  // checked against the depth and by Spark. Without it the plan is drawn from each area's box, as before.
+  const floorPlan = basement3d?.tracked
+    ? await readBasementPlan(work, basement3d, detections, { said: transcript.transcript, log: (text) => emit("log", text), save: (png) => storage.put(keys.basement3d(scanId, "plan.png"), png, "image/png") }).catch((err) => {
+        console.error(`[plan] ${scanId}: ${err instanceof Error ? err.message : err}`);
+        return null;
+      })
+    : null;
   const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost };
+  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan, watching };
 }
 
 // "Found 2 windows, a door and the stairs"
@@ -413,6 +432,9 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   const framePath = (n: number) => join(work, "frames", `${String(n).padStart(4, "0")}.jpg`);
   await Promise.all(Array.from({ length: frameCount }, (_, n) => storage.download(keys.frame(scanId, n), framePath(n))));
   await emit("log", `Reading ${frameCount} photos of ${take.rooms.length === 1 ? "one room" : `${take.rooms.length} rooms`}`, { frameCount, photos: take.rooms });
+  // Muse Wonder looks at every photo together while SAM and the 3D work (server/watch.ts).
+  const watching = startWatch(scanId, emit, { work, framePath, photos: take });
+  inflight.push(watching.watch);
 
   // Each room's 3D alongside SAM, once the service answers. The wait screen shows each room as it's measured.
   const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
@@ -463,10 +485,10 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   inflight.push(sparkP.catch(() => {}));
   // A room they named keeps its name; "Room 2" may still turn out to be the furnace room.
   const names = take.rooms.map((r) => (/^room \d+$/i.test(r.name) ? null : r.name));
-  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names });
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names }, roomNames(ranges, await watching.watch, 1));
   // The 3D's own sense of size, with no walk or tape to check it against.
   if (rooms.some((r) => r.has3d)) await emit("log", "Sizes from photos are a close guess, within about 20%. One tape measurement on the next step makes them true to size.");
-  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage };
+  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage, watching };
 }
 
 export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
@@ -490,7 +512,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const inputs = (scan.inputs ?? {}) as ScanInputs;
     const ctx: AssessContext = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
     const stageInput = { scanId, videoKey: scan.videoKey, inputs, work, ctx, emit, inflight };
-    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
+    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan, watching } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
 
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
@@ -512,6 +534,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       has3d: rooms.some((r) => r.has3d),
       plan,
       rooms,
+      floorPlan: floorPlan ?? null,
       mainRoom: main?.index ?? null,
       ...assessment.result,
     };
@@ -528,6 +551,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       // How it was filmed: the lens, and the still wide shot the staged photos start from. A photo take
       // says how many photos: its sizes are the 3D's own guess, so the plan asks for a tape measurement.
       capture: { lens: inputs.lens ?? null, wideAt: inputs.wideAt ?? null, ...(inputs.photos ? { photos: inputs.photos.count } : {}) },
+      // What Muse Wonder watched and heard: the rooms in order, how they join, what was said (server/watch.ts).
+      watch: await watching.watch,
       layout: plan ? suggestLayout(plan) : null,
       // What they'd like it to be, from the wait screen: their wish when the video didn't say one.
       plans,
@@ -537,7 +562,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     }, Boolean(inputs.demo));
     await db
       .update(schema.scans)
-      .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })
+      .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd + ((await watching.watch)?.costUsd ?? 0), finishedAt: new Date() })
       .where(eq(schema.scans.id, scanId));
     await emit("done", "Your answer is ready");
     // The as-built 3D: the plan painted with the video (server/asBuilt.ts), in the background.
@@ -545,6 +570,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     // Photos that finished while this was written go in now; photos that never started, start.
     await settlePhotos(scanId);
     await enqueuePhotos(scanId);
+    // Muse Wonder checks the plan against the take for "Is this your basement?" (server/planCheck.ts).
+    inflight.push(checkPlanLater(scanId, result, watching));
   } catch (err) {
     // The real cause, in plain words; a missing key or an unreadable file won't fix itself on a retry.
     const cause = causeOf(err);

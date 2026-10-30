@@ -58,7 +58,7 @@ enum Cue: String, CaseIterable, Sendable {
     case .windowFound: "Found a window."
     case .furnaceFound: "Found the furnace."
     case .panelFound: "Found the electrical panel."
-    case .doorFound: "A door. Film what's through it too."
+    case .doorFound: "A door. Pan slowly through it from here."
     case .ductFound: "A duct. Mind your head."
     case .beamFound: "A beam. Mind your head."
     case .oneMinute: "One minute left."
@@ -87,7 +87,7 @@ enum Cue: String, CaseIterable, Sendable {
     case .firstWall: ["wall_found"]
     case .wallsDone: ["walls_done"]
     case .ceilingDone: ["ceiling_done"]
-    case .newSpace: ["new_space"]
+    case .newSpace: ["=new_space"] // only the first take: the others ask to walk the walls again
     case .lookingGood: ["looking_good"]
     case .wideDone: ["wide_done"]
     case .stairsFound: ["stairs_found", "stairs_done"]
@@ -200,8 +200,13 @@ struct ClipLibrary {
   static var bundled: ClipLibrary { ClipLibrary(folder: Bundle.main.url(forResource: "voice", withExtension: nil)) }
 
   // A take of the first id that has one, avoiding the take played last time when there's a choice.
+  // "=id" means that one file only, not its other takes.
   func clip(for cue: Cue, avoiding last: URL? = nil) -> URL? {
     for id in cue.clips {
+      if id.hasPrefix("=") {
+        if let one = clips[String(id.dropFirst())]?.first(where: { $0.deletingPathExtension().lastPathComponent == id.dropFirst() }) { return one }
+        continue
+      }
       guard let takes = clips[id], !takes.isEmpty else { continue }
       let fresh = takes.filter { $0 != last }
       return (fresh.isEmpty ? takes : fresh).randomElement()

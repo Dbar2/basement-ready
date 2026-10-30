@@ -48,6 +48,11 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        # The phone runs Debug builds (no TestFlight), so they're optimised like Release: unoptimised Swift
+        # made the map and the camera handler several times slower.
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
     postCompileScripts:
       # Debug builds only: the Mac's Wi-Fi address at build time, so "Mac (dev)" points at this Mac.
       - name: Dev server address

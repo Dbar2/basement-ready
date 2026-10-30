@@ -2,7 +2,7 @@
 
     python run_local.py scan  FRAMES_DIR_OR_VIDEO --out OUT [--max-frames 16] [--floor-to-joists 2.10] [--preview]
     python run_local.py serve [--port 8790]                     # same HTTP API as Modal, on localhost
-    python run_local.py serve --port 8791 --paint-only          # only POST /texture (the as-built 3D's paint)
+    python run_local.py serve --port 8791 --no-model            # /floorplan and /texture only: no model, no GPU
     python run_local.py post  URL FRAMES_DIR_OR_VIDEO --out OUT  # call any scan3d server, unpack the reply
 
 scan and serve load MapAnything on MPS (or --device cpu). post only needs the frames.
@@ -85,7 +85,7 @@ def main():
     p = sub.add_parser("serve")
     p.add_argument("--port", type=int, default=8790)
     p.add_argument("--device")
-    p.add_argument("--paint-only", action="store_true", help="only POST /texture: no model loaded, no GPU")
+    p.add_argument("--no-model", action="store_true", help="serve /floorplan and /texture only, without loading MapAnything (no GPU)")
     args = ap.parse_args()
 
     if args.cmd == "scan":
@@ -110,7 +110,7 @@ def main():
         token = os.environ.get("SCAN3D_TOKEN") or secrets.token_hex(16)
         if "SCAN3D_TOKEN" not in os.environ:
             print(f"SCAN3D_TOKEN not set; using {token} for this run", file=sys.stderr)
-        scanner = None if args.paint_only else Scanner.load(args.device)
+        scanner = None if args.no_model else Scanner.load(args.device)
         app = create_app(lambda: scanner, token, max_frames_cap=LOCAL_MAX_FRAMES)
         uvicorn.run(app, host="127.0.0.1", port=args.port)
 

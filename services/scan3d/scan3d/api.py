@@ -16,8 +16,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 
 from . import MODEL_ID, MODEL_REVISION, ScanError
-from .export import read_ply
-from .floorplan import floor_plan
+from .planapi import respond
 from .mesh import MAX_FACES
 from .pipeline import Scanner
 from .texture import decode as decode_image
@@ -167,34 +166,34 @@ def create_app(get_scanner: Callable[[], Scanner | None], token: str, max_frames
 
     @app.post("/floorplan")
     async def floorplan(request: Request):
-        """The whole basement's floor plan from areas already scanned with known cameras: multipart
-        `areas` (JSON list of {world: {rotation, origin}, factor}), one `points` PLY per area in the same
-        order (each in its room frame), and `cameras` (JSON list of camera centres in the world)."""
+        """The whole basement's floor plan from areas already scanned (scan3d/planapi.py): multipart `areas`
+        (JSON list, one per area: {world: {rotation, origin}, factor} or {placement}, plus `frames` and
+        `depthShape` when its depth is sent), one `points` PLY per area in the same order (each in its room
+        frame), optionally one `depth` part per area (float16), `cameras` (JSON list of camera centres in
+        the world), `hints` (SAM's finds in the world), `edits` (typed corrections to check), and with
+        `render`: `keyframes` JPEGs and `keyframeCams` (JSON {pose, intrinsics} per keyframe) for the
+        pictures Spark reads."""
         if not authorized(request):
             return error(401, "missing or wrong bearer token")
         try:
-            form = await request.form(max_files=64, max_fields=10)
+            form = await request.form(max_files=128, max_fields=20)
             areas = json.loads(form.get("areas") or "[]")
             cams = np.asarray(json.loads(form.get("cameras") or "[]"), float).reshape(-1, 3)
-            plys = form.getlist("points")
+            plys = [await f.read() for f in form.getlist("points")]
+            depths = [await f.read() for f in form.getlist("depth")]
+            hints = json.loads(form.get("hints") or "{}")
+            edits = json.loads(form.get("edits") or "[]")
+            render = str(form.get("render") or "") in ("1", "true")
+            keyframes = [await f.read() for f in form.getlist("keyframes")]
+            key_cams = json.loads(form.get("keyframeCams") or "[]")
             if not areas or len(plys) != len(areas) or len(cams) < 3:
                 raise ScanError("send areas, one points PLY per area, and at least 3 cameras")
-            pts = []
-            for a, ply in zip(areas, plys):
-                v = read_ply(await ply.read())
-                room = np.stack([v["x"], v["y"], v["z"]], 1).astype(float) / float(a.get("factor") or 1.0)
-                R, o = np.asarray(a["world"]["rotation"], float), np.asarray(a["world"]["origin"], float)
-                pts.append(room @ R + o)
-            fp = await run_in_threadpool(floor_plan, np.concatenate(pts), cams)
-        except (ScanError, json.JSONDecodeError, KeyError, ValueError) as e:
+            if not isinstance(hints, dict) or not isinstance(edits, list):
+                raise ScanError("hints must be an object and edits a list")
+            out = await run_in_threadpool(respond, areas, plys, depths or None, cams, hints, edits, keyframes, key_cams, render)
+        except (ScanError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             return error(400, str(e))
-        return JSONResponse({
-            "rotation": fp.rotation,
-            "floorY": fp.floor_y,
-            "ceilingY": fp.ceiling_y,
-            "footprintM2": fp.footprint_m2,
-            "rooms": [{"box": r.box, "outline": r.outline, "areaM2": r.area_m2, "cameras": r.cameras, "sides": r.walls} for r in fp.rooms],
-        })
+        return JSONResponse(out)
 
     @app.post("/texture")
     async def texture(request: Request):

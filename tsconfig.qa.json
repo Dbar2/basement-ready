@@ -1,0 +1,7 @@
+{
+  // The vision QA reviewer (scripts/qa), a development tool, on its own: the app's build and its Docker
+  // image (which leaves scripts/qa out) check only the app. CI checks this too.
+  "extends": "./tsconfig.json",
+  "include": ["scripts/qa", "tests/qa"],
+  "exclude": []
+}
