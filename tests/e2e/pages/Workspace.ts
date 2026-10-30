@@ -91,8 +91,10 @@ export class AnswerTab {
   // The whole-basement floor plan: its label ("Floor plan of the basement, 2 rooms, 41.7 m²") and every
   // word and size drawn on it (room names, overall dimensions).
   async floorPlan() {
-    await this.page.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Plan" }).click();
-    const svg = this.page.locator("svg.plan").first();
+    // The plan tab has more than one View switch; this one is the scan's.
+    const scanned = this.page.locator("section").filter({ has: this.scanned });
+    await scanned.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Plan" }).click();
+    const svg = scanned.locator("svg.plan").first();
     await expect(svg).toBeVisible();
     return { label: (await svg.getAttribute("aria-label")) ?? "", texts: (await svg.locator("text").allTextContents()).map((t) => t.trim()).filter(Boolean) };
   }
@@ -105,24 +107,32 @@ export class AnswerTab {
 export class PermitTab {
   constructor(readonly page: Page) {}
 
-  // Its readiness count: "14 things left before you can submit", or "Ready to submit".
+  // "Your permit set" until its readiness loads, then "3 things left before you can submit" or "Ready to submit".
+  get heading() {
+    return this.page.getByRole("heading", { level: 2, name: /^(Your permit set|\d+ things? left before you can submit|Ready to submit)$/ });
+  }
+
+  // The same heading, by the name the flow's journeys use.
   get count() {
-    return this.page.getByRole("heading", { name: /things? left before you can submit|Ready to submit/ });
+    return this.heading;
   }
 
   async expectOpen() {
-    await expect(this.count).toBeVisible({ timeout: 30_000 });
+    await expect(this.heading).toBeVisible({ timeout: 30_000 });
   }
 
-  async left() {
-    const text = (await this.count.textContent()) ?? "";
-    return /Ready to submit/.test(text) ? 0 : Number(/(\d+)/.exec(text)?.[1] ?? NaN);
+  // How many things are left before the clean submit copy: 0 when it's ready.
+  async left(): Promise<number> {
+    await expect(this.heading).not.toHaveText("Your permit set", { timeout: 30_000 });
+    const text = (await this.heading.textContent()) ?? "";
+    return /^Ready/.test(text) ? 0 : Number(/^(\d+)/.exec(text)?.[1]);
   }
 
-  // Downloads the review copy and opens it: page count, sheet numbers and the sheet list.
-  async downloadPackage(saveAs: string) {
+  // Downloads the review copy (always offered; the submit copy comes when nothing is left) and opens it:
+  // page count, each sheet's number and the sheet list from the title blocks.
+  async downloadPackage(saveAs: string, copy: "review" | "submit" = "review") {
     const download = this.page.waitForEvent("download", { timeout: 120_000 });
-    await this.page.getByRole("button", { name: "Download the review copy" }).click();
+    await this.page.getByRole("button", { name: copy === "submit" ? "Download the submit copy" : "Download the review copy" }).click();
     // A refusal shows as an alert; fail on it rather than wait out the download.
     let downloaded = false;
     void download.then(() => (downloaded = true), () => {});
@@ -139,6 +149,17 @@ export class PermitTab {
     expect(file.suggestedFilename()).toMatch(/\.pdf$/);
     return { file: saveAs, name: file.suggestedFilename(), ...(await readPdf(new Uint8Array(readFileSync(saveAs)))) };
   }
+}
+
+// What every permit set must hold, whatever its sheets are called: at least eight drawings, a cover
+// first, and a page for every sheet the title blocks list (and nothing unlisted). A plan too big for
+// one sheet runs over "A2.1", "A2.2": both count as A2.
+export function expectSheets(pdf: Awaited<ReturnType<PermitTab["downloadPackage"]>>) {
+  const numbers = Object.keys(pdf.index);
+  expect(numbers.length, `sheets listed: ${JSON.stringify(pdf.index)}`).toBeGreaterThanOrEqual(8);
+  expect(pdf.index.A0).toMatch(/^Cover/);
+  expect([...new Set(pdf.sheets.map((x) => x.number.split(".")[0]))]).toEqual(numbers);
+  expect(pdf.pageCount).toBeGreaterThanOrEqual(numbers.length);
 }
 
 export class MoneyTab {

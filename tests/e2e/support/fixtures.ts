@@ -1,7 +1,7 @@
 // What every journey gets: named steps with a screenshot each, console errors caught, the browser kept
 // off the internet, and replay misses checked. Journeys import `test` and `expect` from here.
 import { test as base, expect, type Page } from "@playwright/test";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { files, runDir } from "./run";
 
@@ -24,7 +24,9 @@ export const test = base.extend<{ journey: Journey }>({
     async ({ page }, use, info) => {
       mkdirSync(runDir, { recursive: true });
       const errors: string[] = [];
-      const allowed: RegExp[] = [];
+      // Headless WebKit drops a WebGL context now and then when several pages draw at once; it says so in
+      // the console. The page itself carries on.
+      const allowed: RegExp[] = [/^WebGL: context lost\./];
       const external = new Set<string>();
       const started = Date.now();
       const misses = missCount();
@@ -47,7 +49,8 @@ export const test = base.extend<{ journey: Journey }>({
         test.step(name, async () => {
           const out = fn ? await fn() : undefined;
           const path = join(shots, `${String(++n).padStart(2, "0")}-${slug(name)}.png`);
-          await page.screenshot({ path }).catch(() => {});
+          // A screenshot is evidence, not the test: one WebKit can't take in 15 s is skipped.
+          await page.screenshot({ path, timeout: 15_000 }).catch(() => {});
           appendFileSync(
             files.steps,
             JSON.stringify({ test: info.titlePath.slice(1).join(" › "), project: info.project.name, n, step: name, shot: relative(runDir, path), ms: Date.now() - started }) + "\n",
@@ -72,9 +75,31 @@ export const test = base.extend<{ journey: Journey }>({
 
 export { expect };
 
+// One at a time across workers: a recorded take replays its races (the 3D against the photos and the
+// deck) the way they went when it was recorded, alone on the server, so two takes never share it.
+export async function oneAtATime<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const lock = join(runDir, "locks", name);
+  mkdirSync(join(runDir, "locks"), { recursive: true });
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
+
 // The JSON a page fetched from the API, for asserting real outcomes beside what's on screen.
+// A minute's grace: the test server is one process, and while a take finishes (the 3D merge, the permit
+// set) it can be busy for twenty seconds and more.
 export async function api<T = any>(page: Page, path: string): Promise<T> {
-  const res = await page.request.get(path);
+  const res = await page.request.get(path, { timeout: 60_000 });
   expect(res.ok(), `${path} → ${res.status()}`).toBeTruthy();
   return res.json();
 }
