@@ -70,8 +70,10 @@ export class PlanTab {
   // The whole-basement floor plan: its label ("Floor plan of the basement, 2 rooms, 41.7 m²") and every
   // word and size drawn on it (room names, overall dimensions).
   async floorPlan() {
-    await this.page.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Plan" }).click();
-    const svg = this.page.locator("svg.plan").first();
+    // The plan tab has more than one View switch; this one is the scan's.
+    const scanned = this.page.locator("section").filter({ has: this.scanned });
+    await scanned.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Plan" }).click();
+    const svg = scanned.locator("svg.plan").first();
     await expect(svg).toBeVisible();
     return { label: (await svg.getAttribute("aria-label")) ?? "", texts: (await svg.locator("text").allTextContents()).map((t) => t.trim()).filter(Boolean) };
   }
@@ -97,14 +99,27 @@ export class IdeasTab {
 export class PermitTab {
   constructor(readonly page: Page) {}
 
-  async expectOpen() {
-    await expect(this.page.getByRole("heading", { name: "Your permit package" })).toBeVisible({ timeout: 30_000 });
+  // "Your permit set" until its readiness loads, then "3 things left before you can submit" or "Ready to submit".
+  get heading() {
+    return this.page.getByRole("heading", { level: 2, name: /^(Your permit set|\d+ things? left before you can submit|Ready to submit)$/ });
   }
 
-  // Downloads the package and opens it: page count, sheet numbers and the sheet list.
-  async downloadPackage(saveAs: string) {
+  async expectOpen() {
+    await expect(this.heading).toBeVisible({ timeout: 30_000 });
+  }
+
+  // How many things are left before the clean submit copy: 0 when it's ready.
+  async left(): Promise<number> {
+    await expect(this.heading).not.toHaveText("Your permit set", { timeout: 30_000 });
+    const text = (await this.heading.textContent()) ?? "";
+    return /^Ready/.test(text) ? 0 : Number(/^(\d+)/.exec(text)?.[1]);
+  }
+
+  // Downloads the review copy (always offered; the submit copy comes when nothing is left) and opens it:
+  // page count, each sheet's number and the sheet list from the title blocks.
+  async downloadPackage(saveAs: string, copy: "review" | "submit" = "review") {
     const download = this.page.waitForEvent("download", { timeout: 120_000 });
-    await this.page.getByRole("button", { name: "Download permit package" }).click();
+    await this.page.getByRole("button", { name: copy === "submit" ? "Download the submit copy" : "Download the review copy" }).click();
     // A refusal shows as an alert; fail on it rather than wait out the download.
     let downloaded = false;
     void download.then(() => (downloaded = true), () => {});
@@ -121,6 +136,16 @@ export class PermitTab {
     expect(file.suggestedFilename()).toMatch(/\.pdf$/);
     return { file: saveAs, name: file.suggestedFilename(), ...(await readPdf(new Uint8Array(readFileSync(saveAs)))) };
   }
+}
+
+// What every permit set must hold, whatever its sheets are called: at least eight drawings, a cover
+// first, and a page for every sheet the title blocks list (and nothing unlisted).
+export function expectSheets(pdf: Awaited<ReturnType<PermitTab["downloadPackage"]>>) {
+  const numbers = Object.keys(pdf.index);
+  expect(numbers.length, `sheets listed: ${JSON.stringify(pdf.index)}`).toBeGreaterThanOrEqual(8);
+  expect(pdf.index.A0).toMatch(/^Cover/);
+  expect(pdf.sheets.map((x) => x.number)).toEqual(numbers);
+  expect(pdf.pageCount).toBeGreaterThanOrEqual(numbers.length);
 }
 
 export class MoneyTab {

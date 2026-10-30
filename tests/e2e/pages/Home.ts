@@ -10,13 +10,14 @@ export class Home {
     await expect(this.page.getByRole("heading", { level: 1 })).toBeVisible();
   }
 
+  // The hero and the closing call to action both offer these: the first is the hero's.
   async trySample() {
-    await this.page.getByRole("button", { name: "Try a sample basement" }).click();
+    await this.page.getByRole("button", { name: /^Try (the example|a sample basement)$/ }).first().click();
     await this.page.waitForURL("**/scans/sample");
   }
 
   async startSheet() {
-    await this.page.getByRole("button", { name: /Check my basement/ }).click();
+    await this.page.getByRole("button", { name: /Check my basement/ }).first().click();
     const sheet = new StartSheet(this.page);
     await expect(sheet.dialog).toBeVisible();
     return sheet;

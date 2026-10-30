@@ -4,8 +4,9 @@
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { Home } from "./pages/Home";
+import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
-import { Workspace } from "./pages/Workspace";
+import { expectSheets, Workspace } from "./pages/Workspace";
 import { api, expect, test } from "./support/fixtures";
 import { costOf, realCalls } from "./support/costs";
 import { mode, runDir } from "./support/run";
@@ -27,6 +28,7 @@ for (const take of TAKES) {
     const home = new Home(page);
     const wait = new WaitScreen(page);
     const ws = new Workspace(page);
+    const deck = new StyleDeck(page);
 
     // ---- In: the start sheet and an upload, or a post the way the iPhone app sends a take ----
     let scanId: string;
@@ -66,6 +68,11 @@ for (const take of TAKES) {
     // ---- The wait screen: stages, its questions, the basement assembling, the answer ----
     await journey.step("wait screen", () => wait.expectOpen());
     const asked = (await journey.step("questions while it checks", () => wait.answerAll(take.answers, mode === "record" ? 15 * 60_000 : 5 * 60_000)))!;
+    // Their own basement restyled while it measures: two loved, one passed, and the board shows the two.
+    await journey.step("swipe your style", async () => {
+      await deck.expectOpen();
+      await deck.swipeAll(["love", "pass", "love"]);
+    });
     // The server's word first, so a slow scan and a stuck screen fail differently.
     await expect
       .poll(async () => (await api(page, `/api/scans/${scanId}`)).status, { timeout: mode === "record" ? 15 * 60_000 : 5 * 60_000, intervals: [2_000] })
@@ -99,6 +106,9 @@ for (const take of TAKES) {
     });
     await expect.poll(async () => (await api(page, `/api/scans/${scanId}`)).result?.concepts?.status, { timeout: mode === "record" ? 10 * 60_000 : 2 * 60_000 }).not.toBe("pending");
     const concepts = (await api(page, `/api/scans/${scanId}`)).result?.concepts;
+    // And the deck, once it's dealt every card it will.
+    await expect.poll(async () => (await api(page, `/api/scans/${scanId}/cards`)).status, { timeout: mode === "record" ? 10 * 60_000 : 2 * 60_000 }).toMatch(/^(done|failed)$/);
+    const deckNow = await api(page, `/api/scans/${scanId}/cards`);
 
     // ---- Permit: the owner once, then the package, opened ----
     await journey.step("permit, owner asked once", async () => {
@@ -106,10 +116,9 @@ for (const take of TAKES) {
       await ws.fillProfileIfAsked();
       await ws.permit().expectOpen();
     });
+    const left = await ws.permit().left();
     const pdf = (await journey.step("permit package downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-${take.id}-permit.pdf`))))!;
-    expect(pdf.pageCount).toBeGreaterThanOrEqual(8);
-    expect(pdf.index).toMatchObject({ A0: "Cover and key plan", A2: "Existing basement plan", A3: "Proposed basement plan" });
-    expect(pdf.sheets.map((s) => s.number)).toEqual(Object.keys(pdf.index));
+    expectSheets(pdf);
 
     await journey.step("money", async () => {
       await ws.open("Money");
@@ -128,8 +137,9 @@ for (const take of TAKES) {
       rooms: (r.rooms ?? []).map((x: any) => ({ name: x.name, size: x.plan ? `${x.plan.widthM} × ${x.plan.depthM} m` : null })),
       finds: count((r.detections ?? []).map((d: any) => d.label)),
       asked,
-      permit: { pages: pdf.pageCount, sheets: pdf.index },
+      permit: { pages: pdf.pageCount, sheets: pdf.index, left },
       photos: concepts?.items?.length ?? 0,
+      cards: deckNow.cards.length,
     };
     if (take.truth) {
       const truth = JSON.parse(readFileSync(take.truth, "utf8"));

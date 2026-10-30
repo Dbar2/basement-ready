@@ -81,7 +81,7 @@ export function apiEnv(): Record<string, string> {
       // env file's SCAN3D_MODAL_TOKEN, read here only to hand to the test server.
       ...(modal
         ? { SCAN3D_URL: modal, SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? fromEnvFile("SCAN3D_MODAL_TOKEN") ?? "", SCAN3D_PARALLEL: "3" }
-        : { SCAN3D_URL: process.env.E2E_SCAN3D_URL ?? "http://127.0.0.1:8790", SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? "dev" }),
+        : { SCAN3D_URL: process.env.E2E_SCAN3D_URL ?? "http://127.0.0.1:8790", SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? "dev", SCAN3D_PARALLEL: process.env.E2E_SCAN3D_PARALLEL ?? "1" }),
     };
   }
   return {
@@ -98,7 +98,9 @@ export function apiEnv(): Record<string, string> {
     // Never used to reach anything: replay answers before a request is made.
     SCAN3D_URL: "http://scan3d.replay.invalid",
     SCAN3D_TOKEN: "replay",
-    MODEL_API_KEY: "",
+    // Not a key: the app only checks that one is set (server/limits.ts), and replay never sends it. Meta's
+    // address below goes nowhere besides.
+    MODEL_API_KEY: "replay-only-not-a-key",
     RELAY_TOKEN: "",
     META_API_BASE: "http://meta.replay.invalid/v1",
     CLERK_SECRET_KEY: "",
