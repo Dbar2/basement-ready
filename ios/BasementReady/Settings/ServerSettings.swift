@@ -23,7 +23,8 @@ enum ServerSettings {
   static var options: [ServerOption] { [mac, live].compactMap { $0 } }
 
   static var current: URL {
-    get { UserDefaults.standard.string(forKey: key).flatMap(URL.init(string:)) ?? (mac ?? live).url }
+    // The live site by default (the GPU and the phone's tracking path); the Mac is one tap away in settings.
+    get { UserDefaults.standard.string(forKey: key).flatMap(URL.init(string:)) ?? live.url }
     set { UserDefaults.standard.set(newValue.absoluteString, forKey: key) }
   }
 
