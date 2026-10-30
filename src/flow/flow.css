@@ -65,6 +65,11 @@
 }
 
 /* The workspace under the step bar: its tabs scroll with the page, the bar stays. */
-.flow-head ~ .ws-head { position: relative; top: auto; z-index: 1; }
+.flow-page .workspace .ws-head { position: relative; top: auto; z-index: 1; }
+.flow-page .workspace { width: 100%; padding-bottom: 32px; }
 .ws-tools { display: flex; justify-content: flex-end; gap: 18px; margin: 10px 0 0; font-size: 14px; }
-.workspace > .flow-foot { margin-top: 24px; }
+
+/* The pictures step: its title, then the pictures, packed at the top. */
+.flow-page > .views-page { align-content: start; width: 100%; }
+.flow-skip { white-space: nowrap; }
+@media (max-width: 419px) { .flow-skip { display: none; } }

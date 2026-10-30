@@ -658,7 +658,10 @@ export function furnitureProblems(design: Design): string[] {
 // furniture and finishes. Pictures are cached by it, so an unchanged design never pays twice.
 export function designHash(design: Pick<Design, "proposed" | "finishes">): string {
   const { walls, openings, rooms, furniture } = design.proposed;
-  const text = JSON.stringify([walls, openings, rooms.map((r) => [r.id, r.kind, r.polygon]), furniture, design.finishes]);
+  // Only what a picture can show: where each wall stands, not whether the scan was sure of it or what
+  // it's rated, so confirming the plan as it is keeps every picture made of it.
+  const shown = walls.map((w) => [w.id, w.a, w.b, w.kind, w.thicknessM]);
+  const text = JSON.stringify([shown, openings, rooms.map((r) => [r.id, r.kind, r.polygon]), furniture, design.finishes]);
   // cyrb53: 53 bits, the same in Node and the browser.
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for (let i = 0; i < text.length; i++) {

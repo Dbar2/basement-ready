@@ -9,6 +9,8 @@ import "./book.css";
 const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const range = (lo: number, hi: number) => (lo === hi ? cad(lo) : `${cad(lo)}–${cad(hi)}`);
 const VERDICT = { yes: "Yes", fix: "Yes, after fixes", no: "Not as it is" } as const;
+// A line that buys two parts from the same listing names it once.
+const once = <T extends { url: string }>(sources: T[]) => [...new Map(sources.map((s) => [s.url, s])).values()];
 
 export function BookView({ scanId }: { scanId: string }) {
   const [b, setB] = useState<BookData | null>(null);
@@ -127,7 +129,7 @@ export function BookView({ scanId }: { scanId: string }) {
                             <strong>{l.item}</strong> <span className="mono">{range(l.low, l.high)}</span>
                             <p>{l.qty.toLocaleString("en-CA")} {l.unit}. {l.basis}</p>
                             {l.missing.length > 0 && <p className="book-missing">No price found: {l.missing.join(", ")}</p>}
-                            <p className="book-sources">{l.sources.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store ?? s.title}</a>)}</p>
+                            <p className="book-sources">{once(l.sources).map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store ?? s.title}</a>)}</p>
                           </li>
                         ))}
                       </ul>
@@ -156,7 +158,7 @@ export function BookView({ scanId }: { scanId: string }) {
                       <td>
                         {l.count > 1 ? `${l.count} × ` : ""}
                         {l.label}
-                        <p className="book-sources">{l.sources.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store}</a>)}</p>
+                        <p className="book-sources">{once(l.sources).map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store}</a>)}</p>
                       </td>
                       <td>{l.price ? range(l.low, l.high) : <span className="book-missing">No price found</span>}</td>
                     </tr>

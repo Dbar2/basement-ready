@@ -63,6 +63,13 @@ describe("one model for every page", () => {
     expect((await designFor("sample"))?.layout).toBe("one_bedroom");
   });
 
+  it("keeps every picture's key when the plan is confirmed as it is", async () => {
+    const { seedDesigns } = await import("../../server/model/seed");
+    const m = seeded();
+    const confirmed = { ...m.existing, walls: m.existing.walls.map((w) => ({ ...w, guess: false })), fixtures: m.existing.fixtures.map((f) => ({ ...f, guess: false })), confirmedAt: "2026-10-31T00:00:00.000Z" };
+    expect(seedDesigns(confirmed, {}).map(designHash)).toEqual(m.designs.map(designHash));
+  });
+
   it("keeps the step it was on with the workspace", () => {
     expect(StateSchema.safeParse({ flow: { step: "studio", at: "2026-10-30T12:00:00.000Z" } }).success).toBe(true);
     expect(StateSchema.safeParse({ flow: { step: "somewhere" } }).success).toBe(false);

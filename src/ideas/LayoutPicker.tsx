@@ -51,7 +51,7 @@ export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: 
                 {cover !== null && <DesignThumb design={d} />}
                 <h3>{d.name}</h3>
                 <p className="layout-facts mono">
-                  <span>{f.beds ? `${f.beds} bedroom${f.beds > 1 ? "s" : ""}` : "Studio"} · {Math.round(f.area)} m²</span>
+                  <span>{d.layout === "studio" || !f.beds ? "Studio" : `${f.beds} bedroom${f.beds > 1 ? "s" : ""}`} · {Math.round(f.area)} m²</span>
                   <span data-ok={f.count.fix === 0 || undefined}>
                     Meets {f.count.ok} checks{f.count.fix ? ` · ${f.count.fix} to fix` : ""}
                   </span>

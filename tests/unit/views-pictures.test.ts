@@ -125,6 +125,27 @@ describe("the photo of an angle", () => {
     expect(kept.checked).toMatch(/no windows or stairs added/);
   });
 
+  it("doesn't ask for a door the design's new wall stands in front of, and allows a window SAM saw in the frame", async () => {
+    const door = { kind: "door" as const, box: { x: 0.7, y: 0.3, w: 0.1, h: 0.4 } };
+    const wall = { x: 0.6, y: 0.2, w: 0.3, h: 0.7 };
+    // The video tracked a door there; the design walls it in, so the photo can't show it.
+    const behind = work({ found: { "basement window": [input.anchors[0].box], bed: [bed.box], sofa: [sofa.box] } });
+    expect((await makePicture({ ...input, anchors: [...input.anchors, door], hidden: [wall] }, behind)).kind).toBe("photo");
+    expect((await makePicture({ ...input, anchors: [...input.anchors, door] }, work({ found: { "basement window": [input.anchors[0].box], bed: [bed.box], sofa: [sofa.box] } }))).kind).toBe("render");
+    // A second window the video missed but SAM sees in the frame itself is real, so it may show.
+    const second = { kind: "window" as const, box: { x: 0.75, y: 0.15, w: 0.15, h: 0.1 } };
+    const real = work({ found: { "basement window": [input.anchors[0].box, second.box], bed: [bed.box], sofa: [sofa.box] } });
+    expect((await makePicture({ ...input, known: [second] }, real)).kind).toBe("photo");
+  });
+
+  it("accepts the top of the real stairs over a new wall, and doesn't hold it to a door cut off at the edge", async () => {
+    const stairs = { kind: "stairs" as const, box: { x: 0.79, y: 0.13, w: 0.21, h: 0.87 } };
+    const sliver = { kind: "door" as const, box: { x: 0.785, y: 0, w: 0.06, h: 0.136 } };
+    const w = work({ found: { "basement window": [input.anchors[0].box], staircase: [{ x: 0.79, y: 0.14, w: 0.2, h: 0.11 }], bed: [bed.box], sofa: [sofa.box] } });
+    const m = await makePicture({ ...input, anchors: [...input.anchors, sliver], known: [stairs] }, w);
+    expect(m.kind).toBe("photo");
+  });
+
   it("shows the render without spending when the day's budget is used up", async () => {
     const w = work({ canSpend: async () => false });
     const m = await makePicture(input, w);

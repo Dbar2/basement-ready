@@ -1,18 +1,13 @@
-import { createRootRoute, createRoute, createRouter, Link, Outlet, redirect } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, Outlet, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Logo } from "./components/Logo";
 import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
 import { applyRouteMeta, marketingRoutes, type MarketingRoute } from "./marketing/routes";
 import { PATHS } from "./marketing/site";
-import { LayoutsPage } from "./flow/LayoutsPage";
-import { StylePage } from "./flow/StylePage";
 import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
 import { ScanPage } from "./screens/ScanPage";
 import { Start } from "./screens/Start";
-import { PlanConfirm } from "./studio/PlanConfirm";
-import { Studio } from "./studio/Studio";
-import { PicturesPage } from "./views/PicturesPage";
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -24,7 +19,13 @@ export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/
 const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
 
 // The flow after the upload (src/flow/flow.ts): while it measures, /scans/:id is the wait screen with
-// the style deck; then each step has its own page, and the book is the workspace's first tab.
+// the style deck; then each step has its own page, and the book is the workspace's first tab. Each
+// step loads with its page, so the home page stays light.
+const StylePage = lazyRouteComponent(() => import("./flow/StylePage"), "StylePage");
+const PlanConfirm = lazyRouteComponent(() => import("./studio/PlanConfirm"), "PlanConfirm");
+const LayoutsPage = lazyRouteComponent(() => import("./flow/LayoutsPage"), "LayoutsPage");
+const Studio = lazyRouteComponent(() => import("./studio/Studio"), "Studio");
+const PicturesPage = lazyRouteComponent(() => import("./views/PicturesPage"), "PicturesPage");
 const styleRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/style", component: StylePage });
 // "Is this your basement?", then the layouts, then the design in 3D (src/studio).
 const planRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/plan", component: PlanConfirm });

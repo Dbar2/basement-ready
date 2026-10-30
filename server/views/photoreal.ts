@@ -84,12 +84,13 @@ export function anchorsKept(anchors: Anchor[], found: Map<string, Box[]>) {
   return anchors.every((a) => (found.get(a.kind) ?? []).some((f) => sameBox(a.box, f)));
 }
 
-// Nothing was added: every window and stair in the picture was in the frame. Muse Image sometimes turns
-// a box on a cluttered wall into a window, or adds stairs; a window the basement doesn't have is a
-// promise it can't keep. (A new door is fine: the design adds doors.)
+// Nothing was added: every window and stair in the picture was in the frame (the same box, or a part of
+// one: the top of the stairs showing over a new wall). Muse Image sometimes turns a box on a cluttered
+// wall into a window, or adds stairs; a window the basement doesn't have is a promise it can't keep.
+// (A new door is fine: the design adds doors.)
 export const ADDED_KINDS = ["window", "stairs"] as const;
 export function nothingAdded(anchors: Anchor[], found: Map<string, Box[]>) {
-  return ADDED_KINDS.every((k) => (found.get(k) ?? []).every((f) => anchors.some((a) => a.kind === k && sameBox(a.box, f))));
+  return ADDED_KINDS.every((k) => (found.get(k) ?? []).every((f) => anchors.some((a) => a.kind === k && (sameBox(a.box, f) || inter(f, a.box) / (area(f) || 1) >= 0.6))));
 }
 
 const list = (words: string[]) => (words.length <= 1 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`);
@@ -119,9 +120,24 @@ export type PictureInput = {
   guide: Buffer; // JPEG, the frame's own size
   size: [number, number];
   items: DrawnItem[];
-  anchors: Anchor[];
+  anchors: Anchor[]; // the windows, doors and stairs the video tracked here: they must stay where they are
+  known?: Anchor[]; // everything really in the frame (SAM on the frame itself): nothing else may appear
+  hidden?: Box[]; // where the design's new walls stand: a real door behind one needn't show
   finishes: { style?: string; floor?: string; walls?: string };
 };
+
+// How much of `a` the boxes cover together, sampled on a 10 × 10 grid (a stair walled in on two sides
+// is hidden by both walls, not by either alone).
+export function coveredBy(a: Box, boxes: Box[]) {
+  if (!boxes.length) return 0;
+  let n = 0;
+  for (let i = 0; i < 10; i++)
+    for (let j = 0; j < 10; j++) {
+      const x = a.x + ((i + 0.5) / 10) * a.w, y = a.y + ((j + 0.5) / 10) * a.h;
+      if (boxes.some((b) => x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h)) n++;
+    }
+  return n / 100;
+}
 
 // One picture: cached, or made now. Never throws for a model failure: the render is the fallback.
 export async function makePicture(input: PictureInput, work: PictureWork, now = () => new Date().toISOString()): Promise<PictureMeta> {
@@ -138,9 +154,13 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
   const [w, h] = input.size;
   const items = checkedItems(input.items);
   const kinds = [...new Set(items.map((i) => i.kind))];
+  // What must stay: what the video saw here, less what the design's own new walls stand in front of.
+  // A sliver cut off by the edge of the picture is too unsure to hold it to, as with the furniture.
+  const keep = input.anchors.filter((a) => coveredBy(a.box, input.hidden ?? []) < 0.5 && !(atEdge(a.box) && area(a.box) < 0.05));
+  const known = [...input.anchors, ...(input.known ?? [])];
   // SAM looks for every window and stair in the picture, not only the ones the frame had.
-  const anchorKinds = [...new Set<Anchor["kind"]>([...ADDED_KINDS, ...input.anchors.map((a) => a.kind)])];
-  const keptKinds = [...new Set(input.anchors.map((a) => a.kind))];
+  const anchorKinds = [...new Set<Anchor["kind"]>([...ADDED_KINDS, ...keep.map((a) => a.kind)])];
+  const keptKinds = [...new Set(keep.map((a) => a.kind))];
   const prompt = picturePrompt(input.items, input.finishes);
   let last = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
@@ -157,8 +177,8 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
       Promise.all(anchorKinds.map(async (k) => [k, await work.boxes(jpeg, ANCHOR_CONCEPT[k]).catch(() => [])] as const)),
       Promise.all(kinds.map(async (k) => [k, await work.boxes(jpeg, CONCEPT[k]).catch(() => [])] as const)),
     ]);
-    const anchorsOk = anchorsKept(input.anchors, new Map(anchorBoxes));
-    const added = !nothingAdded(input.anchors, new Map(anchorBoxes));
+    const anchorsOk = anchorsKept(keep, new Map(anchorBoxes));
+    const added = !nothingAdded(known, new Map(anchorBoxes));
     const found = new Map(itemBoxes);
     const missing = items.filter((i) => !foundWhereDrawn(i.box, found.get(i.kind) ?? []));
     if (anchorsOk && !added && !missing.length) {

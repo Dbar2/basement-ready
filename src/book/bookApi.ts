@@ -42,8 +42,8 @@ async function headers(): Promise<Record<string, string>> {
 // picked here.
 async function fetchBook(scanId: string, pdf: boolean) {
   if (scanId === "sample") {
-    const { state } = await getWorkspace("sample");
-    return fetch(`/api/sample/book${pdf ? ".pdf" : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state }) });
+    const { state, profile } = await getWorkspace("sample");
+    return fetch(`/api/sample/book${pdf ? ".pdf" : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state, profile }) });
   }
   return fetch(`/api/scans/${scanId}/book${pdf ? ".pdf" : ""}`, { headers: await headers() });
 }
