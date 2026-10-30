@@ -3,9 +3,9 @@
 // anything to change it (swap a sofa for a desk, pick a colour, slide it along its wall, take it out)
 // and every angle is drawn again; each old picture stays until its new one lands.
 //
-// Used by the layout cards (session 2), the studio (session 1) and the book (session 4):
+// The flow's pictures step draws the model's chosen design and saves each change into it:
 //   <DesignPictures scanId={id} design={design} onDesignChange={save} view="swipe" />
-// Without `design` it pictures the scan's own suggested layout and keeps edits in this browser.
+// Without `design` it pictures the model's chosen design as the server has it and keeps edits in this browser.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { designHash, lookOf, nudgeFurniture, SPECS, swapFurniture, SWAPS } from "../../server/model/furniture";
 import type { Design, Edit, FurnitureKind } from "../../server/model/types";
@@ -109,7 +109,7 @@ export function DesignPictures({
 
   useEffect(() => {
     let gone = false;
-    getViews(scanId)
+    getViews(scanId, controlled ? designHash(controlled) : undefined, 5, controlled?.id)
       .then((d) => {
         if (gone) return;
         setData(d);
@@ -156,7 +156,8 @@ export function DesignPictures({
         postPicture(scanId, a.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, finishes: design.finishes })
           .then((p: Picture) => {
             if (hashRef.current !== p.designHash) return;
-            setShown((m) => new Map(m).set(a.id, { url: p.url, kind: p.kind, checked: p.checked, hash: p.designHash }));
+            // Nothing kept on the server (the example, past its committed pictures): the render stays.
+            setShown((m) => new Map(m).set(a.id, p.url ? { url: p.url, kind: p.kind, checked: p.checked, hash: p.designHash } : { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", hash: r.hash }));
           })
           .catch(() => setShown((m) => new Map(m).set(a.id, { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", hash: r.hash })))
           .finally(() => hashRef.current === r.hash && setMaking((s) => {

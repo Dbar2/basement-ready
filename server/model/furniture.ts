@@ -291,6 +291,7 @@ type Ctx = {
   placed: Furniture[]; // everything in the design so far, every room
   doors: Pt[][];
   fixtures: Pt[][];
+  budget: { paths: number }; // way-out checks left (PATH_CHECKS)
 };
 
 // The floor a piece keeps clear in front of it.
@@ -333,9 +334,20 @@ function fits(ctx: Ctx, f: Furniture, edge?: { e: Edge; t0: number; t1: number }
 }
 
 // Places `f` if it fits and still leaves a way out; returns whether it did.
+// The way-out check walks a 10 cm grid of the whole design, so it's the slow part of placing a piece.
+// A design gets this many: plenty for any room that has a place for its furniture, and a room that has
+// none (an odd candidate layout) gives up in a fraction of a second instead of searching every spot.
+const PATH_CHECKS = 200;
+export const pathChecks = { used: 0 };
+
 function tryPlace(ctx: Ctx, f: Furniture, edge?: { e: Edge; t0: number; t1: number }) {
   if (!fits(ctx, f, edge)) return false;
-  if (lookOf(f) !== "rug" && !pathOut(ctx.design, [...ctx.placed, f]).ok) return false;
+  if (lookOf(f) !== "rug") {
+    if (ctx.budget.paths <= 0) return false;
+    ctx.budget.paths--;
+    pathChecks.used++;
+    if (!pathOut(ctx.design, [...ctx.placed, f]).ok) return false;
+  }
   ctx.placed.push(f);
   return true;
 }
@@ -526,8 +538,9 @@ export function furnishDesign(design: Design): Design {
   const rooms = [...design.proposed.rooms].sort((a, b) => order.indexOf(a.kind as never) - order.indexOf(b.kind as never));
   const hasKitchen = rooms.some((r) => r.kind === "kitchen");
   const hasDining = rooms.some((r) => r.kind === "living" && /dining/i.test(r.name));
+  const budget = { paths: PATH_CHECKS };
   for (const room of rooms) {
-    const ctx: Ctx = { design: base, room, edges: edgesOf(room, design.proposed.walls, design.proposed.openings), placed, doors, fixtures };
+    const ctx: Ctx = { design: base, room, edges: edgesOf(room, design.proposed.walls, design.proposed.openings), placed, doors, fixtures, budget };
     if (room.kind === "kitchen") furnishKitchen(ctx);
     else if (room.kind === "bathroom") furnishBathroom(ctx);
     else if (room.kind === "laundry") placeBest(ctx, spotsOnEdges(ctx, piece(ctx, "washer_dryer", 1, SPECS.washer_dryer.sizes[0])));
@@ -576,6 +589,7 @@ function ctxFor(design: Design, roomId: string | undefined, except: string): Ctx
     placed: design.proposed.furniture.filter((f) => f.id !== except),
     doors: doorZones(design),
     fixtures: design.proposed.fixtures.filter((f) => f.kind !== "beam" && f.kind !== "duct" && f.kind !== "bulkhead").map((f) => corners({ at: f.at, rotDeg: 0, sizeM: f.sizeM ?? [0.6, 0.6] })),
+    budget: { paths: PATH_CHECKS },
   };
 }
 
