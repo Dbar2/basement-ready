@@ -2,22 +2,23 @@
    slow and failed states, and the example and demo labels in the workspace. */
 
 .demo-link { justify-self: start; margin-top: -8px; font-size: 14px; }
-.demo-card { display: grid; gap: 8px; padding: 14px 16px; border: 1px dashed var(--color-ink); border-radius: 12px; background: var(--color-surface); }
+.demo-card { display: grid; gap: 8px; padding: 14px 16px; border: var(--line-ink); border-radius: var(--radius-1); }
 .demo-card p { margin: 0; }
 .demo-card .link-quiet { justify-self: start; font-size: 14px; }
 
-.sheet-limit { flex-basis: 100%; margin: 0; padding: 10px 12px; border-left: 2px solid var(--color-fix); font-weight: 600; }
+.sheet-limit { flex-basis: 100%; margin: 0; padding: 10px 12px; border: 1px solid var(--color-fix); border-radius: var(--radius-1); font-weight: 600; }
 .sheet-kept { flex-basis: 100%; margin: 0; font-size: 14px; color: var(--color-ink-muted); }
 .sheet-kept a { color: var(--color-accent-text); font-weight: 600; }
 
 /* The example and the demo house, labelled wherever they show. */
-.example-label { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin: 0; padding: 8px 12px; border: 1px dashed var(--color-ink); border-radius: 8px; background: var(--color-card); font-size: 14px; }
-.example-label .tag-mono { flex: none; }
+.example-label { display: block; margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); text-wrap: pretty; }
+.example-label .tag-mono { display: inline; margin-right: 4px; padding: 0; border: 0; color: var(--color-ink); font-size: inherit; font-weight: 700; }
+.example-label .tag-mono::after { content: ":"; }
 .live .example-label { margin: 0 0 12px; }
 .ws-head .example-label { margin-top: 8px; }
 
 /* The wait screen when it's slow, or stopped. */
-.live-slow { display: grid; gap: 6px; margin: 0 0 16px; padding: 10px 12px; border-left: 2px solid var(--color-fix); }
+.live-slow { display: grid; gap: 6px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--color-fix); border-radius: var(--radius-1); }
 .live-slow p { margin: 0; }
 .live-failed { display: grid; gap: 14px; align-content: start; }
 .live-failed h2 { margin: 0; }
@@ -31,7 +32,7 @@
 .app-example b { color: var(--color-ink); font-family: var(--font-mono); font-weight: 400; word-break: break-all; }
 
 .rules-disclaimer { max-width: 70ch; }
-.read-only { margin: 0 0 16px; padding: 8px 12px; border-left: 2px solid var(--color-ink); }
+.read-only { margin: 0 0 16px; padding: 8px 12px; border: var(--line); border-radius: var(--radius-1); }
 .wish-said { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; margin: 0 0 12px; }
 .wish-said .mono { color: var(--color-ink-muted); font-size: 13px; }
 

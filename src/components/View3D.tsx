@@ -23,7 +23,7 @@ export class View3DBoundary extends Component<{ children: ReactNode; quiet?: boo
     return (
       <div className="viewer-empty">
         <div className="viewer-failed">
-          <p className="mono">The 3D view didn't load. The rest of your answer is fine.</p>
+          <p>The 3D view didn't load. The rest of your answer is fine.</p>
           <button className="btn btn-ghost" onClick={() => location.reload()}>
             Try again
           </button>

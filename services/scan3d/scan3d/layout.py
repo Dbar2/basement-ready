@@ -1374,8 +1374,13 @@ def read_plan(
             continue
         lo_, hi_ = turn([d["low"][0], d["low"][2]])[0], turn([d["high"][0], d["high"][2]])[0]
         t = _wall_t(w)
-        width = float(np.clip(abs((hi_ - lo_) @ t), 0.6, 1.2))
+        # Narrower than any door: SAM boxed only part of it (or saw it edge-on). The usual interior door's
+        # width, marked a guess, rather than the narrowest a door can be.
+        measured = abs((hi_ - lo_) @ t)
+        width = float(np.clip(measured, 0.6, 1.2)) if measured >= 0.6 else 0.76
         o = _door(w, c, walls, grid, "sam", width)
+        if measured < 0.6:
+            o["guess"] = True
         o["detectionId"] = d.get("id")
         if d.get("high") and d.get("low"):
             o["heightM"] = _r(np.clip(d["high"][1] - floor.y, 1.7, 2.4), 2)

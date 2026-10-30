@@ -19,6 +19,8 @@ export function useIdeas(scanId: string) {
   const [deck, setDeck] = useState<Deck>(emptyDeck);
   const [error, setError] = useState<string | null>(null);
   const [state, dispatch] = useReducer(swipes, scanId, saved);
+  // Each "Try again" starts the deck once more.
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let stopped = false;
@@ -37,7 +39,7 @@ export function useIdeas(scanId: string) {
       });
     } else {
       const tick = async (first: boolean) => {
-        const d = first ? await startDeck(scanId) : await readDeck(scanId).catch(() => null);
+        const d = first ? await startDeck(scanId, attempt > 0).catch(() => ({ error: "The cards didn't start. Try again." })) : await readDeck(scanId).catch(() => null);
         if (stopped) return;
         if (d && "error" in d) return setError(d.error);
         if (d) setDeck(d);
@@ -49,7 +51,13 @@ export function useIdeas(scanId: string) {
       stopped = true;
       clearTimeout(timer);
     };
-  }, [scanId]);
+  }, [scanId, attempt]);
+
+  const retry = () => {
+    setError(null);
+    setDeck(emptyDeck);
+    setAttempt((n) => n + 1);
+  };
 
   // Planned cards join the deck at once (as placeholders); the ones SAM turned down leave it.
   useEffect(() => {
@@ -75,7 +83,7 @@ export function useIdeas(scanId: string) {
     const t = window.setTimeout(() => saveMood(scanId, JSON.parse(said)), 1200);
     return () => clearTimeout(t);
   }, [scanId, said, state.history.length]);
-  return { deck, cards, slots, state, dispatch, mood, error };
+  return { deck, cards, slots, state, dispatch, mood, error, retry };
 }
 
 export type Ideas = ReturnType<typeof useIdeas>;

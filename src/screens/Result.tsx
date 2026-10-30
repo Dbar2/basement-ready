@@ -34,7 +34,7 @@ function Proof({ scanId, d, photos }: { scanId: string; d: Detection; photos?: b
         className="proof-box"
         style={{ left: `${d.box.x * 100}%`, top: `${d.box.y * 100}%`, width: `${d.box.w * 100}%`, height: `${d.box.h * 100}%` }}
       />
-      <figcaption className="mono">{d.label} · {where}</figcaption>
+      <figcaption>{d.label} · {where}</figcaption>
     </figure>
   );
 }
@@ -68,7 +68,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
   return (
     <div data-verdict={r.verdict}>
       <section className="decision">
-        <p className="eyebrow mono">
+        <p className="eyebrow">
           {r.verdict === "no" ? "Not likely" : "Likely"} · {r.coverage === "provincial" ? (r.city && r.city !== "Ontario" ? `Ontario rules for ${r.city}` : "Ontario rules") : `${r.city ?? "Waterloo"} rules`} checked {checkedOn(r.compiledAt)}
           {p && ` · ${p.address}`}
         </p>
@@ -90,14 +90,14 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
           {upTo > 0 && (
             <div>
               <dt>You may be eligible for</dt>
-              <dd className="mono">up to {money(upTo)}</dd>
+              <dd>up to <span className="mono">{money(upTo)}</span></dd>
             </div>
           )}
           {/* A rough 3D reading isn't a headline fact: the designer confirms it below. */}
           {r.measurements?.ceilingHeightM != null && (r.measurements.trusted || r.measurements.scaleSource !== "model") && (
             <div>
               <dt>Ceiling{mainRoomName && `, ${mainRoomName}`}</dt>
-              <dd className="mono">about {r.measurements.ceilingHeightM.toFixed(1)} m</dd>
+              <dd>about <span className="mono">{r.measurements.ceilingHeightM.toFixed(1)} m</span></dd>
             </div>
           )}
         </dl>
@@ -226,7 +226,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
         <h2>{sample ? "What the example household wants" : "What you want"}</h2>
         {plansSaid && (
           <p className="wish-said">
-            <span className="mono">What would you like it to be?</span> <b>{plansSaid}</b>
+            <span className="aside">What would you like it to be?</span> <b>{plansSaid}</b>
           </p>
         )}
         {r.vision && (r.vision.rooms.length > 0 || r.vision.style || r.vision.mustHaves.length > 0) ? (

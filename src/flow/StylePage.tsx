@@ -17,7 +17,7 @@ export function StylePage() {
       <main className="ideas-page">
         <div className="ideas-intro">
           <h1>Swipe your style</h1>
-          <p>Your own basement, restyled. Right if you love it, left if it's not for you. What you love builds your board, and your board finishes your design.</p>
+          <p>Your own basement, restyled. What you love finishes your design.</p>
         </div>
         <StyleDeck scanId={scanId} />
       </main>

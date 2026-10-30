@@ -8,7 +8,7 @@
 import { execFile } from "node:child_process";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { dataUrl, outputText, responses, tokenCost } from "./meta";
+import { dataUrl, readReply, responses, tokenCost } from "./meta";
 import type { PhotoTake } from "./photoInput";
 
 const run = promisify(execFile);
@@ -215,7 +215,7 @@ export async function wonderThenSpark<T>(developer: string, content: any[], read
       costUsd += tokenCost(model, r.usage)?.usd ?? 0;
       tokens.in += r.usage?.input_tokens ?? 0;
       tokens.out += r.usage?.output_tokens ?? 0;
-      return { model, value: read(outputText(r)), costUsd, tokens, ms: Date.now() - started };
+      return { model, value: readReply(r, read), costUsd, tokens, ms: Date.now() - started };
     } catch (err) {
       lastErr = err;
       console.error(`[wonder] ${model}: ${err instanceof Error ? err.message : err}`);

@@ -122,7 +122,7 @@ function People(props: TabProps & { scope: string }) {
                 ) : (
                   <span className="muted">Add an email to send a quote request.</span>
                 )}
-                {p.requestedAt && <span className="mono ws-sent">Asked {new Date(p.requestedAt).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}</span>}
+                {p.requestedAt && <span className="ws-sent">Asked {new Date(p.requestedAt).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}</span>}
               </div>
               <div className="ws-quote">
                 <label className="field">
@@ -168,7 +168,7 @@ function People(props: TabProps & { scope: string }) {
             </label>
           </div>
           <div className="ws-actions">
-            <button className="btn btn-primary" onClick={add} disabled={!name.trim()}>
+            <button className="btn btn-ghost" onClick={add} disabled={!name.trim()}>
               Add
             </button>
             <button className="link-quiet" onClick={() => setAdding(null)}>
@@ -344,7 +344,7 @@ function Diy({ plan }: { plan: DiyPlan }) {
               <span className="timeline-num">{s.n}</span>
               <div>
                 <h3>{s.title}</h3>
-                <p className="timeline-meta mono">{s.who}</p>
+                <p className="timeline-meta aside">{s.who}</p>
                 <p className="muted">{s.detail}</p>
                 {s.inspection && <p className="ws-inspection">Inspection: {s.inspection}</p>}
               </div>

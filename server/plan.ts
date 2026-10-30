@@ -26,7 +26,8 @@ export type Plan = {
   depthM: number;
   areaM2: number;
   ceilingHeightM: number | null;
-  openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string }[];
+  // guess: its width wasn't measured (SAM boxed only part of it, or it was seen edge-on).
+  openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string; guess?: boolean }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
   fixtures: { kind: FixtureKind; x: number; z: number; detectionId: string }[];
   scaleSource: "model" | "user_measurement" | "door" | "arkit";
@@ -50,6 +51,8 @@ export function rescalePlan(p: Plan, s: number): Plan {
 }
 
 const median = (xs: number[]) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
+const DOOR_PART_M = 0.6; // a door's lifted width under this is only part of a door
+const DOOR_USUAL_M = 0.76; // a 30" interior door, the usual one in a basement
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -101,11 +104,14 @@ export function buildPlan(s3: Scan3d, detections: Detection[], trusted: boolean)
       const lo = alongX ? box.minX : box.minZ, hi = alongX ? box.maxX : box.maxZ;
       const spread = Math.abs(alongX ? at.high[0] - at.low[0] : at.high[2] - at.low[2]);
       const kind = d.kind === "window" ? "window" : "door";
-      const widthM = clamp(spread || (kind === "door" ? 0.86 : 0.8), kind === "door" ? 0.7 : 0.4, kind === "door" ? 1.2 : 2.0);
+      // A door narrower than any door is one SAM boxed only part of (or saw edge-on): give it the usual
+      // interior door's width and say it's a guess, rather than the narrowest a door can be.
+      const partial = kind === "door" && spread < DOOR_PART_M;
+      const widthM = partial ? DOOR_USUAL_M : clamp(spread || (kind === "door" ? 0.86 : 0.8), kind === "door" ? 0.7 : 0.4, kind === "door" ? 1.2 : 2.0);
       const atM = clamp((alongX ? cx : cz) - lo, widthM / 2, hi - lo - widthM / 2);
       // The same window or door tracked twice: keep the one seen most.
       if (openings.some((o) => o.kind === kind && o.side === side && Math.abs(o.atM - atM) < Math.max(o.widthM, widthM) * 0.75)) continue;
-      openings.push({ kind, side, atM: round2(atM), widthM: round2(widthM), detectionId: d.id });
+      openings.push({ kind, side, atM: round2(atM), widthM: round2(widthM), detectionId: d.id, ...(partial ? { guess: true } : {}) });
     } else if (d.kind === "stairs") {
       const x0 = clamp(Math.min(at.low[0], at.high[0]), minX, maxX), x1 = clamp(Math.max(at.low[0], at.high[0]), minX, maxX);
       const z0 = clamp(Math.min(at.low[2], at.high[2]), minZ, maxZ), z1 = clamp(Math.max(at.low[2], at.high[2]), minZ, maxZ);

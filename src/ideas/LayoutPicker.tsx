@@ -44,20 +44,30 @@ export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: 
                   <span className="layout-pic" data-ready={Boolean(cover) || undefined}>
                     {cover ? <img src={cover.url} alt={`${d.name}, virtually staged in your basement`} draggable={false} /> : cover === null ? <DesignThumb design={d} /> : null}
                   </span>
-                  <figcaption className="mono">
-                    {cover ? (cover.making ? "Virtually staged · making it look real…" : `Virtually staged · ${cover.kind === "photo" ? cover.checked : "3D render"}`) : cover === null ? "The plan" : "Drawing it in your basement…"}
+                  <figcaption>
+                    {cover ? (cover.making ? "Virtually staged · making it look real…" : cover.kind === "photo" ? "Virtually staged" : "Virtually staged · 3D render") : cover === null ? "The plan" : "Drawing it in your basement…"}
                   </figcaption>
                 </figure>
                 {cover !== null && <DesignThumb design={d} />}
                 <h3>{d.name}</h3>
-                <p className="layout-facts mono">
-                  <span>{d.layout === "studio" || !f.beds ? "Studio" : `${f.beds} bedroom${f.beds > 1 ? "s" : ""}`} · {Math.round(f.area)} m²</span>
-                  <span data-ok={f.count.fix === 0 || undefined}>
-                    Meets {f.count.ok} checks{f.count.fix ? ` · ${f.count.fix} to fix` : ""}
-                  </span>
-                  <span data-total data-low={f.low} data-high={f.high}>{cad(f.low)}–{cad(f.high)} hired out</span>
-                </p>
-                <span className={d.chosen ? "btn btn-primary layout-pick" : "btn btn-ghost layout-pick"}>{d.chosen ? "Picked ✓" : "Pick this layout"}</span>
+                <dl className="layout-facts">
+                  <div>
+                    <dt>{d.layout === "studio" || !f.beds ? "Studio" : `${f.beds} bedroom${f.beds > 1 ? "s" : ""}`}</dt>
+                    <dd className="mono">{Math.round(f.area)} m²</dd>
+                  </div>
+                  <div data-state={f.count.fix ? "fix" : "ok"}>
+                    <dt>Meets {f.count.ok} checks</dt>
+                    <dd className="mono">{f.count.fix ? `${f.count.fix} to fix` : "all met"}</dd>
+                  </div>
+                  <div>
+                    <dt>Hired out, rough</dt>
+                    <dd className="mono" data-total data-low={f.low} data-high={f.high}>{cad(f.low)}–{cad(f.high)}</dd>
+                  </div>
+                </dl>
+                <span className="layout-pick" aria-hidden>
+                  <i />
+                  {d.chosen ? "Picked" : "Pick this layout"}
+                </span>
               </button>
             </li>
           );

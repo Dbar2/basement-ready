@@ -24,6 +24,7 @@ const OpeningSchema = z.object({
   swing: z.enum(["left", "right"]).nullable().optional(),
   rating: z.enum(["20min"]).nullable().optional(),
   detectionId: id.optional(),
+  guess: z.boolean().optional(),
 });
 const RoomKindSchema = z.enum(["bedroom", "bathroom", "kitchen", "living", "mechanical", "stairs", "closet", "storage", "laundry", "hall", "other"]);
 const RoomSchema = z.object({
