@@ -440,11 +440,28 @@ export function RealScan(props: {
   if (failed && !existing) return <>{props.fallback ?? <p className="viewer-empty mono">The 3D scan isn't available for this one.</p>}</>;
   if (!built && !scanReady) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
 
+  // On the as-built model a filmed spot is stood in at eye height, looking about level: the phone
+  // was often held low or tipped at the floor, which up close reads as a smear, not a room.
+  const level = (v: Viewpoint): Viewpoint => {
+    const flat = new THREE.Vector3(v.forward.x, 0, v.forward.z);
+    if (flat.lengthSq() < 1e-4) return v;
+    const pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(v.forward.y, -1, 1)), -0.3, 0.15);
+    return { position: new THREE.Vector3(v.position.x, EYE_M, v.position.z), forward: flat.normalize().multiplyScalar(Math.cos(pitch)).setY(Math.sin(pitch)) };
+  };
+  // Filmed facing a wall up close, it turns to look into the room (src/three/AsBuiltView.ts).
+  const intoRoom = (v: Viewpoint): Viewpoint => {
+    if (!built) return v;
+    const walls = built.walls.map((w): [Pt, Pt] => [w.a, w.b]);
+    const turned = bestView([{ at: [v.position.x * k, v.position.z * k], dir: [v.forward.x, v.forward.z] }], walls, []);
+    if (!turned) return v;
+    const pitch = Math.asin(THREE.MathUtils.clamp(v.forward.y, -1, 1));
+    return { position: v.position, forward: new THREE.Vector3(turned.dir[0] * Math.cos(pitch), Math.sin(pitch), turned.dir[1] * Math.cos(pitch)) };
+  };
   const go = (i: number) => {
     const n = (i + spots.length) % spots.length;
     setSpot(n);
     setMode("walk");
-    setJump(spots[n]);
+    setJump(built ? intoRoom(level(spots[n])) : spots[n]);
   };
   const ceiling = props.ceilingHeightM ?? 2.4;
 
