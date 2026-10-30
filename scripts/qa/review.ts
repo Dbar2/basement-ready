@@ -7,7 +7,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Captured } from "./capture";
-import { Budget, costOf, estimate, MODEL, type Usage } from "./cost";
+import { Budget, costOf, estimate, type Model, type Usage } from "./cost";
 import { Images, sha256, type Box } from "./images";
 import { CACHE_DIR } from "./paths";
 import { CAMERA_LABEL, screenById, type Viewport } from "./plan";
@@ -46,6 +46,7 @@ export async function review(opts: {
   shots: Captured[];
   apiKey: string;
   budget: Budget;
+  model: Model;
   effort: Effort;
   concurrency: number;
   facts: unknown;
@@ -70,8 +71,8 @@ export async function review(opts: {
         screen: u.screen,
         images: u.images.map((i) => ({ label: i.label, w: i.w, h: i.h, kb: Math.round(i.data.length / 1024) })),
         textChars: u.text.length,
-        estimateUsd: Number(estimate(u.images, (u.key === "consistency" ? CONSISTENCY_SYSTEM : SYSTEM) + u.text, u.outputTokens).toFixed(4)),
-        cached: existsSync(join(CACHE_DIR, `${unitCacheKey(u, opts.effort)}.json`)),
+        estimateUsd: Number(estimate(u.images, (u.key === "consistency" ? CONSISTENCY_SYSTEM : SYSTEM) + u.text, u.outputTokens, opts.model).toFixed(4)),
+        cached: existsSync(join(CACHE_DIR, `${unitCacheKey(u, opts.model, opts.effort)}.json`)),
       }));
       const total = rows.reduce((n, r) => n + (r.cached ? 0 : r.estimateUsd), 0);
       writeFileSync(join(opts.runDir, "requests.json"), JSON.stringify({ effort: opts.effort, totalEstimateUsd: Number(total.toFixed(3)), requests: rows }, null, 1));
@@ -85,7 +86,7 @@ export async function review(opts: {
     const worker = async () => {
       while (next < queue.length) {
         const u = queue[next++];
-        await runUnit(u, { client, images, budget: opts.budget, effort: opts.effort, runDir: opts.runDir, out, log: opts.log });
+        await runUnit(u, { client, images, budget: opts.budget, model: opts.model, effort: opts.effort, runDir: opts.runDir, out, log: opts.log });
       }
     };
     await Promise.all(Array.from({ length: Math.max(1, opts.concurrency) }, worker));
@@ -225,19 +226,19 @@ function consistencyUnit(shots: Captured[], facts: unknown): Unit {
 // ---- Running a request ----
 
 // Same prompt version, model, effort, instructions, text and image bytes: same answer, from the cache.
-function unitCacheKey(u: Unit, effort: Effort) {
+function unitCacheKey(u: Unit, model: Model, effort: Effort) {
   const system = u.key === "consistency" ? CONSISTENCY_SYSTEM : SYSTEM;
-  return sha256(JSON.stringify({ v: PROMPT_VERSION, model: MODEL, effort, system: sha256(system), text: u.text, images: u.images.map((i) => sha256(i.data)) }));
+  return sha256(JSON.stringify({ v: PROMPT_VERSION, model: model.id, effort, system: sha256(system), text: u.text, images: u.images.map((i) => sha256(i.data)) }));
 }
 
-type Ctx = { client: Anthropic; images: Images; budget: Budget; effort: Effort; runDir: string; out: ReviewResult; log: (s: string) => void };
+type Ctx = { client: Anthropic; images: Images; budget: Budget; model: Model; effort: Effort; runDir: string; out: ReviewResult; log: (s: string) => void };
 
 async function runUnit(u: Unit, ctx: Ctx) {
   const isText = u.key === "consistency";
   const system = isText ? CONSISTENCY_SYSTEM : SYSTEM;
   const schema = jsonSchema(isText ? ConsistencyReview : ScreenReview);
-  const cacheFile = join(CACHE_DIR, `${unitCacheKey(u, ctx.effort)}.json`);
-  const est = estimate(u.images, system + u.text, u.outputTokens);
+  const cacheFile = join(CACHE_DIR, `${unitCacheKey(u, ctx.model, ctx.effort)}.json`);
+  const est = estimate(u.images, system + u.text, u.outputTokens, ctx.model);
 
   let answer: unknown;
   let status: UnitResult["status"] = "opus";
@@ -261,7 +262,7 @@ async function runUnit(u: Unit, ctx: Ctx) {
       });
       content.push({ type: "text", text: u.text });
       const res = await ctx.client.beta.messages.create({
-        model: MODEL,
+        model: ctx.model.id,
         max_tokens: 16000,
         // Server-side fallback if a request is ever declined (it shouldn't be: these are app screenshots).
         betas: ["server-side-fallback-2026-07-01"],
@@ -270,7 +271,7 @@ async function runUnit(u: Unit, ctx: Ctx) {
         output_config: { effort: ctx.effort, format: { type: "json_schema", schema } },
         messages: [{ role: "user", content }],
       });
-      cost = costOf(res.usage as Usage);
+      cost = costOf(res.usage as Usage, ctx.model);
       ctx.budget.settle(est, cost);
       ctx.out.calls.made++;
       if (res.stop_reason === "refusal") throw new Error(`declined (${res.stop_details?.category ?? "no category"})`);
