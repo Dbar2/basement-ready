@@ -4,6 +4,7 @@ import type { KnownCamera } from "./capture";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Detection } from "./pipeline";
+import type { BasementPlan } from "../src/api";
 
 const URL_ = process.env.SCAN3D_URL;
 const TOKEN = process.env.SCAN3D_TOKEN;
@@ -77,19 +78,67 @@ export async function runScan3d(
   };
 }
 
-// ---- One floor plan for the whole basement (services/scan3d/scan3d/floorplan.py) ----
+// ---- One floor plan for the whole basement (services/scan3d/scan3d/layout.py, planapi.py) ----
 
 export type FloorPlanRoom = { box: [number, number, number, number]; outline: [number, number][]; areaM2: number; cameras: number; sides: Record<"minX" | "maxX" | "minZ" | "maxZ", "wall" | "extent"> };
-// rotation: world (x, z) turned by -rotation is the plan frame.
-export type FloorPlanResult = { rotation: number; floorY: number; ceilingY: number | null; footprintM2: number; rooms: FloorPlanRoom[] };
+// rotation: world (x, z) turned by -rotation is the plan frame. `plan`: the whole plan (src/api.ts
+// BasementPlan); `renders`: base64 pictures for Spark, when asked for.
+export type FloorPlanResult = {
+  rotation: number;
+  floorY: number;
+  ceilingY: number | null;
+  footprintM2: number;
+  rooms: FloorPlanRoom[];
+  plan?: BasementPlan;
+  checked?: { walls: number; doubtful: number } | null;
+  renders?: { topDown: string; frames: string[] };
+};
+
+// What else the plan can be read with: each area's depth (for where the floor meets the walls, and the
+// self-check), SAM's finds in the phone's world, corrections to check, and frames to draw the walls into.
+export type PlanExtras = {
+  depth?: boolean;
+  hints?: Record<string, unknown>;
+  edits?: Record<string, unknown>[];
+  keyframes?: { jpeg: Uint8Array<ArrayBuffer>; pose: number[][]; intrinsics: number[][] }[];
+  render?: boolean;
+};
+
+// Every other frame of an area's depth at half size, with the lens to match: a twelfth of the bytes,
+// plenty for walls.
+export function thinDepth(s3: Scan3d) {
+  const [n, H, W] = s3.scan.files.depth.shape as number[];
+  const h = Math.ceil(H / 2), w = Math.ceil(W / 2);
+  const keep = Array.from({ length: n }, (_, i) => i).filter((i) => i % 2 === 0);
+  const out = new Uint16Array(keep.length * h * w);
+  const src = new Uint16Array(s3.depth);
+  keep.forEach((f, k) => {
+    for (let v = 0; v < h; v++) for (let u = 0; u < w; u++) out[(k * h + v) * w + u] = src[(f * H + v * 2) * W + u * 2];
+  });
+  const frames = keep.map((f) => {
+    const fr = s3.scan.frames[f];
+    const K = fr.intrinsics as number[][];
+    return { pose: fr.pose, intrinsics: [[K[0][0] / 2, 0, K[0][2] / 2], [0, K[1][1] / 2, K[1][2] / 2], [0, 0, 1]] };
+  });
+  return { depth: out, frames, depthShape: [h, w] };
+}
 
 // The plan read from every area's points at once: only for areas in one tracked world (the app's).
-export async function runFloorPlan(scans: Scan3d[], cameras: number[][]): Promise<FloorPlanResult> {
+export async function runFloorPlan(scans: Scan3d[], cameras: number[][], extras: PlanExtras = {}): Promise<FloorPlanResult> {
   const form = new FormData();
-  form.append("areas", JSON.stringify(scans.map((s3) => ({ world: s3.scan.world, factor: s3.scan.scale?.factor ?? 1 }))));
+  const thin = extras.depth ? scans.map(thinDepth) : null;
+  form.append("areas", JSON.stringify(scans.map((s3, i) => ({ world: s3.scan.world, factor: s3.scan.scale?.factor ?? 1, ...(thin ? { frames: thin[i].frames, depthShape: thin[i].depthShape } : {}) }))));
   form.append("cameras", JSON.stringify(cameras));
   scans.forEach((s3, i) => form.append("points", new Blob([s3.ply], { type: "application/octet-stream" }), `area-${i}.ply`));
-  const res = await fetch(`${URL_}/floorplan`, { method: "POST", body: form, headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(120_000) });
+  thin?.forEach((t, i) => form.append("depth", new Blob([t.depth], { type: "application/octet-stream" }), `area-${i}.bin`));
+  if (extras.hints) form.append("hints", JSON.stringify(extras.hints));
+  if (extras.edits?.length) form.append("edits", JSON.stringify(extras.edits));
+  if (extras.render) {
+    form.append("render", "1");
+    form.append("keyframeCams", JSON.stringify((extras.keyframes ?? []).map((k) => ({ pose: k.pose, intrinsics: k.intrinsics }))));
+    (extras.keyframes ?? []).forEach((k, i) => form.append("keyframes", new Blob([k.jpeg], { type: "image/jpeg" }), `${i}.jpg`));
+  }
+  const res = await fetch(`${URL_}/floorplan`, { method: "POST", body: form, headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(180_000) });
   if (!res.ok) throw new Error(`floorplan ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res.json();
 }

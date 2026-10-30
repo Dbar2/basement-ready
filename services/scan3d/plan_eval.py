@@ -550,7 +550,8 @@ def run(name: str, method: str, use_hints: bool = True, edits=None) -> dict:
             check_walls(plan, take["views"])
     world = to_world(plan)
     truth = truth_for(name)
-    sk = SKETCHES / f"{name}.json"
+    # The homeowner's sketch: the one named for this take, or for the start of its name (david-* -> david).
+    sk = next((p for p in sorted(SKETCHES.glob("*.json"), key=lambda p: -len(p.stem)) if name.startswith(p.stem)), SKETCHES / "none.json")
     if truth is not None:
         score = score_plan(world, truth)
     elif sk.exists():
