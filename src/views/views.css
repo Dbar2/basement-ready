@@ -2,7 +2,7 @@
 
 .views { display: grid; gap: var(--space-3); }
 .views-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
-.views-status { margin: 0; font-size: 13px; color: var(--color-ink-muted); }
+.views-status { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); }
 
 .views-strip { display: grid; gap: var(--space-3); }
 .views[data-view="swipe"] .views-strip {
@@ -24,11 +24,10 @@
   width: 100%;
   padding: 0;
   border: 0;
-  border-radius: var(--radius-2);
+  border-radius: var(--radius-1);
   overflow: hidden;
   background: var(--color-surface);
   cursor: pointer;
-  box-shadow: var(--shadow-card);
 }
 .views-hit:disabled { cursor: default; }
 .views-hit:focus-visible { outline: 3px solid var(--color-mint-line); outline-offset: 2px; }
@@ -45,59 +44,50 @@
   transition: all var(--dur-2) var(--ease-out);
 }
 
-.views-card figcaption { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12px; }
-.views-label {
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-ink);
-  color: var(--color-card);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-}
-.views-checked { color: var(--color-ink-muted); font-size: 11px; line-height: 1.35; }
+.views-card figcaption { display: grid; gap: 2px; padding-top: 4px; font-size: var(--text-small); }
+/* The staging label is a caption under the photo, never a badge on it. */
+.views-label { color: var(--color-ink); font-weight: 700; }
+.views-checked { color: var(--color-ink-muted); font-size: var(--text-tiny); line-height: 1.35; }
 
 .views-sheet {
   display: grid;
   gap: var(--space-2);
   padding: var(--space-3);
-  border: 1px solid var(--color-border);
+  border: var(--line-ink);
   border-radius: var(--radius-2);
-  background: var(--color-card);
-  box-shadow: var(--shadow-card);
+  background: var(--color-bg);
   animation: views-in var(--dur-2) var(--ease-out);
 }
 .views-sheet-head { display: flex; justify-content: space-between; align-items: center; }
 .views-row { display: grid; gap: 6px; }
-.views-row > span { font-size: 13px; color: var(--color-ink-muted); }
+.views-row > span { font-size: var(--text-small); color: var(--color-ink-muted); }
 .views-swatch {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 2px solid var(--color-card);
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-1);
+  border: 2px solid var(--color-bg);
   box-shadow: 0 0 0 1px var(--color-border);
   cursor: pointer;
 }
 .views-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--color-ink); }
-.views-notice { margin: 0; font-size: 13px; color: var(--color-fix); }
-.views-hint { margin: 0; font-size: 12px; color: var(--color-ink-muted); }
+.views-notice { margin: 0; font-size: var(--text-small); color: var(--color-fix); }
+.views-hint { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); }
 .views-empty { color: var(--color-ink-muted); }
 .views-skeleton {
   height: 420px;
-  border-radius: var(--radius-2);
-  background: linear-gradient(100deg, var(--color-surface) 30%, var(--color-card) 50%, var(--color-surface) 70%) 0 0 / 200% 100%;
-  animation: views-shimmer 1.4s linear infinite;
+  border: var(--line);
+  border-radius: var(--radius-1);
+  background: var(--color-surface);
 }
 
 @keyframes views-in { from { opacity: 0; transform: translateY(6px); } }
-@keyframes views-shimmer { to { background-position: -200% 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   .views-img-top, .views-outline { transition: none; }
-  .views-sheet, .views-skeleton { animation: none; }
+  .views-sheet { animation: none; }
 }
 
-.views-page { max-width: 1120px; margin: 0 auto; padding: var(--space-3) 16px var(--space-6); display: grid; gap: var(--space-3); }
+.views-page { width: 100%; max-width: 1240px; margin: 0 auto; padding: 28px var(--gutter) var(--space-6); display: grid; gap: var(--space-3); }
 .views-page-head { display: flex; align-items: center; }
-.views-page h1 { margin: var(--space-2) 0 0; font-size: clamp(26px, 5vw, 40px); line-height: 1.1; }
+.views-page h1 { margin: 0; font-size: var(--text-display); text-wrap: balance; }
 .views-page-lede { margin: 0; color: var(--color-ink-muted); max-width: 60ch; }

@@ -11,8 +11,8 @@
 .sheet-kept a { color: var(--color-accent-text); font-weight: 600; }
 
 /* The example and the demo house, labelled wherever they show. */
-.example-label { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); }
-.example-label .tag-mono { flex: none; padding: 0; border: 0; color: var(--color-ink); font-weight: 700; }
+.example-label { display: block; margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); text-wrap: pretty; }
+.example-label .tag-mono { display: inline; margin-right: 4px; padding: 0; border: 0; color: var(--color-ink); font-size: inherit; font-weight: 700; }
 .example-label .tag-mono::after { content: ":"; }
 .live .example-label { margin: 0 0 12px; }
 .ws-head .example-label { margin-top: 8px; }

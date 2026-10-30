@@ -94,7 +94,7 @@ export function ProfileForm({ initial, prefill, onSave, onCancel }: { initial: P
       )}
       {error && <p className="field-error" role="alert">{error}</p>}
       <div className="ws-actions">
-        <button className="btn btn-primary" disabled={busy}>
+        <button className="btn btn-ghost" disabled={busy}>
           {busy ? "Saving…" : "Save"}
         </button>
         {onCancel && (

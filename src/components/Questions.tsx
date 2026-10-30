@@ -48,7 +48,7 @@ function Question({ f, busy, onAnswer }: { f: Finding; busy: boolean; onAnswer: 
             }}
           >
             <input className="input q-input" inputMode="decimal" value={text} onChange={(e) => setText(e.target.value)} aria-label={f.title} />
-            <button className="btn btn-primary q-save" disabled={busy || parsed == null}>
+            <button className="btn btn-ghost q-save" disabled={busy || parsed == null}>
               {busy ? "Checking…" : "Check"}
             </button>
             <button type="button" className="chip" disabled={busy} onClick={() => onAnswer("unsure")}>

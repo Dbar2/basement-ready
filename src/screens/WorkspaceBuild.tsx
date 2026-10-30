@@ -168,7 +168,7 @@ function People(props: TabProps & { scope: string }) {
             </label>
           </div>
           <div className="ws-actions">
-            <button className="btn btn-primary" onClick={add} disabled={!name.trim()}>
+            <button className="btn btn-ghost" onClick={add} disabled={!name.trim()}>
               Add
             </button>
             <button className="link-quiet" onClick={() => setAdding(null)}>

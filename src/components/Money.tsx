@@ -120,7 +120,7 @@ export function MoneySection({ r, busy, readOnly, example, onAnswer }: { r: Scan
       {no.length > 0 && (
         <details className="money-no">
           <summary>
-            {no.length === 1 ? "1 program you don't qualify for" : `${no.length} programs you don't qualify for`}
+            {no.length === 1 ? "1 program that doesn't fit" : `${no.length} programs that don't fit`}
           </summary>
           <ul className="ruled">
             {no.map((g) => (
@@ -257,7 +257,7 @@ export function GetItDone({ r, scanId, onShare }: { r: ScanResult; scanId: strin
           <h3>Hire a registered designer</h3>
           {designerCost?.note && <p className="muted">{designerCost.note}</p>}
           {registry.howToSearch && <p>{registry.howToSearch}</p>}
-          <a className="btn btn-primary" href={designerUrl} target="_blank" rel="noreferrer">
+          <a className="btn btn-ghost" href={designerUrl} target="_blank" rel="noreferrer">
             Find a BCIN designer <span className="arrow" aria-hidden>→</span>
           </a>
           {registry.searchLinks && registry.searchLinks.length > 1 && <Links links={registry.searchLinks.slice(1)} />}
@@ -353,7 +353,7 @@ export function Applications({ scanId, r, profile, state, example, onSent }: { s
               <div className="app-actions">
                 {a.pdf && (
                   <button
-                    className="btn btn-primary"
+                    className="btn btn-ghost"
                     disabled={busy !== null}
                     onClick={() => {
                       setBusy(a.id);
@@ -367,12 +367,12 @@ export function Applications({ scanId, r, profile, state, example, onSent }: { s
                   </button>
                 )}
                 {a.email && a.email.to && !noSend && (
-                  <a className={a.pdf ? "btn btn-ghost" : "btn btn-primary"} href={mailto(a.email.to, a.email.subject, a.email.body)}>
+                  <a className="btn btn-ghost" href={mailto(a.email.to, a.email.subject, a.email.body)}>
                     Write the email
                   </a>
                 )}
                 {a.email && a.email.to && noSend && (
-                  <button className={a.pdf ? "btn btn-ghost" : "btn btn-primary"} disabled title="The example can't send email">
+                  <button className="btn btn-ghost" disabled title="The example can't send email">
                     Write the email
                   </button>
                 )}
@@ -382,7 +382,7 @@ export function Applications({ scanId, r, profile, state, example, onSent }: { s
                   </button>
                 )}
                 {a.link && (
-                  <a className={a.pdf || a.email ? "link-quiet" : "btn btn-primary"} href={a.link.url} target="_blank" rel="noreferrer">
+                  <a className={a.pdf || a.email ? "link-quiet" : "btn btn-ghost"} href={a.link.url} target="_blank" rel="noreferrer">
                     {a.link.label}
                   </a>
                 )}
