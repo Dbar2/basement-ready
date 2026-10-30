@@ -69,10 +69,13 @@ describe("money and coverage", () => {
     expect(forMom.moneyQuestions.map((q) => q.id)).toEqual(expect.arrayContaining(["rent", "senior", "work_started"]));
   });
 
-  it("falls back to provincial rules outside covered cities", () => {
+  it("falls back to Ontario's own rules outside covered cities", () => {
     const other = packFor("other-on");
     expect(other.coverage).toBe("provincial");
-    expect(other.pack.rules.some((r) => r.category === "zoning")).toBe(false);
+    // Zoning anywhere in Ontario is the province's floor (Planning Act, O. Reg. 299/19), never a city by-law.
+    const zoning = other.pack.rules.filter((r) => r.category === "zoning");
+    expect(zoning.length).toBeGreaterThan(0);
+    for (const r of zoning) expect(r.source.url).toMatch(/^https:\/\/www\.ontario\.ca\/laws\//);
     expect(other.pack.grants.every((g) => g.level === "federal" || g.level === "provincial")).toBe(true);
   });
 

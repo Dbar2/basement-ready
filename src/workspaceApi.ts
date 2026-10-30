@@ -1,7 +1,7 @@
 // Client for the workspace (server/workspaceRoutes.ts): the owner profile and saved state, the permit
 // package, the materials list, the applications and the looks. The sample basement keeps its
 // workspace in this browser and gets its documents from stateless routes.
-import type { Grant, MoneyQuestion, PlanSide } from "./api";
+import { authHeaders as headers, type Grant, type MoneyQuestion, type PlanSide } from "./api";
 import type { Model } from "../server/model/types";
 
 export type Profile = {
@@ -131,25 +131,12 @@ export type Application = {
   warnings: string[];
   link: { label: string; url: string } | null;
   source: { title: string; url: string };
+  // The example or the demo house: the email shows, but nothing can be sent from it.
+  example?: boolean;
 };
 
 const SAMPLE_WS = "br-sample-workspace";
 const isSample = (scanId: string) => scanId === "sample";
-
-// This browser's claim tokens and, when signed in, the Clerk session: what the server checks.
-export async function headers(json = false): Promise<Record<string, string>> {
-  const h: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
-  try {
-    const claims = localStorage.getItem("br-claims");
-    if (claims) h["x-claims"] = encodeURIComponent(claims);
-  } catch {
-    // Private mode: only a signed-in owner can open the workspace.
-  }
-  const clerk = (window as unknown as { Clerk?: { session?: { getToken: () => Promise<string | null> } | null } }).Clerk;
-  const token = await clerk?.session?.getToken().catch(() => null);
-  if (token) h.Authorization = `Bearer ${token}`;
-  return h;
-}
 
 function sampleWorkspace(): { profile: Profile | null; state: WorkspaceState } {
   try {
@@ -238,6 +225,7 @@ export async function startLook(scanId: string, style: string): Promise<Look> {
   return body.look;
 }
 
+// The example's looks come from the files committed with it (server/workspaceRoutes.ts), so they open with no keys.
 export const lookUrl = (scanId: string, style: string, n: number) => `/api/scans/${scanId}/looks/${style}/${n}.jpg`;
 
 export const LOOKS: { key: string; label: string }[] = [

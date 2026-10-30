@@ -72,6 +72,7 @@ const values: FormValues = {
   city: "City of Waterloo",
   valueCAD: 60000,
   ownerBuilds: true,
+  ownerDraws: true,
 };
 
 describe("permit package", () => {
@@ -272,7 +273,7 @@ describe("materials takeoff", () => {
     expect(d.totals.diyLow).toBeGreaterThan(t.materialsCAD);
     expect(d.trades.find((x) => x.id === "gas")?.owner).toBe("no");
     expect(d.trades.find((x) => x.id === "electrical")?.owner).toBe("with_permit");
-    expect(buildOrder([], { egressNew: true, city: "Waterloo" })[1].title).toBe("Cut the escape window");
+    expect(buildOrder([], { egressNew: true, authority: "City of Waterloo" })[1].title).toBe("Cut the escape window");
   });
 });
 

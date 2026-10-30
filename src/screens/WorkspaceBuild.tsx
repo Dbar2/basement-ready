@@ -110,9 +110,15 @@ function People(props: TabProps & { scope: string }) {
               <p className="muted">{[p.registryId, p.email, p.phone].filter(Boolean).join(" · ")}</p>
               <div className="ws-pro-actions">
                 {p.email ? (
-                  <a className="btn btn-ghost" href={mailto(p.email, `Quote request: basement second unit${r.property ? `, ${r.property.address}` : ""}`, quoteBody(p, props, props.scope))} onClick={() => update(p.id, { requestedAt: new Date().toISOString() })}>
-                    {p.requestedAt ? "Write again" : "Ask for a quote"}
-                  </a>
+                  <>
+                    {/* Opening the email isn't sending it: they say when they have. */}
+                    <a className="btn btn-ghost" href={mailto(p.email, `Quote request: basement second unit${r.property ? `, ${r.property.address}` : ""}`, quoteBody(p, props, props.scope))}>
+                      {p.requestedAt ? "Write again" : "Ask for a quote"}
+                    </a>
+                    <button className="link-quiet sent-it" aria-pressed={Boolean(p.requestedAt)} onClick={() => update(p.id, { requestedAt: p.requestedAt ? null : new Date().toISOString() })}>
+                      {p.requestedAt ? "Not sent after all" : "I sent it"}
+                    </button>
+                  </>
                 ) : (
                   <span className="muted">Add an email to send a quote request.</span>
                 )}

@@ -3,7 +3,8 @@
 // its model in this browser, like the rest of its workspace.
 import { ModelSchema } from "../../server/model/schema";
 import type { Design, Edit, Existing, Finishes, Model } from "../../server/model/types";
-import { getWorkspace, headers, saveWorkspace } from "../workspaceApi";
+import { authHeaders as headers } from "../api";
+import { getWorkspace, saveWorkspace } from "../workspaceApi";
 
 export async function loadModel(scanId: string): Promise<{ model: Model; saved: boolean }> {
   if (scanId === "sample") {

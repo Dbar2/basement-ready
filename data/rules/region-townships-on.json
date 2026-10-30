@@ -1,0 +1,219 @@
+{
+  "compiledAt": "2026-10-30",
+  "about": "Waterloo Region's four townships get Ontario's province-wide pack plus the Region of Waterloo's own programs. The Region's Ontario Renovates loan covers the whole Region; its fact sheet and form set lower tenant income limits for Wellesley and Wilmot.",
+  "townships": {
+    "Woolwich": "Township of Woolwich",
+    "Wilmot": "Township of Wilmot",
+    "North Dumfries": "Township of North Dumfries",
+    "Wellesley": "Township of Wellesley"
+  },
+  "grants": [
+    {
+      "id": "region_ontario_renovates_secondary_suites",
+      "name": "Region of Waterloo Ontario Renovates - Secondary Suites (forgivable loan)",
+      "level": "region",
+      "kind": "forgivable_loan",
+      "status": "open",
+      "amount": "Up to $25,000 per property, interest-free, forgiven evenly over 15 years (includes up to $5,000 for accessibility work that is a grant).",
+      "conditions": {
+        "requiresOwnerOccupied": true,
+        "ownerHasNoOtherProperty": true,
+        "houseType": "single family home (application lists single detached, semi-detached, townhouse)",
+        "houseValueCapCAD": {
+          "value": null,
+          "conflict": [
+            {
+              "valueCAD": 600000,
+              "source": "Region web page (MPAC assessment)"
+            },
+            {
+              "valueCAD": 505469,
+              "source": "Fact sheet dated Dec 2025 ('Province's Maximum House value')"
+            }
+          ]
+        },
+        "maxFinancingToValuePct": 90,
+        "workNotStarted": true,
+        "occupantRelation": "any_income_verified_tenant",
+        "rentCap": {
+          "year": "2025 (application form v11 labels the same figures 2024)",
+          "monthlyCAD": {
+            "bachelor": 1002,
+            "1br": 1198,
+            "2br": 1413,
+            "3br": 1545
+          }
+        },
+        "tenantIncomeLimit": {
+          "year": 2025,
+          "area": "Remainder of Waterloo Region (includes Woolwich and North Dumfries)",
+          "householdCAD": {
+            "bachelor": 38500,
+            "1br": 50500,
+            "2br": 61000,
+            "3br": 68000
+          }
+        },
+        "affordabilityYears": 15,
+        "contractorQuotesRequired": 3,
+        "contractorNeedsWSIBAndLiability": true,
+        "repayIf": [
+          "sale or transfer within 15 years (prorated)",
+          "owner stops living there",
+          "rent above cap",
+          "tenant not income-verified",
+          "death of owner on title"
+        ],
+        "unitMustHave": [
+          "sleeping area",
+          "full kitchen",
+          "full bathroom",
+          "separate entrance"
+        ],
+        "stackableWith": [],
+        "workStartWithinDaysOfApproval": {
+          "value": null,
+          "conflict": [
+            {
+              "days": 90,
+              "source": "Application form v11 (2026-05-22), s. 8.5"
+            },
+            {
+              "days": 120,
+              "source": "Fact sheet (Dec 2025), p. 7 step 10"
+            }
+          ]
+        }
+      },
+      "fitsPlans": {
+        "family_suite": "depends",
+        "rental": "fits",
+        "market_rental": "no"
+      },
+      "fitsPlansNote": "The Region pitches it for an 'affordable in-law suite', but every occupant is treated as a tenant who must pass income verification and pay rent at or under the cap. Requires the owner to live in the house for 15 years.",
+      "nextStep": "Confirm zoning with the Township, then send the application to OntarioRenovates@regionofwaterloo.ca before any work starts.",
+      "source": {
+        "title": "Funding for Secondary Suites (Region of Waterloo)",
+        "url": "https://www.regionofwaterloo.ca/programs-and-services/employment-and-financial-supports/financial-support-for-renters-and-homeowners/funding-for-secondary-suites/",
+        "section": "Who is eligible; How to apply",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "Ontario Renovates Program Fact Sheet for Secondary Suites (Dec 2025)",
+          "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/qorb1jgf/secondary-suite-fact-sheet.pdf",
+          "section": "pp. 1-7",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Ontario Renovates Secondary Suite Application (doc 2295447 v11, 2026-05-22)",
+          "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/55bf0zge/docs_admin-2295447-v11-ontario_renovates_secondary_suite_application-aoda.pdf",
+          "section": "s. 7 Maximum rent and tenant household income",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": false,
+      "notes": "Unverified: the house-value cap conflicts ($600,000 on the web page vs $505,469 in the Dec 2025 fact sheet). The fact sheet also says work must start within 90 days of approval (p. 4) and within 120 days (p. 7), and still prints an old 'deadline December 1, 2023'. The web page says applications are received on an ongoing basis but annual funding is limited; if the year's money is gone, eligible applicants go on a waitlist for the following year. The 2026 funding balance is not published.",
+      "maxCAD": 25000,
+      "shortName": "Region of Waterloo forgivable loan",
+      "apply": {
+        "when": "before_work",
+        "paidWhen": "after the work is finished and inspected",
+        "who": "You",
+        "where": [
+          {
+            "label": "Application form (PDF)",
+            "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/55bf0zge/docs_admin-2295447-v11-ontario_renovates_secondary_suite_application-aoda.pdf"
+          },
+          {
+            "label": "OntarioRenovates@regionofwaterloo.ca",
+            "url": "mailto:OntarioRenovates@regionofwaterloo.ca"
+          }
+        ],
+        "bring": [
+          "Written confirmation from the Township that your lot is zoned for a second unit",
+          "Photo ID, proof of status in Canada and proof of age for each owner",
+          "Your latest tax bill or MPAC assessment notice",
+          "Proof your mortgage, property tax and home insurance payments are up to date",
+          "Your mortgage balance, and your lender's OK for a second mortgage if the work costs more than $25,000"
+        ],
+        "payout": {
+          "title": "send invoices and the occupancy permit",
+          "detail": "The Region inspects the work, then pays. It checks the tenant's income before the lease is signed.",
+          "where": [
+            {
+              "label": "OntarioRenovates@regionofwaterloo.ca",
+              "url": "mailto:OntarioRenovates@regionofwaterloo.ca"
+            }
+          ],
+          "bring": [
+            "Paid invoices",
+            "The occupancy permit",
+            "The tenant's income check and the signed lease"
+          ]
+        }
+      }
+    }
+  ],
+  "tenantIncomeLimitByTownship": {
+    "Wellesley": {
+      "year": 2025,
+      "area": "Wellesley and Wilmot Townships",
+      "householdCAD": {
+        "bachelor": 31000,
+        "1br": 41000,
+        "2br": 52000,
+        "3br": 42000
+      },
+      "note": "As printed: the 3-bedroom limit ($42,000) is lower than the 2-bedroom one ($52,000) in both the fact sheet and the form.",
+      "source": {
+        "title": "Ontario Renovates Program Fact Sheet for Secondary Suites (Dec 2025)",
+        "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/qorb1jgf/secondary-suite-fact-sheet.pdf",
+        "section": "'Wellesley and Wilmot Townships' income limits",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "Ontario Renovates Secondary Suite Application (v11, 2026-05-22)",
+          "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/55bf0zge/docs_admin-2295447-v11-ontario_renovates_secondary_suite_application-aoda.pdf",
+          "section": "s. 7 Household Income Limits",
+          "retrieved": "2026-10-30"
+        }
+      ]
+    },
+    "Wilmot": {
+      "year": 2025,
+      "area": "Wellesley and Wilmot Townships",
+      "householdCAD": {
+        "bachelor": 31000,
+        "1br": 41000,
+        "2br": 52000,
+        "3br": 42000
+      },
+      "note": "As printed: the 3-bedroom limit ($42,000) is lower than the 2-bedroom one ($52,000) in both the fact sheet and the form.",
+      "source": {
+        "title": "Ontario Renovates Program Fact Sheet for Secondary Suites (Dec 2025)",
+        "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/qorb1jgf/secondary-suite-fact-sheet.pdf",
+        "section": "'Wellesley and Wilmot Townships' income limits",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "Ontario Renovates Secondary Suite Application (v11, 2026-05-22)",
+          "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/55bf0zge/docs_admin-2295447-v11-ontario_renovates_secondary_suite_application-aoda.pdf",
+          "section": "s. 7 Household Income Limits",
+          "retrieved": "2026-10-30"
+        }
+      ]
+    }
+  },
+  "trades": [
+    {
+      "title": "General contractor, for the Region's loan",
+      "detail": "The Region needs 3 quotes, each from a contractor with WSIB coverage and liability insurance.",
+      "label": "Region's loan fact sheet",
+      "url": "https://media-003-ca.cdn.govstack.com/regionofwaterloo-018-ca/media/qorb1jgf/secondary-suite-fact-sheet.pdf",
+      "program": "region_ontario_renovates_secondary_suites"
+    }
+  ]
+}

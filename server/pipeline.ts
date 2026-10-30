@@ -22,6 +22,9 @@ import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type Basemen
 import { cameraLookup } from "./capture";
 import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
+import { causeOf, FAILURE, stored } from "./failure";
+import { charge, PRICES } from "./spend";
+import { labelled } from "./demo";
 
 const run = promisify(execFile);
 
@@ -217,14 +220,19 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
   const work = join(tmpdir(), "basement-ready", scanId);
   rmSync(work, { recursive: true, force: true });
   mkdirSync(join(work, "frames"), { recursive: true });
+  // Work still reading the folder when something fails: the folder goes only once it's settled, and a
+  // failure in it never goes unhandled (that would take the whole server down).
+  const inflight: Promise<unknown>[] = [];
 
   try {
     await emit("stage", "prepare");
     const input = join(work, `input${extname(scan.videoKey) || ".mp4"}`);
     await storage.download(scan.videoKey, input);
     const { analysis, wav, frameCount } = await prepare(work, input);
+    if (!frameCount) throw new Error("ffmpeg: no frames in the video");
     await emit("log", `Reading ${frameCount} frames from your video`, { frameCount });
     const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
+    inflight.push(uploads.catch(() => {}));
 
     // One retry, and a failure is logged rather than passed off as "you didn't talk".
     const transcriptP = wav
@@ -242,6 +250,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
             return { transcript: "", turns: [] };
           })
       : Promise.resolve({ transcript: "", turns: [] });
+    inflight.push(transcriptP);
 
     // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
     const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[]; ideas?: Idea[]; spoken?: Span[]; lens?: "ultrawide" | "wide"; wideAt?: number };
@@ -254,6 +263,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
           return null;
         })
       : Promise.resolve(null);
+    inflight.push(basementP);
 
     await emit("stage", "find");
     const fileId = await uploadFile(analysis, "video/mp4", "basement.mp4");
@@ -261,7 +271,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const detections: Detection[] = [];
     await Promise.all(
       CONCEPTS.map(async (c) => {
-        const raw = await samVideo(c.concept, fileId).catch(() => "");
+        const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
         // Ignore flickers: an object must hold for half a second to count.
         const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
         const found: Detection[] = tracks.map((t, i) => {
@@ -304,8 +314,12 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     await emit("log", "Checking your city's second-unit rules");
     const ctx = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
     const sparkP = readWithSpark(ctx, detections, transcript.transcript, transcript.turns);
+    // Awaited after the 3D; a Spark failure meanwhile is still this scan's error, never an unhandled one.
+    inflight.push(sparkP.catch(() => {}));
 
     const basement3d = await basementP;
+    // The 3D service bills by the GPU second: an estimate per area, plus the rough pass over the walk.
+    if (basement3d) charge("scan3d", (basement3d.scans.length + 1) * PRICES.scan3dArea());
     // Without the 3D, the phone's room marks still name the areas.
     const ranges = basement3d ? basement3d.spans.map((span, index) => ({ index, ...span })) : roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
     const scans3d: (Scan3d | null)[] = basement3d ? basement3d.scans : ranges.map(() => null);
@@ -349,7 +363,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const plans = cleanPlans(answered.find((a) => a.ruleId === PLANS_ID)?.value);
     // Ideas they tapped while filming count as much as what they said.
     // A starting layout inside the main room, for the 3D staging, the plan drawing and the brief.
-    const result = {
+    // The demo house: Waterloo's rules for a house that isn't real, labelled wherever it shows.
+    const result = labelled({
       ...rechecked,
       vision: withIdeas(rechecked.vision, inputs.ideas, rooms),
       // How it was filmed: the lens, and the still wide shot the staged photos start from.
@@ -360,7 +375,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       wants: rechecked.wants || plansWords(plans),
       // The photos started with the finds; whatever has landed so far comes with the answer.
       concepts: await photosSoFar(scanId),
-    };
+    }, Boolean((inputs as { demo?: boolean }).demo));
     await db
       .update(schema.scans)
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })
@@ -370,15 +385,21 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     await settlePhotos(scanId);
     await enqueuePhotos(scanId);
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (opts.lastAttempt) {
-      await db.update(schema.scans).set({ status: "error", error: message, finishedAt: new Date() }).where(eq(schema.scans.id, scanId));
-      await emit("error", "Something went wrong reading your video. Please try again, or try a shorter clip.");
+    // The real cause, in plain words; a missing key or an unreadable file won't fix itself on a retry.
+    const cause = causeOf(err);
+    if (opts.lastAttempt || !FAILURE[cause].retry) {
+      await db.update(schema.scans).set({ status: "error", error: stored(cause, err), finishedAt: new Date() }).where(eq(schema.scans.id, scanId));
+      await emit("error", FAILURE[cause].text, { cause, retry: FAILURE[cause].retry });
+      if (!FAILURE[cause].retry) {
+        console.error(`[scan] ${scanId}: ${stored(cause, err)}`);
+        return;
+      }
     } else {
       await emit("log", "Hit a snag, trying again…");
     }
     throw err;
   } finally {
+    await Promise.allSettled(inflight);
     rmSync(work, { recursive: true, force: true });
   }
 }

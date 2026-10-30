@@ -21,7 +21,7 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
       <>
         <p>
           Nothing, for homeowners. Scanning, the answer, the 3D view and the brief are free. Designers and builders will
-          pay for qualified leads, and that's how it stays free for you. Right now even founding pros use it free.
+          pay for qualified leads once the pro side opens, and that's how it stays free for you. Founding pros start free.
         </p>
       </>
     ),
@@ -112,7 +112,8 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
     q: "What happens to my video?",
     a: (
       <p>
-        We use it to scan your basement. The raw video is deleted after 30 days unless you save your project. Nothing
+        We use it to scan your basement. The raw video is deleted after 30 days; the frames, 3D scan and answer stay so
+        your plan still opens, until you delete them. Nothing
         goes to a designer or builder unless you choose them and press send. Please don't film people, mail or anything
         with your address on it. <a href={PATHS.privacy}>Read the privacy policy</a>.
       </p>
@@ -122,8 +123,11 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
     q: "Which cities do you cover?",
     a: (
       <p>
-        Waterloo, Kitchener and Cambridge. Anywhere else in Ontario, you get the provincial rules with a note on what to
-        confirm with your City. <a href={PATHS.cities}>See what's covered</a>.
+        All of Ontario, with Waterloo Region in depth. Waterloo, Kitchener and Cambridge get their own zoning rules,
+        fees, grants, forms and permit steps. Woolwich, Wilmot, North Dumfries and Wellesley get Ontario's rules plus
+        the Region's loan. Anywhere else in Ontario, you get the province's rules under your municipality's name, with
+        a note on what to confirm locally. Outside Ontario, try the demo house. <a href={PATHS.cities}>See what's
+        covered</a>.
       </p>
     ),
   },
