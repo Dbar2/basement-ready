@@ -356,7 +356,7 @@
       "product": "BRK Smoke Detector Hardwired with LED Stroboscope with Back-Up Battery - White",
       "unit": "each",
       "coverage": "one alarm with strobe",
-      "priceCAD": 179.0,
+      "priceCAD": 179,
       "retailer": "RONA",
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/brk-smoke-detector-hardwired-with-led-stroboscope-with-back-up-battery-white-1048355-71585178",
@@ -398,7 +398,7 @@
       "product": "BRK Smoke Detector Hardwired with LED Stroboscope with Back-Up Battery - White",
       "unit": "each",
       "coverage": "one alarm with strobe",
-      "priceCAD": 179.0,
+      "priceCAD": 179,
       "retailer": "RONA",
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/brk-smoke-detector-hardwired-with-led-stroboscope-with-back-up-battery-white-1048355-71585178",
@@ -880,5 +880,311 @@
       "checked": "2026-10-29",
       "note": "Toronto figure; HST not included."
     }
-  ]
+  ],
+  "labour": [
+    {
+      "id": "pack_egress",
+      "item": "Egress window incl. excavation, cutting, framing, install",
+      "lowCAD": 3000,
+      "highCAD": 6000,
+      "unit": "each",
+      "installed": true,
+      "region": "Kitchener-Waterloo",
+      "publisher": "Caliber Contracting",
+      "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+      "pageDate": "2026-04",
+      "checked": "2026-10-28",
+      "fromPack": "Egress window incl. excavation, cutting, framing, install"
+    },
+    {
+      "id": "pack_rough_in",
+      "item": "Bathroom rough-in",
+      "lowCAD": 8000,
+      "highCAD": 15000,
+      "unit": "job",
+      "installed": true,
+      "region": "Toronto",
+      "publisher": "HomeStars",
+      "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-28",
+      "fromPack": "Bathroom rough-in"
+    },
+    {
+      "id": "pack_firestopping",
+      "item": "Firestopping and fire dampers",
+      "lowCAD": 1000,
+      "highCAD": 3000,
+      "unit": "job",
+      "installed": true,
+      "region": "Toronto",
+      "publisher": "RenoHouse",
+      "url": "https://renohouse.ca/blog/basement-apartment-legalization-toronto",
+      "pageDate": "2026-05-05",
+      "checked": "2026-10-28",
+      "fromPack": "Firestopping and fire dampers"
+    },
+    {
+      "id": "pack_designer",
+      "item": "Designer drawings for permit",
+      "lowCAD": 2000,
+      "highCAD": 5000,
+      "unit": "job",
+      "installed": false,
+      "region": "Toronto",
+      "publisher": "HomeStars",
+      "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-28",
+      "fromPack": "Designer drawings for permit",
+      "note": "Does not say BCIN specifically; no Ontario BCIN designer published a price."
+    },
+    {
+      "id": "lab_demo",
+      "item": "Removing a non-loadbearing wall and its drywall",
+      "lowCAD": 5,
+      "highCAD": 8,
+      "unit": "sqft",
+      "installed": false,
+      "region": "Quebec",
+      "publisher": "RenoQuotes",
+      "url": "https://renoquotes.com/en/blog/interior-demolition-costs-in-quebec-a-guide-to-prices-per-square-foot",
+      "pageDate": "2026-06-11",
+      "checked": "2026-10-30",
+      "note": "The low end of RenoQuotes Quebec interior demolition range; whether disposal is included is not stated. No Ontario per-sq-ft wall removal rate was found."
+    },
+    {
+      "id": "lab_framing",
+      "item": "Framing wood stud walls",
+      "lowCAD": 15,
+      "highCAD": 30,
+      "unit": "lf",
+      "installed": true,
+      "region": "Toronto",
+      "publisher": "Magic Windows & Doors",
+      "url": "https://www.magicwindow.ca/blog/basement-renovation-cost-in-toronto-a-complete-2025-guide",
+      "pageDate": "2025-12-01",
+      "checked": "2026-10-30",
+      "note": "Installed price including the lumber: the quote takes the shelf price of the lumber off it. No labour-only rate in CAD was found."
+    },
+    {
+      "id": "lab_insulation",
+      "item": "Batt insulation in 2x4 walls (R-14 fibreglass to R-22 mineral wool)",
+      "lowCAD": 1.1,
+      "highCAD": 2.4,
+      "unit": "sqft",
+      "installed": true,
+      "region": "Simcoe County / Central Ontario",
+      "publisher": "BuildersOntario.com",
+      "url": "https://buildersontario.com/?p=13698",
+      "pageDate": "rates checked October 2026",
+      "checked": "2026-10-30",
+      "note": "Installed price including the batts: the quote takes the shelf price of the batts off it. No labour-only rate was found."
+    },
+    {
+      "id": "lab_drywall_hang",
+      "item": "Hanging drywall (not taping)",
+      "lowCAD": 1,
+      "highCAD": 1.75,
+      "unit": "sqft",
+      "installed": false,
+      "region": "Toronto",
+      "publisher": "RenoHouse",
+      "url": "https://renohouse.ca/blog/drywall-installation-cost-toronto",
+      "pageDate": "2026-06-09",
+      "checked": "2026-10-30",
+      "note": "Hanging only, board priced separately. BuildersOntario.com gives $1.20/sq ft hang-only with the board on site (Southern Ontario, https://buildersontario.com/?p=13245)."
+    },
+    {
+      "id": "lab_electrician",
+      "item": "Licensed electrician, hourly",
+      "lowCAD": 75,
+      "highCAD": 130,
+      "unit": "hour",
+      "installed": false,
+      "region": "Kitchener-Waterloo",
+      "publisher": "RenoHouse",
+      "url": "https://renohouse.ca/blog/electrician-kitchener-toronto",
+      "pageDate": "2026-05-26",
+      "checked": "2026-10-30",
+      "note": "HomeStars gives $80-$130/hour for Kitchener. The hours per device in the quote are this app's estimate."
+    },
+    {
+      "id": "lab_plumber",
+      "item": "Licensed plumber, hourly",
+      "lowCAD": 80,
+      "highCAD": 170,
+      "unit": "hour",
+      "installed": false,
+      "region": "Kitchener",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/plumbing/plumber-pros/kitchener-ontario",
+      "pageDate": null,
+      "checked": "2026-10-30",
+      "note": "Same range on the Waterloo page. The hours per fixture in the quote are this app's estimate."
+    },
+    {
+      "id": "lab_fan",
+      "item": "Installing a bathroom exhaust fan, labour",
+      "lowCAD": 140,
+      "highCAD": 550,
+      "unit": "each",
+      "installed": false,
+      "region": "Canada",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/bathroom-sanitary/price-guides/bath-fan-installation-cost",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-30",
+      "note": "New ducting adds $140-$490 on the same page."
+    },
+    {
+      "id": "lab_door",
+      "item": "Installing an interior door",
+      "lowCAD": 150,
+      "highCAD": 350,
+      "unit": "each",
+      "installed": false,
+      "region": "Kitchener",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/carpentry/carpenter-pros/kitchener-ontario",
+      "pageDate": null,
+      "checked": "2026-10-30",
+      "note": "The page does not say whether the door itself is included; the quote counts it as labour and prices the door separately."
+    },
+    {
+      "id": "lab_flooring",
+      "item": "Installing vinyl plank flooring, labour",
+      "lowCAD": 1,
+      "highCAD": 2,
+      "unit": "sqft",
+      "installed": false,
+      "region": "Canada",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/flooring-tiles/price-guides/vinyl-flooring-installation-cost",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-30"
+    },
+    {
+      "id": "lab_trim",
+      "item": "Installing baseboard, labour",
+      "lowCAD": 3,
+      "highCAD": 5,
+      "unit": "lf",
+      "installed": false,
+      "region": "Canada",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/home-constructions-renovations/price-guides/cost-to-install-baseboard-trim",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-30",
+      "note": "Installed with materials: $6-$10/lf on the same page."
+    },
+    {
+      "id": "lab_paint_walls",
+      "item": "Painting new drywall walls: primer and two coats",
+      "lowCAD": 2.25,
+      "highCAD": 3,
+      "unit": "sqft",
+      "installed": true,
+      "region": "Ontario",
+      "publisher": "BuildersOntario.com",
+      "url": "https://buildersontario.com/?p=13247",
+      "pageDate": "rates checked October 2026",
+      "checked": "2026-10-30",
+      "note": "Installed price including paint, before HST: the quote takes the shelf price of the paint off it."
+    },
+    {
+      "id": "lab_paint_ceiling",
+      "item": "Painting new drywall ceilings: primer and two coats",
+      "lowCAD": 1.65,
+      "highCAD": 2.15,
+      "unit": "sqft",
+      "installed": true,
+      "region": "Ontario",
+      "publisher": "BuildersOntario.com",
+      "url": "https://buildersontario.com/?p=13247",
+      "pageDate": "rates checked October 2026",
+      "checked": "2026-10-30",
+      "note": "Installed price including paint, before HST: the quote takes the shelf price of the paint off it."
+    },
+    {
+      "id": "lab_cabinets",
+      "item": "Installing kitchen cabinets, labour",
+      "lowCAD": 100,
+      "highCAD": 200,
+      "unit": "each",
+      "installed": false,
+      "region": "GTA (North York)",
+      "publisher": "Iron Installation",
+      "url": "https://ironinstallation.ca/services/assembly-and-installation-services/ikea-kitchen-installation",
+      "pageDate": null,
+      "checked": "2026-10-30",
+      "note": "Per cabinet. HomeStars gives $100-$300 per linear foot (Canada)."
+    }
+  ],
+  "fees": {
+    "permit": {
+      "waterloo-on": {
+        "perUnitCAD": 392,
+        "perSqftCAD": 0.62,
+        "estimate": false,
+        "title": "Check building permit timelines and fees (City of Waterloo)",
+        "url": "https://www.waterloo.ca/building-and-renovating/get-a-building-permit/check-building-permit-timelines-and-fees/",
+        "checked": "2026-10-28"
+      },
+      "kitchener-on": {
+        "perSqftCAD": 0.37,
+        "minimumCAD": 163,
+        "estimate": false,
+        "title": "Residential building permits (City of Kitchener)",
+        "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
+        "checked": "2026-10-29"
+      },
+      "cambridge-on": {
+        "perSqftCAD": 0.5,
+        "minimumCAD": 143,
+        "extrasCAD": 25,
+        "estimate": true,
+        "title": "Municipal Fees and Charges By-law 25-079 (City of Cambridge)",
+        "url": "https://www.cambridge.ca/media/nridbsyx/municipal-fees-and-charges-by-law-25-079.pdf",
+        "checked": "2026-10-28"
+      }
+    },
+    "esa": {
+      "homeowner": [
+        {
+          "upTo": 10,
+          "CAD": 64
+        },
+        {
+          "upTo": 30,
+          "CAD": 143
+        },
+        {
+          "upTo": 40,
+          "CAD": 220
+        },
+        {
+          "upTo": null,
+          "CAD": 340
+        }
+      ],
+      "contractor": {
+        "id": "esa_contractor",
+        "item": "ESA notification fee pulled by a licensed electrical contractor, renovation with 41+ outlets",
+        "lowCAD": 201,
+        "highCAD": 256,
+        "unit": "job",
+        "installed": false,
+        "region": "Ontario",
+        "publisher": "Electrical Safety Authority (Ontario's delegated electrical regulator)",
+        "url": "https://esasafe.com/assets/files/esasafe/pdf/Fees/2026-Residential-Fees-Reference-Guide.pdf",
+        "pageDate": "2026-04-01",
+        "checked": "2026-10-28",
+        "note": "Contractor rate: $201 without service work, $256 with it (the non-contractor rates are $340 and $399). Read from the same ESA guide the rules packs cite; fees effective 2026-04-01."
+      },
+      "title": "2026 Electrical Safety Services Fees: Residential Fees Quick Reference Guide (ESA)",
+      "url": "https://esasafe.com/assets/files/esasafe/pdf/Fees/2026-Residential-Fees-Reference-Guide.pdf",
+      "checked": "2026-10-29"
+    }
+  }
 }

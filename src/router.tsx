@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Logo } from "./components/Logo";
 import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
@@ -17,6 +17,10 @@ export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/
 
 // The one-page plan to hand a designer, made to print or save as a PDF.
 const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
+
+// The book: the design, pictures, quote, permit readiness, money and timeline, with its PDF. Loaded
+// on its own, so the price catalog the quote carries stays out of the first page's download.
+const bookRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/book", component: lazyRouteComponent(() => import("./book/BookPage"), "BookPage") });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -57,7 +61,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
