@@ -5,7 +5,7 @@ import XCTest
 
 final class VideoWriterTests: XCTestCase {
   // Landscape sensor pixels, a 90° display turn, and times from 0: what the server's ffmpeg reads.
-  func testHEVCPortraitVideo() async throws {
+  func testPortraitVideo() async throws {
     let url = FileManager.default.temporaryDirectory.appending(path: "writer-\(UUID().uuidString).mp4")
     defer { try? FileManager.default.removeItem(at: url) }
     let writer = try VideoWriter(url: url, width: 640, height: 480)
@@ -32,7 +32,8 @@ final class VideoWriterTests: XCTestCase {
     let (size, transform, formats) = try await track.load(.naturalSize, .preferredTransform, .formatDescriptions)
     XCTAssertEqual(size, CGSize(width: 640, height: 480))
     XCTAssertEqual(atan2(transform.b, transform.a) * 180 / .pi, 90, accuracy: 0.01)
-    XCTAssertEqual(CMFormatDescriptionGetMediaSubType(formats[0]), kCMVideoCodecType_HEVC)
+    // HEVC on a phone; the simulator writes H.264 (VideoWriter.codec).
+    XCTAssertEqual(CMFormatDescriptionGetMediaSubType(formats[0]), VideoWriter.codec == .hevc ? kCMVideoCodecType_HEVC : kCMVideoCodecType_H264)
     let duration = try await asset.load(.duration).seconds
     XCTAssertEqual(duration, 2, accuracy: 0.1)
     if let dir = ProcessInfo.processInfo.environment["BR_EXPORT_DIR"] {
