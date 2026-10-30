@@ -477,7 +477,7 @@ export function PermitTab(props: TabProps) {
         {error && <p className="error" role="alert">{error}</p>}
         {fillable.length > 0 && scanId !== "sample" && (
           <p className="ws-forms">
-            <span className="mono">Forms on their own, still editable:</span>
+            <span className="aside">Forms on their own, still editable:</span>
             {fillable.map((f) => (
               <button key={f.id} className="link-quiet" disabled={busy !== null} onClick={() => void run(f.id, () => downloadForm(scanId, f.id))}>
                 {f.title}
@@ -533,7 +533,7 @@ export function PermitTab(props: TabProps) {
             {plan.needsPro.map((n) => (
               <li key={n.id} data-live={n.live || undefined}>
                 <h3>{n.title}</h3>
-                <p className="mono ws-who">{n.who}</p>
+                <p className="ws-who">{n.who}</p>
                 <p>{n.detail}</p>
                 {!n.live && <p className="muted">Only if your plan includes this.</p>}
                 <p>

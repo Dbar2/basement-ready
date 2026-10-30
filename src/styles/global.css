@@ -284,6 +284,8 @@ a { color: inherit; }
 .block .note { padding-left: 0; }
 
 .questions li { display: grid; grid-template-columns: 120px 1fr; gap: 20px; align-items: start; }
+/* A question without a picture takes the whole row. */
+.questions li > .q-body:only-child { grid-column: 1 / -1; max-width: 62ch; }
 .q-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
 .q-input { width: 220px; max-width: 100%; padding: 10px 12px; }
 .q-save { padding: 10px 18px; font-size: 15px; }

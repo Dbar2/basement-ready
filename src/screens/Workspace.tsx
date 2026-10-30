@@ -285,7 +285,7 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
           <BuildTab {...props} />
         </div>
       )}
-      {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty mono ws-wait">Opening your workspace…</p>}
+      {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty ws-wait">Opening your workspace…</p>}
 
       <SiteFooter />
       {readOnly && (
