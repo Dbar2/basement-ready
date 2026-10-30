@@ -50,7 +50,7 @@ struct FilmingGuide: View {
       VStack(spacing: 18) {
         PageDots(count: pages.count, page: $page)
         Button(isLast ? "Got it" : "Next") { next() }
-          .buttonStyle(MintButton())
+          .buttonStyle(PrimaryButton())
           .accessibilityHint(isLast ? "Closes the guide" : "")
       }
       .padding(.horizontal, 20)
