@@ -79,9 +79,13 @@ try {
         log(`Skipping take ${take}: ${why}`);
         continue;
       }
-      const t = await runTake(take, baseURL, log);
-      scans.push(t.scanId);
-      claims.push(...t.claims);
+      try {
+        const t = await runTake(take, baseURL, log);
+        scans.push(t.scanId);
+        claims.push(...t.claims);
+      } catch (e) {
+        log(`Skipping take ${take}: ${(e as Error).message.split("\n")[0]}`);
+      }
     }
     const shots = buildPlan({ scans, browsers: args.browsers, viewports: args.viewports, only: args.only, all: args.all });
     if (!shots.length) throw new Error(`--only ${args.only.join(",")} matches no screen`);
