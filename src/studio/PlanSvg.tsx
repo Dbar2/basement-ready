@@ -4,10 +4,10 @@
 // dragged (or nudged with the arrow keys once picked), and a new wall drawn with a finger.
 import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { add, along, bounds, centroid, dist, dot, inPolygon, mul, openingEnds, polygonArea, project, sub, wallLength, wallNormal, type Box } from "../../server/model/geometry";
-import type { Alarm, Fixture, Opening, Pt, Room, Wall } from "../../server/model/types";
+import type { Alarm, Fixture, Furniture, Opening, Pt, Room, Wall } from "../../server/model/types";
 import { fmtArea, fmtLength, type Units } from "../components/FloorPlan";
 
-export type PlanLayer = { walls: Wall[]; openings: Opening[]; rooms: Room[]; fixtures: Fixture[]; alarms?: Alarm[] };
+export type PlanLayer = { walls: Wall[]; openings: Opening[]; rooms: Room[]; fixtures: Fixture[]; alarms?: Alarm[]; furniture?: Furniture[] };
 export type Picked = { kind: "wall" | "opening" | "room" | "fixture"; id: string } | null;
 
 const W = 1000;
@@ -199,6 +199,20 @@ export function PlanSvg(props: {
             e.stopPropagation();
             props.onSelect({ kind: "room", id: r.id });
           }}
+        />
+      ))}
+
+      {/* furniture, where the model puts it: the same pieces the 3D and the pictures show */}
+      {(layer.furniture ?? []).map((f) => (
+        <rect
+          key={f.id}
+          className="model-furniture"
+          x={-(f.sizeM[0] * s) / 2}
+          y={-(f.sizeM[1] * s) / 2}
+          width={f.sizeM[0] * s}
+          height={f.sizeM[1] * s}
+          rx={3}
+          transform={`translate(${X(f.at[0])} ${Z(f.at[1])}) rotate(${-f.rotDeg})`}
         />
       ))}
 

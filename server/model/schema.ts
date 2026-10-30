@@ -38,6 +38,8 @@ const RoomSchema = z.object({
 const FixtureKindSchema = z.enum(["furnace", "water_heater", "panel", "plumbing", "beam", "duct", "bulkhead", "post", "stairs"]);
 const FixtureSchema = z.object({ id, kind: FixtureKindSchema, at: pt, sizeM: z.tuple([size, size]).optional(), heightM: num.min(0).max(6).nullable().optional(), detectionId: id.optional(), guess: z.boolean().optional() });
 const AlarmSchema = z.object({ id, kind: z.enum(["smoke", "co", "combo"]), at: pt, why: z.string().max(200) });
+const FurnitureKindSchema = z.enum(["bed", "sofa", "armchair", "desk", "dining", "dresser", "tv", "rug", "shelf", "kitchen", "fridge", "vanity", "toilet", "shower", "washer_dryer", "other"]);
+const FurnitureSchema = z.object({ id, kind: FurnitureKindSchema, at: pt, rotDeg: num.min(-720).max(720), sizeM: z.tuple([num.min(0.05).max(12), num.min(0.05).max(12)]), colour: z.string().max(40).optional(), roomId: id.optional() });
 const FinishesSchema = z.object({ style: z.string().max(40), floor: z.string().max(80), walls: z.string().max(80), kitchen: z.string().max(80).optional(), bath: z.string().max(80).optional() });
 const Layer = { walls: z.array(WallSchema).max(200), openings: z.array(OpeningSchema).max(200), rooms: z.array(RoomSchema).max(60), fixtures: z.array(FixtureSchema).max(80) };
 
@@ -56,7 +58,8 @@ export const DesignSchema = z.object({
   id,
   name: z.string().trim().max(60),
   layout: z.enum(["one_bedroom", "studio", "two_bedroom", "custom"]),
-  proposed: z.object({ ...Layer, alarms: z.array(AlarmSchema).max(40) }),
+  // Designs saved before furniture joined the model have none yet.
+  proposed: z.object({ ...Layer, alarms: z.array(AlarmSchema).max(40), furniture: z.array(FurnitureSchema).max(120).default([]) }),
   finishes: FinishesSchema,
   chosen: z.boolean(),
   updatedAt: z.string().max(40),
@@ -93,6 +96,9 @@ export const EditSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("set_fixture"), fixtureId: id, kind: FixtureKindSchema.optional(), at: pt.optional(), sizeM: z.tuple([size, size]).optional(), heightM: num.min(0).max(6).nullable().optional() }),
   z.object({ op: z.literal("remove_fixture"), fixtureId: id }),
   z.object({ op: z.literal("set_finishes"), finishes: FinishesSchema.partial() }),
+  z.object({ op: z.literal("add_furniture"), furniture: FurnitureSchema.extend({ id: id.default("") }) }),
+  z.object({ op: z.literal("set_furniture"), furnitureId: id, kind: FurnitureKindSchema.optional(), at: pt.optional(), rotDeg: num.min(-720).max(720).optional(), sizeM: z.tuple([num.min(0.05).max(12), num.min(0.05).max(12)]).optional(), colour: z.string().max(40).optional() }),
+  z.object({ op: z.literal("remove_furniture"), furnitureId: id }),
 ]);
 
 // Edits someone (or something) proposed, kept only where they make sense for this design: the things
@@ -179,6 +185,13 @@ export function validateEdits(design: Design, existing: Existing, raw: unknown):
       }
       case "set_finishes":
         return null;
+      case "add_furniture":
+        return inside(e.furniture.at) ? null : "That's outside the basement.";
+      case "set_furniture":
+      case "remove_furniture": {
+        if (!(design.proposed.furniture ?? []).some((f) => f.id === e.furnitureId)) return `There's no furniture ${e.furnitureId}.`;
+        return e.op === "set_furniture" && e.at && !inside(e.at) ? "That's outside the basement." : null;
+      }
     }
   }
 }

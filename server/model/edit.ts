@@ -6,7 +6,7 @@
 // grow or shrink with it, so the plan stays closed and the checks see the new sizes.
 import { placeAlarms, burnsFuel } from "./alarms";
 import { add, along, clamp, dot, mul, project, r3, roundPt, sub, wallDir, wallLength, wallNormal } from "./geometry";
-import type { Design, Edit, Existing, Fixture, Opening, Pt, Room, Wall } from "./types";
+import type { Design, Edit, Existing, Fixture, Furniture, Opening, Pt, Room, Wall } from "./types";
 
 export type Layer = { walls: Wall[]; openings: Opening[]; rooms: Room[]; fixtures: Fixture[] };
 
@@ -201,13 +201,39 @@ export function editLayer<T extends Layer>(layer: T, e: Edit): T {
     case "remove_fixture":
       return { ...layer, fixtures: layer.fixtures.filter((f) => f.id !== e.fixtureId) };
     case "set_finishes":
+    case "add_furniture":
+    case "set_furniture":
+    case "remove_furniture":
       return layer;
   }
+}
+
+// Furniture belongs to a design: placed once in the model, so every picture of it agrees.
+function editFurniture(list: Furniture[], e: Extract<Edit, { op: "add_furniture" | "set_furniture" | "remove_furniture" }>): Furniture[] {
+  if (e.op === "remove_furniture") return list.filter((f) => f.id !== e.furnitureId);
+  if (e.op === "add_furniture") {
+    const id = list.some((f) => f.id === e.furniture.id) || !e.furniture.id ? nextId(e.furniture.kind, list) : e.furniture.id;
+    return [...list, { ...e.furniture, id, at: roundPt(e.furniture.at) }];
+  }
+  return list.map((f) =>
+    f.id === e.furnitureId
+      ? {
+          ...f,
+          ...(e.kind ? { kind: e.kind } : {}),
+          ...(e.at ? { at: roundPt(e.at) } : {}),
+          ...(e.rotDeg !== undefined ? { rotDeg: e.rotDeg } : {}),
+          ...(e.sizeM ? { sizeM: e.sizeM } : {}),
+          ...(e.colour !== undefined ? { colour: e.colour } : {}),
+        }
+      : f,
+  );
 }
 
 // A change to a design. The alarms follow the rooms: they're placed again by the rules after every edit.
 export function applyEdit(design: Design, e: Edit, now = new Date().toISOString()): Design {
   if (e.op === "set_finishes") return { ...design, finishes: { ...design.finishes, ...e.finishes }, updatedAt: now };
+  if (e.op === "add_furniture" || e.op === "set_furniture" || e.op === "remove_furniture")
+    return { ...design, proposed: { ...design.proposed, furniture: editFurniture(design.proposed.furniture ?? [], e) }, updatedAt: now };
   const layer = editLayer({ ...design.proposed }, e);
   const next: Design = { ...design, proposed: { ...layer, alarms: design.proposed.alarms }, updatedAt: now };
   next.proposed.alarms = placeAlarms(next, burnsFuel(layer.fixtures));
