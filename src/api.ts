@@ -15,7 +15,7 @@ export type Detection = {
 
 export type ScanEvent = {
   at: number;
-  type: "log" | "find" | "measure" | "stage" | "done" | "error";
+  type: "log" | "find" | "measure" | "stage" | "done" | "error" | "path" | "model";
   text: string;
   data?: { kind?: string; label?: string; detections?: Detection[]; frameCount?: number };
 };
