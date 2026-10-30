@@ -8,8 +8,9 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
-import type { Existing } from "../../server/model/types";
+import type { Existing, Pt } from "../../server/model/types";
 import { AsBuiltScene, asBuiltOf, homeView, useAtlas } from "./AsBuilt";
+import { bestView, spotsOf } from "./AsBuiltView";
 import { Tag, TagRoot, TagTracker } from "./Tags";
 
 const EYE_M = 1.5;
@@ -416,12 +417,18 @@ export function RealScan(props: {
   // The as-built model opens standing in the middle of the biggest room, looking across it; the raw
   // scan where they started filming (often the stairs, looking down).
   const home = useMemo((): Viewpoint | null => {
-    const h = existing && props.asBuilt ? homeView(existing) : null;
-    if (!h) return null;
+    if (!existing || !props.asBuilt) return null;
+    // The filmed spot that looks furthest into the basement; without spots, the biggest room's long view.
+    // Doors count as shut: a long view through a doorway is a close-up of the door.
+    const walls = existing.walls.map((w): [Pt, Pt] => [w.a, w.b]);
+    const v = bestView(spotsOf(scan, k), walls, existing.rooms.map((r) => r.polygon));
     // The model is in their tape's metres, the walk in the scan's.
+    if (v) return { position: new THREE.Vector3(v.at[0] / k, EYE_M, v.at[1] / k), forward: new THREE.Vector3(v.dir[0], -0.12, v.dir[1]).normalize() };
+    const h = homeView(existing);
+    if (!h) return null;
     const at = new THREE.Vector3(...h.at).divideScalar(k);
     return { position: at, forward: new THREE.Vector3(...h.look).divideScalar(k).sub(at).normalize() };
-  }, [existing, k, props.asBuilt]);
+  }, [existing, k, props.asBuilt, scan]);
   useEffect(() => {
     if (home) {
       setSpot(-1);

@@ -10,6 +10,7 @@ import * as THREE from "three";
 import { along, bounds, dot, polygonArea, project, solidPieces, sub, wallNormal } from "../../server/model/geometry";
 import type { Design, Existing, Pt, Wall } from "../../server/model/types";
 import { useAtlas } from "../three/AsBuilt";
+import { bestView, spotsOf, type Spot } from "../three/AsBuiltView";
 import { parseMesh, type Solid } from "../three/RealScan";
 import { Tag, TagRoot, TagTracker } from "../three/Tags";
 import type { Picked } from "./PlanSvg";
@@ -22,6 +23,22 @@ const EYE_M = 1.5;
 
 export function meshUrls(scanId: string) {
   return scanId === "sample" ? ["/samples/sample/3d/mesh.bin"] : [`/api/scans/${scanId}/3d/mesh.bin?room=all`, `/api/scans/${scanId}/3d/mesh.bin`];
+}
+
+// Where they filmed from (the scan's camera spots), in plan metres, for where the walk starts.
+function useSpots(scanId: string, k: number) {
+  const [spots, setSpots] = useState<Spot[]>([]);
+  useEffect(() => {
+    let gone = false;
+    fetch(scanId === "sample" ? "/samples/sample/3d/scan.json" : `/api/scans/${scanId}/3d/scan.json?room=all`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((scan) => !gone && setSpots(spotsOf(scan, k)))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [scanId, k]);
+  return spots;
 }
 
 // The raw scan's solid surface, once `scanId` is given (it's big: only when they ask for it).
@@ -70,6 +87,7 @@ export function Studio3D(props: {
   const wantScan = props.layer === "scan";
   const solid = useSolid(wantScan ? props.scanId : null);
   const { atlas } = useAtlas(props.scanId, existing);
+  const spots = useSpots(props.scanId, existing.scale.factor ?? 1);
   const phone = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   const area = useMemo(() => suiteArea(existing, design), [existing, design]);
   const handles = useRef<THREE.Group>(null);
@@ -83,7 +101,7 @@ export function Studio3D(props: {
         <DesignScene existing={existing} design={design} finish={props.finish} built={scan ? null : { atlas }} scan={scan} overview={view === "overview"} />
         <Overlay design={design} h={wallHeight(existing)} selected={props.selected} marker={props.marker} view={view} handles={handles} canDragWall={props.canDragWall} />
         {view === "walk" ? (
-          <Walker design={design} existing={existing} start={area ? mainRect(area.polygon) : null} reduced={props.reduced} />
+          <Walker design={design} existing={existing} start={area ? mainRect(area.polygon) : null} spots={spots} reduced={props.reduced} />
         ) : (
           <Overview existing={existing} reduced={props.reduced} />
         )}
@@ -262,7 +280,7 @@ function Overview({ existing, reduced }: { existing: Existing; reduced: boolean 
 
 // Walking at eye height: drag to look, tap the floor to walk there, arrow keys or WASD to step. The
 // design's walls stop you; doors let you through.
-function Walker({ design, existing, start, reduced }: { design: Design; existing: Existing; start: { x0: number; z0: number; x1: number; z1: number } | null; reduced: boolean }) {
+function Walker({ design, existing, start, spots, reduced }: { design: Design; existing: Existing; start: { x0: number; z0: number; x1: number; z1: number } | null; spots: Spot[]; reduced: boolean }) {
   const { camera, gl } = useThree();
   const look = useRef({ yaw: 0, pitch: -0.08 });
   const goal = useRef<THREE.Vector3 | null>(null);
@@ -271,16 +289,28 @@ function Walker({ design, existing, start, reduced }: { design: Design; existing
   const solid = useRef<[Pt, Pt][]>([]);
   solid.current = useMemo(() => [...design.proposed.walls.flatMap((w) => solidPieces(w, design.proposed.openings)), ...existing.walls.filter((w) => !design.proposed.walls.some((x) => x.id === w.id)).map((w): [Pt, Pt] => [w.a, w.b])], [design, existing]);
 
+  // Where the walk starts is set once, before they move; edits don't move you.
+  const placed = useRef<"none" | "middle" | "spot">("none");
   useEffect(() => {
-    // Start in the middle of the suite's main room, looking across it.
+    // From where they filmed that looks furthest into the basement, once the spots are in. Doors count
+    // as shut here: a long view through a doorway is a close-up of the door.
+    const shut = [...design.proposed.walls, ...existing.walls.filter((w) => !design.proposed.walls.some((x) => x.id === w.id))].map((w): [Pt, Pt] => [w.a, w.b]);
+    const view = bestView(spots, shut, existing.rooms.map((r) => r.polygon));
+    if (view && placed.current !== "spot") {
+      camera.position.set(view.at[0], EYE_M, view.at[1]);
+      look.current = { yaw: Math.atan2(-view.dir[0], -view.dir[1]), pitch: -0.08 };
+      placed.current = "spot";
+      return;
+    }
+    if (placed.current !== "none") return;
+    // Meanwhile (or for a scan without spots): the middle of the suite's main room, facing its longest view.
     const c: Pt = start ? [(start.x0 + start.x1) / 2, (start.z0 + start.z1) / 2] : [0, 0];
     camera.position.set(c[0], EYE_M, c[1]);
-    const bed = design.proposed.rooms.find((r) => r.kind === "bedroom" && r.unit === 2);
-    const to = bed ? mainRect(bed.polygon) : null;
-    if (to) look.current.yaw = Math.atan2(-((to.x0 + to.x1) / 2 - c[0]), -((to.z0 + to.z1) / 2 - c[1]));
-    // Where the walk starts is set once; edits don't move you.
+    const middle = bestView([0, 1, 2, 3].map((q): Spot => ({ at: c, dir: [Math.cos((q * Math.PI) / 2), Math.sin((q * Math.PI) / 2)] })), shut, []);
+    if (middle) look.current.yaw = Math.atan2(-middle.dir[0], -middle.dir[1]);
+    placed.current = "middle";
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera]);
+  }, [camera, spots]);
 
   useEffect(() => {
     const el = gl.domElement;

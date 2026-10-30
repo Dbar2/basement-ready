@@ -64,14 +64,14 @@ def render(pose, surfs, boxes=()):
         hit = (t > 0) & (t < best) & (s_ >= 0) & (t_ >= 0) & (s_ <= sd["size"][0]) & (t_ <= sd["size"][1])
         best[hit] = t[hit]
         img[hit] = pattern(sd["id"], s_[hit], t_[hit])
-    for c, size in boxes:
+    for c, size, *colour in boxes:
         lo, hi = np.asarray(c) - np.asarray(size) / 2, np.asarray(c) + np.asarray(size) / 2
         with np.errstate(divide="ignore", invalid="ignore"):
             t1, t2 = (lo[None] - C[None]) / d, (hi[None] - C[None]) / d
         tmin, tmax = np.nanmax(np.minimum(t1, t2), 1), np.nanmin(np.maximum(t1, t2), 1)
         hit = (tmax >= tmin) & (tmin > 0) & (tmin < best)
         best[hit] = tmin[hit]
-        img[hit] = (90, 90, 90)
+        img[hit] = colour[0] if colour else (90, 90, 90)
     rgb = img.reshape(H, W, 3).astype(np.uint8)
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), best.reshape(H, W).astype(np.float32)
 
@@ -292,3 +292,24 @@ def test_only_what_lies_on_the_surface_counts():
     assert on_ceiling > 100
     assert seen("ceiling", 0.3, up) < 0.1 * on_ceiling
     assert seen("ceiling", -0.3, up) > 0.8 * on_ceiling
+
+
+def test_paint_the_frames_disagree_on_is_drawn_plain():
+    # A box stands in front of the north wall, in the frames but not in the plan, and without depth to
+    # catch it: from each side it lands on a different part of the wall, so the frames disagree there.
+    poses = [pose_at([1.0, 1.4, 0.8], [2.5, 1.0, 3.0]), pose_at([3.0, 1.4, 0.8], [1.5, 1.0, 3.0]), pose_at([2.0, 1.5, 0.6], [2.0, 1.0, 3.0])]
+    box = [(np.array([2.0, 0.5, 2.4]), [0.6, 1.0, 0.3], (230, 40, 40))]
+
+    def sure(boxes):
+        surfs = room_surfaces()
+        cams, images = [], []
+        for i, pose in enumerate(poses):
+            img, _ = render(pose, surfs, boxes)
+            images.append(img)
+            cams.append({"image": i, "K": K.tolist(), "pose": pose.tolist(), "width": W, "height": H})
+        index, _ = paint({"surfaces": surfs, "occluders": [], "cameras": cams, "options": {"ppm": 40}}, images, [])
+        return index["surfaces"]["wall:n"]["sure"]
+
+    clean, cluttered = sure([]), sure(box)
+    assert clean > 0.9
+    assert cluttered < clean - 0.05
