@@ -27,7 +27,7 @@ export async function photoInputs(scanId: string): Promise<PhotoInputs | null> {
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, scanId));
   if (!scan || scan.status === "error") return null;
   const [basement] = await db.select().from(schema.basements).where(eq(schema.basements.id, scan.basementId));
-  const inputs = (scan.inputs ?? {}) as { wideAt?: number };
+  const inputs = (scan.inputs ?? {}) as { wideAt?: number; photos?: unknown };
   const plans = await plansAnswer(scan.basementId);
   const r = scan.result as any;
   if (r) {
@@ -40,6 +40,7 @@ export async function photoInputs(scanId: string): Promise<PhotoInputs | null> {
       mainRoom: (r.rooms ?? []).find((x: { index: number }) => x.index === r.mainRoom) ?? null,
       wideAt: r.capture?.wideAt ?? inputs.wideAt ?? null,
       plans: r.plans ?? plans,
+      photoTake: Boolean(inputs.photos),
     };
   }
   const events = await db
@@ -58,6 +59,7 @@ export async function photoInputs(scanId: string): Promise<PhotoInputs | null> {
     mainRoom: null,
     wideAt: inputs.wideAt ?? null,
     plans,
+    photoTake: Boolean(inputs.photos),
   };
 }
 

@@ -6,21 +6,23 @@ import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
-import { finishAssessment, readWithSpark } from "./assess";
+import { finishAssessment, readWithSpark, type AssessContext, type SpeechTurn } from "./assess";
 import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
 import { enqueuePhotos, photosSoFar, settlePhotos } from "./photos";
+import { findInPhotos, mergePhotoFinds } from "./photoFinds";
+import { MIN_PHOTOS_3D, type PhotoTake } from "./photoInput";
 import { cleanPlans, plansWords, PLANS_ID } from "./plans";
-import { samVideo, transcribe, uploadFile } from "./meta";
+import { dataUrl, samImage, samVideo, transcribe, uploadFile } from "./meta";
 import type { Property } from "./property";
 import type { Household } from "./rules";
 import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
-import { buildPlan, rescalePlan, type Plan } from "./plan";
+import { buildPlan, locate, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
 import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type BasementProgress, type BasementScan, type RoomPlacement } from "./basement";
 import { cameraLookup } from "./capture";
-import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
+import { doorHeights, doorScale, lowOverhead, meshFaces, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 import { causeOf, FAILURE, stored } from "./failure";
 import { charge, PRICES } from "./spend";
@@ -164,13 +166,16 @@ export async function finishRooms(
   detections: Detection[],
   emit: (type: ScanEventType, text: string, data?: unknown) => Promise<void>,
   placements?: RoomPlacement[],
+  // A photo take's own room names, where they typed one; the others are named here.
+  names?: (string | null)[],
 ): Promise<Room[]> {
   const furnaceFrames = detections.filter((d) => d.label === "Furnace").map((d) => d.frame);
   const named = new Set<string>();
   const rooms: Room[] = [];
   for (const r of ranges) {
     const s3 = scans3d[r.index];
-    let name = ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named);
+    const typed = names?.[r.index] ?? null;
+    let name = typed ?? (ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named));
     let measurements: Measurements | null = null;
     let plan: Plan | null = null;
     if (s3) {
@@ -184,7 +189,7 @@ export async function finishRooms(
         plan = plan && rescalePlan(plan, s);
       }
       // Halls and stairs get their own names; rooms are numbered without them.
-      if (ranges.length > 1) {
+      if (ranges.length > 1 && !typed) {
         named.delete(name);
         name = areaName(plan, rooms.filter((x) => !/^(Hall|Stairs)$/.test(x.name)).length + 1, r.from, r.to, furnaceFrames, named);
       }
@@ -208,6 +213,243 @@ export async function finishRooms(
   return rooms;
 }
 
+type Emit = (type: ScanEventType, text: string, data?: unknown) => Promise<void>;
+type ScanInputs = {
+  floorToJoistsM?: number;
+  rooms?: RoomMark[];
+  ideas?: Idea[];
+  spoken?: Span[];
+  lens?: "ultrawide" | "wide";
+  wideAt?: number;
+  demo?: boolean;
+  photos?: PhotoTake; // a photo take (server/photoInput.ts) instead of a video
+};
+type StageInput = { scanId: string; videoKey: string; inputs: ScanInputs; work: string; ctx: AssessContext; emit: Emit; inflight: Promise<unknown>[] };
+// What the input stage hands on: the finds, the measured rooms, and Spark's reading under way.
+type Stage = {
+  frameCount: number;
+  detections: Detection[];
+  transcript: { transcript: string; turns: SpeechTurn[] };
+  rooms: Room[];
+  sparkP: ReturnType<typeof readWithSpark>;
+  uploads: Promise<unknown>;
+  samCost: number;
+};
+
+// A video: frames and sound out of it, SAM following each thing through it, and the basement's 3D
+// from the camera's walk.
+async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight }: StageInput): Promise<Stage> {
+  const input = join(work, `input${extname(videoKey) || ".mp4"}`);
+  await storage.download(videoKey, input);
+  const { analysis, wav, frameCount } = await prepare(work, input);
+  if (!frameCount) throw new Error("ffmpeg: no frames in the video");
+  await emit("log", `Reading ${frameCount} frames from your video`, { frameCount });
+  const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
+  inflight.push(uploads.catch(() => {}));
+
+  // One retry, and a failure is logged rather than passed off as "you didn't talk".
+  const transcriptP = wav
+    ? transcribe(wav)
+        .catch(async (err) => {
+          console.error(`[voice] ${scanId}: ${err instanceof Error ? err.message : err}; retrying`);
+          return transcribe(wav);
+        })
+        .then(async (t) => {
+          await emit("log", t.transcript ? `Heard: “${t.transcript.slice(0, 90)}${t.transcript.length > 90 ? "…" : ""}”` : "No talking heard in the video");
+          return t;
+        })
+        .catch((err) => {
+          console.error(`[voice] ${scanId}: ${err instanceof Error ? err.message : err}`);
+          return { transcript: "", turns: [] };
+        })
+    : Promise.resolve({ transcript: "", turns: [] });
+  inflight.push(transcriptP);
+
+  // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
+  const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
+  // One connected basement: a rough whole-walk pass places the areas, each measured on its own.
+  const basementP: Promise<BasementScan | null> = (await scan3dReady())
+    ? scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS), progress3d(scanId, emit)).catch(async (err) => {
+        console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
+        await emit("log", "3D scan unavailable this time; checking from the video instead");
+        return null;
+      })
+    : Promise.resolve(null);
+  inflight.push(basementP);
+
+  await emit("stage", "find");
+  const fileId = await uploadFile(analysis, "video/mp4", "basement.mp4");
+
+  const detections: Detection[] = [];
+  await Promise.all(
+    CONCEPTS.map(async (c) => {
+      const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
+      // Ignore flickers: an object must hold for half a second to count.
+      const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
+      const found: Detection[] = tracks.map((t, i) => {
+        const b = bestFrame(t);
+        const r = (n: number) => Math.round(n * 1000) / 1000;
+        return {
+          id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
+          kind: c.kind,
+          label: c.label,
+          concept: c.concept,
+          frame: b.frame,
+          seconds: b.frame / ANALYSIS_FPS,
+          box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
+          framesSeen: t.frames.length,
+          confidence: b.box.c ?? null,
+          track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
+        };
+      });
+      detections.push(...found);
+      await emit("find", found.length ? `Found ${plural(found.length, c.label)}` : `No ${c.label.toLowerCase()} seen`, {
+        kind: c.kind,
+        label: c.label,
+        detections: found,
+      });
+    }),
+  );
+  // The photos start now, from the finds and the wide shot, and land while the 3D measures.
+  void uploads.then(() => enqueuePhotos(scanId)).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
+
+  // Spark reads the finds and what they said while the 3D is still measuring.
+  const heard = await transcriptP;
+  // Drop the guide's own voice, and add what they tapped when asked what a room should be.
+  const turns = withoutGuide(heard.turns, inputs.spoken);
+  const tapped = (inputs.ideas ?? []).map((i) => `[Tapped at ${i.sec.toFixed(0)} s, room ${i.room + 1}: "${i.idea}"]`);
+  const transcript = {
+    transcript: [inputs.spoken?.length ? turns.map((t) => t.transcript).join(" ") : heard.transcript, ...tapped].filter(Boolean).join("\n"),
+    turns,
+  };
+  await emit("stage", "assess");
+  await emit("log", "Checking your city's second-unit rules");
+  const sparkP = readWithSpark(ctx, detections, transcript.transcript, transcript.turns);
+  // Awaited after the 3D; a Spark failure meanwhile is still this scan's error, never an unhandled one.
+  inflight.push(sparkP.catch(() => {}));
+
+  const basement3d = await basementP;
+  // The 3D service bills by the GPU second: an estimate per area, plus the rough pass over the walk.
+  if (basement3d) charge("scan3d", (basement3d.scans.length + 1) * PRICES.scan3dArea());
+  // Without the 3D, the phone's room marks still name the areas.
+  const ranges = basement3d ? basement3d.spans.map((span, index) => ({ index, ...span })) : roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
+  const scans3d: (Scan3d | null)[] = basement3d ? basement3d.scans : ranges.map(() => null);
+  const low = lowOverhead(scans3d, detections);
+  if (low.length) {
+    for (const d of low) detections.splice(detections.indexOf(d), 1);
+    await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
+  }
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements);
+  if (basement3d) {
+    await saveBasement3d(scanId, basement3d);
+    await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
+  }
+  const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
+  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost };
+}
+
+// "Found 2 windows and 1 door"
+function findWords(found: Detection[]) {
+  const counts = new Map<string, number>();
+  for (const d of found) counts.set(d.label, (counts.get(d.label) ?? 0) + 1);
+  const parts = [...counts].map(([label, n]) => plural(n, label));
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}` : parts[0];
+}
+
+// Each room of a photo take measured in 3D on its own, one at a time in room order, from its own run
+// of photos. A room with fewer than MIN_PHOTOS_3D photos isn't measured, and one that fails is left
+// out: either way its finds still count. Without `measure` (no 3D service) nothing is. scans[i] is room i's.
+export async function measurePhotoRooms(
+  take: PhotoTake,
+  measure: ((range: { from: number; to: number }, areas: number) => Promise<Scan3d>) | null,
+  log: (text: string) => Promise<void>,
+  measured: (room: number, s3: Scan3d) => Promise<void> = async () => {},
+): Promise<(Scan3d | null)[]> {
+  const scans: (Scan3d | null)[] = take.rooms.map(() => null);
+  const enough = take.rooms.flatMap((r, i) => (r.to - r.from >= MIN_PHOTOS_3D ? [i] : []));
+  for (const [i, r] of take.rooms.entries()) {
+    if (!enough.includes(i)) await log(`${r.name}: ${plural(r.to - r.from, "photo")} is too few to measure, so only its finds count`);
+  }
+  if (!measure) return scans;
+  for (const [k, i] of enough.entries()) {
+    const r = take.rooms[i];
+    await log(enough.length > 1 ? `Measuring area ${k + 1} of ${enough.length}: ${r.name}` : "Measuring your basement");
+    scans[i] = await measure({ from: r.from, to: r.to }, enough.length).catch(async (err) => {
+      console.error(`[scan3d] ${r.name}: ${err instanceof Error ? err.message : err}`);
+      await log(`${r.name} couldn't be measured this time; its finds still count`);
+      return null;
+    });
+    if (scans[i]) await measured(i, scans[i]!);
+  }
+  return scans;
+}
+
+// A photo take: its photos are already the frames, upright and in room order (server/photoInput.ts).
+// SAM reads each photo while each room with enough photos is measured in 3D on its own; then the same
+// thing seen in two photos of a room becomes one find, and Spark reads the finds. There's no sound to
+// hear. Rooms aren't placed in one plan (a photo has no walk to place it by): each is shown on its own.
+async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageInput, take: PhotoTake): Promise<Stage> {
+  const frameCount = take.count;
+  const framePath = (n: number) => join(work, "frames", `${String(n).padStart(4, "0")}.jpg`);
+  await Promise.all(Array.from({ length: frameCount }, (_, n) => storage.download(keys.frame(scanId, n), framePath(n))));
+  await emit("log", `Reading ${frameCount} photos of ${take.rooms.length === 1 ? "one room" : `${take.rooms.length} rooms`}`, { frameCount, photos: take.rooms });
+
+  const ranges = take.rooms.map((r, index) => ({ index, from: r.from, to: r.to }));
+  const roomOf = (frame: number) => ranges.find((r) => frame >= r.from && frame < r.to)?.index ?? 0;
+  const measurable = ranges.some((r) => r.to - r.from >= MIN_PHOTOS_3D);
+
+  // Each room's 3D alongside SAM. The wait screen shows each room as it's measured.
+  const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
+  const progress = progress3d(scanId, emit);
+  const ready = measurable && (await scan3dReady());
+  if (!ready) await emit("log", measurable ? "3D scan unavailable this time; checking from the photos instead" : "3D scan unavailable: a room needs 3 or more photos to measure");
+  const scans3dP = measurePhotoRooms(
+    take,
+    ready ? (r, areas) => runScan3d(work, r, known, { maxFaces: meshFaces(areas) }) : null,
+    (text) => emit("log", text),
+    (i, s3) => progress.area(i, s3, null),
+  ).catch(() => ranges.map(() => null));
+  inflight.push(scans3dP);
+
+  await emit("stage", "find");
+  const images = new Map<number, string>();
+  const image = (n: number) => images.get(n) ?? images.set(n, dataUrl(framePath(n), "image/jpeg")).get(n)!;
+  const found = await findInPhotos(
+    frameCount,
+    CONCEPTS,
+    (concept, n) => samImage(concept, image(n)),
+    (n, finds) => emit("find", finds.length ? `Found ${findWords(finds)} in photo ${n + 1}` : `Nothing found in photo ${n + 1}`, { photo: n, room: take.rooms[roomOf(n)].name, detections: finds }),
+  );
+  images.clear();
+  // The photos of what it could look like start now, from the finds.
+  void enqueuePhotos(scanId).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
+
+  const scans3d = await scans3dP;
+  charge("scan3d", scans3d.filter(Boolean).length * PRICES.scan3dArea());
+  const { finds: detections, matched } = mergePhotoFinds(found, roomOf, (d) => {
+    const s3 = scans3d[roomOf(d.frame)];
+    const at = s3 ? locate(s3, d) : null;
+    return at ? [at.center[0], at.center[2]] : null;
+  });
+  if (matched) await emit("log", `Matched ${plural(matched, "find")} seen in more than one photo`);
+  const low = lowOverhead(scans3d, detections);
+  if (low.length) {
+    for (const d of low) detections.splice(detections.indexOf(d), 1);
+    await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
+  }
+
+  await emit("stage", "assess");
+  await emit("log", "Checking your city's second-unit rules");
+  const sparkP = readWithSpark(ctx, detections, "", []);
+  inflight.push(sparkP.catch(() => {}));
+  // A room they named keeps its name; "Room 2" may still turn out to be the furnace room.
+  const names = take.rooms.map((r) => (/^room \d+$/i.test(r.name) ? null : r.name));
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, names);
+  // The 3D's own sense of size, with no walk or tape to check it against.
+  if (rooms.some((r) => r.has3d)) await emit("log", "Sizes from photos are a close guess, within about 20%. One tape measurement on the next step makes them true to size.");
+  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage };
+}
+
 export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, scanId));
   if (!scan?.videoKey) throw new Error(`Scan ${scanId} has no video`);
@@ -226,113 +468,11 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
 
   try {
     await emit("stage", "prepare");
-    const input = join(work, `input${extname(scan.videoKey) || ".mp4"}`);
-    await storage.download(scan.videoKey, input);
-    const { analysis, wav, frameCount } = await prepare(work, input);
-    if (!frameCount) throw new Error("ffmpeg: no frames in the video");
-    await emit("log", `Reading ${frameCount} frames from your video`, { frameCount });
-    const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
-    inflight.push(uploads.catch(() => {}));
+    const inputs = (scan.inputs ?? {}) as ScanInputs;
+    const ctx: AssessContext = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
+    const stageInput = { scanId, videoKey: scan.videoKey, inputs, work, ctx, emit, inflight };
+    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
 
-    // One retry, and a failure is logged rather than passed off as "you didn't talk".
-    const transcriptP = wav
-      ? transcribe(wav)
-          .catch(async (err) => {
-            console.error(`[voice] ${scanId}: ${err instanceof Error ? err.message : err}; retrying`);
-            return transcribe(wav);
-          })
-          .then(async (t) => {
-            await emit("log", t.transcript ? `Heard: “${t.transcript.slice(0, 90)}${t.transcript.length > 90 ? "…" : ""}”` : "No talking heard in the video");
-            return t;
-          })
-          .catch((err) => {
-            console.error(`[voice] ${scanId}: ${err instanceof Error ? err.message : err}`);
-            return { transcript: "", turns: [] };
-          })
-      : Promise.resolve({ transcript: "", turns: [] });
-    inflight.push(transcriptP);
-
-    // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
-    const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[]; ideas?: Idea[]; spoken?: Span[]; lens?: "ultrawide" | "wide"; wideAt?: number };
-    const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
-    // One connected basement: a rough whole-walk pass places the areas, each measured on its own.
-    const basementP: Promise<BasementScan | null> = (await scan3dReady())
-      ? scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS), progress3d(scanId, emit)).catch(async (err) => {
-          console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
-          await emit("log", "3D scan unavailable this time; checking from the video instead");
-          return null;
-        })
-      : Promise.resolve(null);
-    inflight.push(basementP);
-
-    await emit("stage", "find");
-    const fileId = await uploadFile(analysis, "video/mp4", "basement.mp4");
-
-    const detections: Detection[] = [];
-    await Promise.all(
-      CONCEPTS.map(async (c) => {
-        const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
-        // Ignore flickers: an object must hold for half a second to count.
-        const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
-        const found: Detection[] = tracks.map((t, i) => {
-          const b = bestFrame(t);
-          const r = (n: number) => Math.round(n * 1000) / 1000;
-          return {
-            id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
-            kind: c.kind,
-            label: c.label,
-            concept: c.concept,
-            frame: b.frame,
-            seconds: b.frame / ANALYSIS_FPS,
-            box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
-            framesSeen: t.frames.length,
-            confidence: b.box.c ?? null,
-            track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
-          };
-        });
-        detections.push(...found);
-        await emit("find", found.length ? `Found ${plural(found.length, c.label)}` : `No ${c.label.toLowerCase()} seen`, {
-          kind: c.kind,
-          label: c.label,
-          detections: found,
-        });
-      }),
-    );
-    // The photos start now, from the finds and the wide shot, and land while the 3D measures.
-    void uploads.then(() => enqueuePhotos(scanId)).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
-
-    // Spark reads the finds and what they said while the 3D is still measuring.
-    const heard = await transcriptP;
-    // Drop the guide's own voice, and add what they tapped when asked what a room should be.
-    const turns = withoutGuide(heard.turns, inputs.spoken);
-    const tapped = (inputs.ideas ?? []).map((i) => `[Tapped at ${i.sec.toFixed(0)} s, room ${i.room + 1}: "${i.idea}"]`);
-    const transcript = {
-      transcript: [inputs.spoken?.length ? turns.map((t) => t.transcript).join(" ") : heard.transcript, ...tapped].filter(Boolean).join("\n"),
-      turns,
-    };
-    await emit("stage", "assess");
-    await emit("log", "Checking your city's second-unit rules");
-    const ctx = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
-    const sparkP = readWithSpark(ctx, detections, transcript.transcript, transcript.turns);
-    // Awaited after the 3D; a Spark failure meanwhile is still this scan's error, never an unhandled one.
-    inflight.push(sparkP.catch(() => {}));
-
-    const basement3d = await basementP;
-    // The 3D service bills by the GPU second: an estimate per area, plus the rough pass over the walk.
-    if (basement3d) charge("scan3d", (basement3d.scans.length + 1) * PRICES.scan3dArea());
-    // Without the 3D, the phone's room marks still name the areas.
-    const ranges = basement3d ? basement3d.spans.map((span, index) => ({ index, ...span })) : roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
-    const scans3d: (Scan3d | null)[] = basement3d ? basement3d.scans : ranges.map(() => null);
-    const low = lowOverhead(scans3d, detections);
-    if (low.length) {
-      for (const d of low) detections.splice(detections.indexOf(d), 1);
-      await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
-    }
-    const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements);
-    if (basement3d) {
-      await saveBasement3d(scanId, basement3d);
-      await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
-    }
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
     const measurements = main?.measurements ?? null;
@@ -344,7 +484,6 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const assessment = finishAssessment({ ...ctx, household }, await sparkP, detections, measurements);
     await uploads;
 
-    const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
     const assessed = {
       id: scanId,
       household,
@@ -367,15 +506,16 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const result = labelled({
       ...rechecked,
       vision: withIdeas(rechecked.vision, inputs.ideas, rooms),
-      // How it was filmed: the lens, and the still wide shot the staged photos start from.
-      capture: { lens: inputs.lens ?? null, wideAt: inputs.wideAt ?? null },
+      // How it was filmed: the lens, and the still wide shot the staged photos start from. A photo take
+      // says how many photos: its sizes are the 3D's own guess, so the plan asks for a tape measurement.
+      capture: { lens: inputs.lens ?? null, wideAt: inputs.wideAt ?? null, ...(inputs.photos ? { photos: inputs.photos.count } : {}) },
       layout: plan ? suggestLayout(plan) : null,
       // What they'd like it to be, from the wait screen: their wish when the video didn't say one.
       plans,
       wants: rechecked.wants || plansWords(plans),
       // The photos started with the finds; whatever has landed so far comes with the answer.
       concepts: await photosSoFar(scanId),
-    }, Boolean((inputs as { demo?: boolean }).demo));
+    }, Boolean(inputs.demo));
     await db
       .update(schema.scans)
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })

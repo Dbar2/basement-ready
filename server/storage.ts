@@ -96,6 +96,8 @@ export const keys = {
   // The iPhone app's camera tracking for the take (docs/capture-contract.md).
   capture: (scanId: string) => `scans/${scanId}/capture.json`,
   frame: (scanId: string, n: number) => `scans/${scanId}/frames/${String(n).padStart(4, "0")}.jpg`,
+  // A photo take's rooms, in place of a video (server/photoInput.ts): its photos are already the frames.
+  photos: (scanId: string) => `scans/${scanId}/photos.json`,
   concept: (scanId: string, n: number) => `scans/${scanId}/concepts/${n}.jpg`,
   // The first room keeps the original path, so scans from before rooms still open.
   scan3d: (scanId: string, file: Scan3dFile, room = 0) =>

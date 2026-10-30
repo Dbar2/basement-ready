@@ -23,6 +23,9 @@ export type ScanEvent = {
     label?: string;
     detections?: Detection[];
     frameCount?: number;
+    photo?: number; // a photo take's find: which photo (its frame)
+    room?: string; // and the room it was tagged with
+    photos?: PhotoRoom[]; // a photo take's first log: its rooms, each a run of photos
     points?: [number, number][]; // path: [x, z] in metres, in the walk frame
     area?: number | "all"; // model: which area; the whole basement's files use ?room=all
     files?: { surfels: string; scan: string; mesh?: string }; // mesh: BRM1 (src/three/RealScan.tsx parseMesh)
@@ -292,6 +295,16 @@ export type ScanResult = {
 // Videos picked in this tab, so the scan screen can play them before the server has its copy.
 export const localVideos = new Map<string, File>();
 
+// A photo take (instead of a video): 5–20 photos, each tagged with its room. The server keeps them in
+// room order, so each room is one run of photos: frames from..to-1.
+export const MIN_PHOTOS = 5;
+export const MAX_PHOTOS = 20;
+export const MIN_PHOTOS_3D = 3; // a room needs this many for its own 3D (server/photoInput.ts)
+export type PhotoRoom = { name: string; from: number; to: number };
+export type PhotoTake = { count: number; rooms: PhotoRoom[] };
+// Photo takes sent from this tab, so the scan screen shows the photos before the server says so.
+export const localPhotoTakes = new Map<string, PhotoTake>();
+
 // The example, everywhere it shows: a real scan, recorded once and replayed, nothing sent.
 export const EXAMPLE_LABEL = "A real basement, filmed and scanned once, replayed here. Nothing you do is sent.";
 export const EXAMPLE_HOUSEHOLD = "The example household's answers";
@@ -332,39 +345,54 @@ export function rememberClaim(basementId: string, claimToken: string) {
   }
 }
 
-export function startScan(
-  video: File,
-  input: {
-    who?: Who;
-    household: Household;
-    address: string;
-    addressMunicipality?: string;
-    municipality: string;
-    floorToJoistsM?: number | null;
-    rooms?: { startS: number }[];
-    ideas?: { room: number; idea: string; sec: number }[];
-    spoken?: { id: string; startMs: number; endMs: number }[];
-    lens?: "ultrawide" | "wide" | null; // which camera filmed it
-    wideAt?: number | null; // seconds into the take of the still wide shot from a corner
-    demo?: boolean; // the demo house: Waterloo's rules, no address
-  },
-  onProgress: (fraction: number) => void,
-): Promise<string> {
+type ScanInput = {
+  who?: Who;
+  household: Household;
+  address: string;
+  addressMunicipality?: string;
+  municipality: string;
+  floorToJoistsM?: number | null;
+  rooms?: { startS: number }[];
+  ideas?: { room: number; idea: string; sec: number }[];
+  spoken?: { id: string; startMs: number; endMs: number }[];
+  lens?: "ultrawide" | "wide" | null; // which camera filmed it
+  wideAt?: number | null; // seconds into the take of the still wide shot from a corner
+  demo?: boolean; // the demo house: Waterloo's rules, no address
+};
+
+export function startScan(video: File, input: ScanInput, onProgress: (fraction: number) => void): Promise<string> {
+  const form = scanForm(input);
+  form.append("video", video);
+  return sendScan(form, onProgress, (body) => localVideos.set(body.id, video));
+}
+
+// A photo take: each photo with its room's name ("Room 1", or one they typed).
+export function startPhotoScan(photos: { blob: Blob; room: string }[], input: ScanInput, onProgress: (fraction: number) => void): Promise<string> {
+  const form = scanForm(input);
+  photos.forEach((p, i) => form.append("photos[]", p.blob, `photo-${i + 1}.jpg`));
+  form.append("photoRooms", JSON.stringify(photos.map((p) => p.room)));
+  return sendScan(form, onProgress, (body) => body.photos && localPhotoTakes.set(body.id, body.photos));
+}
+
+function scanForm(input: ScanInput) {
+  const form = new FormData();
+  form.append("household", input.household);
+  if (input.who) form.append("who", input.who);
+  form.append("address", input.address);
+  form.append("municipality", input.municipality);
+  if (input.floorToJoistsM) form.append("floorToJoistsM", String(input.floorToJoistsM));
+  if (input.addressMunicipality) form.append("addressMunicipality", input.addressMunicipality);
+  if (input.rooms && input.rooms.length > 1) form.append("rooms", JSON.stringify(input.rooms));
+  if (input.ideas?.length) form.append("ideas", JSON.stringify(input.ideas));
+  if (input.spoken?.length) form.append("spoken", JSON.stringify(input.spoken));
+  if (input.lens) form.append("lens", input.lens);
+  if (input.wideAt != null) form.append("wideAt", String(input.wideAt));
+  if (input.demo) form.append("demo", "true");
+  return form;
+}
+
+function sendScan(form: FormData, onProgress: (fraction: number) => void, sent: (body: { id: string; photos?: PhotoTake }) => void): Promise<string> {
   return new Promise((resolve, reject) => {
-    const form = new FormData();
-    form.append("video", video);
-    form.append("household", input.household);
-    if (input.who) form.append("who", input.who);
-    form.append("address", input.address);
-    form.append("municipality", input.municipality);
-    if (input.floorToJoistsM) form.append("floorToJoistsM", String(input.floorToJoistsM));
-    if (input.addressMunicipality) form.append("addressMunicipality", input.addressMunicipality);
-    if (input.rooms && input.rooms.length > 1) form.append("rooms", JSON.stringify(input.rooms));
-    if (input.ideas?.length) form.append("ideas", JSON.stringify(input.ideas));
-    if (input.spoken?.length) form.append("spoken", JSON.stringify(input.spoken));
-    if (input.lens) form.append("lens", input.lens);
-    if (input.wideAt != null) form.append("wideAt", String(input.wideAt));
-    if (input.demo) form.append("demo", "true");
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/scans");
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
@@ -377,7 +405,7 @@ export function startScan(
         }
       })();
       if (xhr.status >= 200 && xhr.status < 300) {
-        localVideos.set(body.id, video);
+        sent(body);
         rememberClaim(body.basementId, body.claimToken);
         resolve(body.id);
       } else reject(Object.assign(new Error(body.error ?? "Upload failed. Check your connection and try again."), { allowance: (body.allowance as Allowance | undefined) ?? null }));
@@ -507,6 +535,7 @@ export async function openMoneyQuestions(scanId: string): Promise<MoneyQuestion[
 export type ScanStatus = {
   status: "queued" | "running" | "done" | "error";
   result: ScanResult | null;
+  photos?: PhotoTake | null; // a photo take, instead of a video
   error?: string | null;
   failure?: { cause: string; retry: boolean } | null;
   demo?: boolean;

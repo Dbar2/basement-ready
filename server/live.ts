@@ -22,6 +22,11 @@ export const LIVE_CONCEPTS: Record<string, { prompt: string; label: string }> = 
 const MIN_CONFIDENCE = 0.45;
 // Things that aren't on the checklist need to be surer before they show up as a card.
 const MIN_CONFIDENCE_EXTRA: Partial<Record<string, number>> = { duct: 0.6, beam: 0.7, drain: 0.55, roughin: 0.6, bulkhead: 0.6 };
+// The same bar by SAM prompt, for a photo take's finds (server/photoFinds.ts): one look, like a live frame.
+export function minConfidence(prompt: string): number {
+  const key = Object.keys(LIVE_CONCEPTS).find((k) => LIVE_CONCEPTS[k].prompt === prompt);
+  return (key && MIN_CONFIDENCE_EXTRA[key]) || MIN_CONFIDENCE;
+}
 const PER_IP_PER_MINUTE = Number(process.env.LIVE_PER_IP_PER_MINUTE ?? 120);
 const PER_SESSION = Number(process.env.LIVE_PER_SESSION ?? 300);
 const DAILY_MAX = Number(process.env.LIVE_DAILY_MAX ?? 8000); // SAM images are $2.50 per 1,000
