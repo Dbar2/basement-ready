@@ -47,7 +47,7 @@ function BasementViews(props: {
           <View3DBoundary>
             <Suspense fallback={<p className="viewer-empty mono">Loading your basement in 3D…</p>}>
               <RealScan
-                asBuilt={{ scanId }}
+                asBuilt={{ scanId, existing: design?.existing }}
                 {...(scanId === "sample"
                   ? { surfelsUrl: "/samples/sample/3d/surfels.bin", liteUrl: "/samples/sample/3d/surfels-lite.bin", meshUrl: "/samples/sample/3d/mesh.bin", scanUrl: "/samples/sample/3d/scan.json" }
                   : { surfelsUrl: `/api/scans/${scanId}/3d/surfels.bin?room=all`, meshUrl: `/api/scans/${scanId}/3d/mesh.bin?room=all`, scanUrl: `/api/scans/${scanId}/3d/scan.json?room=all` })}

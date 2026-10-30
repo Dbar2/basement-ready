@@ -1,6 +1,7 @@
 // The design drawn in 3D and nothing else: no camera, walker, labels or handles. New walls with their
 // door gaps, the furniture and finishes, the fire separation marked on top of its walls, and, when
-// asked, the real scan or a plain shell for the house's own walls. Mount it inside any <Canvas>: the
+// asked, the basement as built (src/three/AsBuilt.tsx: its plan painted with the video, the walls the
+// design removes gone), the raw scan, or a plain shell for the house's own walls. Mount it inside any <Canvas>: the
 // studio does (src/studio/Studio3D.tsx), and the pictures render it in an offscreen canvas from the
 // real cameras' poses over the real frames.
 //
@@ -11,6 +12,7 @@ import { Suspense, useMemo, type ReactNode } from "react";
 import { bounds, midpoint, wallLength } from "../../server/model/geometry";
 import { layoutOf } from "../../server/model/legacy";
 import type { Design, Existing, Wall } from "../../server/model/types";
+import { AsBuiltScene, type Atlas } from "../three/AsBuilt";
 import { SolidView, type Solid } from "../three/RealScan";
 import { StagedFurniture } from "../three/StagedBasement";
 import { DesignFurniture } from "../views/DesignScene";
@@ -26,6 +28,7 @@ export function DesignScene({
   existing,
   design,
   finish = "light",
+  built = null,
   scan = null,
   overview = false,
   shell = false,
@@ -34,6 +37,7 @@ export function DesignScene({
   existing: Existing;
   design: Design;
   finish?: Finish;
+  built?: { atlas: Atlas | null } | null; // the basement as built, painted once `atlas` is in
   scan?: Solid | null; // the real scan's solid surface (src/three/RealScan.tsx parseMesh)
   overview?: boolean; // looking down: the scan's ceiling is cut away
   shell?: boolean; // no scan: draw the floor and the house's own walls plain
@@ -50,7 +54,10 @@ export function DesignScene({
   }, [existing, design, placed]);
   return (
     <>
-      {scan ? (
+      {built ? (
+        // The design's own new walls are drawn by the stager below.
+        <AsBuiltScene existing={existing} design={design} newWalls={false} atlas={built.atlas} overview={overview} />
+      ) : scan ? (
         // The scan was measured before their tape: drawn at the tape's scale, it lines up with the plan.
         <group scale={k}>
           <SolidView solid={scan} ceilingY={ceiling / k} overview={overview} floors={existing.rooms.map((r) => scaleBox(bounds(r.polygon), 1 / k))} />
