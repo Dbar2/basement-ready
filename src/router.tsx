@@ -10,6 +10,7 @@ import { ScanPage } from "./screens/ScanPage";
 import { Start } from "./screens/Start";
 import { PlanConfirm } from "./studio/PlanConfirm";
 import { Studio } from "./studio/Studio";
+import { PicturesPage } from "./views/PicturesPage";
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -23,6 +24,8 @@ const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/
 // "Is this your basement?", then the design in 3D (src/studio).
 const planRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/plan", component: PlanConfirm });
 const studioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/studio", component: Studio });
+// Pictures of the design from the scan's best real angles, all agreeing (src/views/DesignPictures.tsx).
+const picturesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/pictures", component: PicturesPage });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -63,7 +66,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, picturesRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
