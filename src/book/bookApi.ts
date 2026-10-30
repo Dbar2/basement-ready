@@ -1,4 +1,4 @@
-// The book, the quote and the design's pictures, from the browser. The quote itself runs here too:
+// The book and the quote, from the browser. The quote itself runs here too:
 // `quote(model, design)` (server/quote/quote.ts) is pure and carries its own dated catalog, so the
 // 3D studio prices every edit without a round trip.
 import type { Design, Model } from "../../server/model/types";
@@ -17,7 +17,7 @@ export type BookData = {
   money: { id: string; name: string; amount: string; qualify: string; paidWhen: string | null; source: { title: string; url: string } | null }[];
   timeline: { when: string; title: string; detail: string }[];
   steps: { id: string; when: string; title: string; detail?: string | null; tasks: { title: string; detail?: string | null }[] }[];
-  pictures: { title: string; kind: "render" | "favourite" | "look" | "concept"; url: string }[];
+  pictures: { title: string; kind: "design" | "favourite" | "look" | "concept"; url: string; caption: string }[];
   mood: { title: string; url: string }[];
   pdf: string;
 };
@@ -50,28 +50,6 @@ export async function downloadBook(scanId: string, name = "basement-book.pdf") {
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-}
-
-export type Render = { n: number; title: string; spot: number | null; designId: string | null; status: "pending" | "done" | "failed"; kept: boolean | null; checked: string; at: string };
-
-// A picture of the design for the book. The 3D studio renders the design from one of the spots the
-// camera stood (`spot`: the frame number), `canvas.toBlob(...)` hands this the PNG or JPEG, and the
-// server restyles it into a photo, checked by SAM so no window, door or stair moves. It answers at
-// once with the render pending; `getRenders` says when it's done.
-export async function postRender(scanId: string, image: Blob, o: { spot?: number | null; title?: string } = {}): Promise<Render> {
-  const form = new FormData();
-  form.append("image", image, image.type === "image/png" ? "render.png" : "render.jpg");
-  if (o.spot != null) form.append("spot", String(o.spot));
-  if (o.title) form.append("title", o.title);
-  const res = await fetch(`/api/scans/${scanId}/renders`, { method: "POST", headers: await headers(), body: form });
-  const body = await res.json().catch(() => null);
-  if (!res.ok) throw new Error(body?.error ?? "That picture didn't send.");
-  return body.render;
-}
-
-export async function getRenders(scanId: string): Promise<Render[]> {
-  const res = await fetch(`/api/scans/${scanId}/renders`, { headers: await headers() });
-  return res.ok ? (await res.json()).renders : [];
 }
 
 export const chosen = (m: Model | null): Design | null => m?.designs.find((d) => d.chosen) ?? m?.designs[0] ?? null;

@@ -2472,5 +2472,389 @@
       "stores": 2,
       "checked": "2026-10-30"
     }
-  }
+  },
+  "furniture": [
+    {
+      "id": "bed",
+      "item": "Queen bed: frame and mattress",
+      "lowCAD": 698,
+      "highCAD": 1098.95,
+      "basis": "A queen frame and a queen mattress, added together.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "MALM bed frame, high, white/Luröy, Queen",
+          "retailer": "IKEA Canada",
+          "priceCAD": 299,
+          "url": "https://www.ikea.com/ca/en/p/malm-bed-frame-high-white-luroey-s29009482/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "low",
+          "product": "VESTERÖY hybrid mattress, firm, Queen",
+          "retailer": "IKEA Canada",
+          "priceCAD": 399,
+          "url": "https://www.ikea.com/ca/en/p/vesteroey-hybrid-mattress-firm-white-90645001/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "BENA mid-century modern queen bed frame, walnut",
+          "retailer": "Structube",
+          "priceCAD": 399,
+          "url": "https://www.structube.com/en_ca/bedbena?pid=62751",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Serta Back Logic 2.0 Eurotop Firm Queen Mattress",
+          "retailer": "The Brick",
+          "priceCAD": 699.95,
+          "url": "https://www.thebrick.com/products/serta-back-logic-2-0-eurotop-firm-queen-mattress",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; it varies by region."
+        }
+      ]
+    },
+    {
+      "id": "sofa",
+      "item": "Three-seat sofa",
+      "lowCAD": 649,
+      "highCAD": 799,
+      "basis": "One sofa about 2.1 m wide.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "EKHOLMA sofa, Hakebo dark gray (207 cm)",
+          "retailer": "IKEA Canada",
+          "priceCAD": 649,
+          "url": "https://www.ikea.com/ca/en/p/ekholma-sofa-hakebo-dark-gray-s09537450/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "TERESA contemporary 3-seater sofa (213 cm)",
+          "retailer": "Structube",
+          "priceCAD": 799,
+          "url": "https://www.structube.com/en_ca/teresa-contemporary-3seater-sofa-31-76-64?pid=23563",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $749 when checked."
+        }
+      ]
+    },
+    {
+      "id": "armchair",
+      "item": "Upholstered armchair",
+      "lowCAD": 199,
+      "highCAD": 299,
+      "basis": "One chair.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "HERRÅKRA armchair, Diseröd",
+          "retailer": "IKEA Canada",
+          "priceCAD": 199,
+          "url": "https://www.ikea.com/ca/en/p/herrakra-armchair-diseroed-dark-yellow-40535547/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "ROUSSEAU corduroy accent chair, taupe",
+          "retailer": "Structube",
+          "priceCAD": 299,
+          "url": "https://www.structube.com/en_ca/rousseau-corduroy-accent-chair-57-77-60?pid=67396",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "desk",
+      "item": "Desk, about 120 x 60 cm",
+      "lowCAD": 199,
+      "highCAD": 419.95,
+      "basis": "One desk.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "LAGKAPTEN / ALEX desk, white, 120x60 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 199,
+          "url": "https://www.ikea.com/ca/en/p/lagkapten-alex-desk-white-s69416817/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Clayton 47.25\" reversible desk with 3 drawers, dark brown",
+          "retailer": "The Brick",
+          "priceCAD": 419.95,
+          "url": "https://www.thebrick.com/products/clayton-reversible-desk-dark-brown",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; it varies by region."
+        }
+      ]
+    },
+    {
+      "id": "dining",
+      "item": "Dining table and 4 chairs",
+      "lowCAD": 249,
+      "highCAD": 665.95,
+      "basis": "A set: the table and four chairs.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "HÄGERNÄS table and 4 chairs, antique stain pine",
+          "retailer": "IKEA Canada",
+          "priceCAD": 249,
+          "url": "https://www.ikea.com/ca/en/p/haegernaes-table-and-4-chairs-antique-stain-pine-70575947/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Devon 5-piece dining set, table and 4 chairs, 60\"",
+          "retailer": "The Brick",
+          "priceCAD": 665.95,
+          "url": "https://www.thebrick.com/products/devon-5-piece-dining-set",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; other regions list $595.95-$865.95."
+        }
+      ]
+    },
+    {
+      "id": "dresser",
+      "item": "Six-drawer dresser",
+      "lowCAD": 179,
+      "highCAD": 449,
+      "basis": "One dresser about 1.2 m wide.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "RAST 6-drawer dresser, pine (124 cm)",
+          "retailer": "IKEA Canada",
+          "priceCAD": 179,
+          "url": "https://www.ikea.com/ca/en/p/rast-6-drawer-dresser-pine-00582164/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "MONTANA modern 6-drawer dresser, black (118 cm)",
+          "retailer": "Structube",
+          "priceCAD": 449,
+          "url": "https://www.structube.com/en_ca/montana-modern-6drawer-dresser-11-23-55?pid=63393",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "tv",
+      "item": "TV and console",
+      "lowCAD": 538.99,
+      "highCAD": 888.99,
+      "basis": "A media console about 1.6 m wide and a 55\" TV, added together.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "LACK TV bench, black-brown, 160 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 99,
+          "url": "https://www.ikea.com/ca/en/p/lack-tv-bench-black-brown-60566062/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "low",
+          "product": "Magnavox 55\" 4K Roku TV",
+          "retailer": "Canadian Tire",
+          "priceCAD": 439.99,
+          "url": "https://www.canadiantire.ca/en/pdp/magnavox-4k-tv-55-inch-with-roku-tv-streaming-4993323p.html",
+          "checked": "2026-10-30",
+          "note": "Plus a $22.95 environmental fee at checkout."
+        },
+        {
+          "role": "high",
+          "product": "MONTANA media unit, black (157.5 cm)",
+          "retailer": "Structube",
+          "priceCAD": 239,
+          "url": "https://www.structube.com/en_ca/montana-media-unit-29-01-27?pid=44945",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "LG 55\" NU850 4K UHD webOS smart TV",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 649.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/lg-55-nu850-4k-uhd-hdr10-pro-led-webos-smart-tv-55nu850bpua-acc-2026-great-for-streaming-gaming/19852054",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "rug",
+      "item": "Area rug, about 5 x 8 ft",
+      "lowCAD": 89,
+      "highCAD": 209.95,
+      "basis": "One rug.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "VÄXELFEL rug, low pile, off-white, 160x230 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 89,
+          "url": "https://www.ikea.com/ca/en/p/vaexelfel-rug-low-pile-off-white-20636967/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Rene area rug, 5' x 8'",
+          "retailer": "The Brick",
+          "priceCAD": 209.95,
+          "url": "https://www.thebrick.com/products/rene-area-rug-5-x-8",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; it varies by region."
+        }
+      ]
+    },
+    {
+      "id": "shelf",
+      "item": "Bookcase, about 80 cm wide",
+      "lowCAD": 90,
+      "highCAD": 269,
+      "basis": "One bookcase.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "BILLY bookcase, white, 80x28x202 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 90,
+          "url": "https://www.ikea.com/ca/en/p/billy-bookcase-white-20522046/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "ELLINGTON contemporary bookcase, walnut, 80x180 cm",
+          "retailer": "Structube",
+          "priceCAD": 269,
+          "url": "https://www.structube.com/en_ca/ellington-contemporary-bookcase-54-57-18?pid=51022",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "fridge",
+      "item": "Fridge, 28\" top-freezer",
+      "lowCAD": 728,
+      "highCAD": 1199.99,
+      "basis": "One fridge.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "Frigidaire 28\" 17.6 cu ft top-freezer, white (FFHT1822UW)",
+          "retailer": "Home Depot Canada",
+          "priceCAD": 728,
+          "url": "https://www.homedepot.ca/product/frigidaire-28-inch-w-17-6-cu-ft-top-freezer-refrigerator-in-white-home-depot-exclusive-energy-star/1001706004",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "GE 28\" 15.6 cu ft top-freezer, white (GTE16DTNRWW)",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 1199.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/ge-28-15-6-cu-ft-top-freezer-refrigerator-gte16dtnrww-white/13985790",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "washer_dryer",
+      "item": "Washer and dryer, 24\" compact stackable pair",
+      "lowCAD": 1896,
+      "highCAD": 2349.98,
+      "basis": "A compact front-load washer and a stackable dryer, added together.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "GE 24\" 2.8 cu ft front-load washer (GFW148SSMWW)",
+          "retailer": "Home Depot Canada",
+          "priceCAD": 948,
+          "url": "https://www.homedepot.ca/product/ge-24-inch-2-8-cu-ft-front-load-washer-with-steam-quick-wash-1400-rpm-spin-stainless-steel-drum-in-white-energy-star/1001529683",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $898 when checked."
+        },
+        {
+          "role": "low",
+          "product": "GE 24\" 4.1 cu ft stackable electric dryer (GFD14JSINWW)",
+          "retailer": "Home Depot Canada",
+          "priceCAD": 948,
+          "url": "https://www.homedepot.ca/product/ge-24-inch-4-1-cu-ft-vented-stackable-electric-dryer-with-sensor-dry-stainless-steel-drum-led-display-stacking-kit-in-white-energy-star/1001529682",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $898 when checked."
+        },
+        {
+          "role": "high",
+          "product": "LG 2.6 cu ft compact front-load washer (WM1455HWA)",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 1099.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/lg-2-6-cu-ft-iec-front-load-washer-with-allergiene-steam-quick-wash-and-speed-wash-wm1455hwa-white/17302137",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "LG 4.2 cu ft compact stackable electric dryer (DLHC1455W)",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 1249.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/lg-4-2-cu-ft-compact-stackable-electric-dryer-with-moisture-sensing-energy-star-thinq-dlhc1455w-white/17302129",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $1,199.99 until Nov 5 when checked."
+        }
+      ]
+    },
+    {
+      "id": "coffee_table",
+      "item": "Coffee table, about 120 cm",
+      "lowCAD": 79.99,
+      "highCAD": 319,
+      "basis": "One table.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "LACK coffee table, white, 118x78 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 79.99,
+          "url": "https://www.ikea.com/ca/en/p/lack-coffee-table-white-80449901/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "RENO solid acacia wood coffee table, 120 cm",
+          "retailer": "Structube",
+          "priceCAD": 319,
+          "url": "https://www.structube.com/en_ca/reno-solid-acacia-wood-coffee-table-120-cm-45-29-25?pid=24420",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "nightstand",
+      "item": "Nightstand",
+      "lowCAD": 69.99,
+      "highCAD": 139,
+      "basis": "One nightstand.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "BRIMNES nightstand, black",
+          "retailer": "IKEA Canada",
+          "priceCAD": 69.99,
+          "url": "https://www.ikea.com/ca/en/p/brimnes-nightstand-black-80340454/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "MONTANA modern 2-drawer nightstand, black",
+          "retailer": "Structube",
+          "priceCAD": 139,
+          "url": "https://www.structube.com/en_ca/montana-modern-2drawer-nightstand-43-28-85?pid=63381",
+          "checked": "2026-10-30"
+        }
+      ]
+    }
+  ]
 }

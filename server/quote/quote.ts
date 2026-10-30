@@ -3,8 +3,8 @@
 // in data/rules/prices-on.json; labour at published rates; then contingency, HST, and what it comes
 // to if you hire it all out or build it yourself. A price or rate nobody published stays missing:
 // the line says so and adds nothing. Pure and fast, so the 3D studio reruns it on every edit.
-import type { Design, Model, Opening, Pt, Room, Wall } from "../model/types";
-import { catalog, rate, shelf, type Rate } from "./catalog";
+import type { Design, Furniture, Model, Opening, Pt, Room, Wall } from "../model/types";
+import { catalog, furniturePrice, rate, shelf, type Rate } from "./catalog";
 
 export type Trade = "demolition" | "framing" | "insulation" | "drywall" | "electrical" | "plumbing" | "hvac" | "doors_windows" | "flooring_trim" | "paint" | "kitchen" | "bathroom" | "permits" | "pros";
 
@@ -65,7 +65,13 @@ export type Quote = {
   missing: string[]; // "Trade: what" for everything that has no price
   assumptions: string[];
   checked: string; // the catalog's date
+  furniture: FurnitureQuote; // optional, and never in any total above
 };
+
+// Furniture in the design, priced on its own: what they'd buy to live there, not what the permit or a
+// builder covers. The kitchen, vanity, toilet and shower are fixtures, already in the build above.
+export type FurnitureLine = { id: string; label: string; count: number; price: Range | null; low: number; high: number; basis: string; sources: Source[] };
+export type FurnitureQuote = { lines: FurnitureLine[]; subtotal: Range; hst: Range; total: Range; missing: string[]; inBuild: string[] };
 
 export type QuoteOptions = { municipality?: string };
 
@@ -633,7 +639,56 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
       l.sources.push(src(cut));
     }
 
-  return total(lines, assumptions);
+  return { ...total(lines, assumptions), furniture: furnish(P.furniture ?? []) };
+}
+
+const FURNITURE_LABEL: Record<string, string> = {
+  bed: "Bed (frame and mattress)",
+  sofa: "Sofa",
+  armchair: "Armchair",
+  desk: "Desk",
+  dining: "Dining table and 4 chairs",
+  dresser: "Dresser",
+  tv: "TV and console",
+  rug: "Rug",
+  shelf: "Bookshelf",
+  fridge: "Fridge",
+  washer_dryer: "Washer and dryer",
+  coffee_table: "Coffee table",
+  nightstand: "Nightstand",
+  other: "Other furniture",
+};
+// Built in, so priced with the trades: the kitchen with its cabinets, the bathroom with its fixtures.
+const IN_BUILD: Record<string, string> = { kitchen: "Kitchen cabinets and counter", vanity: "Vanity", toilet: "Toilet", shower: "Tub and shower" };
+// Two small pieces are "other" in the model, told apart by their id (as server/model/furniture.ts does).
+const pieceOf = (f: Pick<Furniture, "kind" | "id">) => (f.kind !== "other" ? f.kind : /coffee-table/.test(f.id) ? "coffee_table" : /nightstand/.test(f.id) ? "nightstand" : "other");
+
+function furnish(pieces: Furniture[]): FurnitureQuote {
+  const counts = new Map<string, number>();
+  const inBuild = new Set<string>();
+  for (const f of pieces) {
+    const k = pieceOf(f);
+    if (IN_BUILD[k]) inBuild.add(IN_BUILD[k]);
+    else counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const lines: FurnitureLine[] = [...counts].map(([k, n]) => {
+    const p = furniturePrice(k);
+    const label = FURNITURE_LABEL[k] ?? FURNITURE_LABEL.other;
+    if (!p) return { id: k, label, count: n, price: null, low: 0, high: 0, basis: "No shelf price found for this piece.", sources: [] };
+    return {
+      id: k,
+      label,
+      count: n,
+      price: { low: p.lowCAD, high: p.highCAD },
+      low: money(n * p.lowCAD),
+      high: money(n * p.highCAD),
+      basis: p.basis,
+      sources: p.listings.map((l) => ({ kind: "material" as const, title: `${l.product} (${l.retailer})`, url: l.url, checked: l.checked, store: l.retailer })),
+    };
+  });
+  const subtotal = { low: sum(lines, (l) => l.low), high: sum(lines, (l) => l.high) };
+  const hst = { low: money((subtotal.low * catalog.hstPct) / 100), high: money((subtotal.high * catalog.hstPct) / 100) };
+  return { lines, subtotal, hst, total: { low: subtotal.low + hst.low, high: subtotal.high + hst.high }, missing: lines.filter((l) => !l.price).map((l) => l.label), inBuild: [...inBuild] };
 }
 
 // The kitchen counter runs along the kitchen's longest side.
@@ -648,7 +703,7 @@ function feeLine(id: string, item: string, qty: number, unit: string, amount: Ra
   return { id, trade: "permits", item, qty: r1(qty), unit, basis, parts: [], material: { low: 0, high: 0 }, labour: amount, labourSource: source, low: a.low, high: a.high, diy: { ...a }, pro: true, taxed: false, missing: amount ? [] : ["the fee"], sources: source ? [source] : [] };
 }
 
-function total(lines: QuoteLine[], assumptions: string[]): Quote {
+function total(lines: QuoteLine[], assumptions: string[]): Omit<Quote, "furniture"> {
   const byTrade: TradeTotal[] = TRADES.map((t) => {
     const ls = lines.filter((l) => l.trade === t.id);
     return { trade: t.id, label: t.label, low: sum(ls, (l) => l.low), high: sum(ls, (l) => l.high), diyLow: sum(ls, (l) => l.diy.low), diyHigh: sum(ls, (l) => l.diy.high), lines: ls };

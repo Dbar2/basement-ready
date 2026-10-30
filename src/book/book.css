@@ -83,3 +83,6 @@
   .book-quote { font-size: 14px; }
   .book-quote th:last-child, .book-quote td:last-child { display: none; }
 }
+.book-furniture { margin-top: 22px; }
+.book-furniture h3 { margin: 0; font-size: 18px; }
+.book-furniture .book-quote td:last-child { display: table-cell; }
