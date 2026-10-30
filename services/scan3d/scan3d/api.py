@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse, Response
 from . import MODEL_ID, MODEL_REVISION, ScanError
 from .pipeline import Scanner
 
-MAX_FRAMES_IN = 600  # 2 minutes at 5 fps, the cap in server/pipeline.ts
+MAX_FRAMES_IN = 900  # 3 minutes at 5 fps, the cap in server/pipeline.ts
 MAX_FRAME_BYTES = 10 * 1024 * 1024
 DEFAULT_FRAMES = 48
 

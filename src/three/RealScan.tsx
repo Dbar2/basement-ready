@@ -44,13 +44,14 @@ function makeMaterial(frames: number) {
       uClipY: { value: 9 },
       uCut: { value: 0 },
       uExposure: { value: 1.12 },
+      uMaxPx: { value: 14 },
     },
     vertexShader: /* glsl */ `
       attribute vec3 aPos;
       attribute vec3 aColor;
       attribute float aSize;
       attribute float aFrame;
-      uniform float uScale, uReveal, uFrames, uClipY, uCut, uExposure;
+      uniform float uScale, uReveal, uFrames, uClipY, uCut, uExposure, uMaxPx;
       varying vec3 vColor;
       void main() {
         vec3 p = aPos * 0.001;
@@ -62,7 +63,8 @@ function makeMaterial(frames: number) {
         float px = aSize * 0.001 * ${GROW.toFixed(2)} * uScale / max(-mv.z, 0.05);
         // Right in front of the lens a point is a blur, not a surface: hide it.
         float near = smoothstep(0.25, 0.45, -mv.z);
-        gl_PointSize = clamp(px, 1.0, 40.0) * shown * (1.0 - cut) * near;
+        // Close up, a disc never grows past a few pixels: crisp surfaces, not bubbles.
+        gl_PointSize = clamp(px, 1.0, uMaxPx) * shown * (1.0 - cut) * near;
       }
     `,
     fragmentShader: /* glsl */ `
@@ -97,6 +99,7 @@ function Cloud({ surfels, ceilingY, overview }: { surfels: Surfels; ceilingY: nu
     u.uReveal.value = Math.min(1.1, (clock.elapsedTime - started.current) / REVEAL_S);
     // Pixels per metre at 1 m away: the projection's focal length times half the canvas height.
     u.uScale.value = (camera as THREE.PerspectiveCamera).projectionMatrix.elements[5] * size.height * 0.5 * gl.getPixelRatio();
+    u.uMaxPx.value = 14 * gl.getPixelRatio();
     u.uClipY.value = ceilingY - 0.1;
     u.uCut.value += ((overview && camera.position.y > ceilingY ? 1 : 0) - u.uCut.value) * 0.1;
   });

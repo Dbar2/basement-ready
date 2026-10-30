@@ -16,7 +16,7 @@ import type { Household } from "./rules";
 import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
 import { buildPlan, rescalePlan, type Plan } from "./plan";
-import { mainRoom, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
+import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
 import { basementViewpoints, mergeSurfels, scanBasement, type BasementScan, type RoomPlacement } from "./basement";
 import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
@@ -63,7 +63,7 @@ async function prepare(work: string, inputPath: string) {
   const analysis = join(work, "analysis.mp4");
   // 5 fps, long side 1280, max 2 minutes: keeps SAM to ~600 frames per concept.
   await run("ffmpeg", [
-    "-y", "-loglevel", "error", "-i", inputPath, "-t", "120",
+    "-y", "-loglevel", "error", "-i", inputPath, "-t", String(MAX_TAKE_S),
     "-vf", `fps=${ANALYSIS_FPS},scale='if(gt(iw,ih),1280,-2)':'if(gt(iw,ih),-2,1280)'`,
     "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-preset", "veryfast", "-movflags", "+faststart", analysis,
   ]);
@@ -72,7 +72,7 @@ async function prepare(work: string, inputPath: string) {
   await run("ffmpeg", ["-y", "-loglevel", "error", "-i", analysis, "-vsync", "0", "-q:v", "2", "-start_number", "0", join(work, "frames", "%04d.jpg")]);
   const wav = join(work, "voice.wav");
   try {
-    await run("ffmpeg", ["-y", "-loglevel", "error", "-i", inputPath, "-t", "120", "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-map_metadata", "-1", wav]);
+    await run("ffmpeg", ["-y", "-loglevel", "error", "-i", inputPath, "-t", String(MAX_TAKE_S), "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", "-map_metadata", "-1", wav]);
   } catch {
     // No audio track. The scan still works; we just don't hear what they want.
   }
@@ -122,7 +122,7 @@ export async function finishRooms(
   const rooms: Room[] = [];
   for (const r of ranges) {
     const s3 = scans3d[r.index];
-    const name = ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named);
+    let name = ranges.length === 1 ? "Your basement" : roomName(r.index, r.from, r.to, furnaceFrames, named);
     let measurements: Measurements | null = null;
     let plan: Plan | null = null;
     if (s3) {
@@ -134,6 +134,11 @@ export async function finishRooms(
       if (s) {
         measurements = rescaleMeasurements(measurements, s);
         plan = plan && rescalePlan(plan, s);
+      }
+      // Halls and stairs get their own names; rooms are numbered without them.
+      if (ranges.length > 1) {
+        named.delete(name);
+        name = areaName(plan, rooms.filter((x) => !/^(Hall|Stairs)$/.test(x.name)).length + 1, r.from, r.to, furnaceFrames, named);
       }
       await Promise.all([
         // sentFrames maps the scan's frames back to ours, so the plan can be rebuilt later.

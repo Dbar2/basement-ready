@@ -20,7 +20,7 @@ import { fetchAerial, lookupProperty, type Property } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { finishRooms, saveBasement3d, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { scanBasement } from "./basement";
-import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
+import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { liteSurfels, lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
@@ -120,7 +120,7 @@ app.post("/api/scans", async (c) => {
   const body = await c.req.parseBody();
   const video = body.video;
   if (!(video instanceof File)) return c.json({ error: "Please attach a video." }, 400);
-  if (video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 2 minutes." }, 413);
+  if (video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 3 minutes." }, 413);
   const household = (["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : "unsure") as Household;
   // A picked address sets the city and brings its public facts; otherwise the chosen city's rules.
   const picked = resolveAddress(body.address, body.addressMunicipality);
@@ -147,7 +147,7 @@ app.post("/api/scans", async (c) => {
     ...(ideas ? { ideas } : {}),
     ...(spoken ? { spoken } : {}),
     ...(lens ? { lens } : {}),
-    ...(body.wideAt != null && Number.isFinite(wideAt) && wideAt >= 0 && wideAt <= 130 ? { wideAt } : {}),
+    ...(body.wideAt != null && Number.isFinite(wideAt) && wideAt >= 0 && wideAt <= MAX_TAKE_S + 10 ? { wideAt } : {}),
   };
   const [scan] = await db
     .insert(schema.scans)

@@ -66,7 +66,7 @@ type Phase =
 type StopReason = "user" | "max" | "interrupted" | "discard" | "failed";
 
 // 10 Mbps H.264 is close to what the phone's own camera records (about 10 Mbps HEVC): fewer blocky,
-// smeared frames for SAM and the 3D. A 2-minute take is about 150 MB; the server takes up to 400 MB.
+// smeared frames for SAM and the 3D. A 3-minute take is about 225 MB; the server takes up to 400 MB.
 const VIDEO_BITRATE = 10_000_000;
 const ORDER = NEEDS.map((c) => c.id);
 // Painted enough to call it done. The walls matter most for the 3D; the floor only near the walls.
@@ -291,7 +291,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
       note,
     };
     setPhase({ name: "review", take });
-    setAnnounce(reason === "max" ? "Stopped at 2 minutes." : "Stopped. Check your take.");
+    setAnnounce(reason === "max" ? "Stopped at 3 minutes." : "Stopped. Check your take.");
   }
 
   // Clock, plus the two moments worth saying out loud.

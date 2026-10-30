@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, roomName, roomRanges, withIdeas, withoutGuide, type Room } from "../../server/rooms";
+import { areaName, cleanIdeas, cleanRooms, cleanSpoken, mainRoom, roomName, roomRanges, withIdeas, withoutGuide, type Room } from "../../server/rooms";
 
 describe("cleanRooms", () => {
   it("reads the form field, sorts and starts at 0", () => {
@@ -62,6 +62,37 @@ describe("mainRoom", () => {
 
   it("is null when no room was scanned", () => {
     expect(mainRoom([room(0, 0, false, false)])).toBeNull();
+  });
+
+  // David's second take: a stretched box with one real wall must not win by size, nor the stairs.
+  const placed = (index: number, w: number, d: number, walls: number): Room => ({
+    ...room(index, w * d, false),
+    plan: {
+      areaM2: w * d,
+      widthM: w,
+      depthM: d,
+      trusted: false,
+      stairs: [],
+      sides: Object.fromEntries(["minX", "maxX", "minZ", "maxZ"].map((k, i) => [k, i < walls ? "wall" : "extent"])),
+    } as unknown as Room["plan"],
+  });
+
+  it("prefers a room bounded by its own walls over a bigger box stretched past them", () => {
+    expect(mainRoom([placed(0, 3.5, 0.83, 4), placed(1, 7.56, 3.72, 4), placed(2, 11.98, 9.58, 1)])?.index).toBe(1);
+  });
+
+  it("never makes the stairs or a hall the main room", () => {
+    expect(mainRoom([placed(0, 3.5, 0.83, 4), placed(1, 6, 4, 1)])?.index).toBe(1);
+  });
+});
+
+describe("areaName", () => {
+  it("calls a narrow area the stairs or a hall, and numbers the rooms without it", () => {
+    const named = new Set<string>();
+    const narrow = (stairs: number) => ({ widthM: 3.5, depthM: 0.83, stairs: Array(stairs).fill({}) }) as never;
+    expect(areaName(narrow(1), 1, 0, 100, [], named)).toBe("Stairs");
+    expect(areaName(narrow(0), 1, 0, 100, [], named)).toBe("Hall");
+    expect(areaName({ widthM: 7, depthM: 4, stairs: [] } as never, 1, 100, 200, [], named)).toBe("Room 1");
   });
 });
 

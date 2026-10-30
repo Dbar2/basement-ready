@@ -20,5 +20,5 @@ export const TIPS = [
 ];
 
 export const MIN_SEC = 30;
-export const MAX_SEC = 120;
+export const MAX_SEC = 180; // a whole basement, several rooms, in one take
 export const CEILING_HOLD_MS = 3000;

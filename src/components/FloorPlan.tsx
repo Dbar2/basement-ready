@@ -31,14 +31,17 @@ function sideLine(side: PlanSide, b: Plan["box"], X: (x: number) => number, Z: (
   }
 }
 
+// An area the video didn't bound with at least two of its own walls: its size is a guess.
+export const roughArea = (plan: Plan) => Object.values(plan.sides).filter((v) => v === "wall").length < 2;
+
 // One room's walls, stairs, openings, fixtures and label, drawn with the sheet's mapping (X, Z, s).
-function RoomShape(props: { plan: Plan; units: Units; name: string; X: (x: number) => number; Z: (z: number) => number; s: number; showLabel: boolean }) {
-  const { plan, units, name, X, Z, s, showLabel } = props;
+function RoomShape(props: { plan: Plan; units: Units; name: string; X: (x: number) => number; Z: (z: number) => number; s: number; showLabel: boolean; rough?: boolean }) {
+  const { plan, units, name, X, Z, s, showLabel, rough = false } = props;
   const b = plan.box;
   const wallW = Math.max(6, 0.12 * s);
   const sides = (["minZ", "maxX", "maxZ", "minX"] as PlanSide[]).map((side) => ({ side, ...sideLine(side, b, X, Z) }));
   return (
-    <g className="plan-room-shape">
+    <g className={rough ? "plan-room-shape plan-room-rough" : "plan-room-shape"}>
       {/* walls: solid where the scan saw one, dashed where it never did */}
       {sides.map((l) => (
         <line
@@ -128,13 +131,20 @@ function RoomShape(props: { plan: Plan; units: Units; name: string; X: (x: numbe
 
       {/* room label */}
       {showLabel && (
-        <g className="plan-room">
+        // A rough area's label sits at its top, clear of the rooms drawn over it.
+        <g className="plan-room" transform={rough ? `translate(0 ${Z(b.minZ) + 52 - Z((b.minZ + b.maxZ) / 2)})` : undefined}>
           <text x={X((b.minX + b.maxX) / 2)} y={Z((b.minZ + b.maxZ) / 2) - 8} textAnchor="middle" className="plan-room-name">
             {name}
           </text>
           <text x={X((b.minX + b.maxX) / 2)} y={Z((b.minZ + b.maxZ) / 2) + 22} textAnchor="middle" className="plan-room-meta">
-            {fmtArea(plan.areaM2, units)}
-            {plan.ceilingHeightM != null && ` · ceiling ${fmtLength(plan.ceilingHeightM, units)}`}
+            {rough ? (
+              "Not clear on video: film it slowly"
+            ) : (
+              <>
+                {fmtArea(plan.areaM2, units)}
+                {plan.ceilingHeightM != null && ` · ceiling ${fmtLength(plan.ceilingHeightM, units)}`}
+              </>
+            )}
           </text>
         </g>
       )}
@@ -243,16 +253,20 @@ export function BasementFloorPlan({ rooms, units, layout = null }: { rooms: { na
   const H = oz + depth * s + M;
   const X = (x: number) => ox + (x - box.minX) * s;
   const Z = (z: number) => oz + (z - box.minZ) * s;
-  const area = rooms.reduce((a, r) => a + r.plan.areaM2, 0);
+  // Rough areas are drawn, but their guessed size isn't counted.
+  const area = rooms.reduce((a, r) => a + (roughArea(r.plan) ? 0 : r.plan.areaM2), 0);
   const estimated = rooms.some((r) => r.plan.scaleSource !== "user_measurement" || !r.plan.trusted);
   return (
     <svg className="plan" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Floor plan of the basement, ${rooms.length} rooms, ${fmtArea(area, units)}`}>
       <rect x={0} y={0} width={W} height={H} className="plan-paper" />
       {layout && <LayoutShapes layout={layout} units={units} X={X} Z={Z} s={s} />}
-      {rooms.map((r, i) => (
-        // With a layout, its zones name the main room; the other rooms keep their own labels.
-        <RoomShape key={r.name} plan={r.plan} units={units} name={r.name} X={X} Z={Z} s={s} showLabel={!layout || !layoutInside(layout, r.plan)} />
-      ))}
+      {/* Rough areas first, so measured rooms draw over them. */}
+      {[...rooms]
+        .sort((a, b) => Number(roughArea(b.plan)) - Number(roughArea(a.plan)))
+        .map((r) => (
+          // With a layout, its zones name the main room; the other rooms keep their own labels.
+          <RoomShape key={r.name} plan={r.plan} units={units} name={r.name} X={X} Z={Z} s={s} showLabel={!layout || !layoutInside(layout, r.plan)} rough={roughArea(r.plan)} />
+        ))}
       <Dimensions box={box} units={units} X={X} Z={Z} />
       <Stamp estimated={estimated} W={W} H={H} />
     </svg>
