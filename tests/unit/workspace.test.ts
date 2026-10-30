@@ -138,8 +138,11 @@ describe("permit package", () => {
 
   it("places smoke alarms in the bedroom and outside it, and CO with a furnace", () => {
     const plan = sample.plan as Plan;
-    const layout = suggestLayout(plan) as any;
+    // A one-bedroom: the sample's depth sits near where the layout switches to a studio.
+    const layout = suggestLayout(plan, { kind: "one_bedroom" }) as any;
     expect(placeAlarms(layout, plan as any, false).map((a) => a.kind)).toEqual(["smoke", "smoke"]);
+    // A studio has one, in the sleeping area.
+    expect(placeAlarms(suggestLayout(plan, { kind: "studio" }) as any, plan as any, false).map((a) => a.kind)).toEqual(["smoke"]);
     const fuel = placeAlarms(layout, plan as any, true).map((a) => a.kind);
     expect(fuel).toContain("combo");
   });
