@@ -37,7 +37,7 @@ function service(id: string, item: string, only: string | null = null): Cost | n
 export function buildOrder(inspections: Inspection[], o: { egressNew: boolean; authority: string }): BuildStep[] {
   const find = (re: RegExp) => inspections.find((i) => re.test(`${i.id} ${i.title}`))?.title ?? null;
   const steps: Omit<BuildStep, "n">[] = [
-    { title: "Permits in hand", who: "You", detail: `Building permit from ${o.authority === "your municipality" ? "your municipality" : `the ${o.authority}`}; the electrical permit from ESA before any wiring; keep the approved drawings on site.`, inspection: null },
+    { title: "Permits in hand", who: "You", detail: `Building permit from ${o.authority === "your municipality" ? "your municipality" : `the ${o.authority}`}; the electrical permit from ESA before any wiring; keep the drawings the City stamped on site.`, inspection: null },
   ];
   if (o.egressNew) steps.push({ title: "Cut the escape window", who: "Concrete cutter, to the engineer's design", detail: "Opening, lintel, window and well, before the walls go up.", inspection: find(/footing|structur|excavat/i) });
   steps.push(

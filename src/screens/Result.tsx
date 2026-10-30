@@ -2,7 +2,7 @@
 // then what it could look like and what has to change, and only then the detail behind it. Nothing
 // here asks a homeowner what a designer knows. The money, the permit and the build have their own tabs.
 // A shared link reads it; only the person who filmed it answers.
-import { ANALYSIS_FPS, aerialUrl, DEMO_LABEL, EXAMPLE_HOUSEHOLD, frameUrl, type AnyAnswer, type Detection, type ScanResult } from "../api";
+import { ANALYSIS_FPS, aerialUrl, costLabel, DEMO_LABEL, EXAMPLE_HOUSEHOLD, frameUrl, type AnyAnswer, type Detection, type ScanResult } from "../api";
 import { Answered, Questions } from "../components/Questions";
 import { SaveCta } from "../auth";
 import { ScanViews } from "../components/ScanViews";
@@ -84,8 +84,8 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
         {r.summary && <p className="summary">{r.summary}</p>}
         <dl className="decision-facts">
           <div>
-            <dt>Rough cost, all in</dt>
-            <dd className="mono">{range(r.cost.low, r.cost.high) ?? "To be priced"}</dd>
+            <dt>{costLabel(r)}</dt>
+            <dd className="mono" data-total data-low={r.cost.low} data-high={r.cost.high}>{range(r.cost.low, r.cost.high) ?? "To be priced"}</dd>
           </div>
           {upTo > 0 && (
             <div>
@@ -130,7 +130,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
         </section>
       )}
 
-      <StagedViews scanId={scanId} plan={r.plan ?? null} layout={r.layout ?? null} concepts={r.concepts ?? null} />
+      <StagedViews scanId={scanId} plan={r.design?.plan ?? r.plan ?? null} layout={r.design?.layout ?? r.layout ?? null} designName={r.design?.name ?? null} concepts={r.concepts ?? null} />
 
       {r.fixGroups.length > 0 && (
         <section className="block" id="changes">
@@ -152,7 +152,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
                 <div className="fix-proof">
                   {g.evidence.slice(0, 2).map((id) => byId.get(id)).filter(Boolean).map((d) => <Proof key={d!.id} scanId={scanId} d={d!} photos={Boolean(r.capture?.photos)} />)}
                 </div>
-                <span className="cost mono">{range(g.costLow, g.costHigh) ?? "Price on quote"}</span>
+                <span className="cost mono">{range(g.costLow, g.costHigh) ?? (g.priced === false ? "Not priced yet" : r.cost.design ? "In your quote" : "Price on quote")}</span>
               </li>
             ))}
           </ol>
@@ -162,12 +162,12 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
       {standard.length > 0 && (
         <section className="block">
           <h2>What every basement suite needs</h2>
-          <p className="lede">Not problems with your basement: the work any second home needs to be legal. It's in the cost above.</p>
+          <p className="lede">Not problems with your basement: the work any second home needs to be legal. It's in the cost above, by trade in your book.</p>
           <ul className="ruled standard">
             {standard.map((s) => (
               <li key={s.ruleId}>
                 <span>{s.text}</span>
-                <span className="cost mono">{range(s.costLow, s.costHigh) ?? "On quote"}</span>
+                <span className="cost mono">{range(s.costLow, s.costHigh) ?? "In your quote"}</span>
               </li>
             ))}
           </ul>
