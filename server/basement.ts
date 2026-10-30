@@ -12,8 +12,9 @@ const WHOLE_FRAMES = Number(process.env.SCAN3D_WHOLE_FRAMES ?? 40);
 // Areas measured at once: the Mac's GPU takes one job at a time, Modal runs several side by side.
 const AREAS_AT_ONCE = Math.max(1, Number(process.env.SCAN3D_PARALLEL ?? 1));
 
-// Room frame -> basement frame: turn by quarter turns about the vertical, then shift on the floor.
-export type RoomPlacement = { turn: 0 | 1 | 2 | 3; x: number; z: number };
+// Room frame -> basement frame: turn by quarter turns about the vertical, then shift on the floor; `y`
+// lifts the area so its floor sits on the basement's one floor (0 when absent).
+export type RoomPlacement = { turn: 0 | 1 | 2 | 3; x: number; z: number; y?: number };
 
 export type BasementScan = {
   spans: { from: number; to: number }[]; // the areas kept, in our frame numbers, filming order
@@ -21,6 +22,18 @@ export type BasementScan = {
   placements: RoomPlacement[];
   rects: Rect[]; // each area's box in the basement frame
   path: V2[]; // where the camera walked, on the floor, in the basement frame
+  // App takes: the phone's camera centres along the walk (and our frame number for each) and the first
+  // plan read from every area at once, for the full plan once SAM's finds are in (server/floorplan.ts).
+  tracked?: { cameras: number[][]; frames: number[]; plan: FloorPlanResult };
+  // What a model that watched the whole take saw (server/watch.ts), for the full plan's rooms.
+  watch?: Promise<WatchLike | null>;
+};
+
+// The parts of the whole-take watch (server/watch.ts Watch) the floor plan reads: the rooms in order,
+// the seconds the camera was inside each, which were only seen from a doorway, and the doors.
+export type WatchLike = {
+  rooms: { id: string; name: string; spokenName?: string | null; kind: string; visits: [number, number][]; entered: boolean; seenFrom: string | null }[];
+  doors: { from: string; to: string; kind: string }[];
 };
 
 // What the wait screen draws while the 3D works: the camera's walk first, then each area as it's
@@ -77,10 +90,11 @@ export async function scanBasement(
   log: (text: string) => Promise<void>,
   cameraFor?: (n: number) => KnownCamera | null,
   progress?: BasementProgress,
+  watch?: Promise<WatchLike | null>,
 ): Promise<BasementScan | null> {
   if (cameraFor) {
     const tracked = await scanTracked(work, frameCount, known, log, cameraFor, progress);
-    if (tracked) return tracked;
+    if (tracked) return { ...tracked, watch };
   }
   await log("Mapping your whole basement");
   const whole = await runScan3d(work, { from: 0, to: frameCount }, known, { maxFrames: WHOLE_FRAMES, maxFaces: 0 });
@@ -125,10 +139,27 @@ export async function scanBasement(
   return {
     spans: kept.map((k) => spans[k]),
     scans: kept.map((k) => scans[k]),
-    placements: kept.map((k, i) => ({ turn: quarterTurns(theta[k]), x: centre[k][0] + moves[i][0], z: centre[k][1] + moves[i][1] })),
+    placements: kept.map((k, i) => ({ turn: quarterTurns(theta[k]), x: centre[k][0] + moves[i][0], z: centre[k][1] + moves[i][1], y: lift(scans[k]) ?? 0 })),
     rects: kept.map((k, i) => ({ x0: rects[k].x0 + moves[i][0], z0: rects[k].z0 + moves[i][1], x1: rects[k].x1 + moves[i][0], z1: rects[k].z1 + moves[i][1] })),
     path: w.pos.map(([x, z]): V2 => [x / S, z / S]),
   };
+}
+
+// The phone's own walk, every third frame, cut where it moved on to a new area. Null when too little of
+// the take was tracked to rely on.
+export function trackedWalk(frameCount: number, cameraFor: (n: number) => KnownCamera | null) {
+  const idx: number[] = [], pos: V2[] = [];
+  for (let n = 0; n < frameCount; n += 3) {
+    const c = cameraFor(n);
+    if (!c) continue;
+    idx.push(n);
+    pos.push([c.pose[0][3], c.pose[2][3]]);
+  }
+  if (idx.length < Math.max(12, (frameCount / 3) * 0.5)) return null;
+  const edges = [0];
+  for (const [a] of splitWalk(pos).slice(1)) if (idx[a] - edges.at(-1)! >= MIN_ROOM_FRAMES) edges.push(idx[a]);
+  if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
+  return { idx, pos, spans: edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount })) };
 }
 
 // Areas from the phone's own path, each measured with its known cameras and placed by the world the
@@ -141,20 +172,10 @@ async function scanTracked(
   cameraFor: (n: number) => KnownCamera | null,
   progress?: BasementProgress,
 ): Promise<BasementScan | null> {
-  const idx: number[] = [], pos: V2[] = [];
-  for (let n = 0; n < frameCount; n += 3) {
-    const c = cameraFor(n);
-    if (!c) continue;
-    idx.push(n);
-    pos.push([c.pose[0][3], c.pose[2][3]]);
-  }
-  if (idx.length < Math.max(12, (frameCount / 3) * 0.5)) return null;
+  const walk = trackedWalk(frameCount, cameraFor);
+  if (!walk) return null;
+  const { idx, pos, spans } = walk;
   await progress?.path(pos);
-
-  const edges = [0];
-  for (const [a] of splitWalk(pos).slice(1)) if (idx[a] - edges.at(-1)! >= MIN_ROOM_FRAMES) edges.push(idx[a]);
-  if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
-  const spans = edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount }));
 
   const scans = await measureAreas(
     spans,
@@ -172,7 +193,7 @@ async function scanTracked(
   const plan = await runFloorPlan(scans, centres).catch(() => null);
   if (plan?.rooms.length) {
     const placed = fromFloorPlan(plan, scans, spans, idx, pos);
-    if (placed) return placed;
+    if (placed) return { ...placed, tracked: { cameras: centres, frames: idx, plan } };
   }
 
   // Each area's room frame in the phone's world: its x axis is the first row of the rotation.
@@ -194,7 +215,7 @@ async function scanTracked(
   return {
     spans: kept.map((k) => spans[k]),
     scans: kept.map((k) => scans[k]),
-    placements: kept.map((k, i) => ({ turn: quarterTurns(turned[k]), x: centre[k][0] + moves[i][0], z: centre[k][1] + moves[i][1] })),
+    placements: kept.map((k, i) => ({ turn: quarterTurns(turned[k]), x: centre[k][0] + moves[i][0], z: centre[k][1] + moves[i][1], y: lift(scans[k]) ?? 0 })),
     rects: kept.map((k, i) => ({ x0: rects[k].x0 + moves[i][0], z0: rects[k].z0 + moves[i][1], x1: rects[k].x1 + moves[i][0], z1: rects[k].z1 + moves[i][1] })),
     path: pos.map((p) => turn(p, -theta[big])),
   };
@@ -206,7 +227,7 @@ const sideOf = ([x, z]: V2): (typeof SIDES)[number] => (Math.abs(x) > Math.abs(z
 
 // Each floor-plan room keeps the area that filmed most of it; that area's box becomes the room's box (in
 // the area's own frame, so its finds and depth still line up), and it's placed by the tracked world.
-function fromFloorPlan(plan: FloorPlanResult, scans: Scan3d[], spans: { from: number; to: number }[], idx: number[], pos: V2[]): BasementScan | null {
+export function fromFloorPlan(plan: FloorPlanResult, scans: Scan3d[], spans: { from: number; to: number }[], idx: number[], pos: V2[]): BasementScan | null {
   const phi = plan.rotation;
   const inBox = (b: FloorPlanRoom["box"], [x, z]: V2) => x >= b[0] && x <= b[2] && z >= b[1] && z <= b[3];
   // Which room each area stood in most.
@@ -250,11 +271,42 @@ function fromFloorPlan(plan: FloorPlanResult, scans: Scan3d[], spans: { from: nu
     s3.scan.room.widthM = Math.round((box.max[0] - box.min[0]) * 100) / 100;
     s3.scan.room.depthM = Math.round((box.max[2] - box.min[2]) * 100) / 100;
     const c = turn(o, -phi);
-    placements.push({ turn: quarterTurns(theta - phi), x: c[0], z: c[1] });
+    // The area's own floor goes on the basement's: where its solid surface has its floor, or else where
+    // the plan's RANSAC found this area's floor in the phone's world (its room frame has y = 0 at o[1]).
+    const own = plan.plan?.areaFloors?.find((a) => a.area === k)?.y;
+    const floorY = own != null && Math.abs(own - plan.floorY) <= 0.15 ? own : plan.floorY;
+    const y = lift(s3) ?? s3.scan.world.origin[1] - floorY;
+    placements.push({ turn: quarterTurns(theta - phi), x: c[0], z: c[1], y: Math.round(y * 1000) / 1000 });
     rects.push({ x0, z0, x1, z1 });
   }
   return { spans: kept.map((k) => spans[k]), scans: kept.map((k) => scans[k]), placements, rects, path: pos.map((p) => turn(p, -phi)) };
 }
+
+// Where an area's solid surface has its floor, in its own frame (metres): the strongest layer of
+// vertices within 40 cm of its y = 0. Walls spread over every height; the floor is one layer.
+export function meshFloor(mesh: ArrayBuffer): number | null {
+  const head = new DataView(mesh);
+  if (mesh.byteLength < 12 || head.getUint8(0) !== 66) return null; // "BRM1"
+  const nv = head.getUint32(4, true), nf = head.getUint32(8, true);
+  const P = new Int16Array(mesh, 12 + nf * 12, nv * 3);
+  const bins = new Float64Array(81);
+  for (let i = 0; i < nv; i++) {
+    const y = P[i * 3 + 1];
+    if (y > -400 && y < 400) bins[Math.floor((y + 400) / 10)]++;
+  }
+  let best = -1, at = 0;
+  for (let k = 1; k < 80; k++) {
+    const v = bins[k - 1] + 2 * bins[k] + bins[k + 1];
+    if (v > best) [best, at] = [v, k];
+  }
+  return best >= 200 ? (at * 10 - 400 + 5) / 1000 : null;
+}
+
+// How far to lift an area so its floor sits at the basement's 0 (its mesh's own floor, when it has one).
+const lift = (s3: Scan3d) => {
+  const f = s3.mesh ? meshFloor(s3.mesh) : null;
+  return f != null && Math.abs(f) < 0.3 ? -f : null;
+};
 
 // The 3D matrix of a placement: x' = c x - s z, z' = s x + c z, y unchanged.
 function basis(p: RoomPlacement) {
@@ -274,11 +326,11 @@ export function mergeSurfels(rooms: { surfels: ArrayBuffer; placement: RoomPlace
     const P = new Int16Array(r.surfels, 8, n * 3), C = new Uint8Array(r.surfels, 8 + n * 6, n * 3);
     const Z = new Uint8Array(r.surfels, 8 + n * 9, n), F = new Uint16Array(r.surfels.slice(8 + n * 10, 8 + n * 12));
     const { c, s } = basis(r.placement);
-    const dx = r.placement.x * 1000, dz = r.placement.z * 1000;
+    const dx = r.placement.x * 1000, dy = (r.placement.y ?? 0) * 1000, dz = r.placement.z * 1000;
     for (let i = 0; i < n; i++, o++) {
       const x = P[i * 3], z = P[i * 3 + 2];
       pos[o * 3] = Math.max(-32767, Math.min(32767, Math.round(c * x - s * z + dx)));
-      pos[o * 3 + 1] = P[i * 3 + 1];
+      pos[o * 3 + 1] = Math.max(-32767, Math.min(32767, Math.round(P[i * 3 + 1] + dy)));
       pos[o * 3 + 2] = Math.max(-32767, Math.min(32767, Math.round(s * x + c * z + dz)));
       col.set(C.subarray(i * 3, i * 3 + 3), o * 3);
       size[o] = Z[i];
@@ -315,12 +367,12 @@ export function mergeMesh(rooms: { mesh: ArrayBuffer; placement: RoomPlacement; 
     const nv = head.getUint32(4, true), nf = head.getUint32(8, true);
     const F = new Uint32Array(r.mesh, 12, nf * 3), P = new Int16Array(r.mesh, 12 + nf * 12, nv * 3), C = new Uint8Array(r.mesh, 12 + nf * 12 + nv * 6, nv * 3);
     const { c, s } = basis(r.placement);
-    const dx = r.placement.x * 1000, dz = r.placement.z * 1000;
+    const dx = r.placement.x * 1000, dy = (r.placement.y ?? 0) * 1000, dz = r.placement.z * 1000;
     const pos = new Int16Array(nv * 3);
     for (let i = 0; i < nv; i++) {
       const x = P[i * 3], z = P[i * 3 + 2];
       pos[i * 3] = Math.max(-32767, Math.min(32767, Math.round(c * x - s * z + dx)));
-      pos[i * 3 + 1] = P[i * 3 + 1];
+      pos[i * 3 + 1] = Math.max(-32767, Math.min(32767, Math.round(P[i * 3 + 1] + dy)));
       pos[i * 3 + 2] = Math.max(-32767, Math.min(32767, Math.round(s * x + c * z + dz)));
     }
     const others = rects.filter((o) => o !== r.rect);
@@ -381,7 +433,7 @@ export function basementViewpoints(rooms: { scan: any; placement: RoomPlacement;
       const P = f.pose;
       const pose = [0, 1, 2].map((row) => [
         ...[0, 1, 2].map((col) => M[row][0] * P[0][col] + M[row][1] * P[1][col] + M[row][2] * P[2][col]),
-        M[row][0] * P[0][3] + M[row][1] * P[1][3] + M[row][2] * P[2][3] + (row === 0 ? r.placement.x : row === 2 ? r.placement.z : 0),
+        M[row][0] * P[0][3] + M[row][1] * P[1][3] + M[row][2] * P[2][3] + (row === 0 ? r.placement.x : row === 2 ? r.placement.z : (r.placement.y ?? 0)),
       ]);
       frames.push({ frame: r.frameNumbers[i] ?? 0, room, pose: [...pose, [0, 0, 0, 1]] });
     });

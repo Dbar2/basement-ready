@@ -25,8 +25,8 @@ struct CaptureLog: Sendable {
   var device: String
   var lens = "wide"
   var imageResolution: (width: Int, height: Int)
-  var orientation = "portrait" // the sensor image turned 90° clockwise to stand upright
   var arkitStartTime: Double? // ARFrame.timestamp (seconds of device uptime) of the video's first frame
+  var rotationCW = 90 // ARKit's sensor image turns 90° clockwise to stand upright ("portrait"); a replayed upright take is 0
   var frames: [FrameRecord] = []
   var depth: DepthIndex?
 
@@ -38,7 +38,7 @@ struct CaptureLog: Sendable {
     s += ",\"videoStartTime\":0"
     if let arkitStartTime { s += ",\"arkitStartTime\":" + fixed(arkitStartTime, 6) }
     s += ",\"imageResolution\":[\(imageResolution.width),\(imageResolution.height)]"
-    s += ",\"orientation\":" + jsonString(orientation)
+    s += rotationCW == 90 ? ",\"orientation\":\"portrait\"" : ",\"rotationCW\":\(rotationCW)"
     s += ",\"frames\":["
     s.reserveCapacity(s.utf8.count + frames.count * 260)
     var first = true

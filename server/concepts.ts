@@ -177,6 +177,18 @@ export function keptInPlace(original: Box[], found: Box[], minIou = 0.2) {
   return original.every((o) => found.some((f) => iou(o, f) >= minIou));
 }
 
+// Something in the picture that wasn't in the original: no box of the original matches it, or holds
+// most of it (the top of the real stairs is still the real stairs). Muse Image sometimes turns a box
+// on a cluttered wall into a window, or adds stairs.
+export function addedTo(original: Box[], found: Box[]) {
+  const within = (f: Box, o: Box) => {
+    const x = Math.max(0, Math.min(f.x + f.w, o.x + o.w) - Math.max(f.x, o.x));
+    const y = Math.max(0, Math.min(f.y + f.h, o.y + o.h) - Math.max(f.y, o.y));
+    return (x * y) / (f.w * f.h || 1);
+  };
+  return found.some((f) => !original.some((o) => iou(o, f) >= 0.2 || within(f, o) >= 0.6));
+}
+
 export async function boxesIn(jpeg: Buffer, concept: string): Promise<Box[]> {
   const raw = await samImage(concept, `data:image/jpeg;base64,${jpeg.toString("base64")}`).catch(() => "");
   return parseSam(raw)
@@ -263,16 +275,20 @@ async function renderPick(p: FramePick, n: number, anchors: Anchor[], prompt: (s
   const [w, h] = jpegSize(frame) ?? [1280, 720];
   for (let attempt = 0; attempt < 2; attempt++) {
     const jpeg = await work.resize(await work.edit(frame, prompt(p.space), `${w}x${h}`), w, h);
-    let kept = true;
-    let checked = "Room shape kept";
-    if (anchors.length) {
-      const kinds = [...new Set(anchors.map((a) => a.kind))];
-      const found = await Promise.all(kinds.map(async (k) => ({ k, boxes: await work.boxes(jpeg, k === "window" ? "basement window" : "staircase") })));
-      kept = kinds.every((k) => keptInPlace(anchors.filter((a) => a.kind === k).map((a) => a.box), found.find((f) => f.k === k)!.boxes));
-      checked = kept
-        ? `${kinds.map((k) => (k === "window" ? "Windows" : "Stairs")).join(" and ")} kept where they are · checked by SAM 3.1`
-        : "A window or the stairs moved in this picture: treat it as a mood, not a plan";
-    }
+    // Every window and stair is kept, and none is added: SAM looks for both, whatever the frame had.
+    const kinds = [...new Set(anchors.map((a) => a.kind))];
+    const found = await Promise.all((["window", "stairs"] as const).map(async (k) => ({ k, boxes: await work.boxes(jpeg, k === "window" ? "basement window" : "staircase") })));
+    const was = (k: string) => anchors.filter((a) => a.kind === k).map((a) => a.box);
+    const moved = !kinds.every((k) => keptInPlace(was(k), found.find((f) => f.k === k)?.boxes ?? []));
+    const added = found.some((f) => addedTo(was(f.k), f.boxes));
+    const kept = !moved && !added;
+    const checked = moved
+      ? "A window or the stairs moved in this picture: treat it as a mood, not a plan"
+      : added
+        ? "A window or stairs appeared that aren't there: treat it as a mood, not a plan"
+        : kinds.length
+          ? `${kinds.map((k) => (k === "window" ? "Windows" : "Stairs")).join(" and ")} kept where they are, nothing added · checked by SAM 3.1`
+          : "No windows or stairs added · checked by SAM 3.1";
     if (kept || attempt === 1) {
       await work.save(n, jpeg);
       const c = { n, frame: p.frame, title: p.title, kept, checked };

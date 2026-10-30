@@ -23,6 +23,22 @@ struct Take: Codable, Sendable {
     return folder
   }
 
+  // A sent take's folder: deleted, or in Debug builds moved to Application Support/Kept with the two
+  // before it (video, capture.json and sensors.jsonl: everything the replay harness needs).
+  static func sent(_ folder: URL) {
+    #if DEBUG
+    let fm = FileManager.default
+    let kept = folder.deletingLastPathComponent().deletingLastPathComponent().appending(path: "Kept")
+    try? fm.createDirectory(at: kept, withIntermediateDirectories: true)
+    if (try? fm.moveItem(at: folder, to: kept.appending(path: folder.lastPathComponent))) != nil {
+      let old = ((try? fm.contentsOfDirectory(at: kept, includingPropertiesForKeys: nil)) ?? []).sorted { $0.lastPathComponent > $1.lastPathComponent }
+      for f in old.dropFirst(3) { try? fm.removeItem(at: f) }
+      return
+    }
+    #endif
+    try? FileManager.default.removeItem(at: folder)
+  }
+
   // basement-YYYY-MM-DD-HHMM.mp4, like the web's recordings.
   var uploadName: String {
     let f = DateFormatter()
@@ -45,9 +61,12 @@ enum CaptureEvent: Sendable {
   case failed(String)
 }
 
-// The real camera (ARCapture) or, in Debug builds, a pretend walk for the simulator (DemoCapture).
-// Each takes a `send` for its events when made.
+// The real camera (ARCapture) or, in Debug builds, a replayed take or a pretend walk for the
+// simulator (ReplayCapture, DemoCapture). Each takes a `send` for its events when made, and fills
+// `feed` with what the overlay draws.
 protocol CaptureSource: AnyObject, Sendable {
+  var feed: OverlayFeed { get }
+  var perf: CapturePerf { get }
   func start() throws
   func stop() async throws -> Take
   func cancel()
