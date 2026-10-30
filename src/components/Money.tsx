@@ -120,7 +120,7 @@ export function MoneySection({ r, busy, readOnly, example, onAnswer }: { r: Scan
       {no.length > 0 && (
         <details className="money-no">
           <summary>
-            {no.length === 1 ? "1 program you don't qualify for" : `${no.length} programs you don't qualify for`}
+            {no.length === 1 ? "1 program that doesn't fit" : `${no.length} programs that don't fit`}
           </summary>
           <ul className="ruled">
             {no.map((g) => (

@@ -17,7 +17,8 @@ import { buildPlan } from "./plan";
 import { resolveAddress, searchOntario } from "./address";
 import { suggestLayout } from "./layout";
 import { AERIAL_YEAR, fetchAerial, lookupProperty, type Property } from "./property";
-import { recheck, type Answers, type AnswerValue } from "./recheck";
+import { pricedForBasement, pricedSample } from "./priced";
+import { type Answers, type AnswerValue } from "./recheck";
 import { cameraLookup, cleanCapture } from "./capture";
 import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { scanBasement } from "./basement";
@@ -202,12 +203,13 @@ app.get("/api/scans/:id", async (c) => {
   // Scans from before layouts get one on the way out: it's pure, from the saved plan.
   const result = scan.result as any;
   const withLayout = result?.plan && !result.layout ? { ...result, layout: suggestLayout(result.plan) } : result;
-  // And scans from before the money questions get their money worked out again, with their answers.
   const answers = await savedAnswers(scan.basementId);
-  const withMoney = withLayout?.findings && !withLayout.moneyQuestions ? recheck(withLayout, answers) : withLayout;
   // Who it's for and every answer saved (rule, money, who, plans), and what's still worth asking.
   const [basement] = await db.select().from(schema.basements).where(eq(schema.basements.id, scan.basementId));
   const household = (basement?.household ?? "unsure") as Household;
+  // Re-checked with its answers and priced on the design they picked (server/priced.ts): the cost is
+  // that design's quote, the money is worked from it, and the fixes are one list.
+  const withMoney = withLayout?.findings ? await pricedForBasement(scan.id, scan.basementId, { ...withLayout, household: basement?.household ?? withLayout.household }, answers) : withLayout;
   // Only the owner answers; a shared link reads.
   const owner = await ownerOf(c, currentUser);
   const failure = scan.status === "error" ? failureOf(scan.error) : null;
@@ -435,7 +437,8 @@ app.post("/api/recheck", async (c) => {
   const { pack } = packFor(body.result.municipality ?? "waterloo-on");
   const answers: Answers = Object.fromEntries(Object.entries(body.answers as Record<string, unknown>).map(([k, v]) => [k, answerFor(k, v, pack)]));
   const household = ["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : body.result.household;
-  return c.json({ result: recheck({ ...body.result, household }, answers) });
+  // Priced on the design the example picked in this browser (it sends its workspace's model).
+  return c.json({ result: pricedSample({ ...body.result, household }, { model: body.model }, answers) });
 });
 
 // The 3D scan's files, for the scan reveal and the explorer. `?room=n` for rooms after the first.

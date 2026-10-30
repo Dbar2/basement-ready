@@ -133,7 +133,7 @@ const notStarted = (v: MoneyValue) => v === false;
 
 function rentNo(v: MoneyValue | null | undefined, cap: number, what: string) {
   if (v === "none") return `${what} the suite is rented on a lease, at ${money(cap)} a month or less.`;
-  return `${what} rent of ${money(cap)} a month or less; above that doesn't qualify.`;
+  return `${what} rent of ${money(cap)} a month or less; above that isn't eligible.`;
 }
 
 // What a cash program pays toward this project: its own rule, never more than the cost still unpaid
@@ -200,7 +200,7 @@ function evaluateProgram(g: any, f: Required<Pick<MoneyInput, "household" | "ans
       ],
       note: [
         value?.other ? `The Region's fact sheet sets the house limit at ${money(value.strict)}; its web page says ${money(value.other)}. Between the two, ask the Region.` : null,
-        "Money is limited each year; once it's gone, approved homes wait for next year.",
+        "Money is limited each year; once it's gone, homes it has accepted wait for next year.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -303,7 +303,7 @@ function evaluateProgram(g: any, f: Required<Pick<MoneyInput, "household" | "ans
       ...d,
       reason: d.reason ?? `${familyLivesThere ? "Your relative will live" : "You live"} in the house and work hasn't started.`,
       commitments: [
-        "Approved by CMHC, through your lender, before building starts",
+        "CMHC signs off, through your lender, before building starts",
         "Borrow up to 90% of the finished home's value (under $2 million), over up to 30 years",
         "No short-term rentals: leases of 90 days or more",
       ],

@@ -4,7 +4,8 @@ import type { Design, Model } from "../../server/model/types";
 import { quote, type Quote } from "../../server/quote/quote";
 
 export type { Quote };
-export const quoteFor = (model: Model, design: Design): Quote => quote(model, design);
+// Priced for the scan's own city (its permit fee), as the answer, the layouts and the book are.
+export const quoteFor = (model: Model, design: Design, municipality?: string): Quote => quote(model, design, { municipality });
 
 // What the numbers include, in one line.
 export const basisOf = (q: Quote) =>

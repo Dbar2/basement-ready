@@ -121,7 +121,7 @@ export function applications(given: ApplyInput): Application[] {
         documents,
         warnings: [
           "After conditional approval the Region needs 3 quotes from contractors with WSIB coverage and liability insurance. The Build tab tracks them.",
-          "Work started before written approval doesn't qualify.",
+          "Work started before you have it in writing isn't eligible.",
         ],
         link: null,
       });
@@ -262,7 +262,7 @@ export function applications(given: ApplyInput): Application[] {
         },
         form: null,
         documents: [{ label: "Quotes for the work", have: has.quotes > 0, how: has.quotes ? `${has.quotes} on the Build tab.` : "Ask for quotes on the Build tab." }],
-        warnings: ["Only CMHC-approved lenders offer it, and CMHC approves it before construction starts."],
+        warnings: ["Only lenders that work with CMHC offer it, and CMHC signs off before construction starts."],
         link: g.apply?.where?.[0] ?? null,
       });
     }
