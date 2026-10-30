@@ -1,9 +1,10 @@
 // The filmed basements the journeys run on. Each one is recorded once against the real services
 // (`pnpm test:e2e:record`), which also saves what it came out as; replay checks it comes out the same.
+import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { WaitAnswers } from "../pages/WaitScreen";
-import { COMMITTED_REPLAY, MEDIA_ROOT, mode, PRIVATE_REPLAY, RECORD_DIR } from "./run";
+import { COMMITTED_REPLAY, MEDIA_ROOT, mode, PRIVATE_REPLAY, RECORD_DIR, ROOT } from "./run";
 
 export type Take = {
   id: string;
@@ -65,9 +66,21 @@ export type Outcome = {
   cards: number;
 };
 
-// Beside its saved answers.
-const outcomeFile = (t: Take) => join(RECORD_DIR, "takes", `${t.id}.json`);
-const recordedIn = (t: Take) => [PRIVATE_REPLAY, COMMITTED_REPLAY].map((d) => join(d, "takes", `${t.id}.json`)).find((p) => existsSync(p));
+// Beside its saved answers, one per branch: the saved answers are shared by every checkout (they're keyed
+// by what was asked), but what a take comes out as is the code's, and branches change it in parallel.
+// main's are takes/<id>.json; a branch's are takes/<branch>/<id>.json, read first, then main's.
+const branch = (() => {
+  try {
+    return process.env.E2E_BRANCH ?? execSync("git rev-parse --abbrev-ref HEAD", { cwd: ROOT, encoding: "utf8" }).trim();
+  } catch {
+    return "main";
+  }
+})();
+const onMain = branch === "main" || branch === "HEAD";
+const takesDir = (dir: string, own: boolean) => (own && !onMain ? join(dir, "takes", branch.replace(/[^a-z0-9._-]+/gi, "-")) : join(dir, "takes"));
+const outcomeFile = (t: Take) => join(takesDir(RECORD_DIR, true), `${t.id}.json`);
+const recordedIn = (t: Take) =>
+  [true, false].flatMap((own) => [PRIVATE_REPLAY, COMMITTED_REPLAY].map((d) => join(takesDir(d, own), `${t.id}.json`))).find((p) => existsSync(p));
 
 export function recordedOutcome(t: Take): Outcome | null {
   const at = recordedIn(t);

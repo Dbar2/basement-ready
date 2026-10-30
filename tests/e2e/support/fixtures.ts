@@ -49,7 +49,8 @@ export const test = base.extend<{ journey: Journey }>({
         test.step(name, async () => {
           const out = fn ? await fn() : undefined;
           const path = join(shots, `${String(++n).padStart(2, "0")}-${slug(name)}.png`);
-          await page.screenshot({ path }).catch(() => {});
+          // A screenshot is evidence, not the test: one WebKit can't take in 15 s is skipped.
+          await page.screenshot({ path, timeout: 15_000 }).catch(() => {});
           appendFileSync(
             files.steps,
             JSON.stringify({ test: info.titlePath.slice(1).join(" › "), project: info.project.name, n, step: name, shot: relative(runDir, path), ms: Date.now() - started }) + "\n",
