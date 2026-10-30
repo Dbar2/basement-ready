@@ -183,12 +183,21 @@ describe("SAM on each photo", () => {
     const one = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.95], [600, 100, 660, 900, 0.95], [100, 50, 700, 120, 0.8], [0, 200, 1200, 320, 0.67]));
     expect(one).toHaveLength(1);
     expect(one[0].box).toMatchObject({ x: 0, w: 0.938 });
-    // With no long one, the widest sure box stands in, so the open joists still show; four joists are one find.
-    const joists = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9], [500, 40, 640, 70, 0.75], [700, 30, 900, 60, 0.8], [900, 20, 1000, 50, 0.72]));
-    expect(joists).toHaveLength(1);
-    expect(joists[0].box.x).toBe(0.078);
-    // Unsure joists don't.
-    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.68]))).toHaveLength(0);
+    // Short pieces of joist, posts and stair stringers are never the beam, however sure.
+    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9], [500, 40, 640, 70, 0.95], [700, 30, 900, 60, 0.8]))).toHaveLength(0);
+    expect(photoFinds(0, BEAM, sam([600, 0, 680, 960, 0.95]))).toHaveLength(0);
+    expect(photoFinds(0, BEAM, sam([100, 200, 500, 900, 0.9]))).toHaveLength(0);
+    // Wide but not level: a block of ceiling, not a member.
+    expect(photoFinds(0, BEAM, sam([0, 0, 900, 600, 0.9]))).toHaveLength(0);
+  });
+
+  it("asks a photo for a ceiling duct; only a whole video asks for a metal duct", async () => {
+    expect(CONCEPTS.find((c) => c.label === "Duct")).toMatchObject({ concept: "ceiling duct", video: "metal duct" });
+    expect(CONCEPTS.filter((c) => c.video).map((c) => c.label)).toEqual(["Duct"]);
+    const asked: string[] = [];
+    await findInPhotos(1, CONCEPTS, async (concept) => (asked.push(concept), ""));
+    expect(asked).toContain("ceiling duct");
+    expect(asked).not.toContain("metal duct");
   });
 
   it("counts a duct from 0.55 sure", () => {
@@ -216,6 +225,23 @@ describe("SAM on each photo", () => {
     expect(asked.sort()).toEqual(["0:basement window", "0:furnace", "1:basement window", "1:furnace", "2:basement window", "2:furnace"]);
     expect(heard).toEqual([[0, ["Window", "Furnace"]], [1, ["Window"]], [2, ["Furnace"]]]);
     expect(all.map((d) => `${d.frame}:${d.label}`)).toEqual(["0:Window", "0:Furnace", "1:Window", "2:Furnace"]);
+  });
+
+  it("drops a beam that sits inside a duct or the stairs in the same photo, never one beside them", async () => {
+    const DUCT = CONCEPTS.find((c) => c.label === "Duct")!;
+    const STAIRS = CONCEPTS.find((c) => c.label === "Stairs")!;
+    const boxes: Record<string, string> = {
+      // Photo 0: SAM calls the round duct a beam too. Photo 1: a real beam right beside the duct.
+      "0:support beam": sam([100, 60, 900, 160, 0.8]),
+      "0:ceiling duct": sam([80, 40, 920, 180, 0.7]),
+      "1:support beam": sam([0, 200, 1200, 300, 0.8]),
+      "1:ceiling duct": sam([0, 100, 1200, 230, 0.7]),
+      // Photo 2: a wide box on the stairs' stringer.
+      "2:support beam": sam([400, 300, 900, 500, 0.8]),
+      "2:staircase": sam([350, 100, 1000, 950, 0.9]),
+    };
+    const all = await findInPhotos(3, [BEAM, DUCT, STAIRS], async (concept, n) => boxes[`${n}:${concept}`] ?? "");
+    expect(all.map((d) => `${d.frame}:${d.label}`)).toEqual(["0:Duct", "1:Beam", "1:Duct", "2:Stairs"]);
   });
 
   it("says what each photo showed in plain words", () => {
