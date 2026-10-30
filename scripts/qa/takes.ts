@@ -9,13 +9,28 @@ import { chromiumPath } from "./browsers";
 import { MEDIA_ROOT } from "./paths";
 import { replayAvailable, replayDirs } from "./servers";
 
-type Take = { id: string; video: string; capture: string; who: string; answers: Record<string, string> };
+// How each take came in when it was recorded: the iPhone app's post (with its camera path), or the
+// start sheet's upload (address and who it's for, then the video). Replay matches on the requests, so
+// both are repeated exactly.
+type Take = {
+  id: string;
+  video: string;
+  answers: Record<string, string>;
+} & ({ via: "app"; capture: string; who: string } | { via: "upload"; address: string; who: string });
 
-// Same as tests/e2e/support/takes.ts. Takes that came in through the start sheet's upload (david-05x)
-// need the start sheet walked exactly as recorded; run those through `pnpm test:e2e` instead.
+// Same as tests/e2e/support/takes.ts.
 const TAKES: Take[] = [
   {
+    id: "david-05x",
+    via: "upload",
+    video: join(MEDIA_ROOT, "private/scans/566dc57b-b578-43b0-b897-484eee974de6/input.mp4"),
+    address: "120 Avondale",
+    who: "Family, no rent",
+    answers: { "What would you like it to be": "A suite for family" },
+  },
+  {
     id: "b2-family",
+    via: "app",
     video: join(MEDIA_ROOT, "eval/b2-finished-family/walkthrough.mp4"),
     capture: join(MEDIA_ROOT, "eval/b2-finished-family/capture.json"),
     who: "rental_market",
@@ -27,54 +42,86 @@ export function takeProblem(id: string): string | null {
   const t = TAKES.find((x) => x.id === id);
   if (!t) return `unknown take "${id}" (known: ${TAKES.map((x) => x.id).join(", ")})`;
   if (!replayAvailable()) return "replay isn't on this branch yet (server/replay.ts comes with the end-to-end tests)";
-  if (!existsSync(t.video) || !existsSync(t.capture)) return `its video or camera path isn't on this machine (${MEDIA_ROOT})`;
+  if (!existsSync(t.video) || (t.via === "app" && !existsSync(t.capture))) return `its video or camera path isn't on this machine (${MEDIA_ROOT})`;
   const recorded = replayDirs().some((d) => existsSync(join(d, "takes", `${t.id}.json`)) || (existsSync(join(d, "takes")) && readdirSync(join(d, "takes")).includes(`${t.id}.json`)));
   if (!recorded) return "not recorded yet: pnpm test:e2e:record spends Meta credit (ask David first)";
   return null;
 }
 
-// Posts the take, answers the wait screen's questions as the recording did, and waits for the answer.
-// Returns the scan id and the claim the workspace needs (kept in localStorage "br-claims").
-export async function runTake(id: string, baseURL: string, log: (s: string) => void): Promise<{ scanId: string; claim: { basementId: string; claimToken: string } }> {
+// Sends the take in as it was recorded, answers the wait screen's questions as the recording did, and
+// waits for the answer. Returns the scan id and the device claims the workspace needs ("br-claims").
+export async function runTake(id: string, baseURL: string, log: (s: string) => void): Promise<{ scanId: string; claims: unknown[] }> {
   const t = TAKES.find((x) => x.id === id)!;
   const browser = await chromium.launch({ executablePath: chromiumPath() });
   try {
-    const context = await browser.newContext({ baseURL });
+    const context = await browser.newContext({ baseURL, viewport: { width: 1280, height: 800 } });
+    await context.addInitScript({ content: "window.__name = window.__name || ((f) => f);" });
     const page = await context.newPage();
-    const res = await page.request.post("/api/scans", {
-      timeout: 180_000,
-      multipart: {
-        video: { name: basename(t.video), mimeType: "video/mp4", buffer: readFileSync(t.video) },
-        capture: { name: "capture.json", mimeType: "application/json", buffer: readFileSync(t.capture) },
-        who: t.who,
-        household: "unsure",
-        municipality: "waterloo-on",
-        lens: "wide",
-      },
-    });
-    if (!res.ok()) throw new Error(`POST /api/scans → ${res.status()}`);
-    const posted = await res.json();
-    const claim = { basementId: posted.basementId, claimToken: posted.claimToken };
-    await page.goto("/");
-    await page.evaluate((c) => localStorage.setItem("br-claims", JSON.stringify([c])), claim);
-    await page.goto(`/scans/${posted.id}`);
-    log(`  take ${id}: scan ${posted.id}, replaying`);
-    const until = Date.now() + 6 * 60_000;
+    let scanId: string;
+    if (t.via === "app") {
+      const res = await page.request.post("/api/scans", {
+        timeout: 180_000,
+        multipart: {
+          video: { name: basename(t.video), mimeType: "video/mp4", buffer: readFileSync(t.video) },
+          capture: { name: "capture.json", mimeType: "application/json", buffer: readFileSync(t.capture) },
+          who: t.who,
+          household: "unsure",
+          municipality: "waterloo-on",
+          lens: "wide",
+        },
+      });
+      if (!res.ok()) throw new Error(`POST /api/scans → ${res.status()}`);
+      const posted = await res.json();
+      scanId = posted.id;
+      await page.goto("/");
+      await page.evaluate((c) => localStorage.setItem("br-claims", JSON.stringify([c])), { basementId: posted.basementId, claimToken: posted.claimToken });
+      await page.goto(`/scans/${scanId}`);
+    } else {
+      // The start sheet (tests/e2e/pages/Home.ts): address, who it's for, then the video.
+      await page.goto("/");
+      await page.getByRole("button", { name: /Check my basement/ }).first().click();
+      const sheet = page.getByRole("dialog");
+      await sheet.getByRole("combobox", { name: "Your address" }).fill(t.address);
+      await sheet.getByRole("option", { name: t.address }).first().click({ timeout: 30_000 });
+      await sheet.getByRole("button", { name: t.who }).click();
+      const chooser = page.waitForEvent("filechooser");
+      await sheet.getByRole("button", { name: "Upload a video" }).click();
+      await (await chooser).setFiles(t.video);
+      await page.waitForURL(/\/scans\/[0-9a-f-]{36}$/, { timeout: 180_000 });
+      scanId = page.url().split("/").pop()!;
+    }
+    log(`  take ${id}: scan ${scanId}, replaying`);
+    const until = Date.now() + 8 * 60_000;
     for (;;) {
-      if (Date.now() > until) throw new Error("the replayed scan didn't finish in 6 minutes");
-      const status = (await (await page.request.get(`/api/scans/${posted.id}`)).json()).status;
+      if (Date.now() > until) throw new Error("the replayed scan didn't finish in 8 minutes");
+      const status = (await (await page.request.get(`/api/scans/${scanId}`)).json()).status;
       if (status === "done") break;
-      if (status === "failed") throw new Error("the replayed scan failed (a replay miss? see server/replay-misses.jsonl)");
+      if (status === "failed" || status === "error") throw new Error("the replayed scan failed (a replay miss? see server/replay-misses.jsonl)");
+      // Its questions, as tests/e2e/pages/WaitScreen.ts answers them.
       const ask = page.locator(".live-ask");
       if (await ask.isVisible().catch(() => false)) {
-        const q = (await ask.locator("h2").textContent()) ?? "";
-        const want = Object.entries(t.answers).find(([k]) => q.includes(k))?.[1];
+        const q = ((await ask.getByRole("heading").first().textContent()) ?? "").toLowerCase();
+        const want = Object.entries(t.answers).find(([k]) => q.includes(k.toLowerCase()))?.[1];
         const option = want ? ask.getByRole("button", { name: want, exact: true }) : ask.locator(".live-ask-options button").first();
-        await option.click().catch(() => {});
+        if (want && !(await option.count())) {
+          await ask.getByRole("textbox").fill(want);
+          await ask.getByRole("button", { name: "Save" }).click().catch(() => {});
+        } else {
+          await option.click().catch(() => {});
+        }
+        await page.waitForTimeout(1200);
+        continue;
       }
       await page.waitForTimeout(1500);
     }
-    return { scanId: posted.id, claim };
+    const claims = await page.evaluate(() => {
+      try {
+        return JSON.parse(localStorage.getItem("br-claims") ?? "[]");
+      } catch {
+        return [];
+      }
+    });
+    return { scanId, claims };
   } finally {
     await browser.close();
   }

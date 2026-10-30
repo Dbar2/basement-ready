@@ -81,7 +81,7 @@ try {
       }
       const t = await runTake(take, baseURL, log);
       scans.push(t.scanId);
-      claims.push(t.claim);
+      claims.push(...t.claims);
     }
     const shots = buildPlan({ scans, browsers: args.browsers, viewports: args.viewports, only: args.only, all: args.all });
     if (!shots.length) throw new Error(`--only ${args.only.join(",")} matches no screen`);
