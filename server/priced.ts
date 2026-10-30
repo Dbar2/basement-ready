@@ -4,9 +4,11 @@
 // joins the fixes. The answer, the layouts, the brief, the money tab, the book and the PDFs all read
 // a result priced here, so they show one quote and count one list of fixes.
 import type { DesignPricing, FixGroup } from "./assess";
+import { type Layout, rejudgeEscape } from "./layout";
 import { checkDesign, openingsOn } from "./model/checks";
 import { currentModel } from "./model/current";
 import { chosenDesign, layoutOf } from "./model/legacy";
+import { suiteAreaM2 } from "./model/suite";
 import type { Model } from "./model/types";
 import { quote } from "./quote/quote";
 import { recheck, type Answers } from "./recheck";
@@ -50,7 +52,7 @@ export function designPricing(result: { municipality?: string }, model: Model | 
       priced: !failing.length,
     });
   }
-  return { name: design.name, cost: { low: q.totalLow, high: q.totalHigh }, fixes, lineCost };
+  return { name: design.name, cost: { low: q.totalLow, high: q.totalHigh }, fixes, lineCost, suiteAreaM2: suiteAreaM2(design) };
 }
 
 // A result, re-checked with its answers and priced on the model's chosen design (as it stands when
@@ -59,7 +61,7 @@ export function designPricing(result: { municipality?: string }, model: Model | 
 // itself still fails is the studio's "to fix", not a fix to the basement.)
 export function priceResult<R extends ResultLike>(result: R, answers: Answers, model: Model | null) {
   const pricing = designPricing(result, model);
-  const r = recheck(result, answers, pricing);
+  const r = rejudged(recheck(result, answers, pricing));
   const design = chosenDesign(model);
   const shapes = model && design ? layoutOf(model.existing, design) : null;
   if (!pricing || !model || !design || !shapes) return r;
@@ -67,6 +69,12 @@ export function priceResult<R extends ResultLike>(result: R, answers: Answers, m
     .filter((c) => /^(escape|bedroom-size):/.test(c.id))
     .map((c) => ({ label: c.label, ok: c.ok, detail: c.detail }));
   return { ...r, design: { id: design.id, name: design.name, plan: shapes.plan, layout: { ...shapes.layout, checks } } };
+}
+
+// A saved layout's escape check as the scan knows it now: no tick without a taped height.
+function rejudged<T>(r: T): T {
+  const layout = (r as { layout?: Layout | null }).layout;
+  return layout?.checks ? { ...r, layout: rejudgeEscape(layout) } : r;
 }
 
 // A saved scan's: the model from its workspace (saved, or seeded from the scan).

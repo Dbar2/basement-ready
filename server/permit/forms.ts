@@ -2,7 +2,7 @@
 // the official address (cached, never shipped with the app), their fields set, and kept editable for
 // signing. A form we can't fill as a PDF gets a summary sheet: every answer laid out to copy.
 import { createHash } from "node:crypto";
-import { PDFCheckBox, PDFDict, PDFDocument, PDFName, PDFRadioGroup, PDFTextField, StandardFonts } from "pdf-lib";
+import { PDFCheckBox, PDFDict, PDFDocument, type PDFFont, PDFName, PDFRadioGroup, PDFTextField, StandardFonts } from "pdf-lib";
 import { storage } from "../storage";
 import type { CityForm } from "./data";
 import { embedFonts, INK, LETTER, MUTED, safe, Sheet } from "./pdf";
@@ -167,11 +167,32 @@ export async function fetchOfficialPdf(url: string): Promise<Uint8Array | null> 
 }
 
 // Sets every mapped field the PDF has. Returns the filled PDF and which fields were set or missing.
+// A value is drawn inside its own cell. The City's form asks for 10 pt in cells 11 to 15 pt tall and
+// marks them multi-line, which sets the text at the cell's top, its lower part cut off (the Fable
+// review, Oct 30); one cell's box is also stored upside down, which drew its value outside it. A cell
+// that holds one line becomes a one-line field, centred, at the largest size that clears its 1 pt
+// padding and fits its width: Helvetica's capitals rise 0.718 of the size and its descenders drop
+// 0.207, so centred text needs 1.132 times its size. Taller boxes keep the form's own size.
+export function fitFont(field: PDFTextField, font: PDFFont, text: string) {
+  for (const w of field.acroField.getWidgets()) {
+    const r = w.getRectangle();
+    if (r.width < 0 || r.height < 0) w.setRectangle({ x: Math.min(r.x, r.x + r.width), y: Math.min(r.y, r.y + r.height), width: Math.abs(r.width), height: Math.abs(r.height) });
+  }
+  const boxes = field.acroField.getWidgets().map((w) => w.getRectangle());
+  const h = Math.min(...boxes.map((r) => r.height));
+  const w = Math.min(...boxes.map((r) => r.width));
+  if (!Number.isFinite(h) || h >= 27) return;
+  field.disableMultiline();
+  const size = Math.min(10, (h - 2) / 1.132, (w - 2) / Math.max(1e-6, font.widthOfTextAtSize(text, 1)));
+  field.setFontSize(Math.max(6, Math.floor(size * 2) / 2));
+}
+
 // The fields stay fillable (and their values show through their appearances), so the owner can still
 // edit and sign; copies placed in the package keep the same appearances.
 export async function fillAcroForm(bytes: Uint8Array, map: FieldMap, v: FormValues) {
   const doc = await PDFDocument.load(bytes, { ignoreEncryption: true });
   const form = doc.getForm();
+  const helvetica = await doc.embedFont(StandardFonts.Helvetica);
   const set: Record<string, string | boolean> = {};
   const missing: string[] = [];
   for (const [name, get] of Object.entries(map)) {
@@ -183,7 +204,9 @@ export async function fillAcroForm(bytes: Uint8Array, map: FieldMap, v: FormValu
       continue;
     }
     if (field instanceof PDFTextField && typeof value === "string") {
-      field.setText(safe(value).slice(0, field.getMaxLength() ?? 500));
+      const text = safe(value).slice(0, field.getMaxLength() ?? 500);
+      field.setText(text);
+      fitFont(field, helvetica, text);
       set[name] = value;
     } else if (field instanceof PDFCheckBox && typeof value === "boolean") {
       if (value) field.check();
@@ -211,7 +234,7 @@ export async function fillAcroForm(bytes: Uint8Array, map: FieldMap, v: FormValu
       set[name] = option.trim();
     } else missing.push(name);
   }
-  form.updateFieldAppearances(await doc.embedFont(StandardFonts.Helvetica));
+  form.updateFieldAppearances(helvetica);
   return { bytes: await doc.save(), set, missing };
 }
 

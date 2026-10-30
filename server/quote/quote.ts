@@ -3,6 +3,7 @@
 // in data/rules/prices-on.json; labour at published rates; then contingency, HST, and what it comes
 // to if you hire it all out or build it yourself. A price or rate nobody published stays missing:
 // the line says so and adds nothing. Pure and fast, so the 3D studio reruns it on every edit.
+import { areaText, feeFor, sqftOf, suiteAreaM2 } from "../model/suite";
 import type { Design, Furniture, Model, Opening, Pt, Room, Wall } from "../model/types";
 import { catalog, furniturePrice, rate, shelf, type Rate } from "./catalog";
 
@@ -598,10 +599,12 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   // ---- Permits and fees ----
   const slug = opts.municipality ?? "waterloo-on";
   const fee = catalog.fees?.permit[slug] ?? null;
-  const suiteFt2 = area(suite) * FT2;
-  const permitCAD = fee ? Math.max(fee.minimumCAD ?? 0, (fee.perUnitCAD ?? 0) + fee.perSqftCAD * suiteFt2 + (fee.extrasCAD ?? 0)) : null;
+  // The suite's floor and its fee, as every other page prints them (server/model/suite.ts).
+  const suiteM2 = suiteAreaM2(design) ?? 0;
+  const permit = fee ? feeFor(fee, suiteM2) : null;
+  const suiteFt2 = permit?.sqft ?? sqftOf(suiteM2);
   lines.push(
-    feeLine("permit_building", "Building permit", suiteFt2, "sq ft", permitCAD == null ? null : { low: money(permitCAD), high: money(permitCAD) }, fee ? { kind: "fee", title: fee.title, url: fee.url, checked: fee.checked } : null, fee ? `${fee.perUnitCAD ? `$${fee.perUnitCAD} for the new unit plus ` : ""}$${fee.perSqftCAD.toFixed(2)} per sq ft of the suite (${Math.round(suiteFt2)} sq ft)${fee.minimumCAD ? `, $${fee.minimumCAD} minimum` : ""}${fee.estimate ? "; the City confirms the exact fee" : ""}.` : "This municipality's permit fee isn't in our data yet: ask its building department."),
+    feeLine("permit_building", "Building permit", suiteFt2, "sq ft", permit == null ? null : { low: money(permit.amount), high: money(permit.amount) }, fee ? { kind: "fee", title: fee.title, url: fee.url, checked: fee.checked } : null, fee ? `${fee.perUnitCAD ? `$${fee.perUnitCAD} for the new unit plus ` : ""}$${fee.perSqftCAD.toFixed(2)} per sq ft of the suite (${areaText(suiteM2)})${fee.minimumCAD ? `, $${fee.minimumCAD} minimum` : ""}${fee.estimate ? "; the City confirms the exact fee" : ""}.` : "This municipality's permit fee isn't in our data yet: ask its building department."),
   );
   const esa = catalog.fees?.esa ?? null;
   const outlets = devices + lights + P.alarms.length + baths.length;

@@ -30,7 +30,11 @@ describe("suggested layout", () => {
     // The window (2 m along from minX = x of -2) is inside the bedroom's span.
     expect(bed.x0).toBeLessThanOrEqual(-2);
     expect(bed.x1).toBeGreaterThanOrEqual(-2);
-    expect(l.checks.find((c) => c.label.startsWith("The bedroom has"))!.ok).toBe(true);
+    // On the window's wall, but the scan has no height: an escape window once a tape says so.
+    const escape = l.checks.find((c) => c.label.startsWith("The bedroom has"))!;
+    expect(escape.ok).toBeNull();
+    expect(escape.detail).toContain("80 cm wide");
+    expect(escape.detail).toContain("at least 44 cm tall");
   });
 
   it("keeps every zone inside the room, with a bathroom, kitchen and living space", () => {
@@ -95,8 +99,8 @@ describe("the bathroom goes where the plumbing comes up", () => {
       if (z !== bath && z.kind !== "stairs") expect(overlap(z, bath)).toBe(false);
     }
     expect(l.checks.find((c) => c.label.includes("plumbing rough-in"))!.ok).toBe(true);
-    // The bedroom still has the window.
-    expect(l.checks.find((c) => c.label.startsWith("The bedroom has"))!.ok).toBe(true);
+    // The bedroom still has the window (its height still to be taped).
+    expect(l.checks.find((c) => c.label.startsWith("The bedroom has"))!.ok).toBeNull();
   });
 
   it("on the window wall: beside the bedroom, over the pipes", () => {

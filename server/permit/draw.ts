@@ -415,12 +415,22 @@ export function drawChains(s: Sheet, v: View, m: PermitModel, clipBox?: Box) {
     const side = n[0] * e.out[0] + n[1] * e.out[1] > 0 ? 1 : -1;
     const off1 = face + 0.18 + 14 / v.k, off2 = off1 + 16 / v.k;
     const w0 = { ...edge, id: "edge", thicknessM: face, kind: "existing", rating: null } as PWall;
-    for (let i = 0; i + 1 < sorted.length; i++) chainSeg(s, v, w0, sorted[i], sorted[i + 1], n, side * off1, i, face);
-    if (sorted.length > 2) chainSeg(s, v, w0, 0, L, n, side * off2, 0, face);
+    // On a plan cut into sheets, only what's on this sheet: a dimension that crosses the match line
+    // stops there and says so, and the overall goes on the sheet that shows the whole edge. A line the
+    // sheet's edge cut short would read shorter than its label at the sheet's scale.
+    const horizontal = Math.abs(e.b[1] - e.a[1]) < 1e-6;
+    const lo = clipBox ? Math.max(0, horizontal ? clipBox.minX - e.a[0] : clipBox.minZ - e.a[1]) : 0;
+    const hi = clipBox ? Math.min(L, horizontal ? clipBox.maxX - e.a[0] : clipBox.maxZ - e.a[1]) : L;
+    for (let i = 0; i + 1 < sorted.length; i++) {
+      const t0 = Math.max(sorted[i], lo), t1 = Math.min(sorted[i + 1], hi);
+      if (t1 - t0 < 0.05) continue;
+      chainSeg(s, v, w0, t0, t1, n, side * off1, i, face, t0 > sorted[i] || t1 < sorted[i + 1] ? "TO MATCH LINE" : undefined);
+    }
+    if (sorted.length > 2 && lo <= 0.001 && hi >= L - 0.001) chainSeg(s, v, w0, 0, L, n, side * off2, 0, face);
   }
 }
 
-function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, off: number, i: number, face: number) {
+function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, off: number, i: number, face: number, note?: string) {
   const a = add(at(w, t0), n, off), b = add(at(w, t1), n, off);
   const [ax, ay] = v.P(a), [bx, by] = v.P(b);
   s.line(ax, ay, bx, by, { width: 0.45, color: MUTED });
@@ -431,7 +441,7 @@ function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, of
     s.line(px - 3, py - 3, px + 3, py + 3, { width: 0.8 });
   }
   const len = t1 - t0;
-  const label = dimText(len);
+  const label = note ? `${dimText(len)} ${note}` : dimText(len);
   const span = Math.hypot(bx - ax, by - ay);
   const ang = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI;
   const up = ang > 90 || ang < -90 ? ang + 180 : ang;
