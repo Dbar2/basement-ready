@@ -21,12 +21,20 @@ final class VideoWriter: @unchecked Sendable {
   var status: Int { writer.status.rawValue }
   private var closed = false
 
+  // HEVC on the phone (its hardware encoder). The simulator encodes in software, where HEVC can't keep
+  // up and drops most frames, so replayed takes there are written as H.264.
+  #if targetEnvironment(simulator)
+  static let codec = AVVideoCodecType.h264
+  #else
+  static let codec = AVVideoCodecType.hevc
+  #endif
+
   init(url: URL, width: Int, height: Int, rotationCW: Int = 90) throws {
     self.url = url
     try? FileManager.default.removeItem(at: url)
     writer = try AVAssetWriter(outputURL: url, fileType: .mp4)
     input = AVAssetWriterInput(mediaType: .video, outputSettings: [
-      AVVideoCodecKey: AVVideoCodecType.hevc,
+      AVVideoCodecKey: Self.codec,
       AVVideoWidthKey: width,
       AVVideoHeightKey: height,
       AVVideoCompressionPropertiesKey: [

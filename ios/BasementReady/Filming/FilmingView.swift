@@ -8,7 +8,7 @@ struct FilmingView: View {
   @StateObject private var model: FilmingModel
   let onCancel: () -> Void
   @State private var confirmDiscard = false
-  @State private var voidView = false
+  @State private var voidView = FilmingView.startInScanOnly
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   init(server: URL, onDone: @escaping (Take, String?) -> Void, onCancel: @escaping () -> Void) {
@@ -65,6 +65,12 @@ struct FilmingView: View {
     }
   }
 
+  #if DEBUG
+  static let startInScanOnly = ProcessInfo.processInfo.arguments.contains("-BRScanOnly")
+  #else
+  static let startInScanOnly = false
+  #endif
+
   private var topBar: some View {
     HStack(alignment: .top, spacing: 10) {
       VStack(alignment: .leading, spacing: 8) {
@@ -80,6 +86,8 @@ struct FilmingView: View {
           Text("\(Int(s.floorAreaM2.rounded())) m² · \(s.wallsFound) \(s.wallsFound == 1 ? "wall" : "walls") · \(Int((s.ceilingCovered * 100).rounded()))% ceiling")
             .font(Brand.mono(13))
             .foregroundStyle(Brand.bg.opacity(0.85))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
             .padding(.leading, 4)
             .accessibilityIdentifier("filming.stats")
         }

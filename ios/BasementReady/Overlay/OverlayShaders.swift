@@ -102,7 +102,7 @@ fragment float4 surface_fragment(SurfaceOut in [[stage_in]], constant Uniforms &
     float d = distance(in.world, in.extra.xyz);
     float painted = smoothstep(r, r - 0.35, d);
     float edge = smoothstep(0.3, 0.0, abs(d - r)) * step(d, r + 0.3) * saturate(2.5 - (t - in.extra.w));
-    float lines = grid(in.world, 0.25);
+    float lines = grid(in.world, 0.5);
     float a = (mix(0.10, 0.20, voidView) + lines * mix(0.22, 0.38, voidView)) * painted;
     float3 c = mix(LIGHT, MINT, 0.25 + 0.75 * edge);
     return float4(c, saturate(a + edge * 0.5) * fade);
