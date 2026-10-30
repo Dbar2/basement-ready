@@ -2,7 +2,8 @@
 // and mechanicals placed where the scan says they are. Metres, room frame (x across, z deep).
 import type { Detection } from "./pipeline";
 import { nearestSide } from "./side";
-import { liftBox, type Scan3d } from "./scan3d";
+import { liftBox } from "./lift";
+import type { Scan3d } from "./scan3d";
 
 export { nearestSide };
 

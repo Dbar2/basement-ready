@@ -3,7 +3,9 @@
 import type { KnownCamera } from "./capture";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { liftBox } from "./lift";
 import type { Detection } from "./pipeline";
+import { serviceFetch } from "./replay";
 
 const URL_ = process.env.SCAN3D_URL;
 const TOKEN = process.env.SCAN3D_TOKEN;
@@ -15,7 +17,12 @@ const SEND_FRAMES = 120;
 const MESH_FACES = 600_000;
 export const meshFaces = (areas: number) => Math.round(Math.min(300_000, Math.max(100_000, MESH_FACES / Math.max(1, areas))));
 
+export { half, liftBox } from "./lift";
+
 export const scan3dEnabled = Boolean(URL_ && TOKEN);
+
+// Every call to the 3D service goes out here, so tests can record and replay them (server/replay.ts).
+const call = (route: string, init: RequestInit) => serviceFetch("scan3d", URL_ ?? "", route, init, () => ({ Authorization: `Bearer ${TOKEN}` }));
 
 export type Scan3d = {
   scan: any; // scan.json, see services/scan3d/README.md
@@ -33,7 +40,14 @@ export const readyWaitMs = (url = URL_) => (/modal\.run/.test(url ?? "") ? 3 * 6
 
 // Whether the 3D service answers /health within `waitMs`. Asking also wakes Modal. A refused connection
 // or a 5xx (a container still starting) is asked again; a 4xx (wrong token or address) won't get better.
-export async function scan3dReady({ url = URL_, token = TOKEN, waitMs = readyWaitMs(url), retryMs = 2000, get = fetch } = {}) {
+// `get` defaults to the record/replay-aware fetch (server/replay.ts), so a replayed test never wakes Modal.
+export async function scan3dReady({
+  url = URL_,
+  token = TOKEN,
+  waitMs = readyWaitMs(url),
+  retryMs = 2000,
+  get = (_target: string, init: RequestInit): Promise<Response> => serviceFetch("scan3d", url ?? "", "/health", init, () => ({ Authorization: `Bearer ${token}` })),
+}: { url?: string; token?: string; waitMs?: number; retryMs?: number; get?: (target: string, init: RequestInit) => Promise<Response> } = {}) {
   if (!url || !token) return false;
   const until = Date.now() + waitMs;
   let why = "no answer";
@@ -72,12 +86,7 @@ export async function runScan3d(
   form.append("options", JSON.stringify({ maxFrames, ...(maxFaces != null ? { maxFaces } : {}), ...(known.floorToJoistsM ? { known } : {}) }));
   const cameras = cameraFor ? sentFrames.map(cameraFor) : [];
   if (cameras.some(Boolean)) form.append("cameras", JSON.stringify(cameras));
-  const res = await fetch(`${URL_}/scan`, {
-    method: "POST",
-    body: form,
-    headers: { Authorization: `Bearer ${TOKEN}` },
-    signal: AbortSignal.timeout(10 * 60 * 1000),
-  });
+  const res = await call("/scan", { method: "POST", body: form, signal: AbortSignal.timeout(10 * 60 * 1000) });
   if (!res.ok) throw new Error(`scan3d ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const parts = await res.formData();
   const scan = JSON.parse(await (parts.get("scan") as File).text());
@@ -105,7 +114,7 @@ export async function runFloorPlan(scans: Scan3d[], cameras: number[][]): Promis
   form.append("areas", JSON.stringify(scans.map((s3) => ({ world: s3.scan.world, factor: s3.scan.scale?.factor ?? 1 }))));
   form.append("cameras", JSON.stringify(cameras));
   scans.forEach((s3, i) => form.append("points", new Blob([s3.ply], { type: "application/octet-stream" }), `area-${i}.ply`));
-  const res = await fetch(`${URL_}/floorplan`, { method: "POST", body: form, headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(120_000) });
+  const res = await call("/floorplan", { method: "POST", body: form, signal: AbortSignal.timeout(120_000) });
   if (!res.ok) throw new Error(`floorplan ${res.status}: ${(await res.text()).slice(0, 300)}`);
   return res.json();
 }
@@ -126,48 +135,7 @@ export function liteSurfels(buf: Buffer, n = LITE_SURFELS): Buffer {
   return Buffer.concat([head, at(0, 6), at(6, 3), at(9, 1), at(10, 2)]);
 }
 
-// ---- Lifting SAM boxes into the room (formula from services/scan3d/README.md) ----
-
-export function half(bits: number) {
-  const e = (bits >> 10) & 0x1f;
-  const m = bits & 0x3ff;
-  const s = bits & 0x8000 ? -1 : 1;
-  if (e === 0) return s * m * 2 ** -24;
-  if (e === 31) return m ? NaN : s * Infinity;
-  return s * (1 + m / 1024) * 2 ** (e - 15);
-}
-
-type Box = { x: number; y: number; w: number; h: number };
-
-// Room-frame points (metres) under a box on one scan frame; percentiles per axis.
-export function liftBox(scan: any, depth: ArrayBuffer, scanFrame: number, box: Box, erodePx = 2) {
-  const f = scan.frames[scanFrame];
-  const [, H, W] = scan.files.depth.shape;
-  const m = f.model;
-  const u0 = Math.max(0, Math.ceil(box.x * m.resizedWidth - m.cropLeft) + erodePx);
-  const v0 = Math.max(0, Math.ceil(box.y * m.resizedHeight - m.cropTop) + erodePx);
-  const u1 = Math.min(W - 1, Math.floor((box.x + box.w) * m.resizedWidth - m.cropLeft) - erodePx);
-  const v1 = Math.min(H - 1, Math.floor((box.y + box.h) * m.resizedHeight - m.cropTop) - erodePx);
-  const [[fx, , cx], [, fy, cy]] = f.intrinsics;
-  const P = f.pose;
-  const view = new DataView(depth, f.depthOffset, H * W * 2);
-  const pts: number[][] = [];
-  for (let v = v0; v <= v1; v++) {
-    for (let u = u0; u <= u1; u++) {
-      const z = half(view.getUint16((v * W + u) * 2, true));
-      if (!(z > 0)) continue;
-      const c = [((u - cx) * z) / fx, ((v - cy) * z) / fy, z];
-      pts.push([0, 1, 2].map((r) => P[r][0] * c[0] + P[r][1] * c[1] + P[r][2] * c[2] + P[r][3]));
-    }
-  }
-  if (pts.length < 20) return null;
-  const pct = (q: number) =>
-    [0, 1, 2].map((a) => {
-      const s = pts.map((p) => p[a]).sort((x, y) => x - y);
-      return s[Math.min(s.length - 1, Math.floor(q * s.length))];
-    });
-  return { count: pts.length, median: pct(0.5), p05: pct(0.05), p95: pct(0.95) };
-}
+// ---- Lifting SAM boxes into the room: server/lift.ts ----
 
 const median = (xs: number[]) => {
   const s = [...xs].sort((a, b) => a - b);
