@@ -2,6 +2,7 @@
 import type { JobRow } from "./jobs";
 import { runScan } from "./pipeline";
 import { runPhotos } from "./photos";
+import { runCards } from "./ideas/cards";
 
 export const handlers = {
   scan: async (job: JobRow) => {
@@ -12,5 +13,10 @@ export const handlers = {
   concepts: async (job: JobRow) => {
     const { scanId } = job.payload as { scanId: string };
     await runPhotos(scanId, { lastAttempt: job.attempts >= job.maxAttempts });
+  },
+  // The swipe deck's cards, queued when the deck first opens (server/ideas/cards.ts).
+  cards: async (job: JobRow) => {
+    const { scanId } = job.payload as { scanId: string };
+    await runCards(scanId, { lastAttempt: job.attempts >= job.maxAttempts });
   },
 };

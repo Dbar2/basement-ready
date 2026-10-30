@@ -1,0 +1,600 @@
+{
+  "status": "done",
+  "slots": [
+    {
+      "n": 1,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Bedroom corner, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Warm oak floor",
+        "walls": "Cream walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "bedroom",
+        "light": "day"
+      }
+    },
+    {
+      "n": 2,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Living room, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Pale grey floor",
+        "walls": "White walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "living",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 3,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Living room, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Light oak floor",
+        "walls": "Soft white walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "living",
+        "light": "day"
+      }
+    },
+    {
+      "n": 4,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Living room, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Polished concrete floor",
+        "walls": "Warm grey walls",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "living",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 5,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Living room, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Light oak floor",
+        "walls": "White walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "living",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 6,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Kitchenette, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Whitewashed oak floor",
+        "walls": "Soft white walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "kitchen",
+        "light": "day"
+      }
+    },
+    {
+      "n": 7,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Kitchenette, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Dark oak floor",
+        "walls": "Warm grey walls",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "kitchen",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 8,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Kitchenette, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Walnut floor",
+        "walls": "Cream walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "kitchen",
+        "light": "day"
+      }
+    },
+    {
+      "n": 9,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Bedroom corner, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Light oak floor",
+        "walls": "Pale sage walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "bedroom",
+        "light": "day"
+      }
+    },
+    {
+      "n": 10,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Living room, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Polished concrete floor",
+        "walls": "White painted brick wall",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "living",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 11,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Living room, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Warm oak floor",
+        "walls": "Warm beige walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "living",
+        "light": "day"
+      }
+    },
+    {
+      "n": 12,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Living room, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Pale grey floor",
+        "walls": "Light grey walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "living",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 13,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Kitchenette, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Dark oak floor",
+        "walls": "White painted brick wall",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "kitchen",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 14,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Kitchenette, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Walnut floor",
+        "walls": "Warm beige walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "kitchen",
+        "light": "day"
+      }
+    },
+    {
+      "n": 15,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Kitchenette, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Light oak floor",
+        "walls": "Light grey walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "kitchen",
+        "light": "evening"
+      }
+    },
+    {
+      "n": 16,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Kitchenette, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Whitewashed oak floor",
+        "walls": "Pale sage walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "kitchen",
+        "light": "day"
+      }
+    }
+  ],
+  "cards": [
+    {
+      "n": 1,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Bedroom corner, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Warm oak floor",
+        "walls": "Cream walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "bedroom",
+        "light": "day"
+      },
+      "id": "c1",
+      "kept": true,
+      "checked": "Windows kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/1.jpg",
+      "from": "/samples/sample/frames/0000.jpg"
+    },
+    {
+      "n": 2,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Living room, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Pale grey floor",
+        "walls": "White walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "living",
+        "light": "evening"
+      },
+      "id": "c2",
+      "kept": true,
+      "checked": "Stairs kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/2.jpg",
+      "from": "/samples/sample/frames/0044.jpg"
+    },
+    {
+      "n": 3,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Living room, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Light oak floor",
+        "walls": "Soft white walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "living",
+        "light": "day"
+      },
+      "id": "c3",
+      "kept": true,
+      "checked": "Room shape kept",
+      "url": "/samples/sample/cards/3.jpg",
+      "from": "/samples/sample/frames/0021.jpg"
+    },
+    {
+      "n": 4,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Living room, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Polished concrete floor",
+        "walls": "Warm grey walls",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "living",
+        "light": "evening"
+      },
+      "id": "c4",
+      "kept": true,
+      "checked": "Stairs and doors kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/4.jpg",
+      "from": "/samples/sample/frames/0059.jpg"
+    },
+    {
+      "n": 5,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Living room, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Light oak floor",
+        "walls": "White walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "living",
+        "light": "evening"
+      },
+      "id": "c5",
+      "kept": true,
+      "checked": "Windows kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/5.jpg",
+      "from": "/samples/sample/frames/0000.jpg"
+    },
+    {
+      "n": 6,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Kitchenette, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Whitewashed oak floor",
+        "walls": "Soft white walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "kitchen",
+        "light": "day"
+      },
+      "id": "c6",
+      "kept": true,
+      "checked": "Stairs kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/6.jpg",
+      "from": "/samples/sample/frames/0044.jpg"
+    },
+    {
+      "n": 7,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Kitchenette, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Dark oak floor",
+        "walls": "Warm grey walls",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "kitchen",
+        "light": "evening"
+      },
+      "id": "c7",
+      "kept": true,
+      "checked": "Room shape kept",
+      "url": "/samples/sample/cards/7.jpg",
+      "from": "/samples/sample/frames/0021.jpg"
+    },
+    {
+      "n": 8,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Kitchenette, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Walnut floor",
+        "walls": "Cream walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "kitchen",
+        "light": "day"
+      },
+      "id": "c8",
+      "kept": true,
+      "checked": "Stairs and doors kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/8.jpg",
+      "from": "/samples/sample/frames/0059.jpg"
+    },
+    {
+      "n": 9,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Bedroom corner, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Light oak floor",
+        "walls": "Pale sage walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "bedroom",
+        "light": "day"
+      },
+      "id": "c9",
+      "kept": true,
+      "checked": "Windows kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/9.jpg",
+      "from": "/samples/sample/frames/0000.jpg"
+    },
+    {
+      "n": 10,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Living room, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Polished concrete floor",
+        "walls": "White painted brick wall",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "living",
+        "light": "evening"
+      },
+      "id": "c10",
+      "kept": true,
+      "checked": "Stairs kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/10.jpg",
+      "from": "/samples/sample/frames/0044.jpg"
+    },
+    {
+      "n": 11,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Living room, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Warm oak floor",
+        "walls": "Warm beige walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "living",
+        "light": "day"
+      },
+      "id": "c11",
+      "kept": true,
+      "checked": "Room shape kept",
+      "url": "/samples/sample/cards/11.jpg",
+      "from": "/samples/sample/frames/0021.jpg"
+    },
+    {
+      "n": 12,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Living room, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Pale grey floor",
+        "walls": "Light grey walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "living",
+        "light": "evening"
+      },
+      "id": "c12",
+      "kept": true,
+      "checked": "Stairs and doors kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/12.jpg",
+      "from": "/samples/sample/frames/0059.jpg"
+    },
+    {
+      "n": 13,
+      "frame": 0,
+      "view": "By the window",
+      "title": "Kitchenette, soft industrial",
+      "aspect": 1.778,
+      "tags": {
+        "style": "industrial",
+        "floor": "Dark oak floor",
+        "walls": "White painted brick wall",
+        "kitchen": "Black metal and oak kitchen",
+        "bath": "Black and white tile, concrete vanity",
+        "use": "kitchen",
+        "light": "evening"
+      },
+      "id": "c13",
+      "kept": true,
+      "checked": "Windows kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/13.jpg",
+      "from": "/samples/sample/frames/0000.jpg"
+    },
+    {
+      "n": 14,
+      "frame": 44,
+      "view": "The wide view",
+      "title": "Kitchenette, warm wood",
+      "aspect": 1.778,
+      "tags": {
+        "style": "warm",
+        "floor": "Walnut floor",
+        "walls": "Warm beige walls",
+        "kitchen": "Walnut kitchen, brass handles",
+        "bath": "Cream tile, walnut vanity",
+        "use": "kitchen",
+        "light": "day"
+      },
+      "id": "c14",
+      "kept": true,
+      "checked": "Stairs kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/14.jpg",
+      "from": "/samples/sample/frames/0044.jpg"
+    },
+    {
+      "n": 15,
+      "frame": 21,
+      "view": "Another angle",
+      "title": "Kitchenette, clean modern",
+      "aspect": 1.778,
+      "tags": {
+        "style": "modern",
+        "floor": "Light oak floor",
+        "walls": "Light grey walls",
+        "kitchen": "Matte white kitchen, black taps",
+        "bath": "Large grey tile, floating vanity",
+        "use": "kitchen",
+        "light": "evening"
+      },
+      "id": "c15",
+      "kept": true,
+      "checked": "Room shape kept",
+      "url": "/samples/sample/cards/15.jpg",
+      "from": "/samples/sample/frames/0021.jpg"
+    },
+    {
+      "n": 16,
+      "frame": 59,
+      "view": "Another angle",
+      "title": "Kitchenette, bright Scandinavian",
+      "aspect": 1.778,
+      "tags": {
+        "style": "bright",
+        "floor": "Whitewashed oak floor",
+        "walls": "Pale sage walls",
+        "kitchen": "White flat-front kitchen, oak shelves",
+        "bath": "White tile, oak vanity",
+        "use": "kitchen",
+        "light": "day"
+      },
+      "id": "c16",
+      "kept": true,
+      "checked": "Stairs and doors kept where they are · checked by SAM 3.1",
+      "url": "/samples/sample/cards/16.jpg",
+      "from": "/samples/sample/frames/0059.jpg"
+    }
+  ],
+  "dropped": []
+}
