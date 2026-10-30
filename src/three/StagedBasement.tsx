@@ -14,7 +14,7 @@ const T = 0.12; // wall thickness
 const DOOR_H = 2.03;
 const MODEL = (id: string) => `/staging/models/${id}.glb`;
 const TEX = (id: string) => `/staging/textures/${id}.webp`;
-const MODELS = [
+export const MODELS = [
   "mid_century_lounge_chair",
   "modern_arm_chair_01",
   "modern_coffee_table_01",
@@ -29,7 +29,7 @@ const MODELS = [
 for (const id of MODELS) useGLTF.preload(MODEL(id));
 
 // Finishes for the room. UI colours live in brand/tokens.css; these are paint, fabric and wood.
-type Finish = {
+export type Finish = {
   label: string;
   floor: "laminate_floor_02" | "wood_floor";
   wall: string;
@@ -40,7 +40,7 @@ type Finish = {
   rug: string;
   swatch: [string, string];
 };
-const FINISHES: Record<"light" | "warm" | "deep", Finish> = {
+export const FINISHES: Record<"light" | "warm" | "deep", Finish> = {
   light: {
     label: "Light oak",
     floor: "laminate_floor_02",
@@ -75,16 +75,16 @@ const FINISHES: Record<"light" | "warm" | "deep", Finish> = {
     swatch: ["#34473C", "#A87A4F"],
   },
 };
-type FinishKey = keyof typeof FINISHES;
+export type FinishKey = keyof typeof FINISHES;
 
 // How far each room wall is standing (1 = full height), so things hung on it can go when it's cut.
 const CutCtx = createContext<{ current: Partial<Record<PlanSide, number>> } | null>(null);
 
-type Mats = ReturnType<typeof makeMats>;
-const MatsCtx = createContext<Mats | null>(null);
+export type Mats = ReturnType<typeof makeMats>;
+export const MatsCtx = createContext<Mats | null>(null);
 const useMats = () => useContext(MatsCtx)!;
 
-function useMaps() {
+export function useMaps() {
   const t = useTexture({
     lightFloor: TEX("laminate_floor_02_diff"),
     lightFloorN: TEX("laminate_floor_02_nor"),
@@ -112,7 +112,7 @@ function useMaps() {
   return t;
 }
 
-function makeMats(f: Finish, t: ReturnType<typeof useMaps>) {
+export function makeMats(f: Finish, t: ReturnType<typeof useMaps>) {
   const std = (o: THREE.MeshStandardMaterialParameters) => new THREE.MeshStandardMaterial(o);
   const fabric = (color: string, weave = t.linen) => std({ color, roughness: 0.95, normalMap: weave, normalScale: new THREE.Vector2(0.7, 0.7) });
   const oak = std({ map: t.oak, roughnessMap: t.oakR, roughness: 0.9, color: "#F4EEE6" });
@@ -156,7 +156,7 @@ function makeMats(f: Finish, t: ReturnType<typeof useMaps>) {
 // ---------- building blocks ----------
 
 type V3 = [number, number, number];
-function B({ p, s, m, r = 0.006, rot }: { p: V3; s: V3; m: THREE.Material; r?: number; rot?: V3 }) {
+export function B({ p, s, m, r = 0.006, rot }: { p: V3; s: V3; m: THREE.Material; r?: number; rot?: V3 }) {
   return (
     <RoundedBox
       args={s}
@@ -171,7 +171,7 @@ function B({ p, s, m, r = 0.006, rot }: { p: V3; s: V3; m: THREE.Material; r?: n
   );
 }
 
-function Model({ id, p, yaw = 0, s = 1 }: { id: (typeof MODELS)[number]; p: V3; yaw?: number; s?: number }) {
+export function Model({ id, p, yaw = 0, s = 1 }: { id: (typeof MODELS)[number]; p: V3; yaw?: number; s?: number }) {
   const { scene } = useGLTF(MODEL(id));
   return <Clone object={scene} position={p} rotation={[0, yaw, 0]} scale={s} castShadow receiveShadow />;
 }
@@ -415,7 +415,7 @@ function At({ f, u, v, yaw, y = 0, children }: { f: Frame; u: number; v: number;
 
 // ---------- furniture modelled here ----------
 
-function Bed() {
+export function Bed() {
   const m = useMats();
   return (
     <>
@@ -432,7 +432,7 @@ function Bed() {
   );
 }
 
-function BedsideLamp() {
+export function BedsideLamp() {
   const m = useMats();
   return (
     <>
@@ -446,7 +446,7 @@ function BedsideLamp() {
   );
 }
 
-function Sofa() {
+export function Sofa() {
   const m = useMats();
   return (
     <>
@@ -474,7 +474,7 @@ function Sofa() {
   );
 }
 
-function DiningTable({ w, d }: { w: number; d: number }) {
+export function DiningTable({ w, d }: { w: number; d: number }) {
   const m = useMats();
   return (
     <>
@@ -490,7 +490,7 @@ function DiningTable({ w, d }: { w: number; d: number }) {
   );
 }
 
-function DiningChair() {
+export function DiningChair() {
   const m = useMats();
   return (
     <>
@@ -512,7 +512,7 @@ function DiningChair() {
   );
 }
 
-function Kitchen({ len, wall }: { len: number; wall: PlanSide }) {
+export function Kitchen({ len, wall }: { len: number; wall: PlanSide }) {
   const m = useMats();
   const fridge = 0.75;
   const run = Math.max(1.2, len - fridge);
@@ -563,7 +563,7 @@ function Kitchen({ len, wall }: { len: number; wall: PlanSide }) {
   );
 }
 
-function Tub() {
+export function Tub() {
   const m = useMats();
   const w = 1.5,
     d = 0.75,
@@ -583,7 +583,7 @@ function Tub() {
   );
 }
 
-function Toilet() {
+export function Toilet() {
   const m = useMats();
   return (
     <>
@@ -598,7 +598,7 @@ function Toilet() {
   );
 }
 
-function Vanity({ w, wall }: { w: number; wall: PlanSide }) {
+export function Vanity({ w, wall }: { w: number; wall: PlanSide }) {
   const m = useMats();
   return (
     <>

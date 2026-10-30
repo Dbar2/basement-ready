@@ -38,6 +38,7 @@ import { FAILURE, failureOf } from "./failure";
 import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger, USED_UP } from "./limits";
 import { startSweeps } from "./sweep";
 import { DEMO_MUNICIPALITY, isDemo, labelled } from "./demo";
+import { mountViews } from "./views/routes";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
 const UUID = /^[0-9a-f-]{36}$/;
@@ -531,6 +532,9 @@ app.post("/api/scans/:id/replan", async (c) => {
 // The workspace: owner profile, permit package, materials, applications, looks (server/workspaceRoutes.ts).
 mountWorkspace(app, currentUser);
 mountModel(app, currentUser);
+
+// Pictures of a design from the scan's best real angles, all agreeing (server/views/routes.ts).
+mountViews(app);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {
