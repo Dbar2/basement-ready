@@ -80,7 +80,7 @@ async function normalizeBody(body: unknown): Promise<unknown> {
 }
 
 // The model a call asks for, and what it's about, for the saved entry and for miss messages.
-function describe(route: string, request: any): { model: string | null; about: string | null } {
+function describe(route: string, request: any): { model: string | null; about: string | null; input: string | null } {
   const json = request?.json;
   const form: any[] = request?.form ?? [];
   const field = (name: string) => form.find((p) => p.field === name);
@@ -91,7 +91,11 @@ function describe(route: string, request: any): { model: string | null; about: s
     (typeof field("prompt")?.value === "string" ? String(field("prompt").value).slice(0, 80) : null) ??
     (route === "/scan" ? `${form.filter((p) => p.field === "frames").length} frames` : null) ??
     (route === "/files" ? `${field("file")?.name} ${field("file")?.bytes} bytes` : null);
-  return { model: typeof model === "string" ? model : null, about };
+  // A SAM call on a whole video or on one picture: priced differently.
+  const first = json?.input?.[0]?.content;
+  const parts: any[] = Array.isArray(first) ? first : [];
+  const input = parts.some((c) => c?.type === "input_video") ? "video" : parts.some((c) => c?.type === "input_image") ? "image" : null;
+  return { model: typeof model === "string" ? model : null, about, input };
 }
 
 type Entry = {
@@ -111,9 +115,10 @@ type Entry = {
   request: unknown; // what was keyed, bytes hashed and long text cut
 };
 
-// Long text (instructions, rules) cut down for the saved copy; the key used the whole of it.
+// Very long text cut down for the saved copy (the key used the whole of it). The rest is kept, so two
+// requests that should have matched can be compared.
 function shorten(v: unknown): unknown {
-  if (typeof v === "string") return v.length > 400 ? `${v.slice(0, 200)}… (${v.length} chars, sha256 ${sha(v).slice(0, 12)})` : v;
+  if (typeof v === "string") return v.length > 20_000 ? `${v.slice(0, 2000)}… (${v.length} chars, sha256 ${sha(v).slice(0, 12)})` : v;
   if (Array.isArray(v)) return v.map(shorten);
   if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shorten(x)]));
   return v;
@@ -164,14 +169,14 @@ export async function serviceFetch(
   const method = (init.method ?? "GET").toUpperCase();
   const request = await normalizeBody(init.body);
   const key = sha(JSON.stringify({ service, method, route, request })).slice(0, 40);
-  const { model, about } = describe(route, request);
+  const { model, about, input } = describe(route, request);
   const what = `${service} ${method} ${route}${model ? ` ${model}` : ""}${about ? ` "${about}"` : ""}`;
 
   const saved = find(key);
   if (saved) {
     const wait = saved.entry.ms * pace();
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    log(process.env.REPLAY_LOG, { event: "hit", key, service, route, model, about, ms: saved.entry.ms });
+    log(process.env.REPLAY_LOG, { event: "hit", key, service, route, model, about, input, ms: saved.entry.ms });
     return toResponse(saved.entry, saved.dir);
   }
   if (mode === "replay") {
@@ -187,7 +192,7 @@ export async function serviceFetch(
   const bytes = new Uint8Array(await res.arrayBuffer());
   const ms = Date.now() - started;
   const contentType = res.headers.get("content-type");
-  log(process.env.REPLAY_LOG, { event: "recorded", key, service, route, model, about, ms, status: res.status, bytes: bytes.length });
+  log(process.env.REPLAY_LOG, { event: "recorded", key, service, route, model, about, input, ms, status: res.status, bytes: bytes.length });
   // Failures aren't saved: a hiccup shouldn't replay forever.
   if (res.ok) {
     const dir = dirs()[0];

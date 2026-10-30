@@ -305,7 +305,9 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     await emit("stage", "assess");
     await emit("log", "Checking your city's second-unit rules");
     const ctx = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
-    const sparkP = readWithSpark(ctx, detections, transcript.transcript, transcript.turns);
+    // A copy: the finds the 3D rules out below are taken from `detections` while Spark is still drawing its
+    // proof frames, and Spark should read every find whether the 3D is fast or slow.
+    const sparkP = readWithSpark(ctx, [...detections], transcript.transcript, transcript.turns);
 
     const basement3d = await basementP;
     // Without the 3D, the phone's room marks still name the areas.

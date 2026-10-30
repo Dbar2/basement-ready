@@ -2,14 +2,26 @@
 // every scan (record mode times the real services, replay mode times our own work), what was replayed,
 // and anything that was missing.
 import type { FullResult, Reporter, TestCase, TestResult } from "@playwright/test/reporter";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { relative } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { files, mode, ROOT, runDir, runId } from "./run";
 import { MILESTONE_LABELS } from "./timing";
 
 const lines = (path: string) => (existsSync(path) ? readFileSync(path, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const secs = (n: number | null | undefined) => (n == null ? "–" : `${n.toFixed(1)} s`);
+
+// The scans timed by the newest record run (its folder ends in -record).
+function lastRecordedScans() {
+  const root = join(ROOT, "tmp/e2e");
+  if (!existsSync(root)) return [];
+  for (const dir of readdirSync(root).filter((d) => d.endsWith("-record")).sort().reverse()) {
+    // Rows whose calls all came from saved answers aren't real-service times.
+    const rows = lines(join(root, dir, "timing.jsonl")).filter((t) => t.kind === "scan" && t.realCalls !== 0);
+    if (rows.length) return rows.map((t) => ({ ...t, run: "record", runId: dir }));
+  }
+  return [];
+}
 
 export default class HtmlReport implements Reporter {
   private results: { title: string; project: string; status: string; ms: number; error: string | null; notes: string[] }[] = [];
@@ -47,15 +59,17 @@ export default class HtmlReport implements Reporter {
       })
       .join("\n");
 
-    const scans = timing.filter((t) => t.kind === "scan");
+    // Beside a replay run's own times (our work only), the newest record run's (the real services).
+    const recorded = mode === "replay" ? lastRecordedScans() : [];
+    const scans = [...timing.filter((t) => t.kind === "scan").map((t) => ({ ...t, run: mode })), ...recorded];
     const keys = Object.keys(MILESTONE_LABELS) as (keyof typeof MILESTONE_LABELS)[];
     const timingTable = scans.length
-      ? `<table><tr><th>Take</th><th>Project</th><th>Upload</th>${keys.map((k) => `<th>${esc(MILESTONE_LABELS[k])}</th>`).join("")}<th>Upload → answer on screen</th></tr>${scans
+      ? `<table><tr><th>Take</th><th>Run</th><th>Project</th><th>Upload</th>${keys.map((k) => `<th>${esc(MILESTONE_LABELS[k])}</th>`).join("")}<th>Upload → answer on screen</th></tr>${scans
           .map(
             (t) =>
-              `<tr><td>${esc(t.take)}</td><td>${esc(t.project)}</td><td>${secs(t.uploadS)}</td>${keys.map((k) => `<td>${secs(t.milestones?.[k])}</td>`).join("")}<td><b>${secs(t.toAnswerS)}</b></td></tr>`,
+              `<tr><td>${esc(t.take)}</td><td>${esc(t.run === "record" ? `record ${t.runId ?? ""}` : t.run)}</td><td>${esc(t.project)}</td><td>${secs(t.uploadS)}</td>${keys.map((k) => `<td>${secs(t.milestones?.[k])}</td>`).join("")}<td><b>${secs(t.toAnswerS)}</b></td></tr>`,
           )
-          .join("")}</table><p class="note">Milestones are seconds after the scan job started (the server's own event log). Upload is in the browser.</p>`
+          .join("")}</table><p class="note">Milestones are seconds after the scan job started (the server's own event log); upload is in the browser. Record rows are the real services; replay rows are our own work (ffmpeg, storage, the database, the browser) with every model answer instant.</p>`
       : "<p>No scans timed in this run.</p>";
 
     // How long each kind of call took when it was recorded: the real services.
@@ -68,6 +82,12 @@ export default class HtmlReport implements Reporter {
       .map(([k, ms]) => `<tr><td>${esc(k)}</td><td>${ms.length}</td><td>${secs(Math.min(...ms) / 1000)}</td><td>${secs(ms.reduce((a, b) => a + b, 0) / ms.length / 1000)}</td><td>${secs(Math.max(...ms) / 1000)}</td></tr>`)
       .join("");
 
+    const costs = timing.filter((t) => t.kind === "cost");
+    const costTable = costs.length
+      ? `<h2>What recording cost</h2><table><tr><th>Take</th><th>Frames</th><th>SAM concepts on the video</th><th>SAM picture checks</th><th>Muse images</th><th>Spark reads</th><th>Voice</th><th>3D areas</th><th>Cost</th></tr>${costs
+          .map((c) => `<tr><td>${esc(c.take)}</td><td>${c.frames}</td><td>${c.samVideoConcepts}</td><td>${c.samPictureChecks}</td><td>${c.museImages}</td><td>${c.sparkReads}</td><td>${c.voice}</td><td>${c.areas3d}</td><td><b>$${Number(c.usd).toFixed(2)}</b></td></tr>`)
+          .join("")}</table><p class="note">Only calls that really went out. SAM $0.20 per 1,000 frames (50-frame minimum per request); Muse Image $0.01 an image; Spark by its token count; about $0.03 an area on Modal; voice not priced.</p>`
+      : "";
     const passed = this.results.filter((r) => r.status === "passed").length;
     const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>E2E ${esc(runId)}</title>
@@ -88,6 +108,7 @@ ${misses.length ? `<h2 class="miss">Missing saved answers</h2><table><tr><th>Ser
 <h2>Timing, upload to answer</h2>
 ${timingTable}
 ${callTable ? `<h2>Calls to the services (time when recorded)</h2><table><tr><th>Call</th><th>Count</th><th>Fastest</th><th>Average</th><th>Slowest</th></tr>${callTable}</table>` : ""}
+${costTable}
 <h2>Journeys</h2>
 ${tests}
 <p class="note">Folder: ${esc(relative(ROOT, runDir))}</p>`;

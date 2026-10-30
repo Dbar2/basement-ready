@@ -30,7 +30,7 @@ export const test = base.extend<{ journey: Journey }>({
       const misses = missCount();
 
       page.on("console", (m) => {
-        if (m.type() === "error") errors.push(m.text());
+        if (m.type() === "error") errors.push(`${m.text()}${m.location().url ? ` @ ${m.location().url}` : ""}`);
       });
       page.on("pageerror", (e) => errors.push(`page error: ${e.message}`));
       // No network: anything not served by the test servers (web fonts, say) is answered empty, as the

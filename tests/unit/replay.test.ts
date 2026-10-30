@@ -88,6 +88,14 @@ describe("record and replay", () => {
     delete process.env.SCAN3D_CACHE;
   });
 
+  it("keys a Spark read, whose first message is plain text", async () => {
+    process.env.META_CACHE = "record";
+    const spark = { method: "POST", body: json({ model: "muse-spark-1.3", input: [{ role: "developer", content: "rules" }, { role: "user", content: [{ type: "input_text", text: "{}" }] }] }) };
+    await serviceFetch("meta", "https://api.example", "/responses", spark, auth, real as any);
+    process.env.META_CACHE = "replay";
+    expect((await serviceFetch("meta", "https://api.example", "/responses", spark, auth, real as any)).status).toBe(200);
+  });
+
   it("doesn't save a failed call", async () => {
     process.env.META_CACHE = "record";
     const failing = vi.fn(async () => new Response("busy", { status: 503 }));
