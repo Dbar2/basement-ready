@@ -369,8 +369,10 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   }
   // Areas named for the rooms the watch pass saw and heard ("Mom's room"), when there's more than one.
   const watch = await watchP;
-  const names = ranges.length > 1 ? watchedNames(ranges, watch, ANALYSIS_FPS) : [];
-  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements, { names: ranges.map((r) => names[r.index] ?? null) });
+  const watched = ranges.length > 1 ? watchedNames(ranges, watch, ANALYSIS_FPS) : [];
+  const names: (string | null)[] = [];
+  ranges.forEach((r, i) => (names[r.index] = watched[i] ?? null));
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements, { names });
   if (basement3d) {
     await saveBasement3d(scanId, basement3d);
     await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
