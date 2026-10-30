@@ -1,25 +1,22 @@
-// The design inside the real scan: their basement's solid surface (src/three/RealScan.tsx SolidView),
-// the new walls and furniture from the stager (src/three/StagedBasement.tsx StagedFurniture), the fire
-// separation marked on top of its walls, and labels drawn over the canvas (src/three/Tags.tsx). Walk it
-// at eye height without passing through walls, or look from above and drag walls and doors. The canvas
-// is mounted once: an edit changes what's in it, never remounts it.
+// The studio's 3D: the design inside the real scan (src/studio/DesignScene.tsx draws it), with labels
+// drawn over the canvas (src/three/Tags.tsx), what's picked, a marker for a failing check and the grab
+// handles. Walk it at eye height without passing through walls, or look from above and drag walls and
+// doors. The canvas is mounted once: an edit changes what's in it, never remounts it.
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
-import { along, bounds, dot, midpoint, polygonArea, project, solidPieces, sub, wallLength, wallNormal } from "../../server/model/geometry";
+import { along, bounds, dot, polygonArea, project, solidPieces, sub, wallNormal } from "../../server/model/geometry";
 import type { Design, Existing, Pt, Wall } from "../../server/model/types";
-import { parseMesh, SolidView, type Solid } from "../three/RealScan";
-import { StagedFurniture } from "../three/StagedBasement";
+import { parseMesh, type Solid } from "../three/RealScan";
 import { Tag, TagRoot, TagTracker } from "../three/Tags";
 import type { Picked } from "./PlanSvg";
-import { mainRect, stagingFor, suiteArea, walkStep } from "./stage";
+import { css, DesignScene, wallHeight, WallBox, type Finish } from "./DesignScene";
+import { mainRect, suiteArea, walkStep } from "./stage";
 
 export type View = "walk" | "overview";
-type Finish = "light" | "warm" | "deep";
 
 const EYE_M = 1.5;
-const css = (name: string, fallback: string) => (typeof document === "undefined" ? fallback : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback);
 
 export function meshUrls(scanId: string) {
   return scanId === "sample" ? ["/samples/sample/3d/mesh.bin"] : [`/api/scans/${scanId}/3d/mesh.bin?room=all`, `/api/scans/${scanId}/3d/mesh.bin`];
@@ -67,9 +64,6 @@ export function Studio3D(props: {
   const { existing, design, view } = props;
   const solid = useSolid(props.scanId);
   const phone = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
-  const k = existing.scale.factor ?? 1;
-  const ceiling = existing.ceilingM ?? 2.4;
-  const staging = useMemo(() => stagingFor(existing, design), [existing, design]);
   const area = useMemo(() => suiteArea(existing, design), [existing, design]);
   const handles = useRef<THREE.Group>(null);
   if (solid === null) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
@@ -78,20 +72,8 @@ export function Studio3D(props: {
       <Canvas className="viewer-canvas" camera={{ fov: 62, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
         <TagTracker />
         <color attach="background" args={[css("--color-ink", "#0F2A1E")]} />
-        {solid !== "none" ? (
-          // The scan was measured before their tape: drawn at the tape's scale, it lines up with the plan.
-          <group scale={k}>
-            <SolidView solid={solid} ceilingY={ceiling / k} overview={view === "overview"} floors={existing.rooms.map((r) => scaleBox(bounds(r.polygon), 1 / k))} />
-          </group>
-        ) : (
-          <Shell existing={existing} h={ceiling} />
-        )}
-        {staging && (
-          <Suspense fallback={null}>
-            <StagedFurniture plan={staging.plan} layout={staging.layout} finishKey={props.finish} />
-          </Suspense>
-        )}
-        <Overlay design={design} h={Math.min(2.6, Math.max(2.0, ceiling))} selected={props.selected} marker={props.marker} view={view} handles={handles} canDragWall={props.canDragWall} />
+        <DesignScene existing={existing} design={design} finish={props.finish} scan={solid === "none" ? null : solid} overview={view === "overview"} shell={solid === "none"} />
+        <Overlay design={design} h={wallHeight(existing)} selected={props.selected} marker={props.marker} view={view} handles={handles} canDragWall={props.canDragWall} />
         {view === "walk" ? (
           <Walker design={design} existing={existing} start={area ? mainRect(area.polygon) : null} reduced={props.reduced} />
         ) : (
@@ -103,48 +85,9 @@ export function Studio3D(props: {
   );
 }
 
-const scaleBox = (b: { minX: number; maxX: number; minZ: number; maxZ: number }, k: number) => ({ minX: b.minX * k, maxX: b.maxX * k, minZ: b.minZ * k, maxZ: b.maxZ * k });
-
-// Without a solid scan (older scans): the floor and the outside walls, plain.
-function Shell({ existing, h }: { existing: Existing; h: number }) {
-  const floor = css("--color-surface", "#E6EBE4");
-  return (
-    <>
-      <ambientLight intensity={1.2} />
-      <directionalLight position={[3, 8, 4]} intensity={1.4} />
-      {existing.rooms.map((r) => {
-        const b = bounds(r.polygon);
-        return (
-          <mesh key={r.id} position={[(b.minX + b.maxX) / 2, -0.01, (b.minZ + b.maxZ) / 2]} rotation-x={-Math.PI / 2}>
-            <planeGeometry args={[b.maxX - b.minX, b.maxZ - b.minZ]} />
-            <meshLambertMaterial color={floor} />
-          </mesh>
-        );
-      })}
-      {existing.walls.map((w) => (
-        <WallBox key={w.id} w={w} h={h} y={h / 2} height={h} thick={Math.max(0.1, w.thicknessM)}>
-          <meshLambertMaterial color="#D9DDD6" />
-        </WallBox>
-      ))}
-    </>
-  );
-}
-
-// A box along a wall, from `a` to `b`.
-function WallBox({ w, y, height, thick, extra = 0, children, ...rest }: { w: Pick<Wall, "a" | "b">; h?: number; y: number; height: number; thick: number; extra?: number; children: React.ReactNode; userData?: Record<string, unknown> }) {
-  const m = midpoint(w);
-  const ang = Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]);
-  return (
-    <mesh position={[m[0], y, m[1]]} rotation-y={-ang} {...rest}>
-      <boxGeometry args={[wallLength(w) + extra, height, thick]} />
-      {children}
-    </mesh>
-  );
-}
-
 const OVERHEAD_NAME: Record<string, string> = { beam: "Beam", duct: "Duct", bulkhead: "Bulkhead" };
 
-// The fire separation, what's picked, labels, a marker for a failing check, and the grab handles.
+// What's picked, labels, a marker for a failing check, and the grab handles.
 function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { design: Design; h: number; selected: Picked; marker: Pt | null; view: View; handles: RefObject<THREE.Group | null>; canDragWall: (w: Wall) => boolean }) {
   const red = css("--color-stop", "#B42318");
   const mint = css("--color-mint", "#4BE38A");
@@ -153,11 +96,6 @@ function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { 
   const overview = view === "overview";
   return (
     <>
-      {walls.filter((w) => w.rating).map((w) => (
-        <WallBox key={`r${w.id}`} w={w} y={(w.kind === "new" ? h : 0.02) + 0.012} height={0.024} thick={0.13}>
-          <meshBasicMaterial color={red} />
-        </WallBox>
-      ))}
       {sel && (
         <WallBox w={sel} y={h / 2} height={h + 0.04} thick={0.18} extra={0.04}>
           <meshBasicMaterial color={mint} transparent opacity={0.35} depthWrite={false} />

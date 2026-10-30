@@ -238,6 +238,7 @@ describe("the checks, one by one", () => {
         ],
         fixtures: [],
         alarms: [],
+        furniture: [],
       },
     };
     expect(check(narrow, ex, "way-out").ok).toBe(true);
@@ -480,5 +481,43 @@ describe("the chosen design in the older layout shape", () => {
     const living = out.layout.zones.find((z) => z.kind === "living")!;
     const stairs = bounds(room(d, "stairs").polygon);
     expect(living.x0 >= stairs.maxX - 0.01 || living.z0 >= stairs.maxZ - 0.01 || living.x1 <= stairs.minX + 0.01).toBe(true);
+  });
+});
+
+describe("furniture in the model", () => {
+  const m = seedModel(sampleResult(), {}, NOW)!;
+  const d = chosen(m);
+  const bed = room(d, "bedroom");
+  it("is seeded empty until it's placed, and saves", () => {
+    expect(d.proposed.furniture).toEqual([]);
+    expect(ModelSchema.safeParse(m).success).toBe(true);
+    // A model saved before furniture joined still opens.
+    const old = { ...m, designs: m.designs.map((x) => ({ ...x, proposed: { ...x.proposed, furniture: undefined } })) };
+    const parsed = ModelSchema.safeParse(old);
+    expect(parsed.success && parsed.data.designs[0].proposed.furniture).toEqual([]);
+  });
+
+  it("adds, swaps, recolours and removes a piece without touching the plan", () => {
+    const b = bounds(bed.polygon);
+    const added = applyEdit(d, { op: "add_furniture", furniture: { id: "", kind: "bed", at: [(b.minX + b.maxX) / 2, b.maxZ - 1.1], rotDeg: 180, sizeM: [1.6, 2.1], roomId: bed.id } }, NOW);
+    const piece = added.proposed.furniture[0];
+    expect(piece.id).toBe("bed-1");
+    expect(added.proposed.walls).toBe(d.proposed.walls);
+    const swapped = applyEdits(added, [{ op: "set_furniture", furnitureId: piece.id, kind: "desk", sizeM: [1.4, 0.7], colour: "#8A6F4E" }], NOW);
+    expect(swapped.proposed.furniture[0]).toMatchObject({ kind: "desk", sizeM: [1.4, 0.7], colour: "#8A6F4E", at: piece.at });
+    expect(applyEdit(swapped, { op: "remove_furniture", furnitureId: piece.id }, NOW).proposed.furniture).toEqual([]);
+    // A wall slide leaves the furniture where it is.
+    const inner = added.proposed.walls.find((w) => w.kind === "new")!;
+    expect(applyEdit(added, { op: "move_wall", wallId: inner.id, a: inner.a, b: inner.b }, NOW).proposed.furniture).toEqual(added.proposed.furniture);
+  });
+
+  it("checks proposed furniture edits like the rest", () => {
+    const { edits, dropped } = validateEdits(d, m.existing, [
+      { op: "add_furniture", furniture: { kind: "sofa", at: [0, 0], rotDeg: 0, sizeM: [2, 0.9] } },
+      { op: "add_furniture", furniture: { kind: "sofa", at: [90, 0], rotDeg: 0, sizeM: [2, 0.9] } },
+      { op: "set_furniture", furnitureId: "nope", colour: "green" },
+    ]);
+    expect(edits.map((e: Edit) => e.op)).toEqual(["add_furniture"]);
+    expect(dropped).toHaveLength(2);
   });
 });

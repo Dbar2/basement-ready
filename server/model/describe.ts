@@ -30,6 +30,9 @@ Edits, exactly these shapes:
 - {"op":"remove_room","roomId":"..."}
 - {"op":"set_fixture","fixtureId":"...","heightM":<metres to its underside>}  only for raising a duct or bulkhead.
 - {"op":"set_finishes","finishes":{"style":"...","floor":"...","walls":"..."}}
+- {"op":"add_furniture","furniture":{"id":"","kind":"bed"|"sofa"|"armchair"|"desk"|"dining"|"dresser"|"tv"|"rug"|"shelf"|"kitchen"|"fridge"|"vanity"|"toilet"|"shower"|"washer_dryer"|"other","at":[x,z],"rotDeg":0,"sizeM":[width,depth],"colour":"...","roomId":"..."}}
+- {"op":"set_furniture","furnitureId":"...","kind":"...","at":[x,z],"rotDeg":<degrees, 0 faces +z>,"colour":"..."}  swap a piece by changing its kind and size.
+- {"op":"remove_furniture","furnitureId":"..."}
 
 Rules:
 - Keep it legal: doors at least 0.81 m wide, bedrooms at least 7 m² with their escape window, halls at least 0.86 m.
@@ -50,6 +53,7 @@ function brief(design: Design, existing: Existing) {
     walls: walls.map((w) => ({ id: w.id, kind: w.kind, rating: w.rating, a: w.a.map(r2), b: w.b.map(r2), lengthM: r2(wallLength(w)) })),
     openings: openings.map((o) => ({ id: o.id, wallId: o.wallId, kind: o.kind, offsetM: r2(o.offsetM), widthM: r2(o.widthM), rating: o.rating ?? null })),
     overhead: fixtures.filter((f) => f.heightM != null).map((f) => ({ id: f.id, kind: f.kind, at: f.at.map(r2), heightM: f.heightM })),
+    furniture: (design.proposed.furniture ?? []).map((f) => ({ id: f.id, kind: f.kind, at: f.at.map(r2), rotDeg: f.rotDeg, sizeM: f.sizeM, colour: f.colour ?? null, roomId: f.roomId ?? null })),
     finishes: design.finishes,
     failing: checkDesign(design, existing).filter((c) => c.ok === false).map((c) => c.label),
   };

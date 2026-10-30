@@ -66,6 +66,7 @@
 .model-room[data-kind="kitchen"] { fill: color-mix(in srgb, var(--color-ink) 12%, transparent); }
 .model-room[data-kind="stairs"], .model-room[data-kind="mechanical"] { fill: color-mix(in srgb, var(--color-stop) 7%, transparent); }
 .model-room[data-selected] { stroke: var(--color-mint-line); stroke-width: 4; }
+.model-furniture { fill: color-mix(in srgb, var(--color-ink) 6%, transparent); stroke: var(--color-ink-muted); stroke-width: 1.5; pointer-events: none; }
 .model-wall line { stroke: var(--color-ink); }
 .model-wall[data-kind="new"] line:first-child { stroke: var(--color-ink-muted); }
 .model-wall[data-guess] line:first-child { stroke: var(--color-ink-muted); stroke-dasharray: 10 8; }
