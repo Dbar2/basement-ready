@@ -20,7 +20,6 @@ import { AERIAL_YEAR, fetchAerial, lookupProperty, type Property } from "./prope
 import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { cameraLookup, cleanCapture } from "./capture";
 import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
-import { watchedNames } from "./watch";
 import { scanBasement } from "./basement";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { liteSurfels, lowOverhead, runScan3d, scan3dReady, summarize, type Scan3d } from "./scan3d";
@@ -491,9 +490,7 @@ app.post("/api/scans/:id/replan", async (c) => {
       if (!b) return c.json({ error: "No 3D" }, 500);
       const low = new Set(lowOverhead(b.scans, result.detections));
       const detections = (result.detections as Detection[]).filter((d) => !low.has(d));
-      const ranges = b.spans.map((s, index) => ({ index, ...s }));
-      const names = ranges.length > 1 ? watchedNames(ranges, result.watch ?? null, ANALYSIS_FPS) : [];
-      const rooms = await finishRooms(id, ranges, b.scans, detections, async () => {}, b.placements, { names });
+      const rooms = await finishRooms(id, b.spans.map((s, index) => ({ index, ...s })), b.scans, detections, async () => {}, b.placements);
       await saveBasement3d(id, b);
       const main = mainRoom(rooms);
       const next = {

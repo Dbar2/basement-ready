@@ -11,10 +11,34 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { finishAssessment, readWithSpark } from "../../server/assess";
 import { uploadFile, samVideo } from "../../server/meta";
+import { bestFrame, parseSam } from "../../server/sam";
 import type { Measurements } from "../../server/scan3d";
 
 process.env.PGLITE_DIR ??= "memory://"; // the pipeline module opens a database; this script needs none
-const { CONCEPTS, videoFinds } = await import("../../server/pipeline");
+const { ANALYSIS_FPS, CONCEPTS } = await import("../../server/pipeline");
+
+// SAM's answer on the whole video for one concept, as finds, the way server/pipeline.ts videoStage makes
+// them (keep the two in step): an object must hold for half a second to count.
+function videoFinds(c: (typeof CONCEPTS)[number], raw: string) {
+  return parseSam(raw)
+    .filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2))
+    .slice(0, 6)
+    .map((t, i) => {
+      const b = bestFrame(t);
+      return {
+        id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
+        kind: c.kind,
+        label: c.label,
+        concept: c.concept,
+        frame: b.frame,
+        seconds: b.frame / ANALYSIS_FPS,
+        box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
+        framesSeen: t.frames.length,
+        confidence: b.box.c ?? null,
+        track: [],
+      };
+    });
+}
 
 const run = promisify(execFile);
 const arg = (name: string, fallback: string) => {
