@@ -18,7 +18,27 @@
       "url": "https://www.rona.ca/en/product/2-in-x-4-in-x-8-ft-spf-select-lumber-034-02013-0971073",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Regular price; 1,940 in stock. Listing shows a 'Buy in bulk 10%' badge (not applied). Kiln-dried stud-grade 2x4x8 (Art. 0971047) is $4.39."
+      "note": "Regular price; 1,940 in stock. Listing shows a 'Buy in bulk 10%' badge (not applied). Kiln-dried stud-grade 2x4x8 (Art. 0971047) is $4.39.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 4.18,
+          "url": "https://www.homedepot.ca/product/1000112108",
+          "sku": "1000112108",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 4.18,
+          "url": "https://www.homedepot.ca/product/1000112108",
+          "sku": "1000112108",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "pt_2x4_8",
@@ -32,7 +52,27 @@
       "url": "https://www.rona.ca/en/product/pressure-treated-wood-deck-board-2-x-4-in-x-8-ft-brown-761-62389-84895021",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "RONA names it 'deck board' but it is 2x4x8 brown PT lumber. 1,046 in stock. 'Buy in bulk 10%' badge."
+      "note": "RONA names it 'deck board' but it is 2x4x8 brown PT lumber. 1,046 in stock. 'Buy in bulk 10%' badge.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 7.35,
+          "url": "https://www.homedepot.ca/product/pressure-treated-2-x-4-x-8-premium-wood-above-ground-use-only/1000789777",
+          "sku": "1000789777",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 7.35,
+          "url": "https://www.homedepot.ca/product/pressure-treated-2-x-4-x-8-premium-wood-above-ground-use-only/1000789777",
+          "sku": "1000789777",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "concrete_fasteners",
@@ -46,7 +86,27 @@
       "url": "https://www.rona.ca/en/product/cobra-cobratap-flat-head-concrete-screws-1-4-in-dia-x-2-1-4-in-l-steel-100-per-pack-blue-632t-04845625",
       "checked": "2026-10-29",
       "per": 100,
-      "note": "6 in stock. Needs a masonry bit and hammer drill."
+      "note": "6 in stock. Needs a masonry bit and hammer drill.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 59.18,
+          "url": "https://www.homedepot.ca/product/tapcon-1-4-inch-x-2-1-4-inch-climaseal-blue-slotted-hex-head-concrete-screw-anchors-with-drill-bit-100-pcs/1000156186",
+          "sku": "1000156186",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 59.18,
+          "url": "https://www.homedepot.ca/product/tapcon-1-4-inch-x-2-1-4-inch-climaseal-blue-slotted-hex-head-concrete-screw-anchors-with-drill-bit-100-pcs/1000156186",
+          "sku": "1000156186",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "framing_screws",
@@ -73,7 +133,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/certainteed-type-x-fire-resistant-drywall-panel-5-8-in-x-4-x-8-ft-greenguard-certified-640230-0932009",
       "checked": "2026-10-29",
-      "note": "257 in stock."
+      "note": "257 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 27.28,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-5-8-in-x-4-ft-x-8-ft-firecode-core-type-x-drywall-panel/1000115029",
+          "sku": "1000115029",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 27.28,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-5-8-in-x-4-ft-x-8-ft-firecode-core-type-x-drywall-panel/1000115029",
+          "sku": "1000115029",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "drywall_regular_12",
@@ -86,7 +166,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/certainteed-easi-lite-1-2-in-x-4-x-8-ft-lightweight-gypsum-drywall-commercial-residential-640249-61635035",
       "checked": "2026-10-29",
-      "note": "576 in stock."
+      "note": "576 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 16.75,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-1-2-in-x-4-ft-x-8-ft-ultralight-drywall-panel/1000686028",
+          "sku": "1000686028",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 16.75,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-1-2-in-x-4-ft-x-8-ft-ultralight-drywall-panel/1000686028",
+          "sku": "1000686028",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "drywall_mr_12",
@@ -99,7 +199,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/certainteed-moisture-resistant-gypsum-wallboard-1-2-in-x-4-ft-x-8-ft-640246-61635031",
       "checked": "2026-10-29",
-      "note": "361 in stock."
+      "note": "361 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 31.45,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-1-2-in-x-4-ft-x-8-ft-ultralight-mold-tough-drywall-panel/1000152285",
+          "sku": "1000152285",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 31.45,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-1-2-in-x-4-ft-x-8-ft-ultralight-mold-tough-drywall-panel/1000152285",
+          "sku": "1000152285",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "joint_compound",
@@ -113,7 +233,27 @@
       "url": "https://www.rona.ca/en/product/certainteed-the-best-mud-in-the-joint-17-l-ready-mixed-lite-all-purpose-drywall-compound-300-ft3-coverage-163791-09935151",
       "checked": "2026-10-29",
       "per": 300,
-      "note": "162 in stock. Coverage taken as the listing's '300' (shown as ft³ on the page; read as sq ft). An estimate."
+      "note": "162 in stock. Coverage taken as the listing's '300' (shown as ft³ on the page; read as sq ft). An estimate.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 29.97,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-all-purpose-lite-drywall-compound-ready-mixed-17-l-carton/1000511934",
+          "sku": "1000511934",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 29.97,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-all-purpose-lite-drywall-compound-ready-mixed-17-l-carton/1000511934",
+          "sku": "1000511934",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "drywall_tape",
@@ -127,7 +267,27 @@
       "url": "https://www.rona.ca/en/product/certainteed-marco-spark-perf-2-1-16-in-x-500-ft-perforated-paper-drywall-joint-tape-615121-0993040",
       "checked": "2026-10-29",
       "per": 500,
-      "note": "44 in stock. 250 ft roll is $10.56."
+      "note": "44 in stock. 250 ft roll is $10.56.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 9.84,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-drywall-paper-joint-tape-2-1-16-in-x-500-ft-roll/1000117375",
+          "sku": "1000117375",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 9.84,
+          "url": "https://www.homedepot.ca/product/cgc-sheetrock-drywall-paper-joint-tape-2-1-16-in-x-500-ft-roll/1000117375",
+          "sku": "1000117375",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "drywall_screws",
@@ -141,7 +301,27 @@
       "url": "https://www.rona.ca/en/product/reliable-bugle-head-drywall-screws-black-phosphate-coarse-thread-1000-per-pack-6-x-1-1-4-in-dsc6114m1-1399149",
       "checked": "2026-10-29",
       "per": 1000,
-      "note": "Kitchener price, stocked at a nearby store. In stock at Kitchener: Precision #6 x 1.25 in 285/box $11.29. 5/8 in Type X needs longer (about 1-5/8 in) screws; not priced. 1-1/4 in screws suit 1/2 in board; 5/8 in Type X needs 1-5/8 in screws, not priced."
+      "note": "Kitchener price, stocked at a nearby store. In stock at Kitchener: Precision #6 x 1.25 in 285/box $11.29. 5/8 in Type X needs longer (about 1-5/8 in) screws; not priced. 1-1/4 in screws suit 1/2 in board; 5/8 in Type X needs 1-5/8 in screws, not priced.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 24.98,
+          "url": "https://www.homedepot.ca/product/paulin-6-x-1-1-4-inch-flat-head-phillips-drive-coarse-thread-drywall-screws-1000pcs/1000179917",
+          "sku": "1000179917",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 24.98,
+          "url": "https://www.homedepot.ca/product/paulin-6-x-1-1-4-inch-flat-head-phillips-drive-coarse-thread-drywall-screws-1000pcs/1000179917",
+          "sku": "1000179917",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "resilient_channel",
@@ -154,7 +334,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/bailey-metal-product-bailey-resilient-bar-in-galvanized-steel-for-ceilings-1-3-8-in-x-12-ft-d1007-18x144-5831004",
       "checked": "2026-10-29",
-      "note": "220 in stock."
+      "note": "220 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 10.58,
+          "url": "https://www.homedepot.ca/product/bailey-metal-products-rc-plus-12-ft-resilient-channel/1000165782",
+          "sku": "1000165782",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 10.58,
+          "url": "https://www.homedepot.ca/product/bailey-metal-products-rc-plus-12-ft-resilient-channel/1000165782",
+          "sku": "1000165782",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "insul_r14_comfortbatt",
@@ -168,7 +368,28 @@
       "url": "https://www.homedepot.ca/product/rockwool-r14-comfortbatt-2x4-wood-stud-16-inch-o-c-59-7-sq-ft-15-25-inch-x-47-inch-x-3-5-inch/1000122327",
       "checked": "2026-10-29",
       "per": 59.7,
-      "note": "No sale shown; 54 in stock, Aisle 23. RONA+ Kitchener lists this product but shows no price (special order)."
+      "note": "No sale shown; 54 in stock, Aisle 23. RONA+ Kitchener lists this product but shows no price (special order).",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 111.09,
+          "url": "https://www.homedepot.ca/product/rockwool-r14-comfortbatt-2x4-wood-stud-16-inch-o-c-59-7-sq-ft-15-25-inch-x-47-inch-x-3-5-inch/1000122327",
+          "sku": "1000122327",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 111.09,
+          "url": "https://www.homedepot.ca/product/rockwool-r14-comfortbatt-2x4-wood-stud-16-inch-o-c-59-7-sq-ft-15-25-inch-x-47-inch-x-3-5-inch/1000122327",
+          "sku": "1000122327",
+          "checked": "2026-10-30"
+        }
+      ],
+      "sku": "1000122327"
     },
     {
       "id": "insul_safe_n_sound",
@@ -182,7 +403,28 @@
       "url": "https://www.homedepot.ca/product/rockwool-3-inch-safe-n-sound-2x4-wood-stud-16-inch-o-c-59-7-sq-ft-15-25-inch-x-47-inch-x-3-inch/1000421954",
       "checked": "2026-10-29",
       "per": 59.7,
-      "note": "No sale shown; 123 in stock. Not carried at RONA+ Kitchener."
+      "note": "No sale shown; 123 in stock. Not carried at RONA+ Kitchener.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 112.56,
+          "url": "https://www.homedepot.ca/product/rockwool-3-inch-safe-n-sound-2x4-wood-stud-16-inch-o-c-59-7-sq-ft-15-25-inch-x-47-inch-x-3-inch/1000421954",
+          "sku": "1000421954",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 112.56,
+          "url": "https://www.homedepot.ca/product/rockwool-3-inch-safe-n-sound-2x4-wood-stud-16-inch-o-c-59-7-sq-ft-15-25-inch-x-47-inch-x-3-inch/1000421954",
+          "sku": "1000421954",
+          "checked": "2026-10-30"
+        }
+      ],
+      "sku": "1000421954"
     },
     {
       "id": "poly_6mil",
@@ -196,7 +438,27 @@
       "url": "https://www.rona.ca/en/product/polytarp-super-six-10-ft-x-100-ft-cgsb-approved-vapour-barrier-66-0053-01075022",
       "checked": "2026-10-29",
       "per": 1000,
-      "note": "Kitchener price, but the page says it is not available for immediate purchase there (order in store). In-stock RONA rolls are 8.5 ft wide; see the next rows."
+      "note": "Kitchener price, but the page says it is not available for immediate purchase there (order in store). In-stock RONA rolls are 8.5 ft wide; see the next rows.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 92.96,
+          "url": "https://www.homedepot.ca/product/everbilt-10-x-100-1000-sq-ft-ccmc-evaluated-6-mil-vapour-barrier/1000113373",
+          "sku": "1000113373",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 92.96,
+          "url": "https://www.homedepot.ca/product/everbilt-10-x-100-1000-sq-ft-ccmc-evaluated-6-mil-vapour-barrier/1000113373",
+          "sku": "1000113373",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "acoustic_sealant",
@@ -209,7 +471,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/lepage-pl-acousti-seal-sealant-295-ml-1435208-0040150",
       "checked": "2026-10-29",
-      "note": "42 in stock. 825 mL size is $13.59."
+      "note": "42 in stock. 825 mL size is $13.59.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 8.37,
+          "url": "https://www.homedepot.ca/product/lepage-pl-acousti-seal-sound-absorbing-vapor-barrier-adhesive-black-flexible-295ml/1000409509",
+          "sku": "1000409509",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 8.37,
+          "url": "https://www.homedepot.ca/product/lepage-pl-acousti-seal-sound-absorbing-vapor-barrier-adhesive-black-flexible-295ml/1000409509",
+          "sku": "1000409509",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "sheathing_tape",
@@ -222,7 +504,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/tuck-tape-sheathing-tape-construction-grade-60-mm-x-55-m-red-205256055-00545090",
       "checked": "2026-10-29",
-      "note": "107 in stock."
+      "note": "107 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 10.66,
+          "url": "https://www.homedepot.ca/product/tuck-tape-60mm-x-55m-contractor-s-sheathing-tape/1001659553",
+          "sku": "1001659553",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 10.66,
+          "url": "https://www.homedepot.ca/product/tuck-tape-60mm-x-55m-contractor-s-sheathing-tape/1001659553",
+          "sku": "1001659553",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "lvp_flooring",
@@ -250,7 +552,27 @@
       "url": "https://www.rona.ca/en/product/metrie-30-in-x-80-in-6-panel-textured-left-hand-primed-pre-hung-interior-door-1313111-61406552",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Metrie, hollow core (per specs). 16 in stock."
+      "note": "Metrie, hollow core (per specs). 16 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 248,
+          "url": "https://www.homedepot.ca/product/masonite-lincoln-park-30-inch-x-80-inch-x-4-9-16-inch-1-panel-hollow-core-single-prehung-interior-door-lh-black-hinges/1001093615",
+          "sku": "1001093615",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 248,
+          "url": "https://www.homedepot.ca/product/masonite-lincoln-park-30-inch-x-80-inch-x-4-9-16-inch-1-panel-hollow-core-single-prehung-interior-door-lh-black-hinges/1001093615",
+          "sku": "1001093615",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "door_prehung_32",
@@ -292,7 +614,27 @@
       "url": "https://www.rona.ca/en/product/onward-full-mortise-adjustable-spring-hinge-3-1-2-in-w-x-3-1-2-in-h-1-4-in-radius-brushed-chrome-52821bcr-3505327",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "5 in stock. No interior-rated hydraulic door closer was stocked; the Tell Grade 3 commercial closer is $133.99, delivery only. No interior door closer was stocked; three spring hinges make the door self-closing."
+      "note": "5 in stock. No interior-rated hydraulic door closer was stocked; the Tell Grade 3 commercial closer is $133.99, delivery only. No interior door closer was stocked; three spring hinges make the door self-closing.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 25.98,
+          "url": "https://www.homedepot.ca/product/onward-3-1-2-inch-89-mm-full-mortise-adjustable-spring-butt-hinge-for-exterior-door-1-4-inch-radius-brass-finish/1001559110",
+          "sku": "1001559110",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 25.98,
+          "url": "https://www.homedepot.ca/product/onward-3-1-2-inch-89-mm-full-mortise-adjustable-spring-butt-hinge-for-exterior-door-1-4-inch-radius-brass-finish/1001559110",
+          "sku": "1001559110",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "lever_privacy",
@@ -306,7 +648,27 @@
       "url": "https://www.rona.ca/en/product/weiser-casey-privacy-door-lever-for-bedrooms-and-bathrooms-satin-nickel-9glc3310-096-09656281",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Regular price shown; on sale for $35.24 when checked. 2 in stock."
+      "note": "Regular price shown; on sale for $35.24 when checked. 2 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 32.98,
+          "url": "https://www.homedepot.ca/product/defiant-olympic-polished-brass-bed-bath-privacy-door-lever/1000100634",
+          "sku": "1000100634",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 32.98,
+          "url": "https://www.homedepot.ca/product/defiant-olympic-polished-brass-bed-bath-privacy-door-lever/1000100634",
+          "sku": "1000100634",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "lever_passage",
@@ -320,7 +682,27 @@
       "url": "https://www.rona.ca/en/product/weiser-casey-passage-door-lever-for-hall-or-closet-doors-satin-nickel-9glc1010-071-09656128",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Regular price shown; on sale for $28.49 when checked. 56 in stock."
+      "note": "Regular price shown; on sale for $28.49 when checked. 56 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 27.98,
+          "url": "https://www.homedepot.ca/product/defiant-olympic-polished-brass-hall-closet-passage-door-lever/1000100633",
+          "sku": "1000100633",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 27.98,
+          "url": "https://www.homedepot.ca/product/defiant-olympic-polished-brass-hall-closet-passage-door-lever/1000100633",
+          "sku": "1000100633",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "baseboard_mdf",
@@ -334,7 +716,27 @@
       "url": "https://www.rona.ca/en/product/metrie-colonial-3-1-4-in-x-10-ft-white-primed-mdf-baseboard-for-builders-8-pack-1693033-00175810",
       "checked": "2026-10-29",
       "per": 24.38,
-      "note": "56 in stock. 8 x 10 ft = 80 lf (24.4 m) a bundle."
+      "note": "56 in stock. 8 x 10 ft = 80 lf (24.4 m) a bundle.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 61.98,
+          "url": "https://www.homedepot.ca/product/alexandria-moulding-10-pack-1-2-inch-x-3-1-2-inch-x-96-inch-modern-mdf-primed-baseboard-moulding-valupak/1000725900",
+          "sku": "1000725900",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 61.98,
+          "url": "https://www.homedepot.ca/product/alexandria-moulding-10-pack-1-2-inch-x-3-1-2-inch-x-96-inch-modern-mdf-primed-baseboard-moulding-valupak/1000725900",
+          "sku": "1000725900",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "casing_mdf",
@@ -356,13 +758,33 @@
       "product": "BRK Smoke Detector Hardwired with LED Stroboscope with Back-Up Battery - White",
       "unit": "each",
       "coverage": "one alarm with strobe",
-      "priceCAD": 179.0,
+      "priceCAD": 179,
       "retailer": "RONA",
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/brk-smoke-detector-hardwired-with-led-stroboscope-with-back-up-battery-white-1048355-71585178",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Model 1048355. Listing says 177 candela LED strobe meeting ULC S526, interconnectable with other BRK units (strobes flash together), 10-year sealed battery backup. 9 in stock. Built-in strobe, 177 cd: covers the visual signal."
+      "note": "Model 1048355. Listing says 177 candela LED strobe meeting ULC S526, interconnectable with other BRK units (strobes flash together), 10-year sealed battery backup. 9 in stock. Built-in strobe, 177 cd: covers the visual signal.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 159,
+          "url": "https://www.homedepot.ca/product/kidde-hardwire-interconnected-smoke-alarm-with-led-strobe-light-and-voice-alert/1001000245",
+          "sku": "1001000245",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 159,
+          "url": "https://www.homedepot.ca/product/kidde-hardwire-interconnected-smoke-alarm-with-led-strobe-light-and-voice-alert/1001000245",
+          "sku": "1001000245",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "alarm_combo_hardwired",
@@ -376,7 +798,27 @@
       "url": "https://www.rona.ca/en/product/first-alert-sc7010ba-smoke-and-carbon-monoxide-detector-alarm-hardwired-120-v-white-1043251-71585137",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Regular price shown; on sale for $57.59 when checked. Photoelectric, interconnection: yes, battery backup. 56 in stock."
+      "note": "Regular price shown; on sale for $57.59 when checked. Photoelectric, interconnection: yes, battery backup. 56 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 99.97,
+          "url": "https://www.homedepot.ca/product/kidde-hardwired-combination-smoke-and-co-alarm-with-voice-alert-and-10-year-backup-battery/1001856059",
+          "sku": "1001856059",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 99.97,
+          "url": "https://www.homedepot.ca/product/kidde-hardwired-combination-smoke-and-co-alarm-with-voice-alert-and-10-year-backup-battery/1001856059",
+          "sku": "1001856059",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "alarm_co_hardwired",
@@ -398,13 +840,33 @@
       "product": "BRK Smoke Detector Hardwired with LED Stroboscope with Back-Up Battery - White",
       "unit": "each",
       "coverage": "one alarm with strobe",
-      "priceCAD": 179.0,
+      "priceCAD": 179,
       "retailer": "RONA",
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/brk-smoke-detector-hardwired-with-led-stroboscope-with-back-up-battery-white-1048355-71585178",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Model 1048355. Listing says 177 candela LED strobe meeting ULC S526, interconnectable with other BRK units (strobes flash together), 10-year sealed battery backup. 9 in stock. A strobe smoke alarm beside each combination alarm gives the visual signal."
+      "note": "Model 1048355. Listing says 177 candela LED strobe meeting ULC S526, interconnectable with other BRK units (strobes flash together), 10-year sealed battery backup. 9 in stock. A strobe smoke alarm beside each combination alarm gives the visual signal.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 159,
+          "url": "https://www.homedepot.ca/product/kidde-hardwire-interconnected-smoke-alarm-with-led-strobe-light-and-voice-alert/1001000245",
+          "sku": "1001000245",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 159,
+          "url": "https://www.homedepot.ca/product/kidde-hardwire-interconnected-smoke-alarm-with-led-strobe-light-and-voice-alert/1001000245",
+          "sku": "1001000245",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "egress_window",
@@ -418,7 +880,27 @@
       "url": "https://www.rona.ca/en/product/rona-by-lajeunesse-single-sliding-window-white-pvc-cladding-48-in-w-x-48-in-h-lcs-4848-71565016",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "3 in stock. Numerically meets OBC 0.35 m² with no side under 380 mm (smallest 19.75 in = 502 mm), but the listing's 'Meets Egress Requirement' field says No (likely a US rule). Confirm with the building department. The 48x36 slider is only 3.5 sq ft (0.33 m²), too small; the 24x48 is 1.8 sq ft. 48 x 48 in slider: clear opening 0.49 m² per the listing, over the 0.35 m² minimum. Not labelled egress by the store."
+      "note": "3 in stock. Numerically meets OBC 0.35 m² with no side under 380 mm (smallest 19.75 in = 502 mm), but the listing's 'Meets Egress Requirement' field says No (likely a US rule). Confirm with the building department. The 48x36 slider is only 3.5 sq ft (0.33 m²), too small; the 24x48 is 1.8 sq ft. 48 x 48 in slider: clear opening 0.49 m² per the listing, over the 0.35 m² minimum. Not labelled egress by the store.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 298,
+          "url": "https://www.homedepot.ca/product/jeld-wen-40-1-4-inch-x-22-1-2-inch-full-vent-willmar-collection-inswing-top-hinged-egress-compliant-vinyl-window/1000740041",
+          "sku": "1000740041",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 298,
+          "url": "https://www.homedepot.ca/product/jeld-wen-40-1-4-inch-x-22-1-2-inch-full-vent-willmar-collection-inswing-top-hinged-egress-compliant-vinyl-window/1000740041",
+          "sku": "1000740041",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "window_well",
@@ -432,7 +914,27 @@
       "url": "https://www.rona.ca/en/product/atlantic-ail-ail-54-x-30-x-36-in-corrugated-galvanized-steel-window-well-for-basement-window-wwf101370760900-22395041",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Kitchener price; stocked at a nearby store. 30 in projection matches the 760 mm clearance commonly required in front of egress windows. 30 in (762 mm) projection, over the 550 mm minimum."
+      "note": "Kitchener price; stocked at a nearby store. 30 in projection matches the 760 mm clearance commonly required in front of egress windows. 30 in (762 mm) projection, over the 550 mm minimum.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 73.7,
+          "url": "https://www.homedepot.ca/product/tecsteel-49-in-w-x-24-in-p-x-22-in-h-window-well/1000158406",
+          "sku": "1000158406",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 73.7,
+          "url": "https://www.homedepot.ca/product/tecsteel-49-in-w-x-24-in-p-x-22-in-h-window-well/1000158406",
+          "sku": "1000158406",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "receptacle_tr_15a",
@@ -446,7 +948,27 @@
       "url": "https://www.rona.ca/en/product/eaton-white-15-amp-duplex-tamper-resistant-outlet-10-pack-trcr15w-10-l-04805826",
       "checked": "2026-10-29",
       "per": 10,
-      "note": "45 in stock."
+      "note": "45 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 25.98,
+          "url": "https://www.homedepot.ca/product/leviton-lever-edge-15-amp-decora-tamper-resistant-receptacle-white-10-pack/1001798806",
+          "sku": "1001798806",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 25.98,
+          "url": "https://www.homedepot.ca/product/leviton-lever-edge-15-amp-decora-tamper-resistant-receptacle-white-10-pack/1001798806",
+          "sku": "1001798806",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "receptacle_gfci",
@@ -460,7 +982,27 @@
       "url": "https://www.rona.ca/en/product/eaton-white-3-wire-gfci-15-a-125-v-receptacle-trgf15w-bx-l-04806085",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Model TRGF15W. 26 in stock."
+      "note": "Model TRGF15W. 26 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 27.97,
+          "url": "https://www.homedepot.ca/product/leviton-decora-15-amp-tamper-resistant-slim-gfci-receptacle-outlet-with-wall-plate/1000660807",
+          "sku": "1000660807",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 27.97,
+          "url": "https://www.homedepot.ca/product/leviton-decora-15-amp-tamper-resistant-slim-gfci-receptacle-outlet-with-wall-plate/1000660807",
+          "sku": "1000660807",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "switch_single",
@@ -474,7 +1016,27 @@
       "url": "https://www.rona.ca/en/product/eaton-15-amp-single-pole-white-toggle-residential-light-switch-1-pack-04805749",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "10 in stock. Eaton 1301W 10-pack is listed at regular $11.49 (on sale $6), which is cheaper per switch."
+      "note": "10 in stock. Eaton 1301W 10-pack is listed at regular $11.49 (on sale $6), which is cheaper per switch.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 2.57,
+          "url": "https://www.homedepot.ca/product/leviton-decora-single-pole-switch-white/1000105689",
+          "sku": "1000105689",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 2.57,
+          "url": "https://www.homedepot.ca/product/leviton-decora-single-pole-switch-white/1000105689",
+          "sku": "1000105689",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "pot_light_4in",
@@ -502,7 +1064,27 @@
       "url": "https://www.rona.ca/en/product/broan-nutone-roomside-series-bathroom-fan-80-cfm-with-15-sones-white-be8-09095215",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Model BE8. Regular price shown; on sale for $80.74 when checked. 9 in stock."
+      "note": "Model BE8. Regular price shown; on sale for $80.74 when checked. 9 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 84.15,
+          "url": "https://www.homedepot.ca/product/panasonic-70-90-cfm-0-7-1-5-sones-whisper-boost-bath-fan-for-rooms-80-sq-ft-energy-star/1001747729",
+          "sku": "1001747729",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 84.15,
+          "url": "https://www.homedepot.ca/product/panasonic-70-90-cfm-0-7-1-5-sones-whisper-boost-bath-fan-for-rooms-80-sq-ft-energy-star/1001747729",
+          "sku": "1001747729",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "device_box",
@@ -516,7 +1098,27 @@
       "url": "https://www.rona.ca/en/product/nutek-device-box-in-plastic-3-3-4-x-2-1-4-x-2-3-4-in-with-side-bracket-grey-wsw-upc-0320351",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "14 in stock. Airtight-gasket version for walls with vapour barrier is $6.19 (85 in stock)."
+      "note": "14 in stock. Airtight-gasket version for walls with vapour barrier is $6.19 (85 in stock).",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 2.87,
+          "url": "https://www.homedepot.ca/product/nutek-3-3-4-x-2-1-4-x-2-3-4-d-1-gang-18-cu-in-plastic-device-box-with-integrated-bracket/1000404475",
+          "sku": "1000404475",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 2.87,
+          "url": "https://www.homedepot.ca/product/nutek-3-3-4-x-2-1-4-x-2-3-4-d-1-gang-18-cu-in-plastic-device-box-with-integrated-bracket/1000404475",
+          "sku": "1000404475",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "wire_14_2",
@@ -542,7 +1144,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/southwire-romex-simpull-electric-cable-nmd90-12-2-gauge-75-m-coil-yellow-47175576-1798008",
       "checked": "2026-10-29",
-      "note": "Kitchener price; yellow is stocked at a nearby store. Red-jacket 12-2 75 m is also $259.99 with 13 in stock at Kitchener."
+      "note": "Kitchener price; yellow is stocked at a nearby store. Red-jacket 12-2 75 m is also $259.99 with 13 in stock at Kitchener.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 259,
+          "url": "https://www.homedepot.ca/product/southwire-12-2-nmd90-75m-romex-simpull-electrical-wire-yellow/1001952137",
+          "sku": "1001952137",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 259,
+          "url": "https://www.homedepot.ca/product/southwire-12-2-nmd90-75m-romex-simpull-electrical-wire-yellow/1001952137",
+          "sku": "1001952137",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "breaker_afci_15",
@@ -556,7 +1178,27 @@
       "url": "https://www.rona.ca/en/product/homeline-schneider-15-amp-1-pole-combination-arc-fault-circuit-breaker-chom115pcafi-02655128",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Model CHOM115PCAFI, for Homeline panels. 2 in stock. Square D Homeline. Buy the AFCI that matches your panel's brand."
+      "note": "Model CHOM115PCAFI, for Homeline panels. 2 in stock. Square D Homeline. Buy the AFCI that matches your panel's brand.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 109,
+          "url": "https://www.homedepot.ca/product/siemens-15-amp-single-pole-afci-pigtail-type-qafc-circuit-breaker/1000106755",
+          "sku": "1000106755",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 109,
+          "url": "https://www.homedepot.ca/product/siemens-15-amp-single-pole-afci-pigtail-type-qafc-circuit-breaker/1000106755",
+          "sku": "1000106755",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "toilet",
@@ -570,7 +1212,27 @@
       "url": "https://www.rona.ca/en/product/american-standard-reliant-toilet-with-elongated-bowl-2-piece-chair-height-48-lpf-white-726aa101020-00535186",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Seat included; supply line not included. 12 in stock."
+      "note": "Seat included; supply line not included. 12 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 198,
+          "url": "https://www.homedepot.ca/product/american-standard-mainstream-2-piece-4-8-lpf-single-flush-standard-height-elongated-toilet-in-white/1001877076",
+          "sku": "1001877076",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 198,
+          "url": "https://www.homedepot.ca/product/american-standard-mainstream-2-piece-4-8-lpf-single-flush-standard-height-elongated-toilet-in-white/1001877076",
+          "sku": "1001877076",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "vanity",
@@ -584,7 +1246,27 @@
       "url": "https://www.rona.ca/en/product/valu-truven-24-in-light-grey-engineered-wood-2-door-single-sink-bathroom-vanity-with-white-cultured-marble-top-13847784",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Faucet NOT included (see bath_faucet). Assembled. 3 in stock."
+      "note": "Faucet NOT included (see bath_faucet). Assembled. 3 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 259,
+          "url": "https://www.homedepot.ca/product/glacier-bay-delchester-24-inch-w-x-32-7-inch-h-x-18-7-inch-d-bathroom-vanity-in-white-wood-with-integral-single-centre-sink-ceramic-top/1000822618",
+          "sku": "1000822618",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 259,
+          "url": "https://www.homedepot.ca/product/glacier-bay-delchester-24-inch-w-x-32-7-inch-h-x-18-7-inch-d-bathroom-vanity-in-white-wood-with-integral-single-centre-sink-ceramic-top/1000822618",
+          "sku": "1000822618",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "bath_faucet",
@@ -598,7 +1280,27 @@
       "url": "https://www.rona.ca/en/product/valu-ohan-4-in-centreset-zinc-brass-1-handle-bathroom-faucet-chrome-finish-f4510068cp-80375281",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "6 in stock. Mid-range option: Pfister Matlock chrome $119.99."
+      "note": "6 in stock. Mid-range option: Pfister Matlock chrome $119.99.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 79.98,
+          "url": "https://www.homedepot.ca/product/moen-adler-4-inch-2-handle-centerset-bathroom-sink-faucet-tap-in-chrome/1001036787",
+          "sku": "1001036787",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 79.98,
+          "url": "https://www.homedepot.ca/product/moen-adler-4-inch-2-handle-centerset-bathroom-sink-faucet-tap-in-chrome/1001036787",
+          "sku": "1001036787",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "tub",
@@ -612,7 +1314,27 @@
       "url": "https://www.rona.ca/en/product/maax-interflo-alcove-bathtub-in-acrylic-60-x-30-x-18-in-with-rightside-drain-white-220416000001002-06385380",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "2 in stock; left-drain version same price."
+      "note": "2 in stock; left-drain version same price.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 498,
+          "url": "https://www.homedepot.ca/product/delta-classic-500-60-in-x-30-in-right-drain-rectangular-alcove-bathtub-in-high-gloss-white/1001757427",
+          "sku": "1001757427",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 498,
+          "url": "https://www.homedepot.ca/product/delta-classic-500-60-in-x-30-in-right-drain-rectangular-alcove-bathtub-in-high-gloss-white/1001757427",
+          "sku": "1001757427",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "tub_walls",
@@ -626,7 +1348,27 @@
       "url": "https://www.rona.ca/en/product/maax-interflo-modular-tub-shower-wall-kit-in-acrylic-60-x-30-x-60-in-white-107817000001000-06385378",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Pairs with the Interflo tub above. 2 in stock."
+      "note": "Pairs with the Interflo tub above. 2 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 818,
+          "url": "https://www.homedepot.ca/product/maax-nextile-60l-x-30w-x-60h-inch-4-piece-alcove-tub-surround-kit-in-white-subway-tile-with-built-in-niche-direct-to-stud/1001389376",
+          "sku": "1001389376",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 818,
+          "url": "https://www.homedepot.ca/product/maax-nextile-60l-x-30w-x-60h-inch-4-piece-alcove-tub-surround-kit-in-white-subway-tile-with-built-in-niche-direct-to-stud/1001389376",
+          "sku": "1001389376",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "kitchen_sink",
@@ -640,7 +1382,27 @@
       "url": "https://www.rona.ca/en/product/kindred-double-sink-3-holes-20-in-x-31-in-x-7-in-stainless-steel-32207313-12975117",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "4 in stock."
+      "note": "4 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 148,
+          "url": "https://www.homedepot.ca/product/kindred-drop-in-stainless-steel-31-25-inch-3-hole-double-bowl-kitchen-sink-with-ez-torque-installation/1001493907",
+          "sku": "1001493907",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 148,
+          "url": "https://www.homedepot.ca/product/kindred-drop-in-stainless-steel-31-25-inch-3-hole-double-bowl-kitchen-sink-with-ez-torque-installation/1001493907",
+          "sku": "1001493907",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "kitchen_faucet",
@@ -654,7 +1416,27 @@
       "url": "https://www.rona.ca/en/product/valu-embrel-kitchen-faucet-with-1-handle-and-pull-down-spout-chrome-fp4af330cp-80375298",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Not on sale. 5 in stock."
+      "note": "Not on sale. 5 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 224,
+          "url": "https://www.homedepot.ca/product/moen-adler-pull-down-kitchen-faucet-tap-in-spot-resistant-stainless-steel-deckplate-included/1001512508",
+          "sku": "1001512508",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 224,
+          "url": "https://www.homedepot.ca/product/moen-adler-pull-down-kitchen-faucet-tap-in-spot-resistant-stainless-steel-deckplate-included/1001512508",
+          "sku": "1001512508",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "pex_12",
@@ -667,7 +1449,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/bow-pex-ftpe-1-2-in-x-100-ft-588855-1159179",
       "checked": "2026-10-29",
-      "note": "BOW brand, model 588855. RONA's page prints 'ftpe' where 'pipe' should be. 20 in stock. The store's page shows the name as 'PEX-ftpe'."
+      "note": "BOW brand, model 588855. RONA's page prints 'ftpe' where 'pipe' should be. 20 in stock. The store's page shows the name as 'PEX-ftpe'.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 37.98,
+          "url": "https://www.homedepot.ca/product/apollo-1-2-inch-x-100-ft-pex-b-pipe-in-white/1000144862",
+          "sku": "1000144862",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 37.98,
+          "url": "https://www.homedepot.ca/product/apollo-1-2-inch-x-100-ft-pex-b-pipe-in-white/1000144862",
+          "sku": "1000144862",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "abs_3",
@@ -680,7 +1482,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/ipex-3-in-x-12-ft-black-abs-cellcore-pipe-for-drain-waste-and-vent-system-079134-00685478",
       "checked": "2026-10-29",
-      "note": "Kitchener price; stocked at a nearby store."
+      "note": "Kitchener price; stocked at a nearby store.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 46.97,
+          "url": "https://www.homedepot.ca/product/ipex-cell-core-3-inch-x-12-feet-abs-dwv-pipe/1000120780",
+          "sku": "1000120780",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 46.97,
+          "url": "https://www.homedepot.ca/product/ipex-cell-core-3-inch-x-12-feet-abs-dwv-pipe/1000120780",
+          "sku": "1000120780",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "abs_1_5",
@@ -693,7 +1515,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/ipex-1-1-2-in-x-12-ft-black-abs-cellcore-pipe-for-drain-waste-and-vent-system-079118-00685475",
       "checked": "2026-10-29",
-      "note": "30 in stock."
+      "note": "30 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 20.98,
+          "url": "https://www.homedepot.ca/product/ipex-cell-core-1-1-2-inch-x-12-feet-abs-dwv-pipe/1000120764",
+          "sku": "1000120764",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 20.98,
+          "url": "https://www.homedepot.ca/product/ipex-cell-core-1-1-2-inch-x-12-feet-abs-dwv-pipe/1000120764",
+          "sku": "1000120764",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "shutoff_valve",
@@ -721,7 +1563,27 @@
       "url": "https://www.rona.ca/en/product/landon-co-landon-co-elite-30-in-2-door-base-cabinet-shaker-style-polymer-white-rd-b30-sd-75396484",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Assembly required: No. 6 in stock."
+      "note": "Assembly required: No. 6 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 339,
+          "url": "https://www.homedepot.ca/product/hampton-bay-30-in-w-x-30-h-x-24-d-ready-to-assemble-kitchen-2-drawer-base-cabinet-white-b2d30/1001968631",
+          "sku": "1001968631",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 339,
+          "url": "https://www.homedepot.ca/product/hampton-bay-30-in-w-x-30-h-x-24-d-ready-to-assemble-kitchen-2-drawer-base-cabinet-white-b2d30/1001968631",
+          "sku": "1001968631",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "cabinet_wall_30",
@@ -735,7 +1597,27 @@
       "url": "https://www.rona.ca/en/product/landon-co-landon-co-elite-wall-cabinet-with-2-doors-shaker-style-30-in-w-x-3025-in-h-x-12-in-d-white-rd-hg30-sd-75396502",
       "checked": "2026-10-29",
       "per": 1,
-      "note": "Assembly required: No. 8 in stock."
+      "note": "Assembly required: No. 8 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 98,
+          "url": "https://www.homedepot.ca/product/hampton-bay-30-in-w-x-30-h-x-14-d-ready-to-assemble-kitchen-wall-cabinet-white-w3030/1001969414",
+          "sku": "1001969414",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 98,
+          "url": "https://www.homedepot.ca/product/hampton-bay-30-in-w-x-30-h-x-14-d-ready-to-assemble-kitchen-wall-cabinet-white-w3030/1001969414",
+          "sku": "1001969414",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "countertop_8ft",
@@ -748,7 +1630,27 @@
       "store": "RONA+ Kitchener (730 Ottawa St S)",
       "url": "https://www.rona.ca/en/product/belanger-laminates-granite-finish-moulded-laminate-kitchen-countertop-with-backsplash-8-ft-x-255-in-arctic-snow-1132249089p394vl-58167041",
       "checked": "2026-10-29",
-      "note": "1 in stock."
+      "note": "1 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 179,
+          "url": "https://www.homedepot.ca/product/belanger-laminates-inc-bl-dimensions-96-in-8-elemental-concrete-laminate-countertop-with-2300-full-wrap-edge-and-integrated-backsplash/1000788698",
+          "sku": "1000788698",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 179,
+          "url": "https://www.homedepot.ca/product/belanger-laminates-inc-bl-dimensions-96-in-8-elemental-concrete-laminate-countertop-with-2300-full-wrap-edge-and-integrated-backsplash/1000788698",
+          "sku": "1000788698",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "primer",
@@ -762,7 +1664,27 @@
       "url": "https://www.rona.ca/en/product/sico-expert-interior-primer-sealer-378-l-50317230",
       "checked": "2026-10-29",
       "per": 400,
-      "note": "Kitchener price; stocked at a nearby store. Zinsser Bulls Eye water-base primer 3.78 L is $42.29."
+      "note": "Kitchener price; stocked at a nearby store. Zinsser Bulls Eye water-base primer 3.78 L is $42.29.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 26.97,
+          "url": "https://www.homedepot.ca/product/glidden-interior-drywall-primer-sealer-3-78-l-48180/1000541487",
+          "sku": "1000541487",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 26.97,
+          "url": "https://www.homedepot.ca/product/glidden-interior-drywall-primer-sealer-3-78-l-48180/1000541487",
+          "sku": "1000541487",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "paint_walls",
@@ -776,7 +1698,27 @@
       "url": "https://www.rona.ca/en/product/ronapro-by-dulux-elite-interior-paint-and-primer-neutral-base-with-eggshell-finish-378-l-50317508",
       "checked": "2026-10-29",
       "per": 400,
-      "note": "Tinted in store. 16 in stock. SICO Evolution eggshell 3.78 L is $74.99."
+      "note": "Tinted in store. 16 in stock. SICO Evolution eggshell 3.78 L is $74.99.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 42.97,
+          "url": "https://www.homedepot.ca/product/glidden-premium-paint-primer-interior-eggshell-white-3-7-l/1000737057",
+          "sku": "1000737057",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 42.97,
+          "url": "https://www.homedepot.ca/product/glidden-premium-paint-primer-interior-eggshell-white-3-7-l/1000737057",
+          "sku": "1000737057",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "paint_ceiling",
@@ -790,7 +1732,27 @@
       "url": "https://www.rona.ca/en/product/sico-evolution-white-latex-flat-for-ceilings-paint-and-primer-378-l-50316778",
       "checked": "2026-10-29",
       "per": 540,
-      "note": "22 in stock."
+      "note": "22 in stock.",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 37.97,
+          "url": "https://www.homedepot.ca/product/glidden-premium-ez-track-pink-to-white-interior-ceiling-paint-primer-3-78-l/1000163427",
+          "sku": "1000163427",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 37.97,
+          "url": "https://www.homedepot.ca/product/glidden-premium-ez-track-pink-to-white-interior-ceiling-paint-primer-3-78-l/1000163427",
+          "sku": "1000163427",
+          "checked": "2026-10-30"
+        }
+      ]
     },
     {
       "id": "minisplit_12k",
@@ -805,6 +1767,321 @@
       "checked": "2026-10-29",
       "per": 1,
       "note": "Online only, equipment price only. Install, line set, refrigerant work, electrical and permit are extra. Check voltage before buying. Home Depot Canada's 12,000 BTU unit (Perfect Aire) showed 'Unavailable in your area'. Marketplace seller on Best Buy; a TSSA or HRAI-certified installer is still needed."
+    },
+    {
+      "id": "sill_gasket",
+      "item": "Foam sill gasket under bottom plates on the slab",
+      "product": "ProPINK ComfortSeal Sill Gasket 3 1/2-inch x 82-ft. x 3/16-inch",
+      "unit": "roll",
+      "coverage": "one roll (length in ft)",
+      "per": 82,
+      "priceCAD": 16.2,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/owens-corning-propink-comfortseal-sill-gasket-3-1-2-inch-x-82-ft-x-3-16-inch/1000150655",
+      "sku": "1000150655",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 16.2,
+          "url": "https://www.homedepot.ca/product/owens-corning-propink-comfortseal-sill-gasket-3-1-2-inch-x-82-ft-x-3-16-inch/1000150655",
+          "sku": "1000150655",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 16.2,
+          "url": "https://www.homedepot.ca/product/owens-corning-propink-comfortseal-sill-gasket-3-1-2-inch-x-82-ft-x-3-16-inch/1000150655",
+          "sku": "1000150655",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "underlay",
+      "item": "Underlay for vinyl plank flooring",
+      "product": "All-in-One Premium Underlayment for Vinyl, Laminate, Engineered 100 sq.ft. 1.5mm",
+      "unit": "roll",
+      "coverage": "one roll (sq ft)",
+      "per": 100,
+      "priceCAD": 49.98,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/uhd-all-in-one-premium-underlayment-for-vinyl-laminate-engineered-100-sq-ft-1-5mm/1001942416",
+      "sku": "1001942416",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 49.98,
+          "url": "https://www.homedepot.ca/product/uhd-all-in-one-premium-underlayment-for-vinyl-laminate-engineered-100-sq-ft-1-5mm/1001942416",
+          "sku": "1001942416",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 49.98,
+          "url": "https://www.homedepot.ca/product/uhd-all-in-one-premium-underlayment-for-vinyl-laminate-engineered-100-sq-ft-1-5mm/1001942416",
+          "sku": "1001942416",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "door_fire_20min",
+      "item": "20-minute fire-rated pre-hung door between the two homes (steel; check it suits an inside doorway)",
+      "product": "32-inch x 80-inch x 4-9/16-inch 6 Panel Single Primed Steel 20 Minute Fire Rated Prehung Front Door LH",
+      "unit": "each",
+      "coverage": "one door",
+      "per": 1,
+      "priceCAD": 564,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/masonite-32-inch-x-80-inch-x-4-9-16-inch-6-panel-single-primed-steel-20-minute-fire-rated-prehung-front-door-lh/1001026280",
+      "sku": "1001026280",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 564,
+          "url": "https://www.homedepot.ca/product/masonite-32-inch-x-80-inch-x-4-9-16-inch-6-panel-single-primed-steel-20-minute-fire-rated-prehung-front-door-lh/1001026280",
+          "sku": "1001026280",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 564,
+          "url": "https://www.homedepot.ca/product/masonite-32-inch-x-80-inch-x-4-9-16-inch-6-panel-single-primed-steel-20-minute-fire-rated-prehung-front-door-lh/1001026280",
+          "sku": "1001026280",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "alarm_combo_strobe",
+      "item": "Hard-wired interconnected smoke and CO alarm with a strobe",
+      "product": "Hardwire Interconnected Combination Smoke and CO Alarm with Strobe Light and Voice Alert",
+      "unit": "each",
+      "coverage": "one alarm",
+      "per": 1,
+      "priceCAD": 179,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/kidde-hardwire-interconnected-combination-smoke-and-co-alarm-with-strobe-light-and-voice-alert/1001020476",
+      "sku": "1001020476",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 179,
+          "url": "https://www.homedepot.ca/product/kidde-hardwire-interconnected-combination-smoke-and-co-alarm-with-strobe-light-and-voice-alert/1001020476",
+          "sku": "1001020476",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 179,
+          "url": "https://www.homedepot.ca/product/kidde-hardwire-interconnected-combination-smoke-and-co-alarm-with-strobe-light-and-voice-alert/1001020476",
+          "sku": "1001020476",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "receptacle_tr_20a",
+      "item": "20 A tamper-resistant receptacle (kitchen counter)",
+      "product": "20A Tamper-Resistant, Decora duplex Receptacle/Outlet - White",
+      "unit": "each",
+      "coverage": "one receptacle",
+      "per": 1,
+      "priceCAD": 8.27,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/leviton-20a-tamper-resistant-decora-duplex-receptacle-outlet-white/1000140142",
+      "sku": "1000140142",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 8.27,
+          "url": "https://www.homedepot.ca/product/leviton-20a-tamper-resistant-decora-duplex-receptacle-outlet-white/1000140142",
+          "sku": "1000140142",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 8.27,
+          "url": "https://www.homedepot.ca/product/leviton-20a-tamper-resistant-decora-duplex-receptacle-outlet-white/1000140142",
+          "sku": "1000140142",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "shutoff_main",
+      "item": "3/4\" full-port ball valve: the suite's own shut-off",
+      "product": "3/4-inch Threaded Forged Brass Full Port Ball Valve Lead Free",
+      "unit": "each",
+      "coverage": "one valve",
+      "per": 1,
+      "priceCAD": 22.32,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/aqua-dynamic-3-4-inch-threaded-forged-brass-full-port-ball-valve-lead-free/1000789583",
+      "sku": "1000789583",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 22.32,
+          "url": "https://www.homedepot.ca/product/aqua-dynamic-3-4-inch-threaded-forged-brass-full-port-ball-valve-lead-free/1000789583",
+          "sku": "1000789583",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 22.32,
+          "url": "https://www.homedepot.ca/product/aqua-dynamic-3-4-inch-threaded-forged-brass-full-port-ball-valve-lead-free/1000789583",
+          "sku": "1000789583",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "mixing_valve",
+      "item": "Thermostatic mixing valve (hot water held to 49 °C)",
+      "product": "3/4 inch Copper HG110-D Sweat Thermostatic Mixing Valve Lead Free",
+      "unit": "each",
+      "coverage": "one valve",
+      "per": 1,
+      "priceCAD": 147,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/cash-acme-3-4-inch-copper-hg110-d-sweat-thermostatic-mixing-valve-lead-free/1001615656",
+      "sku": "1001615656",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 147,
+          "url": "https://www.homedepot.ca/product/cash-acme-3-4-inch-copper-hg110-d-sweat-thermostatic-mixing-valve-lead-free/1001615656",
+          "sku": "1001615656",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 147,
+          "url": "https://www.homedepot.ca/product/cash-acme-3-4-inch-copper-hg110-d-sweat-thermostatic-mixing-valve-lead-free/1001615656",
+          "sku": "1001615656",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "laundry_box",
+      "item": "Recessed washer outlet box with valves",
+      "product": "Washing Machine Outlet Box Kit 1/2 inch Push-to-Connect x 3/4 inch MHT Valves",
+      "unit": "each",
+      "coverage": "one box",
+      "per": 1,
+      "priceCAD": 96.54,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/sharkbite-washing-machine-outlet-box-kit-1-2-inch-push-to-connect-x-3-4-inch-mht-valves/1000820718",
+      "sku": "1000820718",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 96.54,
+          "url": "https://www.homedepot.ca/product/sharkbite-washing-machine-outlet-box-kit-1-2-inch-push-to-connect-x-3-4-inch-mht-valves/1000820718",
+          "sku": "1000820718",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 96.54,
+          "url": "https://www.homedepot.ca/product/sharkbite-washing-machine-outlet-box-kit-1-2-inch-push-to-connect-x-3-4-inch-mht-valves/1000820718",
+          "sku": "1000820718",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
+    },
+    {
+      "id": "dryer_vent_kit",
+      "item": "4\" dryer vent kit to the outside",
+      "product": "4-inch x 8 ft. Wide Mouth Dryer Vent Kit with Aluminum Dryer Duct",
+      "unit": "each",
+      "coverage": "one kit",
+      "per": 1,
+      "priceCAD": 34.98,
+      "retailer": "Home Depot Canada",
+      "store": "Home Depot WATERLOO (#7105)",
+      "url": "https://www.homedepot.ca/product/everbilt-4-inch-x-8-ft-wide-mouth-dryer-vent-kit-with-aluminum-dryer-duct/1001805409",
+      "sku": "1001805409",
+      "checked": "2026-10-30",
+      "offers": [
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot WATERLOO (#7105)",
+          "storeId": "7105",
+          "priceCAD": 34.98,
+          "url": "https://www.homedepot.ca/product/everbilt-4-inch-x-8-ft-wide-mouth-dryer-vent-kit-with-aluminum-dryer-duct/1001805409",
+          "sku": "1001805409",
+          "checked": "2026-10-30"
+        },
+        {
+          "retailer": "Home Depot Canada",
+          "store": "Home Depot KITCHENER WEST (#7179)",
+          "storeId": "7179",
+          "priceCAD": 34.98,
+          "url": "https://www.homedepot.ca/product/everbilt-4-inch-x-8-ft-wide-mouth-dryer-vent-kit-with-aluminum-dryer-duct/1001805409",
+          "sku": "1001805409",
+          "checked": "2026-10-30"
+        }
+      ],
+      "note": "From the Home Depot Canada Apify refresh; check the pack size on the product page."
     }
   ],
   "services": [
@@ -879,6 +2156,705 @@
       "pageDate": "2026-06-09",
       "checked": "2026-10-29",
       "note": "Toronto figure; HST not included."
+    }
+  ],
+  "labour": [
+    {
+      "id": "pack_egress",
+      "item": "Egress window incl. excavation, cutting, framing, install",
+      "lowCAD": 3000,
+      "highCAD": 6000,
+      "unit": "each",
+      "installed": true,
+      "region": "Kitchener-Waterloo",
+      "publisher": "Caliber Contracting",
+      "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+      "pageDate": "2026-04",
+      "checked": "2026-10-28",
+      "fromPack": "Egress window incl. excavation, cutting, framing, install"
+    },
+    {
+      "id": "pack_rough_in",
+      "item": "Bathroom rough-in",
+      "lowCAD": 8000,
+      "highCAD": 15000,
+      "unit": "job",
+      "installed": true,
+      "region": "Toronto",
+      "publisher": "HomeStars",
+      "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-28",
+      "fromPack": "Bathroom rough-in"
+    },
+    {
+      "id": "pack_firestopping",
+      "item": "Firestopping and fire dampers",
+      "lowCAD": 1000,
+      "highCAD": 3000,
+      "unit": "job",
+      "installed": true,
+      "region": "Toronto",
+      "publisher": "RenoHouse",
+      "url": "https://renohouse.ca/blog/basement-apartment-legalization-toronto",
+      "pageDate": "2026-05-05",
+      "checked": "2026-10-28",
+      "fromPack": "Firestopping and fire dampers"
+    },
+    {
+      "id": "pack_designer",
+      "item": "Designer drawings for permit",
+      "lowCAD": 2000,
+      "highCAD": 5000,
+      "unit": "job",
+      "installed": false,
+      "region": "Toronto",
+      "publisher": "HomeStars",
+      "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-28",
+      "fromPack": "Designer drawings for permit",
+      "note": "Does not say BCIN specifically; no Ontario BCIN designer published a price."
+    },
+    {
+      "id": "lab_demo",
+      "item": "Removing a non-loadbearing wall and its drywall",
+      "lowCAD": 5,
+      "highCAD": 8,
+      "unit": "sqft",
+      "installed": false,
+      "region": "Quebec",
+      "publisher": "RenoQuotes",
+      "url": "https://renoquotes.com/en/blog/interior-demolition-costs-in-quebec-a-guide-to-prices-per-square-foot",
+      "pageDate": "2026-06-11",
+      "checked": "2026-10-30",
+      "note": "The low end of RenoQuotes Quebec interior demolition range; whether disposal is included is not stated. No Ontario per-sq-ft wall removal rate was found."
+    },
+    {
+      "id": "lab_framing",
+      "item": "Framing wood stud walls",
+      "lowCAD": 15,
+      "highCAD": 30,
+      "unit": "lf",
+      "installed": true,
+      "region": "Toronto",
+      "publisher": "Magic Windows & Doors",
+      "url": "https://www.magicwindow.ca/blog/basement-renovation-cost-in-toronto-a-complete-2025-guide",
+      "pageDate": "2025-12-01",
+      "checked": "2026-10-30",
+      "note": "Installed price including the lumber: the quote takes the shelf price of the lumber off it. No labour-only rate in CAD was found."
+    },
+    {
+      "id": "lab_insulation",
+      "item": "Batt insulation in 2x4 walls (R-14 fibreglass to R-22 mineral wool)",
+      "lowCAD": 1.1,
+      "highCAD": 2.4,
+      "unit": "sqft",
+      "installed": true,
+      "region": "Simcoe County / Central Ontario",
+      "publisher": "BuildersOntario.com",
+      "url": "https://buildersontario.com/?p=13698",
+      "pageDate": "rates checked October 2026",
+      "checked": "2026-10-30",
+      "note": "Installed price including the batts: the quote takes the shelf price of the batts off it. No labour-only rate was found."
+    },
+    {
+      "id": "lab_drywall_hang",
+      "item": "Hanging drywall (not taping)",
+      "lowCAD": 1,
+      "highCAD": 1.75,
+      "unit": "sqft",
+      "installed": false,
+      "region": "Toronto",
+      "publisher": "RenoHouse",
+      "url": "https://renohouse.ca/blog/drywall-installation-cost-toronto",
+      "pageDate": "2026-06-09",
+      "checked": "2026-10-30",
+      "note": "Hanging only, board priced separately. BuildersOntario.com gives $1.20/sq ft hang-only with the board on site (Southern Ontario, https://buildersontario.com/?p=13245)."
+    },
+    {
+      "id": "lab_electrician",
+      "item": "Licensed electrician, hourly",
+      "lowCAD": 75,
+      "highCAD": 130,
+      "unit": "hour",
+      "installed": false,
+      "region": "Kitchener-Waterloo",
+      "publisher": "RenoHouse",
+      "url": "https://renohouse.ca/blog/electrician-kitchener-toronto",
+      "pageDate": "2026-05-26",
+      "checked": "2026-10-30",
+      "note": "HomeStars gives $80-$130/hour for Kitchener. The hours per device in the quote are this app's estimate."
+    },
+    {
+      "id": "lab_plumber",
+      "item": "Licensed plumber, hourly",
+      "lowCAD": 80,
+      "highCAD": 170,
+      "unit": "hour",
+      "installed": false,
+      "region": "Kitchener",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/plumbing/plumber-pros/kitchener-ontario",
+      "pageDate": null,
+      "checked": "2026-10-30",
+      "note": "Same range on the Waterloo page. The hours per fixture in the quote are this app's estimate."
+    },
+    {
+      "id": "lab_fan",
+      "item": "Installing a bathroom exhaust fan, labour",
+      "lowCAD": 140,
+      "highCAD": 550,
+      "unit": "each",
+      "installed": false,
+      "region": "Canada",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/bathroom-sanitary/price-guides/bath-fan-installation-cost",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-30",
+      "note": "New ducting adds $140-$490 on the same page."
+    },
+    {
+      "id": "lab_door",
+      "item": "Installing an interior door",
+      "lowCAD": 150,
+      "highCAD": 350,
+      "unit": "each",
+      "installed": false,
+      "region": "Kitchener",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/carpentry/carpenter-pros/kitchener-ontario",
+      "pageDate": null,
+      "checked": "2026-10-30",
+      "note": "The page does not say whether the door itself is included; the quote counts it as labour and prices the door separately."
+    },
+    {
+      "id": "lab_flooring",
+      "item": "Installing vinyl plank flooring, labour",
+      "lowCAD": 1,
+      "highCAD": 2,
+      "unit": "sqft",
+      "installed": false,
+      "region": "Canada",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/flooring-tiles/price-guides/vinyl-flooring-installation-cost",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-30"
+    },
+    {
+      "id": "lab_trim",
+      "item": "Installing baseboard, labour",
+      "lowCAD": 3,
+      "highCAD": 5,
+      "unit": "lf",
+      "installed": false,
+      "region": "Canada",
+      "publisher": "HomeStars",
+      "url": "https://r.homestars.com/home-constructions-renovations/price-guides/cost-to-install-baseboard-trim",
+      "pageDate": "2026-08-21",
+      "checked": "2026-10-30",
+      "note": "Installed with materials: $6-$10/lf on the same page."
+    },
+    {
+      "id": "lab_paint_walls",
+      "item": "Painting new drywall walls: primer and two coats",
+      "lowCAD": 2.25,
+      "highCAD": 3,
+      "unit": "sqft",
+      "installed": true,
+      "region": "Ontario",
+      "publisher": "BuildersOntario.com",
+      "url": "https://buildersontario.com/?p=13247",
+      "pageDate": "rates checked October 2026",
+      "checked": "2026-10-30",
+      "note": "Installed price including paint, before HST: the quote takes the shelf price of the paint off it."
+    },
+    {
+      "id": "lab_paint_ceiling",
+      "item": "Painting new drywall ceilings: primer and two coats",
+      "lowCAD": 1.65,
+      "highCAD": 2.15,
+      "unit": "sqft",
+      "installed": true,
+      "region": "Ontario",
+      "publisher": "BuildersOntario.com",
+      "url": "https://buildersontario.com/?p=13247",
+      "pageDate": "rates checked October 2026",
+      "checked": "2026-10-30",
+      "note": "Installed price including paint, before HST: the quote takes the shelf price of the paint off it."
+    },
+    {
+      "id": "lab_cabinets",
+      "item": "Installing kitchen cabinets, labour",
+      "lowCAD": 100,
+      "highCAD": 200,
+      "unit": "each",
+      "installed": false,
+      "region": "GTA (North York)",
+      "publisher": "Iron Installation",
+      "url": "https://ironinstallation.ca/services/assembly-and-installation-services/ikea-kitchen-installation",
+      "pageDate": null,
+      "checked": "2026-10-30",
+      "note": "Per cabinet. HomeStars gives $100-$300 per linear foot (Canada)."
+    }
+  ],
+  "fees": {
+    "permit": {
+      "waterloo-on": {
+        "perUnitCAD": 392,
+        "perSqftCAD": 0.62,
+        "estimate": false,
+        "title": "Check building permit timelines and fees (City of Waterloo)",
+        "url": "https://www.waterloo.ca/building-and-renovating/get-a-building-permit/check-building-permit-timelines-and-fees/",
+        "checked": "2026-10-28"
+      },
+      "kitchener-on": {
+        "perSqftCAD": 0.37,
+        "minimumCAD": 163,
+        "estimate": false,
+        "title": "Residential building permits (City of Kitchener)",
+        "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
+        "checked": "2026-10-29"
+      },
+      "cambridge-on": {
+        "perSqftCAD": 0.5,
+        "minimumCAD": 143,
+        "extrasCAD": 25,
+        "estimate": true,
+        "title": "Municipal Fees and Charges By-law 25-079 (City of Cambridge)",
+        "url": "https://www.cambridge.ca/media/nridbsyx/municipal-fees-and-charges-by-law-25-079.pdf",
+        "checked": "2026-10-28"
+      }
+    },
+    "esa": {
+      "homeowner": [
+        {
+          "upTo": 10,
+          "CAD": 64
+        },
+        {
+          "upTo": 30,
+          "CAD": 143
+        },
+        {
+          "upTo": 40,
+          "CAD": 220
+        },
+        {
+          "upTo": null,
+          "CAD": 340
+        }
+      ],
+      "contractor": {
+        "id": "esa_contractor",
+        "item": "ESA notification fee pulled by a licensed electrical contractor, renovation with 41+ outlets",
+        "lowCAD": 201,
+        "highCAD": 256,
+        "unit": "job",
+        "installed": false,
+        "region": "Ontario",
+        "publisher": "Electrical Safety Authority (Ontario's delegated electrical regulator)",
+        "url": "https://esasafe.com/assets/files/esasafe/pdf/Fees/2026-Residential-Fees-Reference-Guide.pdf",
+        "pageDate": "2026-04-01",
+        "checked": "2026-10-28",
+        "note": "Contractor rate: $201 without service work, $256 with it (the non-contractor rates are $340 and $399). Read from the same ESA guide the rules packs cite; fees effective 2026-04-01."
+      },
+      "title": "2026 Electrical Safety Services Fees: Residential Fees Quick Reference Guide (ESA)",
+      "url": "https://esasafe.com/assets/files/esasafe/pdf/Fees/2026-Residential-Fees-Reference-Guide.pdf",
+      "checked": "2026-10-29"
+    }
+  },
+  "missing": [],
+  "refreshed": {
+    "homeDepot": {
+      "actor": "yugenox~home-depot-canada-scraper",
+      "near": "N2J 1N8",
+      "stores": 2,
+      "checked": "2026-10-30"
+    }
+  },
+  "furniture": [
+    {
+      "id": "bed",
+      "item": "Queen bed: frame and mattress",
+      "lowCAD": 698,
+      "highCAD": 1098.95,
+      "basis": "A queen frame and a queen mattress, added together.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "MALM bed frame, high, white/Luröy, Queen",
+          "retailer": "IKEA Canada",
+          "priceCAD": 299,
+          "url": "https://www.ikea.com/ca/en/p/malm-bed-frame-high-white-luroey-s29009482/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "low",
+          "product": "VESTERÖY hybrid mattress, firm, Queen",
+          "retailer": "IKEA Canada",
+          "priceCAD": 399,
+          "url": "https://www.ikea.com/ca/en/p/vesteroey-hybrid-mattress-firm-white-90645001/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "BENA mid-century modern queen bed frame, walnut",
+          "retailer": "Structube",
+          "priceCAD": 399,
+          "url": "https://www.structube.com/en_ca/bedbena?pid=62751",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Serta Back Logic 2.0 Eurotop Firm Queen Mattress",
+          "retailer": "The Brick",
+          "priceCAD": 699.95,
+          "url": "https://www.thebrick.com/products/serta-back-logic-2-0-eurotop-firm-queen-mattress",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; it varies by region."
+        }
+      ]
+    },
+    {
+      "id": "sofa",
+      "item": "Three-seat sofa",
+      "lowCAD": 649,
+      "highCAD": 799,
+      "basis": "One sofa about 2.1 m wide.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "EKHOLMA sofa, Hakebo dark gray (207 cm)",
+          "retailer": "IKEA Canada",
+          "priceCAD": 649,
+          "url": "https://www.ikea.com/ca/en/p/ekholma-sofa-hakebo-dark-gray-s09537450/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "TERESA contemporary 3-seater sofa (213 cm)",
+          "retailer": "Structube",
+          "priceCAD": 799,
+          "url": "https://www.structube.com/en_ca/teresa-contemporary-3seater-sofa-31-76-64?pid=23563",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $749 when checked."
+        }
+      ]
+    },
+    {
+      "id": "armchair",
+      "item": "Upholstered armchair",
+      "lowCAD": 199,
+      "highCAD": 299,
+      "basis": "One chair.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "HERRÅKRA armchair, Diseröd",
+          "retailer": "IKEA Canada",
+          "priceCAD": 199,
+          "url": "https://www.ikea.com/ca/en/p/herrakra-armchair-diseroed-dark-yellow-40535547/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "ROUSSEAU corduroy accent chair, taupe",
+          "retailer": "Structube",
+          "priceCAD": 299,
+          "url": "https://www.structube.com/en_ca/rousseau-corduroy-accent-chair-57-77-60?pid=67396",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "desk",
+      "item": "Desk, about 120 x 60 cm",
+      "lowCAD": 199,
+      "highCAD": 419.95,
+      "basis": "One desk.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "LAGKAPTEN / ALEX desk, white, 120x60 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 199,
+          "url": "https://www.ikea.com/ca/en/p/lagkapten-alex-desk-white-s69416817/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Clayton 47.25\" reversible desk with 3 drawers, dark brown",
+          "retailer": "The Brick",
+          "priceCAD": 419.95,
+          "url": "https://www.thebrick.com/products/clayton-reversible-desk-dark-brown",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; it varies by region."
+        }
+      ]
+    },
+    {
+      "id": "dining",
+      "item": "Dining table and 4 chairs",
+      "lowCAD": 249,
+      "highCAD": 665.95,
+      "basis": "A set: the table and four chairs.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "HÄGERNÄS table and 4 chairs, antique stain pine",
+          "retailer": "IKEA Canada",
+          "priceCAD": 249,
+          "url": "https://www.ikea.com/ca/en/p/haegernaes-table-and-4-chairs-antique-stain-pine-70575947/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Devon 5-piece dining set, table and 4 chairs, 60\"",
+          "retailer": "The Brick",
+          "priceCAD": 665.95,
+          "url": "https://www.thebrick.com/products/devon-5-piece-dining-set",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; other regions list $595.95-$865.95."
+        }
+      ]
+    },
+    {
+      "id": "dresser",
+      "item": "Six-drawer dresser",
+      "lowCAD": 179,
+      "highCAD": 449,
+      "basis": "One dresser about 1.2 m wide.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "RAST 6-drawer dresser, pine (124 cm)",
+          "retailer": "IKEA Canada",
+          "priceCAD": 179,
+          "url": "https://www.ikea.com/ca/en/p/rast-6-drawer-dresser-pine-00582164/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "MONTANA modern 6-drawer dresser, black (118 cm)",
+          "retailer": "Structube",
+          "priceCAD": 449,
+          "url": "https://www.structube.com/en_ca/montana-modern-6drawer-dresser-11-23-55?pid=63393",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "tv",
+      "item": "TV and console",
+      "lowCAD": 538.99,
+      "highCAD": 888.99,
+      "basis": "A media console about 1.6 m wide and a 55\" TV, added together.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "LACK TV bench, black-brown, 160 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 99,
+          "url": "https://www.ikea.com/ca/en/p/lack-tv-bench-black-brown-60566062/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "low",
+          "product": "Magnavox 55\" 4K Roku TV",
+          "retailer": "Canadian Tire",
+          "priceCAD": 439.99,
+          "url": "https://www.canadiantire.ca/en/pdp/magnavox-4k-tv-55-inch-with-roku-tv-streaming-4993323p.html",
+          "checked": "2026-10-30",
+          "note": "Plus a $22.95 environmental fee at checkout."
+        },
+        {
+          "role": "high",
+          "product": "MONTANA media unit, black (157.5 cm)",
+          "retailer": "Structube",
+          "priceCAD": 239,
+          "url": "https://www.structube.com/en_ca/montana-media-unit-29-01-27?pid=44945",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "LG 55\" NU850 4K UHD webOS smart TV",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 649.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/lg-55-nu850-4k-uhd-hdr10-pro-led-webos-smart-tv-55nu850bpua-acc-2026-great-for-streaming-gaming/19852054",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "rug",
+      "item": "Area rug, about 5 x 8 ft",
+      "lowCAD": 89,
+      "highCAD": 209.95,
+      "basis": "One rug.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "VÄXELFEL rug, low pile, off-white, 160x230 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 89,
+          "url": "https://www.ikea.com/ca/en/p/vaexelfel-rug-low-pile-off-white-20636967/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "Rene area rug, 5' x 8'",
+          "retailer": "The Brick",
+          "priceCAD": 209.95,
+          "url": "https://www.thebrick.com/products/rene-area-rug-5-x-8",
+          "checked": "2026-10-30",
+          "note": "The Brick's price for the Waterloo store; it varies by region."
+        }
+      ]
+    },
+    {
+      "id": "shelf",
+      "item": "Bookcase, about 80 cm wide",
+      "lowCAD": 90,
+      "highCAD": 269,
+      "basis": "One bookcase.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "BILLY bookcase, white, 80x28x202 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 90,
+          "url": "https://www.ikea.com/ca/en/p/billy-bookcase-white-20522046/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "ELLINGTON contemporary bookcase, walnut, 80x180 cm",
+          "retailer": "Structube",
+          "priceCAD": 269,
+          "url": "https://www.structube.com/en_ca/ellington-contemporary-bookcase-54-57-18?pid=51022",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "fridge",
+      "item": "Fridge, 28\" top-freezer",
+      "lowCAD": 728,
+      "highCAD": 1199.99,
+      "basis": "One fridge.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "Frigidaire 28\" 17.6 cu ft top-freezer, white (FFHT1822UW)",
+          "retailer": "Home Depot Canada",
+          "priceCAD": 728,
+          "url": "https://www.homedepot.ca/product/frigidaire-28-inch-w-17-6-cu-ft-top-freezer-refrigerator-in-white-home-depot-exclusive-energy-star/1001706004",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "GE 28\" 15.6 cu ft top-freezer, white (GTE16DTNRWW)",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 1199.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/ge-28-15-6-cu-ft-top-freezer-refrigerator-gte16dtnrww-white/13985790",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "washer_dryer",
+      "item": "Washer and dryer, 24\" compact stackable pair",
+      "lowCAD": 1896,
+      "highCAD": 2349.98,
+      "basis": "A compact front-load washer and a stackable dryer, added together.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "GE 24\" 2.8 cu ft front-load washer (GFW148SSMWW)",
+          "retailer": "Home Depot Canada",
+          "priceCAD": 948,
+          "url": "https://www.homedepot.ca/product/ge-24-inch-2-8-cu-ft-front-load-washer-with-steam-quick-wash-1400-rpm-spin-stainless-steel-drum-in-white-energy-star/1001529683",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $898 when checked."
+        },
+        {
+          "role": "low",
+          "product": "GE 24\" 4.1 cu ft stackable electric dryer (GFD14JSINWW)",
+          "retailer": "Home Depot Canada",
+          "priceCAD": 948,
+          "url": "https://www.homedepot.ca/product/ge-24-inch-4-1-cu-ft-vented-stackable-electric-dryer-with-sensor-dry-stainless-steel-drum-led-display-stacking-kit-in-white-energy-star/1001529682",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $898 when checked."
+        },
+        {
+          "role": "high",
+          "product": "LG 2.6 cu ft compact front-load washer (WM1455HWA)",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 1099.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/lg-2-6-cu-ft-iec-front-load-washer-with-allergiene-steam-quick-wash-and-speed-wash-wm1455hwa-white/17302137",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "LG 4.2 cu ft compact stackable electric dryer (DLHC1455W)",
+          "retailer": "Best Buy Canada",
+          "priceCAD": 1249.99,
+          "url": "https://www.bestbuy.ca/en-ca/product/lg-4-2-cu-ft-compact-stackable-electric-dryer-with-moisture-sensing-energy-star-thinq-dlhc1455w-white/17302129",
+          "checked": "2026-10-30",
+          "note": "Regular price; on sale for $1,199.99 until Nov 5 when checked."
+        }
+      ]
+    },
+    {
+      "id": "coffee_table",
+      "item": "Coffee table, about 120 cm",
+      "lowCAD": 79.99,
+      "highCAD": 319,
+      "basis": "One table.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "LACK coffee table, white, 118x78 cm",
+          "retailer": "IKEA Canada",
+          "priceCAD": 79.99,
+          "url": "https://www.ikea.com/ca/en/p/lack-coffee-table-white-80449901/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "RENO solid acacia wood coffee table, 120 cm",
+          "retailer": "Structube",
+          "priceCAD": 319,
+          "url": "https://www.structube.com/en_ca/reno-solid-acacia-wood-coffee-table-120-cm-45-29-25?pid=24420",
+          "checked": "2026-10-30"
+        }
+      ]
+    },
+    {
+      "id": "nightstand",
+      "item": "Nightstand",
+      "lowCAD": 69.99,
+      "highCAD": 139,
+      "basis": "One nightstand.",
+      "listings": [
+        {
+          "role": "low",
+          "product": "BRIMNES nightstand, black",
+          "retailer": "IKEA Canada",
+          "priceCAD": 69.99,
+          "url": "https://www.ikea.com/ca/en/p/brimnes-nightstand-black-80340454/",
+          "checked": "2026-10-30"
+        },
+        {
+          "role": "high",
+          "product": "MONTANA modern 2-drawer nightstand, black",
+          "retailer": "Structube",
+          "priceCAD": 139,
+          "url": "https://www.structube.com/en_ca/montana-modern-2drawer-nightstand-43-28-85?pid=63381",
+          "checked": "2026-10-30"
+        }
+      ]
     }
   ]
 }

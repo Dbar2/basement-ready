@@ -200,7 +200,7 @@ async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnT
   s.wrap(`Source: ${permit.inspectionsSource.title}, ${permit.inspectionsSource.url}`, 48, Math.max(60, y - 8), s.width - 96, { size: 7.5, color: MUTED });
 }
 
-async function lookPage(doc: PDFDocument, favourites: PackageInput["favourites"], state: StoredState) {
+export async function lookPage(doc: PDFDocument, favourites: PackageInput["favourites"], state: StoredState) {
   const fonts = await embedFonts(doc);
   const s = new Sheet(doc.addPage(LETTER), fonts);
   s.rect(0, 0, s.width, s.height, { fill: rgb(1, 1, 1), stroke: false });
