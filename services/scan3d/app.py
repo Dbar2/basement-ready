@@ -75,3 +75,14 @@ class Scan3D:
 
         # 48 GB holds about 150 views at once.
         return create_app(lambda: self.scanner, token=os.environ["SCAN3D_TOKEN"], max_frames_cap=150)
+
+
+# Painting the as-built model (scan3d/texture.py) needs no GPU and no model: its own small CPU
+# container, so repainting after a plan change never wakes an L40S. Point the Node side's
+# SCAN3D_TEXTURE_URL at this endpoint's URL (it prints on deploy); without it, the GPU endpoint paints.
+@app.function(secrets=[modal.Secret.from_name("scan3d-token")], cpu=4.0, memory=8192, timeout=600, scaledown_window=60, max_containers=2)
+@modal.asgi_app()
+def paint_web():
+    from scan3d.api import create_app
+
+    return create_app(lambda: None, token=os.environ["SCAN3D_TOKEN"], max_frames_cap=150)

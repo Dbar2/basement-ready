@@ -3,7 +3,7 @@
 // card picks it (saved at once); the way on is the 3D studio, open on the one they picked.
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { DEMO_LABEL, EXAMPLE_LABEL, getScan, type ScanResult } from "../api";
+import { costLabel, DEMO_LABEL, EXAMPLE_LABEL, getScan, type ScanResult } from "../api";
 import { LayoutPicker } from "../ideas/LayoutPicker";
 import { loadModel, saveModel } from "../studio/api";
 import type { Model } from "../../server/model/types";
@@ -34,7 +34,11 @@ export function LayoutsPage() {
     setModel(next);
     setSaving("saving");
     saveModel(scanId, next)
-      .then(() => setSaving("saved"))
+      .then(() => {
+        setSaving("saved");
+        // The answer is priced on the picked design: its cost and money follow the pick.
+        return getScan(scanId).then((s) => setResult(s.result ?? null));
+      })
       .catch(() => setSaving("error"));
   };
   const chosen = model?.designs.find((d) => d.chosen) ?? null;
@@ -56,7 +60,7 @@ export function LayoutsPage() {
             <FlowLink className="btn btn-primary" href={`/scans/${scanId}?tab=decision`}>See the answer</FlowLink>
           </div>
         ) : model ? (
-          <LayoutPicker scanId={scanId} model={model} onPick={pick} />
+          <LayoutPicker scanId={scanId} model={model} municipality={result?.municipality} onPick={pick} />
         ) : (
           <div className="skeleton skeleton-plan" aria-busy="true" />
         )}
@@ -85,8 +89,8 @@ function Decision({ scanId, r }: { scanId: string; r: ScanResult }) {
       <dl>
         {r.cost.high > 0 && (
           <>
-            <dt>Rough cost</dt>
-            <dd>{money(r.cost.low)}–{money(r.cost.high)}</dd>
+            <dt>{costLabel(r)}</dt>
+            <dd data-total data-low={r.cost.low} data-high={r.cost.high}>{money(r.cost.low)}–{money(r.cost.high)}</dd>
           </>
         )}
         {upTo > 0 && (

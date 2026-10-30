@@ -61,7 +61,7 @@ export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: 
                   </div>
                   <div>
                     <dt>Hired out, rough</dt>
-                    <dd className="mono">{cad(f.low)}–{cad(f.high)}</dd>
+                    <dd className="mono" data-total data-low={f.low} data-high={f.high}>{cad(f.low)}–{cad(f.high)}</dd>
                   </div>
                 </dl>
                 <span className="layout-pick" aria-hidden>

@@ -3,7 +3,7 @@
 // qualify for and how to apply. Laid out for paper: "Save as PDF" is the browser's print dialog.
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { aerialUrl, getScan, type ScanResult } from "../api";
+import { aerialUrl, costLabel, getScan, type ScanResult } from "../api";
 import { FloorPlan } from "../components/FloorPlan";
 import { Logo } from "../components/Logo";
 import { conceptUrl } from "../components/StagedViews";
@@ -56,12 +56,12 @@ export function Brief() {
         {r.summary && <p>{r.summary}</p>}
         <dl>
           <div>
-            <dt>Rough cost, all in</dt>
-            <dd>{range(r.cost.low, r.cost.high) ?? "To be priced"}</dd>
+            <dt>{costLabel(r)}</dt>
+            <dd data-total data-low={r.cost.low} data-high={r.cost.high}>{range(r.cost.low, r.cost.high) ?? "To be priced"}</dd>
           </div>
           {upTo > 0 && (
             <div>
-              <dt>Looks eligible for</dt>
+              <dt>They may be eligible for</dt>
               <dd>up to {money(upTo)}</dd>
             </div>
           )}
@@ -133,13 +133,13 @@ export function Brief() {
             {r.fixGroups.map((g) => (
               <li key={g.category}>
                 <span>{g.title}</span>
-                <span className="mono">{range(g.costLow, g.costHigh) ?? "on quote"}</span>
+                <span className="mono">{range(g.costLow, g.costHigh) ?? "in the quote"}</span>
               </li>
             ))}
             {(r.standard ?? []).map((s) => (
               <li key={s.ruleId}>
                 <span>{s.text}</span>
-                <span className="mono">{range(s.costLow, s.costHigh) ?? "on quote"}</span>
+                <span className="mono">{range(s.costLow, s.costHigh) ?? "in the quote"}</span>
               </li>
             ))}
           </ul>

@@ -3,6 +3,7 @@
 // 3D studio prices every edit without a round trip.
 import type { Design, Model } from "../../server/model/types";
 import { quote, type Quote } from "../../server/quote/quote";
+import { sampleEarlyAnswers } from "../api";
 import { getWorkspace } from "../workspaceApi";
 
 export { quote, type Quote };
@@ -43,7 +44,8 @@ async function headers(): Promise<Record<string, string>> {
 async function fetchBook(scanId: string, pdf: boolean) {
   if (scanId === "sample") {
     const { state, profile } = await getWorkspace("sample");
-    return fetch(`/api/sample/book${pdf ? ".pdf" : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state, profile }) });
+    // What its visitor answered while it measured, as the answer tab applies it.
+    return fetch(`/api/sample/book${pdf ? ".pdf" : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state, profile, answers: sampleEarlyAnswers() }) });
   }
   return fetch(`/api/scans/${scanId}/book${pdf ? ".pdf" : ""}`, { headers: await headers() });
 }

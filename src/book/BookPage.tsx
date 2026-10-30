@@ -60,7 +60,7 @@ export function BookView({ scanId }: { scanId: string }) {
         {b.headline && <p className="book-headline">{b.headline}</p>}
         <dl className="book-facts">
           {design && <div><dt>The design</dt><dd>{design.name}</dd></div>}
-          {q && <div><dt>Hired out</dt><dd>{range(q.totalLow, q.totalHigh)}</dd></div>}
+          {q && <div><dt>Hired out</dt><dd data-total data-low={q.totalLow} data-high={q.totalHigh}>{range(q.totalLow, q.totalHigh)}</dd></div>}
           {q && <div><dt>Built yourself</dt><dd>{range(q.diy.low, q.diy.high)}</dd></div>}
           {b.readiness.length > 0 && <div><dt>Permit</dt><dd>{ready} of {b.readiness.length} checks ready</dd></div>}
         </dl>
@@ -195,7 +195,7 @@ export function BookView({ scanId }: { scanId: string }) {
             {b.money.map((m) => (
               <li key={m.id}>
                 <strong>{m.name}</strong>
-                <span className="book-fit" data-fit={m.qualify === "yes" ? "yes" : "maybe"}>{m.qualify === "yes" ? "Looks eligible" : "May be eligible"}</span>
+                <span className="book-fit" data-fit={m.qualify === "yes" ? "yes" : "maybe"}>{m.qualify === "yes" ? "Looks eligible" : "Could be eligible"}</span>
                 <p>{m.amount}{m.paidWhen ? ` Paid ${m.paidWhen}.` : ""}</p>
               </li>
             ))}
