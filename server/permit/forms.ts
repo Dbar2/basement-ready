@@ -24,9 +24,10 @@ export type FormValues = {
   scope: string;
   areaM2: number | null;
   bedrooms: number;
-  city: string; // "City of Waterloo"
+  city: string; // "City of Waterloo", "Township of Woolwich"; empty when we don't know
   valueCAD: number | null; // the project's estimated value
   ownerBuilds: boolean; // the owner is their own builder
+  ownerDraws: boolean; // the owner signs Schedule 1 as an exempt designer (only where the city allows it)
 };
 
 // A text value, a checkbox (true/false), or a radio choice ({ pick: the option's opening words }).
@@ -103,24 +104,25 @@ export const FIELD_MAPS: Record<string, FieldMap> = {
     // The published form ships with "ADE" typed in these two boxes; clear them.
     "Owner Unit number": () => " ",
     "Owner Lot/Concession": () => " ",
-    // Schedule 1, filled as the exempt owner-designer.
-    "Designer Name": (v) => v.ownerNames,
+    // Schedule 1, filled as the exempt owner-designer only where the city accepts owner-drawn plans;
+    // otherwise only the project lines, and the designer fills in the rest.
+    "Designer Name": (v) => (v.ownerDraws ? v.ownerNames : null),
     "Project Building number street name for Designer Information": (v) => v.street,
     "Project Municipality for Designer Information": (v) => v.municipality,
     "Project Postal code for Designer Information": (v) => v.postalCode,
     "Project Plan number / other description for Designer Information": (v) => v.legal,
-    "Designer Street address": (v) => v.mailing ?? v.street,
-    "Designer Municipality": (v) => (v.mailing ? null : v.municipality),
-    "Designer Postal code": (v) => (v.mailing ? null : v.postalCode),
-    "Designer Province": () => "Ontario",
-    "Designer Email": (v) => v.email,
-    "Designer Telephone number": (v) => v.phone,
-    "Design Activities": () => true,
-    "Description of designers work": () => "Drawings for an additional residential unit in the basement of my own house (sheets A0 to A7).",
-    "Declaration of Designer": () => ({ pick: "The design work is exempt" }),
-    "For design work, Basis for exemption from registration and qualification": () => "Owner designing their own house: Building Code, Div. C 3.2.5.1.(3)(b)",
-    "Designer Name for Declaration": (v) => v.ownerNames,
-    "Date Signed by Designer": (v) => v.date,
+    "Designer Street address": (v) => (v.ownerDraws ? v.mailing ?? v.street : null),
+    "Designer Municipality": (v) => (v.ownerDraws ? (v.mailing ? null : v.municipality) : null),
+    "Designer Postal code": (v) => (v.ownerDraws ? (v.mailing ? null : v.postalCode) : null),
+    "Designer Province": (v) => (v.ownerDraws ? "Ontario" : null),
+    "Designer Email": (v) => (v.ownerDraws ? v.email : null),
+    "Designer Telephone number": (v) => (v.ownerDraws ? v.phone : null),
+    "Design Activities": (v) => (v.ownerDraws ? true : null),
+    "Description of designers work": (v) => (v.ownerDraws ? "Drawings for an additional residential unit in the basement of my own house (sheets A0 to A7)." : null),
+    "Declaration of Designer": (v) => (v.ownerDraws ? ({ pick: "The design work is exempt" }) : null),
+    "For design work, Basis for exemption from registration and qualification": (v) => (v.ownerDraws ? "Owner designing their own house: Building Code, Div. C 3.2.5.1.(3)(b)" : null),
+    "Designer Name for Declaration": (v) => (v.ownerDraws ? v.ownerNames : null),
+    "Date Signed by Designer": (v) => (v.ownerDraws ? v.date : null),
   },
   // City of Kitchener, Project Information: Residential, Section D (secondary suites). The form
   // carries each field twice (a print copy); both get the same answer.

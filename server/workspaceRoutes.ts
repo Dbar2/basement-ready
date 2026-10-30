@@ -10,7 +10,7 @@ import { diyPlan } from "./diy/plan";
 import { lookKey, renderLook, sourcesFrom, STYLES } from "./ideas/looks";
 import { cityPermit } from "./permit/data";
 import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm } from "./permit/forms";
-import { buildPermitPackage, formValues, localDate } from "./permit/package";
+import { buildPermitPackage, formPlace, formValues, localDate } from "./permit/package";
 import { basementGeometry } from "./permit/plans";
 import { scopeOfWork } from "./permit/sheets";
 import { lookupSiteGeometry, type Property, type SiteGeometry } from "./property";
@@ -25,7 +25,7 @@ async function siteFor(property: Property | null): Promise<SiteGeometry | null> 
   if (!property) return null;
   const k = `${property.address}|${property.municipality}`;
   if (!siteCache.has(k)) {
-    const g = await lookupSiteGeometry({ address: property.address, municipality: property.municipality, city: property.city, lon: property.lon, lat: property.lat, units: property.unitsRegistered }).catch(() => null);
+    const g = await lookupSiteGeometry({ address: property.address, municipality: property.municipality, city: property.city, lon: property.lon, lat: property.lat, units: property.unitsRegistered, source: property.inRegion === false ? "ontario" : "region" }).catch(() => null);
     if (siteCache.size > 500) siteCache.clear();
     siteCache.set(k, g);
   }
@@ -123,10 +123,11 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const site = await siteFor(a.basement.property as Property | null);
     return c.json({
       ...w,
+      // No open parcel data carries the legal description, PIN or roll number: the owner adds them.
       prefill: {
-        legalDescription: site?.legalDescription ?? null,
-        pin: site?.pin ?? null,
-        rollNumber: site?.rollNumber ?? null,
+        legalDescription: null,
+        pin: null,
+        rollNumber: null,
         fromOtherBasement: w.profile ? null : await profileFromOtherBasements(a.userId, a.basement.id),
       },
       site,
@@ -181,7 +182,7 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const w = await loadWorkspace(a.basement.id);
     const property = a.basement.property as Property | null;
     const { areaM2, bedrooms, scope } = project(a.result, w.state);
-    const values = formValues({ profile: w.profile, address: property?.address ?? a.basement.address, result: a.result, site: await siteFor(property), state: w.state }, property?.municipality ?? a.basement.municipality, scope, areaM2, bedrooms, localDate());
+    const values = formValues({ profile: w.profile, address: property?.address ?? a.basement.address, result: a.result, site: await siteFor(property), state: w.state }, property?.municipality ?? cityPermit(a.basement.municipality).city, scope, areaM2, bedrooms, localDate(), formPlace(a.basement.municipality, w.state));
     const filled = await fillAcroForm(bytes, map, values);
     return pdf(filled.bytes, `${formId}.pdf`);
   });
