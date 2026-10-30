@@ -9,7 +9,6 @@ struct FilmingView: View {
   let onCancel: () -> Void
   @State private var confirmDiscard = false
   @State private var voidView = FilmingView.startInScanOnly
-  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   init(server: URL, onDone: @escaping (Take, String?) -> Void, onCancel: @escaping () -> Void) {
     _model = StateObject(wrappedValue: FilmingModel(server: server, onDone: onDone))
@@ -24,32 +23,20 @@ struct FilmingView: View {
           .accessibilityElement()
           .accessibilityLabel(sceneDescription)
 
-        // Shade behind the words at the top and bottom, so they read on a bright wall.
-        VStack(spacing: 0) {
-          LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom).frame(height: geo.safeAreaInsets.top + 130)
-          Spacer()
-          LinearGradient(colors: [.clear, .black.opacity(0.62)], startPoint: .top, endPoint: .bottom).frame(height: geo.safeAreaInsets.bottom + 260)
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-
-        GapArrow(bearing: model.gapBearing, cue: model.cue, size: geo.size, reduceMotion: reduceMotion)
+        GapArrow(bearing: model.gapBearing, cue: model.cue, size: geo.size)
           .allowsHitTesting(false)
 
         VStack(spacing: 0) {
           topBar
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
+            .padding(.horizontal, Space.s3)
+            .padding(.top, Space.s2)
           Spacer()
-          bottom
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
+          bottomPanel
         }
       }
     }
     .background(Brand.ink.ignoresSafeArea())
     .preferredColorScheme(.dark)
-    .statusBarHidden(false)
     .onAppear { model.start() }
     .confirmationDialog("Throw away this take?", isPresented: $confirmDiscard, titleVisibility: .visible) {
       Button("Throw it away", role: .destructive) {
@@ -60,7 +47,7 @@ struct FilmingView: View {
     }
     .overlay {
       if case .stopped(let why) = model.phase, !why.isEmpty {
-        stoppedCard(why)
+        stoppedSheet(why)
       }
     }
   }
@@ -71,95 +58,100 @@ struct FilmingView: View {
   static let startInScanOnly = false
   #endif
 
+  // Over the camera: the time as a tag, and the view switch. Tags are card paper with an ink hairline.
   private var topBar: some View {
-    HStack(alignment: .top, spacing: 10) {
-      VStack(alignment: .leading, spacing: 8) {
-        HStack(spacing: 8) {
-          Circle().fill(model.phase == .recording ? Brand.stop : Brand.inkMuted).frame(width: 10, height: 10)
-          Text(model.timeText).font(Brand.mono(16, .semibold)).foregroundStyle(Brand.bg).monospacedDigit()
+    HStack(alignment: .top, spacing: Space.s2) {
+      VStack(alignment: .leading, spacing: Space.s2) {
+        HStack(spacing: Space.s2) {
+          Circle().fill(model.phase == .recording ? Brand.stop : Brand.inkMuted).frame(width: 8, height: 8)
+          Text(model.timeText).font(Brand.mono(15)).foregroundStyle(Brand.ink).monospacedDigit()
             .accessibilityIdentifier("filming.time")
         }
-        .padding(.horizontal, 12)
-        .frame(minHeight: 36)
-        .background(Brand.ink.opacity(0.75), in: Capsule())
-        if let s = model.map?.stats {
-          Text("\(Int(s.floorAreaM2.rounded())) m² · \(s.wallsFound) \(s.wallsFound == 1 ? "wall" : "walls") · \(Int((s.ceilingCovered * 100).rounded()))% ceiling")
-            .font(Brand.mono(13))
-            .foregroundStyle(Brand.bg.opacity(0.85))
-            .lineLimit(1)
-            .minimumScaleFactor(0.7)
-            .padding(.leading, 4)
-            .accessibilityIdentifier("filming.stats")
-        }
-        HStack(spacing: 6) {
-          if model.lidar { badge("LiDAR depth on") }
-          if model.source == .replay { badge("Replay") }
-          if model.source == .demo { badge("Pretend walk") }
-        }
+        .padding(.horizontal, Space.s2 + 2)
+        .frame(minHeight: 32)
+        .tag()
+        if model.lidar { tagText("LiDAR depth on") }
+        if model.source == .replay { tagText("Replay") }
+        if model.source == .demo { tagText("Pretend walk") }
       }
       Spacer()
       viewSwitch
     }
   }
 
-  // Camera, or only what's been captured.
+  // Camera, or only what's been captured: two rectangles, the picked one in ink.
   private var viewSwitch: some View {
-    HStack(spacing: 2) {
-      switchButton(icon: "camera.fill", label: "Camera", on: !voidView, id: "filming.view.camera") { voidView = false }
+    HStack(spacing: 0) {
+      switchButton(icon: "camera", label: "Camera", on: !voidView, id: "filming.view.camera") { voidView = false }
+      Rectangle().fill(Brand.ink).frame(width: 1)
       switchButton(icon: "cube.transparent", label: "Scan only", on: voidView, id: "filming.view.scan") { voidView = true }
     }
-    .padding(3)
-    .background(Brand.ink.opacity(0.75), in: Capsule())
+    .fixedSize()
+    .background(Brand.card)
+    .clipShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).stroke(Brand.ink, lineWidth: 1))
   }
 
   private func switchButton(icon: String, label: String, on: Bool, id: String, action: @escaping () -> Void) -> some View {
     Button(action: action) {
       Image(systemName: icon)
         .font(.system(size: 16, weight: .semibold))
-        .foregroundStyle(on ? Brand.ink : Brand.bg)
-        .frame(width: 48, height: 40)
-        .background(on ? Brand.mint : .clear, in: Capsule())
+        .foregroundStyle(on ? Brand.card : Brand.ink)
+        .frame(width: 48, height: 44)
+        .background(on ? Brand.ink : .clear)
     }
     .accessibilityLabel(label)
     .accessibilityAddTraits(on ? .isSelected : [])
     .accessibilityIdentifier(id)
   }
 
-  private var bottom: some View {
-    VStack(spacing: 14) {
+  // The sheet at the bottom: an ink rule, one instruction, the figures, and the record button.
+  private var bottomPanel: some View {
+    VStack(alignment: .leading, spacing: Space.s2) {
       if model.elapsed < 15 && model.phase == .recording {
-        HStack(spacing: 8) {
-          Circle().fill(Brand.mint).frame(width: 8, height: 8).shadow(color: Brand.mint, radius: 4)
+        HStack(spacing: Space.s2) {
+          Rectangle().fill(Brand.mint).frame(width: 12, height: 12).overlay(Rectangle().stroke(Brand.ink, lineWidth: 1))
           Text("Glow means not filmed yet. Point at it to fill it in.")
+            .font(Brand.body(15)).foregroundStyle(Brand.inkMuted)
         }
-        .font(Brand.body(13, .medium))
-        .foregroundStyle(Brand.bg.opacity(0.9))
         .transition(.opacity)
       }
       Text(model.line)
-        .font(Brand.body(22, .semibold))
-        .foregroundStyle(Brand.bg)
-        .multilineTextAlignment(.center)
+        .heading(22)
+        .foregroundStyle(Brand.ink)
         .lineLimit(2)
-        .minimumScaleFactor(0.8)
-        .frame(maxWidth: .infinity, minHeight: 60)
-        .animation(.easeOut(duration: 0.25), value: model.line)
+        .minimumScaleFactor(0.85)
+        .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
+        .animation(.easeOut(duration: 0.2), value: model.line)
         .accessibilityAddTraits(.updatesFrequently)
         .accessibilityIdentifier("filming.line")
-      HStack(spacing: 12) {
-        Button { confirmDiscard = true } label: {
-          Image(systemName: "xmark").font(.system(size: 18, weight: .bold)).foregroundStyle(Brand.bg).frame(width: 56, height: 56)
-            .overlay(Circle().stroke(Brand.bg.opacity(0.7), lineWidth: 1.5))
-        }
-        .accessibilityLabel("Stop and throw away this take")
-        Button { model.done() } label: {
-          Text(model.phase == .saving ? "Saving…" : "Done")
-        }
-        .buttonStyle(MintButton())
-        .disabled(model.phase != .recording)
-        .accessibilityIdentifier("filming.done")
+      if let s = model.map?.stats {
+        Text("\(Int(s.floorAreaM2.rounded())) m²  ·  \(s.wallsFound) \(s.wallsFound == 1 ? "wall" : "walls")  ·  \(Int((s.ceilingCovered * 100).rounded()))% ceiling")
+          .font(Brand.mono(15))
+          .foregroundStyle(Brand.ink)
+          .lineLimit(1)
+          .minimumScaleFactor(0.7)
+          .accessibilityIdentifier("filming.stats")
       }
+      ZStack {
+        HStack {
+          Button("Throw away") { confirmDiscard = true }
+            .buttonStyle(TextLink())
+            .accessibilityLabel("Stop and throw away this take")
+          Spacer()
+        }
+        RecordButton(saving: model.phase == .saving) { model.done() }
+          .disabled(model.phase != .recording)
+          .accessibilityIdentifier("filming.done")
+      }
+      .padding(.top, Space.s2)
     }
+    .padding(.horizontal, Space.s3)
+    .padding(.top, Space.s3)
+    .padding(.bottom, Space.s2)
+    .background(Brand.bg.ignoresSafeArea(edges: .bottom))
+    .overlay(alignment: .top) { Rectangle().fill(Brand.ink).frame(height: 1) }
+    .environment(\.colorScheme, .light)
   }
 
   private var sceneDescription: String {
@@ -167,69 +159,97 @@ struct FilmingView: View {
     return "Camera view with the scan: about \(Int(s.floorAreaM2.rounded())) square metres of floor, \(s.wallsFound) walls found, ceiling \(Int((s.ceilingCovered * 100).rounded())) percent filmed."
   }
 
-  private func badge(_ text: String) -> some View {
-    Text(text).font(Brand.body(12, .semibold)).foregroundStyle(Brand.ink)
-      .padding(.horizontal, 10).frame(minHeight: 24)
-      .background(Brand.mint, in: Capsule())
+  private func tagText(_ text: String) -> some View {
+    Text(text).font(Brand.body(13, .semibold)).foregroundStyle(Brand.ink)
+      .padding(.horizontal, Space.s2).frame(minHeight: 24)
+      .tag()
   }
 
-  private func stoppedCard(_ why: String) -> some View {
-    VStack(spacing: 16) {
-      Text(why).font(Brand.body(18, .semibold)).foregroundStyle(Brand.ink).multilineTextAlignment(.center)
+  private func stoppedSheet(_ why: String) -> some View {
+    VStack(alignment: .leading, spacing: Space.s3) {
+      Rectangle().fill(Brand.ink).frame(height: 1)
+      Text(why).heading(22).foregroundStyle(Brand.ink)
+      Button("Back to start", action: onCancel).buttonStyle(PrimaryButton())
       if why.contains("Settings") {
-        Button("Open Settings") { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }.buttonStyle(OutlineButton())
+        Button("Open Settings") { UIApplication.shared.open(URL(string: UIApplication.openSettingsURLString)!) }
+          .buttonStyle(TextLink()).frame(maxWidth: .infinity)
       }
-      Button("Back to start", action: onCancel).buttonStyle(MintButton())
     }
-    .padding(24)
-    .background(Brand.bg, in: RoundedRectangle(cornerRadius: 20))
-    .padding(24)
+    .padding(Space.s3)
+    .background(Brand.bg)
+    .environment(\.colorScheme, .light)
+    .frame(maxHeight: .infinity, alignment: .bottom)
   }
 }
 
-// A soft mint chevron at the edge of the screen, toward the nearest spot nobody has filmed: left,
-// right, behind (at the bottom), or up at the ceiling. Hidden when it's already in front of you.
+// The one action while filming: a 72 pt ink ring. While recording, an ink square in it means stop;
+// tapping it is Done (before 30 s the guide asks for a little longer).
+struct RecordButton: View {
+  var saving = false
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      ZStack {
+        Circle().fill(Brand.card)
+        Circle().stroke(Brand.ink, lineWidth: 3)
+        if saving {
+          ProgressView().tint(Brand.ink)
+        } else {
+          RoundedRectangle(cornerRadius: Radius.small, style: .continuous).fill(Brand.ink).frame(width: 24, height: 24)
+        }
+      }
+      .frame(width: 72, height: 72)
+      .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(saving ? "Saving" : "Done")
+  }
+}
+
+private extension View {
+  // A tag on the camera: card paper, an ink hairline, 4 pt corners.
+  func tag() -> some View {
+    background(Brand.card, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous).stroke(Brand.ink, lineWidth: 1))
+  }
+}
+
+// A tag at the edge of the screen pointing toward the nearest spot nobody has filmed: left, right,
+// behind (a turn, at the bottom), or up at the ceiling. Hidden when it's already in front of you.
 struct GapArrow: View {
   let bearing: Float?
   let cue: Cue
   let size: CGSize
-  let reduceMotion: Bool
-  @State private var breathe = false
 
   private var target: (icon: String, angle: Double, point: CGPoint)? {
     let w = size.width, h = size.height
     switch cue {
-    case .ceiling, .tiltUp: return ("chevron.up", 0, CGPoint(x: w / 2, y: h * 0.2))
-    case .tiltDown: return ("chevron.up", 180, CGPoint(x: w / 2, y: h * 0.66))
+    case .ceiling, .tiltUp: return ("chevron.up", 0, CGPoint(x: w / 2, y: h * 0.18))
+    case .tiltDown: return ("chevron.up", 180, CGPoint(x: w / 2, y: h * 0.56))
     default: break
     }
     guard let b = bearing.map(Double.init), abs(b) >= 35 else { return nil }
-    // Behind you: a turn, not a tilt.
-    if abs(b) > 120 { return ("arrow.uturn.down", 0, CGPoint(x: w / 2, y: h * 0.64)) }
-    return ("chevron.up", b < 0 ? -90 : 90, CGPoint(x: b < 0 ? 34 : w - 34, y: h * 0.45))
+    if abs(b) > 120 { return ("arrow.uturn.down", 0, CGPoint(x: w / 2, y: h * 0.56)) }
+    return ("chevron.up", b < 0 ? -90 : 90, CGPoint(x: b < 0 ? 36 : w - 36, y: h * 0.42))
   }
 
   var body: some View {
     ZStack {
       if let target {
         Image(systemName: target.icon)
-          .font(.system(size: 30, weight: .heavy))
-          .foregroundStyle(Brand.mint)
-          .shadow(color: Brand.mint.opacity(0.9), radius: breathe ? 14 : 6)
-          .opacity(breathe ? 1 : 0.65)
+          .font(.system(size: 20, weight: .bold))
+          .foregroundStyle(Brand.ink)
           .rotationEffect(.degrees(target.angle))
+          .frame(width: 44, height: 44)
+          .background(Brand.mint, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+          .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous).stroke(Brand.ink, lineWidth: 1))
           .position(target.point)
           .transition(.opacity)
           .accessibilityHidden(true)
       }
     }
-    .animation(.easeInOut(duration: 0.35), value: target?.angle)
-    .onAppear {
-      guard !reduceMotion else {
-        breathe = true
-        return
-      }
-      withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { breathe = true }
-    }
+    .animation(.easeInOut(duration: 0.25), value: target?.icon)
+    .animation(.easeInOut(duration: 0.25), value: target?.angle)
   }
 }
