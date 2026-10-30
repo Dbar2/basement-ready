@@ -22,7 +22,7 @@ import { cameraLookup, cleanCapture } from "./capture";
 import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { scanBasement } from "./basement";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
-import { liteSurfels, lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
+import { liteSurfels, lowOverhead, runScan3d, scan3dReady, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
 import { cleanMunicipality, MUNICIPALITIES, packFor, type Household } from "./rules";
@@ -120,6 +120,8 @@ app.post("/api/scans", async (c) => {
   const ip = clientIp(c);
   const allowed = await allowance(ip);
   if (!allowed.ok) return c.json({ error: allowed.message, allowance: allowed }, allowed.reason === "hour" ? 429 : 503);
+  // Wake the 3D service while the take uploads: a cold Modal start then overlaps the upload.
+  void scan3dReady();
 
   const body = await c.req.parseBody();
   const video = body.video;
