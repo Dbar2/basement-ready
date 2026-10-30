@@ -240,6 +240,8 @@ type Stage = {
 // A video: frames and sound out of it, SAM following each thing through it, and the basement's 3D
 // from the camera's walk.
 async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight }: StageInput): Promise<Stage> {
+  // Asked first, while the video downloads and ffmpeg reads it: a cold Modal takes up to two minutes.
+  const readyP = scan3dReady();
   const input = join(work, `input${extname(videoKey) || ".mp4"}`);
   await storage.download(videoKey, input);
   const { analysis, wav, frameCount } = await prepare(work, input);
@@ -269,13 +271,19 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
   const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
   // One connected basement: a rough whole-walk pass places the areas, each measured on its own.
-  const basementP: Promise<BasementScan | null> = (await scan3dReady())
-    ? scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS), progress3d(scanId, emit)).catch(async (err) => {
-        console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
-        await emit("log", "3D scan unavailable this time; checking from the video instead");
-        return null;
-      })
-    : Promise.resolve(null);
+  // It starts once the service answers, without holding up SAM; a skipped 3D always says so.
+  const no3d = "3D scan unavailable this time; checking from the video instead";
+  const basementP: Promise<BasementScan | null> = readyP.then(async (ready) => {
+    if (!ready) {
+      await emit("log", no3d);
+      return null;
+    }
+    return scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS), progress3d(scanId, emit)).catch(async (err) => {
+      console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
+      await emit("log", no3d);
+      return null;
+    });
+  });
   inflight.push(basementP);
 
   await emit("stage", "find");
@@ -392,25 +400,30 @@ export async function measurePhotoRooms(
 // hear. Rooms aren't placed in one plan (a photo has no walk to place it by): each is shown on its own.
 async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageInput, take: PhotoTake): Promise<Stage> {
   const frameCount = take.count;
+  const ranges = take.rooms.map((r, index) => ({ index, from: r.from, to: r.to }));
+  const roomOf = (frame: number) => ranges.find((r) => frame >= r.from && frame < r.to)?.index ?? 0;
+  const measurable = ranges.some((r) => r.to - r.from >= MIN_PHOTOS_3D);
+  // Asked first, while the photos download: a cold Modal takes up to two minutes.
+  const readyP = measurable ? scan3dReady() : Promise.resolve(false);
+
   const framePath = (n: number) => join(work, "frames", `${String(n).padStart(4, "0")}.jpg`);
   await Promise.all(Array.from({ length: frameCount }, (_, n) => storage.download(keys.frame(scanId, n), framePath(n))));
   await emit("log", `Reading ${frameCount} photos of ${take.rooms.length === 1 ? "one room" : `${take.rooms.length} rooms`}`, { frameCount, photos: take.rooms });
 
-  const ranges = take.rooms.map((r, index) => ({ index, from: r.from, to: r.to }));
-  const roomOf = (frame: number) => ranges.find((r) => frame >= r.from && frame < r.to)?.index ?? 0;
-  const measurable = ranges.some((r) => r.to - r.from >= MIN_PHOTOS_3D);
-
-  // Each room's 3D alongside SAM. The wait screen shows each room as it's measured.
+  // Each room's 3D alongside SAM, once the service answers. The wait screen shows each room as it's measured.
   const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
   const progress = progress3d(scanId, emit);
-  const ready = measurable && (await scan3dReady());
-  if (!ready) await emit("log", measurable ? "3D scan unavailable this time; checking from the photos instead" : "3D scan unavailable: a room needs 3 or more photos to measure");
-  const scans3dP = measurePhotoRooms(
-    take,
-    ready ? (r, areas) => runScan3d(work, r, known, { maxFaces: meshFaces(areas) }) : null,
-    (text) => emit("log", text),
-    (i, s3) => progress.area(i, s3, null),
-  ).catch(() => ranges.map(() => null));
+  const scans3dP = readyP
+    .then(async (ready) => {
+      if (!ready) await emit("log", measurable ? "3D scan unavailable this time; checking from the photos instead" : "3D scan unavailable: a room needs 3 or more photos to measure");
+      return measurePhotoRooms(
+        take,
+        ready ? (r, areas) => runScan3d(work, r, known, { maxFaces: meshFaces(areas) }) : null,
+        (text) => emit("log", text),
+        (i, s3) => progress.area(i, s3, null),
+      );
+    })
+    .catch(() => ranges.map(() => null));
   inflight.push(scans3dP);
 
   await emit("stage", "find");
