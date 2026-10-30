@@ -142,12 +142,13 @@ export function editLayer<T extends Layer>(layer: T, e: Edit): T {
         openings: layer.openings.map((o) => {
           if (o.id !== e.openingId) return o;
           const w = layer.walls.find((x) => x.id === o.wallId);
+          // A guessed window put in place, or a guessed width typed in, is no longer a guess.
           const next: Opening =
             e.op === "move_opening"
-              ? { ...o, offsetM: e.offsetM }
+              ? { ...o, offsetM: e.offsetM, ...(o.guess && o.kind === "window" ? { guess: false } : {}) }
               : {
                   ...o,
-                  ...(e.widthM !== undefined ? { widthM: e.widthM } : {}),
+                  ...(e.widthM !== undefined ? { widthM: e.widthM, ...(o.guess ? { guess: false } : {}) } : {}),
                   ...(e.heightM !== undefined ? { heightM: e.heightM } : {}),
                   ...(e.sillM !== undefined ? { sillM: e.sillM } : {}),
                   ...(e.rating !== undefined ? { rating: e.rating } : {}),

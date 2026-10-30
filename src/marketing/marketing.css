@@ -58,14 +58,17 @@
 .mk-nav a:hover,
 .mk-nav a[aria-current="page"] { text-decoration-line: underline; text-decoration-color: var(--color-mint-line); }
 .mk-nav .mk-nav-cta {
-  padding: 9px 16px;
-  border-radius: var(--radius-pill);
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-2);
   background: var(--color-mint);
   color: var(--color-mint-ink);
   font-weight: 700;
   text-decoration: none;
 }
-.mk-nav .mk-nav-cta:hover { text-decoration: none; background: var(--color-mint); box-shadow: inset 0 0 0 1px var(--color-mint-line); }
+.mk-nav .mk-nav-cta:hover { text-decoration: none; background: var(--color-mint-press); }
 .mk-menu {
   display: none;
   padding: 8px 14px;

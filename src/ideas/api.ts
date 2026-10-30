@@ -31,10 +31,10 @@ export async function sampleDeck(): Promise<Deck> {
   return res.ok ? res.json() : { ...emptyDeck, status: "failed" };
 }
 
-// Opening the deck starts it on the server; afterwards it's read as it fills.
-export async function startDeck(scanId: string): Promise<Deck | { error: string }> {
+// Opening the deck starts it on the server; afterwards it's read as it fills. `again` deals a failed deck anew.
+export async function startDeck(scanId: string, again = false): Promise<Deck | { error: string }> {
   if (isSample(scanId)) return sampleDeck();
-  const res = await fetch(`/api/scans/${scanId}/cards`, { method: "POST", headers: await headers() });
+  const res = await fetch(`/api/scans/${scanId}/cards${again ? "?again=1" : ""}`, { method: "POST", headers: await headers() });
   const body = await res.json().catch(() => ({ error: "The cards didn't start. Try again." }));
   return res.ok ? body : { error: body.error ?? "The cards didn't start. Try again." };
 }
