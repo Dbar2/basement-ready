@@ -1,7 +1,8 @@
 // A 2D floor plan from the 3D scan: the main room's outline, with SAM's windows, doors, stairs
 // and mechanicals placed where the scan says they are. Metres, room frame (x across, z deep).
 import type { Detection } from "./pipeline";
-import { liftBox, type Scan3d } from "./scan3d";
+import { liftBox } from "./lift";
+import type { Scan3d } from "./scan3d";
 
 export type Side = "minX" | "maxX" | "minZ" | "maxZ";
 
