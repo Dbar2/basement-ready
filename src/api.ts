@@ -15,9 +15,37 @@ export type Detection = {
 
 export type ScanEvent = {
   at: number;
-  type: "log" | "find" | "measure" | "stage" | "done" | "error" | "path" | "model";
+  // path: the camera's walk in plan view. model: an area's 3D, ready to draw. photo: a finished photo.
+  type: "log" | "find" | "measure" | "stage" | "done" | "error" | "path" | "model" | "photo" | "photos";
   text: string;
-  data?: { kind?: string; label?: string; detections?: Detection[]; frameCount?: number };
+  data?: {
+    kind?: string;
+    label?: string;
+    detections?: Detection[];
+    frameCount?: number;
+    points?: [number, number][]; // path: [x, z] in metres, in the walk frame
+    area?: number | "all"; // model: which area; the whole basement's files use ?room=all
+    files?: { surfels: string; scan: string; mesh?: string }; // mesh: BRM1 (src/three/RealScan.tsx parseMesh)
+    place?: { angle: number; scale: number; x: number; z: number } | null; // model, an area: its own frame into the walk frame; null when it couldn't be placed
+    path?: [number, number][]; // model, the whole basement: the walk again, in the final frame
+    n?: number; // photo
+    url?: string;
+    title?: string;
+  };
+};
+
+// Who it's for, one tap on the start sheet with the rent folded in (server/eligibility.ts fromWho).
+export type Who = "family" | "rental_capped" | "rental_market" | "unsure";
+
+// A question the wait screen still asks (server/eligibility.ts waitQuestions). `words`: their own words welcome.
+export type WaitAsk = {
+  id: string;
+  kind: "who" | "plans" | "rule" | "money";
+  question: string;
+  hint: string;
+  options: { label: string; value: MoneyValue }[];
+  words?: boolean;
+  decides?: string[];
 };
 
 export type Source = { title: string; url: string; section?: string; retrieved?: string };
@@ -231,6 +259,7 @@ export type ScanResult = {
   property?: Property | null;
   layout?: Layout | null;
   concepts?: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
+  plans?: string | null; // what they'd like it to be, from the wait screen
   heldBack: number;
   cost: { low: number; high: number; fixesLow?: number; fixesHigh?: number; standardLow?: number; standardHigh?: number; pricedFixes: number; unpricedFixes: number };
   grants: Grant[];
@@ -262,6 +291,7 @@ export function rememberClaim(basementId: string, claimToken: string) {
 export function startScan(
   video: File,
   input: {
+    who?: Who;
     household: Household;
     address: string;
     addressMunicipality?: string;
@@ -279,6 +309,7 @@ export function startScan(
     const form = new FormData();
     form.append("video", video);
     form.append("household", input.household);
+    if (input.who) form.append("who", input.who);
     form.append("address", input.address);
     form.append("municipality", input.municipality);
     if (input.floorToJoistsM) form.append("floorToJoistsM", String(input.floorToJoistsM));
@@ -342,17 +373,35 @@ export function sampleEarlyAnswers(): Record<string, AnyAnswer> {
   }
 }
 
-// While the scan runs: answers are kept and applied when it finishes.
-export async function answerEarly(scanId: string, ruleId: string, value: AnyAnswer) {
+// While the scan runs: answers are kept and applied when it finishes. Returns what's still worth
+// asking, or null when that couldn't be worked out.
+export async function answerEarly(scanId: string, ruleId: string, value: AnyAnswer): Promise<WaitAsk[] | null> {
   if (scanId === "sample") {
     try {
       sessionStorage.setItem(SAMPLE_ANSWERS, JSON.stringify({ ...sampleEarlyAnswers(), [ruleId]: value }));
     } catch {
       // Private mode: the sample just asks again on the answer page.
     }
-    return;
+    return waitAsks(scanId);
   }
-  await fetch(`/api/scans/${scanId}/answers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId, value }) });
+  const res = await fetch(`/api/scans/${scanId}/answers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId, value }) });
+  return res.ok ? ((await res.json()).asks ?? null) : null;
+}
+
+// What the wait screen still asks. The sample brings the answers it was recorded with.
+export async function waitAsks(scanId: string): Promise<WaitAsk[]> {
+  if (scanId === "sample") {
+    const sample: ScanResult = await (await fetch("/samples/sample/result.json")).json();
+    const told = Object.fromEntries((sample.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer]));
+    const res = await fetch("/api/money", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ municipality: "waterloo-on", household: sample.household, answers: { ...told, ...sampleEarlyAnswers() } }),
+    });
+    return res.ok ? ((await res.json()).asks ?? []) : [];
+  }
+  const s = await getScan(scanId);
+  return s.asks ?? [];
 }
 export async function setHousehold(scanId: string, household: Household): Promise<ScanResult | null> {
   if (scanId === "sample") {
@@ -403,7 +452,15 @@ export async function openMoneyQuestions(scanId: string): Promise<MoneyQuestion[
   return res.ok ? (await res.json()).questions : [];
 }
 
-export async function getScan(id: string): Promise<{ status: "queued" | "running" | "done" | "error"; result: ScanResult | null }> {
+// household and answers: who it's for and everything they told us (rule, money, who, plans), so nothing
+// is asked twice. asks: what's still worth asking.
+export async function getScan(id: string): Promise<{
+  status: "queued" | "running" | "done" | "error";
+  result: ScanResult | null;
+  household?: Household;
+  answers?: Record<string, AnyAnswer>;
+  asks?: WaitAsk[];
+}> {
   if (id === "sample") return { status: "done", result: await (await fetch("/samples/sample/result.json")).json() };
   const res = await fetch(`/api/scans/${id}`);
   if (!res.ok) throw new Error("not found");
@@ -411,12 +468,44 @@ export async function getScan(id: string): Promise<{ status: "queued" | "running
 }
 
 
+// The sample was recorded before the wait screen drew the basement: its walk, its 3D and its photo,
+// played back where a scan sends them now.
+async function withSampleViews(events: ScanEvent[]): Promise<ScanEvent[]> {
+  const scan = await fetch("/samples/sample/3d/scan.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const result = await fetch("/samples/sample/result.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const lastFind = events.map((e) => e.type).lastIndexOf("find");
+  const at = events[lastFind]?.at ?? 0;
+  const points = ((scan?.frames ?? []) as { pose: number[][] }[]).map((f): [number, number] => [f.pose[0][3], f.pose[2][3]]);
+  const views: ScanEvent[] = points.length
+    ? [
+        { at: at + 0.5, type: "path", text: "Your walk", data: { points } },
+        {
+          at: at + 4,
+          type: "model",
+          text: "Your basement in 3D",
+          data: { area: "all", files: { surfels: "/samples/sample/3d/surfels-lite.bin", mesh: "/samples/sample/3d/mesh.bin", scan: "/samples/sample/3d/scan.json" }, path: points },
+        },
+      ]
+    : [];
+  const photos: ScanEvent[] = ((result?.concepts?.items ?? []) as Concept[]).map((c, i) => ({
+    at: at + 6 + i,
+    type: "photo",
+    text: c.title,
+    data: { n: c.n, title: c.title, url: `/samples/sample/concepts/${c.n}.jpg` },
+  }));
+  const done = events.findIndex((e) => e.type === "done");
+  const out = [...events];
+  out.splice(done < 0 ? out.length : done, 0, ...[...views, ...photos].map((e) => ({ ...e, at: Math.min(e.at, events[done]?.at ?? e.at) })));
+  return out;
+}
+
 // Replays the recorded sample scan with its real timing, but never waits more than 2.5 s between steps.
 export function replaySample(onEvent: (e: ScanEvent) => void): () => void {
   let cancelled = false;
   const timers: number[] = [];
   fetch("/samples/sample/events.json")
     .then((r) => r.json())
+    .then(withSampleViews)
     .then((events: ScanEvent[]) => {
       let t = 0;
       let prev = 0;

@@ -1,5 +1,6 @@
 // Durable job queue on Postgres. A job is claimed with FOR UPDATE SKIP LOCKED, so any number of
-// workers can share the table; an expired lease puts a crashed job back in the queue.
+// workers can share the table; an expired lease puts a crashed job back in the queue. Each kind of job
+// has its own slot in a worker, so the photos run while the scan that queued them is still going.
 import { sql } from "drizzle-orm";
 import { db, schema } from "./db";
 
@@ -17,14 +18,26 @@ function rows<T>(result: unknown): T[] {
   return (Array.isArray(result) ? result : (result as { rows: T[] }).rows) as T[];
 }
 
-export async function claimNext(workerId: string): Promise<JobRow | null> {
+// Queues a job for a scan unless one of this kind is already waiting, running or done since `since`.
+export async function enqueueOnce(kind: string, payload: { scanId: string } & Record<string, unknown>, since: Date, maxAttempts = 2) {
+  const found = rows<{ id: number }>(
+    await db.execute(sql`
+      SELECT id FROM jobs
+       WHERE kind = ${kind} AND payload->>'scanId' = ${payload.scanId} AND status <> 'failed' AND created_at >= ${since.toISOString()}::timestamptz
+       LIMIT 1`),
+  );
+  return found.length ? null : enqueue(kind, payload, maxAttempts);
+}
+
+export async function claimNext(workerId: string, kinds?: string[]): Promise<JobRow | null> {
+  const only = kinds?.length ? sql`AND kind IN (${sql.join(kinds.map((k) => sql`${k}`), sql`, `)})` : sql``;
   const result = await db.execute(sql`
     UPDATE jobs
        SET status = 'running', attempts = attempts + 1, locked_by = ${workerId},
            locked_until = now() + make_interval(mins => ${LEASE_MINUTES}), updated_at = now()
      WHERE id = (
        SELECT id FROM jobs
-        WHERE status = 'queued' AND run_after <= now()
+        WHERE status = 'queued' AND run_after <= now() ${only}
         ORDER BY id
         FOR UPDATE SKIP LOCKED
         LIMIT 1)
@@ -57,28 +70,23 @@ export async function reclaimExpired() {
 
 type Handler = (job: JobRow) => Promise<void>;
 
-export function startWorker(handlers: Record<string, Handler>, opts: { id?: string; pollMs?: number } = {}) {
+// One loop per kind of job (more with `slots`), so a long scan never holds up its own photos.
+export function startWorker(handlers: Record<string, Handler>, opts: { id?: string; pollMs?: number; slots?: Record<string, number> } = {}) {
   const id = opts.id ?? `worker-${process.pid}`;
   const pollMs = opts.pollMs ?? 1000;
   let stopped = false;
-  let running: Promise<void> = Promise.resolve();
 
-  const loop = async () => {
+  const loop = async (kind: string) => {
     while (!stopped) {
       try {
         await reclaimExpired();
-        const job = await claimNext(id);
+        const job = await claimNext(id, [kind]);
         if (!job) {
           await new Promise((r) => setTimeout(r, pollMs));
           continue;
         }
-        const handler = handlers[job.kind];
-        if (!handler) {
-          await fail(job.id, `No handler for job kind "${job.kind}"`);
-          continue;
-        }
         try {
-          await handler(job);
+          await handlers[kind](job);
           await complete(job.id);
         } catch (err) {
           const message = err instanceof Error ? err.stack ?? err.message : String(err);
@@ -91,12 +99,12 @@ export function startWorker(handlers: Record<string, Handler>, opts: { id?: stri
       }
     }
   };
-  running = loop();
+  const running = Object.keys(handlers).flatMap((kind) => Array.from({ length: Math.max(1, opts.slots?.[kind] ?? 1) }, () => loop(kind)));
   console.log(`[worker] ${id} started`);
   return {
     stop: async () => {
       stopped = true;
-      await running;
+      await Promise.all(running);
     },
   };
 }

@@ -7,9 +7,10 @@ import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
 import { finishAssessment, readWithSpark } from "./assess";
-import { enqueue } from "./jobs";
 import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
+import { enqueuePhotos, photosSoFar, settlePhotos } from "./photos";
+import { cleanPlans, plansWords, PLANS_ID } from "./plans";
 import { samVideo, transcribe, uploadFile } from "./meta";
 import type { Property } from "./property";
 import type { Household } from "./rules";
@@ -281,6 +282,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
         });
       }),
     );
+    // The photos start now, from the finds and the wide shot, and land while the 3D measures.
+    void uploads.then(() => enqueuePhotos(scanId)).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
 
     // Spark reads the finds and what they said while the 3D is still measuring.
     const heard = await transcriptP;
@@ -337,6 +340,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     // Questions answered while it ran are applied now; recheck also redoes the plan with the room's size.
     const answered = await db.select().from(schema.answers).where(eq(schema.answers.basementId, basement.id));
     const rechecked = recheck(assessed, Object.fromEntries(answered.map((a) => [a.ruleId, a.value as AnswerValue])));
+    const plans = cleanPlans(answered.find((a) => a.ruleId === PLANS_ID)?.value);
     // Ideas they tapped while filming count as much as what they said.
     // A starting layout inside the main room, for the 3D staging, the plan drawing and the brief.
     const result = {
@@ -345,15 +349,20 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       // How it was filmed: the lens, and the still wide shot the staged photos start from.
       capture: { lens: inputs.lens ?? null, wideAt: inputs.wideAt ?? null },
       layout: plan ? suggestLayout(plan) : null,
-      // The photos come from their own job, right after this answer.
-      concepts: { status: "pending" as const, items: [] },
+      // What they'd like it to be, from the wait screen: their wish when the video didn't say one.
+      plans,
+      wants: rechecked.wants || plansWords(plans),
+      // The photos started with the finds; whatever has landed so far comes with the answer.
+      concepts: await photosSoFar(scanId),
     };
     await db
       .update(schema.scans)
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd, finishedAt: new Date() })
       .where(eq(schema.scans.id, scanId));
     await emit("done", "Your answer is ready");
-    await enqueue("concepts", { scanId });
+    // Photos that finished while this was written go in now; photos that never started, start.
+    await settlePhotos(scanId);
+    await enqueuePhotos(scanId);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (opts.lastAttempt) {

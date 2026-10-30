@@ -452,6 +452,97 @@ export function evaluateMoney(pack: Pack, input: MoneyInput) {
 
 export type MoneyResult = ReturnType<typeof evaluateMoney>;
 
+// ---- Ask once ------------------------------------------------------------------------------------
+
+// Who it's for, asked once on the start sheet with the rent folded in. Saved as the household plus
+// the rent answer, and as "who" itself, so nothing asks it again.
+export const WHO_ID = "who";
+export type Who = "family" | "rental_capped" | "rental_market" | "unsure";
+export const WHO_IDS: Who[] = ["family", "rental_capped", "rental_market", "unsure"];
+
+// The lowest rent cap among this city's open programs: a rent at or under it fits all of them.
+export function lowestRentCap(pack: Pack): number | null {
+  const caps = pack.grants.filter((g) => g.status === "open").map((g) => capFor(g, SIZE)).filter((x): x is number => x != null);
+  return caps.length ? Math.min(...caps) : null;
+}
+
+export function fromWho(who: Who, pack: Pack): { household: Household; rent: MoneyValue | null } {
+  const cap = lowestRentCap(pack);
+  switch (who) {
+    case "family":
+      return { household: "relative", rent: "none" };
+    // No program here caps rent: the rent changes nothing, so none is saved.
+    case "rental_capped":
+      return { household: "renter", rent: cap };
+    case "rental_market":
+      return { household: "renter", rent: cap == null ? null : "market" };
+    case "unsure":
+      return { household: "unsure", rent: "unsure" };
+  }
+}
+
+export function whoQuestion(): { id: string; question: string; hint: string; options: { label: string; value: MoneyValue }[] } {
+  return {
+    id: WHO_ID,
+    question: "Who's it for?",
+    hint: "Who lives there and the rent decide which money fits.",
+    options: [
+      { label: "Family, no rent", value: "family" },
+      { label: "Rental, about $1,200/mo or less", value: "rental_capped" },
+      { label: "Rental at market rent", value: "rental_market" },
+      { label: "Not sure", value: "unsure" },
+    ],
+  };
+}
+
+export type WaitAsk = {
+  id: string;
+  kind: "who" | "plans" | "rule" | "money";
+  question: string;
+  hint: string;
+  options: { label: string; value: MoneyValue }[];
+  words?: boolean; // their own words are welcome too
+  decides?: string[];
+};
+
+type RuleAsk = { ruleId: string; question: string; hint?: string | null };
+type FindingLike = { ruleId: string; status: string; question?: string | null; hint?: string | null; answer?: unknown; options?: unknown[] | null; check?: { operator: string; value: unknown } };
+
+// What the wait screen still asks, in order, each question at most once. Anything with a saved answer
+// is never asked again, "Not sure" included; a money question is asked only while it still decides a
+// program. Before the result, the rule questions are the ones only a homeowner can answer; after it,
+// the ones the scan left open.
+export function waitQuestions(
+  pack: Pack,
+  input: {
+    household: Household;
+    answers: Record<string, unknown>;
+    property?: Pick<Property, "unitsRegistered"> | null;
+    findings?: FindingLike[] | null;
+    ruleAsks: RuleAsk[];
+    plans: { id: string; question: string; hint: string; options: { label: string; value: MoneyValue }[] };
+  },
+): WaitAsk[] {
+  const said = (id: string) => input.answers[id] !== undefined && input.answers[id] !== null;
+  const asks: WaitAsk[] = [];
+  const add = (a: WaitAsk) => {
+    if (!said(a.id) && !asks.some((x) => x.id === a.id)) asks.push(a);
+  };
+  // The start sheet asks who it's for. A take from somewhere that didn't ask gets it here, once.
+  if (input.household === "unsure" && !said(WHO_ID)) add({ kind: "who", ...whoQuestion() });
+  add({ kind: "plans", ...input.plans, words: true });
+  const rules = new Set(pack.rules.map((r) => r.id));
+  const yesNo = (f: FindingLike) => f.check?.operator === "exists" || typeof f.check?.value === "boolean" || Boolean(f.options?.length);
+  const open = input.findings
+    ? input.findings.filter((f) => f.status === "needs_answer" && !f.answer && f.question && yesNo(f)).map((f) => ({ ruleId: f.ruleId, question: f.question!, hint: f.hint ?? "" }))
+    : input.ruleAsks.filter((r) => rules.has(r.ruleId));
+  for (const r of open) add({ id: r.ruleId, kind: "rule", question: r.question, hint: r.hint ?? "", options: YES_NO });
+  // Who it's for was asked above or at the start; the rest only while they still decide something.
+  const money = evaluateMoney(pack, { household: input.household, answers: input.answers as MoneyAnswers, property: input.property ?? null });
+  for (const q of money.questions) if (q.id !== "household") add({ id: q.id, kind: "money", question: q.question, hint: q.hint, options: q.options, decides: q.decides });
+  return asks;
+}
+
 // Keeps only a value the question offers.
 export function cleanMoneyAnswer(id: string, v: unknown, pack: Pack): MoneyValue | null {
   if (!STORED_MONEY_QUESTIONS.has(id)) return null;
