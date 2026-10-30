@@ -33,7 +33,13 @@ MIN_PAGE = 1024
 COARSE_M = 0.04  # the scoring grid
 MASK_PPM = 25  # the model's own outlines, for working out what hides what
 KEEP = 8  # frames per surface at most
-BLEND_POWER = 3.0  # how strongly the best frame wins where several see a spot
+BLEND_POWER = 5.0  # how strongly the best frame wins where several see a spot (fewer ghosts)
+# How sure a texel's paint is, 0..1: from its best frame's quality (far, grazing, blurry or at a frame's
+# edge is poor) and from whether the frames blended there agree (clutter and misplaced paint look
+# different from each side). Unsure paint fades into a soft plain version of the surface.
+SURE_Q = (0.12, 0.30)  # best frame quality: unsure below the first, sure above the second
+SURE_SPREAD = (14.0, 40.0)  # colour spread between the frames, 0-255: sure below, unsure above
+PLAIN_BLUR_M = 0.2  # the plain version keeps the surface's light and shade at this scale
 # How far a wall's paint may move to where the depth says the wall is: back a fair way (the plan put
 # the wall a little into the room), forward only a little (in front of a wall is usually a shelf).
 MAX_SHIFT_M = 0.35
@@ -475,16 +481,35 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
         qs = dict(scored)
         warps = [warp(cams[i], s, w, h, ppm, shift) for i in chosen]
         weights = [cv2.resize(qs[i].reshape(gh, gw).astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR) ** BLEND_POWER for i in chosen]
+        qbest = np.max([qs[i] for i in chosen], axis=0).reshape(gh, gw) if chosen else np.zeros((gh, gw))
         sm = cv2.resize(inside.reshape(gh, gw).astype(np.float32), (w, h), interpolation=cv2.INTER_NEAREST) > 0
-        plans.append({"s": s, "w": w, "h": h, "chosen": chosen, "warps": warps, "weights": weights, "solid": sm, "shift": shift})
+        plans.append({"s": s, "w": w, "h": h, "chosen": chosen, "warps": warps, "weights": weights, "solid": sm, "shift": shift, "qbest": cv2.resize(qbest.astype(np.float32), (w, h), interpolation=cv2.INTER_LINEAR)})
 
-    def blend(p, gains):
+    def blend(p, gains, spread=False):
         acc = np.zeros((p["h"], p["w"], 3), np.float32)
         wsum = np.zeros((p["h"], p["w"]), np.float32)
+        if spread:
+            n = np.zeros((p["h"], p["w"]), np.float32)
+            s1, s2 = np.zeros((p["h"], p["w"], 3), np.float32), np.zeros((p["h"], p["w"], 3), np.float32)
+            soft = max(1.0, 0.025 * ppm)  # a couple of centimetres off between frames isn't disagreement
         for i, img, wt in zip(p["chosen"], p["warps"], p["weights"]):
-            acc += img.astype(np.float32) * gains[i][None, None] * wt[..., None]
+            c = img.astype(np.float32) * gains[i][None, None]
+            acc += c * wt[..., None]
             wsum += wt
-        return acc / np.maximum(wsum[..., None], 1e-12), wsum
+            if spread:
+                cs = cv2.GaussianBlur(c, (0, 0), sigmaX=soft)
+                sees = (wt > 1e-6).astype(np.float32)
+                n += sees
+                s1 += cs * sees[..., None]
+                s2 += cs * cs * sees[..., None]
+        mix = acc / np.maximum(wsum[..., None], 1e-12)
+        if not spread:
+            return mix, wsum
+        # How much the frames that see a spot disagree on its colour: every one of them, not only the
+        # one that wins the blend there.
+        m = s1 / np.maximum(n, 1)[..., None]
+        std = np.sqrt(np.maximum(s2 / np.maximum(n, 1)[..., None] - m * m, 0).mean(axis=2))
+        return mix, wsum, np.where(n >= 2, std, 0)
 
     # Pass 2: match every frame's exposure to the blend it's part of, then blend again.
     gains = {i: np.ones(3, np.float32) for i in range(len(cams))}
@@ -518,7 +543,7 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
     for p in plans:
         if not p["chosen"]:
             continue
-        p["mix"], wsum = blend(p, gains)
+        p["mix"], wsum, p["spread"] = blend(p, gains, spread=True)
         p["known"] = wsum > 1e-9
         seen = p["known"] & p["solid"]
         p["coverage"] = float(seen.sum() / max(1, p["solid"].sum()))
@@ -540,18 +565,28 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
             g = max(1.0, ppm * COARSE_M)
             soft = cv2.GaussianBlur(known.astype(np.float32), (0, 0), sigmaX=0.75 * g)
             alpha = (np.clip(soft * 1.6 - 0.3, 0, 1) * known)[..., None]
-            # Far from anything seen, the fill settles on the surface's own colour rather than smearing
-            # whatever was nearest (in a full basement, that's usually stuff); on a surface barely
-            # seen, on its kind's colour.
+            # The surface's own colour (on a surface barely seen, mostly its kind's). Far from anything
+            # seen, the fill settles on it rather than smearing whatever was nearest (in a full
+            # basement, that's usually stuff).
             seen = known & solid
-            if seen.any() and not seen.all():
-                own = np.median(mix[seen][:: max(1, int(seen.sum()) // 20000)], axis=0)
+            own = tone
+            if seen.any():
                 c = min(1.0, p["coverage"] / 0.35)
-                own = own * c + tone * (1 - c)
+                own = np.median(mix[seen][:: max(1, int(seen.sum()) // 20000)], axis=0) * c + tone * (1 - c)
+            if seen.any() and not seen.all():
                 far = cv2.distanceTransform((~known).astype(np.uint8), cv2.DIST_L2, 5) / ppm
                 w = np.clip((far - FILL_FAR_M) / (2 * FILL_FAR_M), 0, 1)[..., None]
                 smooth = smooth * (1 - w) + own[None, None] * w
-            tile = np.clip(mix * alpha + smooth * (1 - alpha), 0, 255).astype(np.uint8)
+            # Where the paint is unsure (only poor frames saw it, or the frames disagree), a soft plain
+            # version of the surface instead of a smear: its light and shade, not its detail.
+            lo, hi = SURE_Q
+            sure_q = np.clip((p["qbest"] - lo) / (hi - lo), 0, 1)
+            lo, hi = SURE_SPREAD
+            sure_c = np.clip((hi - p["spread"]) / (hi - lo), 0, 1)
+            sure = (sure_q * sure_c)[..., None]
+            plain = cv2.GaussianBlur(smooth.astype(np.float32), (0, 0), sigmaX=max(1.0, PLAIN_BLUR_M * ppm)) * 0.6 + own[None, None] * 0.4
+            tile = np.clip(mix * (alpha * sure) + plain * (alpha * (1 - sure)) + smooth * (1 - alpha), 0, 255).astype(np.uint8)
+            p["sure"] = float((sure[..., 0] * seen).sum() / max(1, seen.sum()))
             coverage = p["coverage"]
         else:
             tile = np.empty((p["h"], p["w"], 3), np.uint8)
@@ -564,6 +599,8 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
             "key": s.key,
             "rect": [x / page, y / page, p["w"] / page, p["h"] / page],
             "coverage": round(coverage, 3),
+            # Of what was seen, the share painted with confidence (the rest is drawn plain).
+            **({"sure": round(p["sure"], 3)} if "sure" in p else {}),
             "frames": [int(i) for i in p["chosen"]],
             **({"shiftM": round(p["shift"], 3)} if p["shift"] else {}),
         }

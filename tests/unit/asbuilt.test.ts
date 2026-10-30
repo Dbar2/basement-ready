@@ -248,3 +248,30 @@ describe("the studio's overhead labels", () => {
     expect(tags[0].at).toEqual([3, 1]);
   });
 });
+
+describe("where the walk starts", () => {
+  it("is the filmed spot that looks furthest into the room, never one facing a wall", async () => {
+    const { bestView, freeAhead, spotsOf } = await import("../../src/three/AsBuiltView");
+    const e = basement();
+    const walls = e.walls.map((w): [[number, number], [number, number]] => [w.a, w.b]);
+    expect(freeAhead([1, 2], [1, 0], walls)).toBeCloseTo(4);
+    const rooms = e.rooms.map((r) => r.polygon);
+    // One spot faces the far wall from 0.6 m away; one looks down the 5 m room; one stood outside.
+    const v = bestView(
+      [
+        { at: [4.4, 2], dir: [1, 0] },
+        { at: [0.6, 2], dir: [1, 0] },
+        { at: [-2, 2], dir: [1, 0] },
+      ],
+      walls,
+      rooms,
+    )!;
+    expect(v.at).toEqual([0.6, 2]);
+    expect(v.dir[0]).toBeGreaterThan(0.85);
+    // Facing a wall up close, it turns to see across the room instead.
+    const turned = bestView([{ at: [2.5, 3.6], dir: [0, 1] }], walls, rooms)!;
+    expect(freeAhead(turned.at, turned.dir, walls)).toBeGreaterThan(1.5);
+    // A scan's camera poses: column 2 is where it looked.
+    expect(spotsOf({ frames: [{ pose: [[1, 0, 0, 2], [0, 1, 0, 1.4], [0, 0, 1, 3], [0, 0, 0, 1]] }] }, 2)).toEqual([{ at: [4, 6], dir: [0, 1] }]);
+  });
+});
