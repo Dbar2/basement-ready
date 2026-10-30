@@ -14,17 +14,19 @@ const CITED: SourceId[] = [
   "waterlooGrant",
   "regionFactSheet",
   "kitchenerAdu",
+  "kitchenerPermits",
+  "kitchenerGrant",
   "cambridgeAru",
+  "cambridgeFees",
 ];
 
-// Coverage, per city. Waterloo's rules pack is data/rules/waterloo-on.json.
-// Kitchener and Cambridge packs are being compiled; flip `pack` to "full" and
-// fill in permit and money details once their JSON lands.
+// Waterloo Region in depth: each city's rules pack is data/rules/<city>-on.json, checked on `checked`.
+// Every other Ontario address gets the province's rules ("Anywhere else in Ontario" below).
 type City = {
   name: string;
   units: number;
   unitsLabel: string;
-  pack: "full" | "in-progress";
+  checked: string;
   rows: { label: string; value: React.ReactNode }[];
 };
 
@@ -33,7 +35,7 @@ const CITIES: City[] = [
     name: "Waterloo",
     units: 4,
     unitsLabel: "Up to four homes on the lot",
-    pack: "full",
+    checked: "2026-10-28",
     rows: [
       { label: "Called", value: "Additional residential unit (ARU)" },
       {
@@ -53,14 +55,14 @@ const CITIES: City[] = [
           </>
         ),
       },
-      { label: "Coverage", value: "Full: zoning, the Building Code, City permit steps and fees, and City, Region and federal money." },
+      { label: "Coverage", value: "In depth: zoning rules, the Building Code, City permit steps and fees, and City, Region and federal money." },
     ],
   },
   {
     name: "Kitchener",
     units: 4,
     unitsLabel: "Up to four homes on many lots",
-    pack: "in-progress",
+    checked: "2026-10-28",
     rows: [
       { label: "Called", value: "Additional dwelling unit (ADU)" },
       {
@@ -74,17 +76,35 @@ const CITIES: City[] = [
       },
       {
         label: "Permit",
-        value: <>A building permit, and a zoning (occupancy) certificate for most ADUs<Ref id="kitchenerAdu" /></>,
+        value: (
+          <>
+            $0.37 per sq ft of finished space, plus a $250 fee refunded after the final inspection; the City reviews a
+            complete application within 10 business days<Ref id="kitchenerPermits" />. Most ADUs other than a duplex
+            also need a zoning (occupancy) certificate<Ref id="kitchenerAdu" />
+          </>
+        ),
       },
-      { label: "Money we check", value: <>The federal tax credit<Ref id="mhrtc" />. Region and City programs are being added.</> },
-      { label: "Coverage", value: "The Building Code and Kitchener's unit limit. City steps and fees are being added." },
+      {
+        label: "Money we check",
+        value: (
+          <>
+            Region of Waterloo loan, up to $25,000<Ref id="regionFactSheet" />; the City's ADU grant, which covers
+            school-board development charges for a 2nd or 3rd unit<Ref id="kitchenerGrant" />; the federal tax credit
+            <Ref id="mhrtc" />
+          </>
+        ),
+      },
+      {
+        label: "Coverage",
+        value: "In depth: Kitchener's ADU rules, the Building Code, City permit steps and fees, and City, Region and federal money. For your lot's zone, check the City's map.",
+      },
     ],
   },
   {
     name: "Cambridge",
     units: 3,
     unitsLabel: "Up to three homes on the lot",
-    pack: "in-progress",
+    checked: "2026-10-28",
     rows: [
       { label: "Called", value: "Additional residential unit (ARU)" },
       {
@@ -93,14 +113,28 @@ const CITIES: City[] = [
       },
       {
         label: "Permit",
-        value: <>A building permit, and the City's Building Services must approve occupancy<Ref id="cambridgeAru" /></>,
+        value: (
+          <>
+            A building permit, and the City's Building Services must approve occupancy<Ref id="cambridgeAru" />. We
+            estimate the fee from the City's interior-finish rate, $0.50 per sq ft plus a $25 zoning review; the City
+            invoices the exact fee<Ref id="cambridgeFees" />
+          </>
+        ),
       },
       {
         label: "Charges",
         value: <>The City and Region don't collect development charges for ARUs; school boards may in some cases<Ref id="cambridgeAru" /></>,
       },
-      { label: "Money we check", value: <>The federal tax credit<Ref id="mhrtc" />. Region and City programs are being added.</> },
-      { label: "Coverage", value: "The Building Code and Cambridge's unit limit. City steps and fees are being added." },
+      {
+        label: "Money we check",
+        value: (
+          <>
+            City ARU grant, up to $10,000 per property while funds last<Ref id="cambridgeAru" />; Region of Waterloo
+            loan, up to $25,000<Ref id="regionFactSheet" />; the federal tax credit<Ref id="mhrtc" />
+          </>
+        ),
+      },
+      { label: "Coverage", value: "In depth: Cambridge's ARU rules, the Building Code, City permit steps and fees, and City, Region and federal money." },
     ],
   },
 ];
@@ -110,8 +144,8 @@ export function Cities() {
     <MarketingPage path={PATHS.cities} motion="ledger">
       <Cited ids={CITED}>
         <PageHead
-          title="Waterloo, Kitchener and Cambridge."
-          lede="Basement Ready checks the rules for these three cities. Each one sets its own zoning. Ontario's Building Code is the same everywhere in the province."
+          title="All of Ontario. Waterloo Region in depth."
+          lede="Every Ontario address gets the province's rules: the Building Code is the same everywhere. Waterloo, Kitchener and Cambridge also get their own zoning rules, permit steps, fees and local money."
         />
 
         <div className="mk-cities">
@@ -120,7 +154,7 @@ export function Cities() {
               <div className="mk-city-name">
                 <h2 id={`city-${c.name}`}>{c.name}</h2>
                 <UnitsArt units={c.units} label={c.unitsLabel} />
-                <span className="mk-spec">{c.pack === "full" ? "Rules checked 2026-10-28" : "City details in progress"}</span>
+                <span className="mk-spec">Rules checked {c.checked}</span>
               </div>
               <dl className="mk-city-rows">
                 {c.rows.map((r) => (

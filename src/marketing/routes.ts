@@ -30,14 +30,14 @@ export const marketingRoutes: MarketingRoute[] = [
     path: PATHS.forPros,
     title: "For designers and builders | Basement Ready",
     description:
-      "Leads from Waterloo Region homeowners that come with a scan, measurements, a fix list and a rough cost. Founding pros are free while pricing is set.",
+      "Homeowners' basement plans that come with a scan, measurements, a fix list and a rough cost. A pro inbox is coming; founding pros are free while pricing is set.",
     component: ForPros,
   },
   {
     path: PATHS.cities,
     title: "Cities | Basement Ready",
     description:
-      "What Basement Ready checks in Waterloo, Kitchener and Cambridge, and what you get for other Ontario addresses.",
+      "All of Ontario, with Waterloo Region in depth: what Basement Ready checks in Waterloo, Kitchener and Cambridge, and for every other Ontario address.",
     component: Cities,
   },
   {

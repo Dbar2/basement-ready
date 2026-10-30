@@ -1,5 +1,4 @@
-// Paths and the few facts every marketing page shares. Fill the placeholders
-// before launch; anything still null renders as a visible "[to come]" note.
+// Paths and the few facts every marketing page shares.
 
 export const PATHS = {
   home: "/",
@@ -25,9 +24,6 @@ export const NAV = [
 export const SITE = {
   name: "Basement Ready",
   builder: "David Barry",
-  // Placeholder until the domain and inbox exist.
-  contactEmail: null as string | null,
-  // David's own line on why this matters to him (PLAN.md, to-dos). Not written yet.
-  firsthandLine: null as string | null,
+  contactEmail: "davidbarry476@gmail.com" as string | null,
   legalDraftDate: "October 28, 2026",
 };
