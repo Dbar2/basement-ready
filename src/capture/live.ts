@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
 import type { Need } from "./script";
 import { lookOf, type Look } from "./rooms";
+import type { LiveMap } from "./map";
 
 // ---------- live finds (SAM 3.1 on one frame at a time) ----------
 
-export type FindKey = "stairs" | "window" | "furnace" | "panel" | "door" | "duct" | "beam";
+export type FindKey = "stairs" | "window" | "furnace" | "panel" | "door" | "duct" | "beam" | "drain" | "roughin" | "heater" | "bulkhead";
 
 // Which checklist step each find ticks.
 export const FIND_TICKS: Partial<Record<FindKey, Need>> = {
@@ -96,13 +97,16 @@ export function useLiveFinds(opts: {
     let turn = 0;
     let failures = 0;
     let seq = 0;
+    let spent = false;
 
     // Doors every round (they mark a way through), then what's still missing, then an extra.
     const plan = (): FindKey[] => {
       const have = new Set(findsRef.current.map((f) => f.key));
       const missing = (["stairs", "window", "furnace", "panel"] as FindKey[]).filter((k) => !have.has(k));
-      // Beams are left to the full scan: live, they matched furniture in a finished basement.
-      const extras: FindKey[] = ["window", "duct", "panel", "furnace"];
+      // Beams are left to the full scan: live, they matched furniture in a finished basement. The
+      // plumbing, the water heater and low bulkheads are what the guide talks about, so they're asked
+      // for in turn too.
+      const extras: FindKey[] = ["window", "drain", "heater", "duct", "roughin", "panel", "bulkhead", "furnace"];
       const extra = extras[turn++ % extras.length];
       return [...new Set<FindKey>(["door", ...missing.slice(0, 1), extra, ...missing.slice(1)])].slice(0, 3);
     };
@@ -117,14 +121,18 @@ export function useLiveFinds(opts: {
             const form = new FormData();
             form.append("frame", blob, "frame.jpg");
             form.append("session", session);
-            form.append("concepts", JSON.stringify(plan()));
+            form.append("concepts", JSON.stringify(spent ? ["door"] : plan()));
+            // The compass when this frame was taken: the live map turns its camera marker with it.
+            if (heading != null) form.append("heading", heading.toFixed(1));
             try {
               const res = await fetch("/api/live/detect", { method: "POST", body: form });
               if (res.status === 429) {
                 const { error } = await res.json().catch(() => ({ error: "" }));
+                // Out of live finds for this take (the full scan still runs afterwards). Frames keep
+                // going, so the map keeps building.
                 if (error !== "slow down") {
                   setOffline(true);
-                  return; // out of live finds for this take; the full scan still runs afterwards
+                  spent = true;
                 }
               } else if (res.ok) {
                 failures = 0;
@@ -267,12 +275,15 @@ export type Preview3d = {
   count: number;
   positions: Float32Array;
   colors: Uint8Array;
+  pointViews: Uint8Array; // which of the rebuild's views each point came from
   views: number;
   framesSeen: number;
   ceilingHeightM: number | null;
   widthM: number | null;
   depthM: number | null;
   rebuilding: boolean;
+  map: LiveMap | null; // where the camera stood, the room box and its unfilmed sides
+  at: number; // performance.now() when it arrived
 };
 
 export function useLive3d(active: boolean, session: string) {
@@ -300,8 +311,9 @@ export function useLive3d(active: boolean, session: string) {
             const at = 4 + len;
             const positions = new Float32Array(buf.slice(at, at + meta.count * 12));
             const colors = new Uint8Array(buf.slice(at + meta.count * 12, at + meta.count * 15));
+            const pointViews = new Uint8Array(buf.slice(at + meta.count * 15, at + meta.count * 16));
             version = meta.version;
-            setPreview({ ...meta, positions, colors });
+            setPreview({ ...meta, map: meta.map ?? null, positions, colors, pointViews, at: performance.now() });
           }
         } catch {
           // Network blip: try again next round.

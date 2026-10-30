@@ -20,7 +20,7 @@ export type Room = {
 
 export const MAX_ROOMS = 8;
 // The longest take the app records and the server reads, in seconds (src/capture/checklist.ts MAX_SEC).
-export const MAX_TAKE_S = 180;
+export const MAX_TAKE_S = 300;
 // Under this, a room is a doorway walked through, not a room filmed.
 export const MIN_ROOM_FRAMES = 25;
 
