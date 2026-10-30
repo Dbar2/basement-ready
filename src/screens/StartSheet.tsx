@@ -142,7 +142,7 @@ export function StartSheet({ onClose }: { onClose: () => void }) {
                 <AddressField
                   picked={picked}
                   onPick={setPicked}
-                  help={!picked && "Outside Waterloo Region? Skip the address: we'll use Ontario's rules."}
+                  help={!picked && "Any Ontario address. Skip it and we'll use Ontario's rules."}
                 />
                 {picked && <PropertyCard address={picked} onLoad={showWho} />}
                 {!picked && (
