@@ -1,14 +1,18 @@
 // The design drawn from a real camera angle, in the browser: a hidden canvas with that camera's own
-// lens (focal length and centre, from the 3D) and pose, the real scan's surface drawn depth-only so the
-// real walls hide what's behind them, and the design's floor, walls and furniture lit on top. That is
-// laid over the real frame (the guide, sent to Muse Image), and drawn again with each piece in a flat
-// colour that names it (the object-id image, for tap-to-change).
+// lens (focal length and centre, from the 3D) and pose, and the design's floor, walls and furniture lit
+// on top of the basement as it is. With `scanId`, that's the as-built model (src/three/AsBuilt.tsx):
+// the plan painted with the video, clean and square, so the photoreal pass starts from a clean image.
+// Without one (or until it's painted), the real frame, with the real scan's surface drawn depth-only so
+// the real walls hide what's behind them. That is the guide sent to Muse Image; it's drawn again with
+// each piece in a flat colour that names it (the object-id image, for tap-to-change).
 import { Environment, Lightformer } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { lookOf, SPECS, designHash } from "../../server/model/furniture";
-import type { Design } from "../../server/model/types";
+import type { Design, Existing } from "../../server/model/types";
+import { AsBuiltScene, useAtlas } from "../three/AsBuilt";
+import { loadModel } from "../studio/api";
 import type { Angle } from "../../server/views/angles";
 import type { DrawnItem } from "../../server/views/photoreal";
 import type { Solid } from "../three/RealScan";
@@ -80,7 +84,8 @@ function idMaterial(i: number) {
 }
 
 // Lives inside the canvas, after the design: once everything has loaded it hands out `snap`.
-function Snapper({ design, root, onReady }: { design: Design; root: React.RefObject<THREE.Group | null>; onReady: (snap: Snap | null, hash: string) => void }) {
+// `shell`: the as-built model, which hides what's behind its walls in the object-id pass too.
+function Snapper({ design, root, shell, onReady }: { design: Design; root: React.RefObject<THREE.Group | null>; shell: React.RefObject<THREE.Group | null>; onReady: (snap: Snap | null, hash: string) => void }) {
   const { gl, scene, advance } = useThree();
   const hash = useMemo(() => designHash(design), [design]);
   useEffect(() => {
@@ -130,6 +135,12 @@ function Snapper({ design, root, onReady }: { design: Design; root: React.RefObj
         swapped.push([mesh, mesh.material]);
         mesh.material = idMaterial(index.get(id)!);
       });
+      shell.current?.traverse((o) => {
+        const mesh = o as THREE.Mesh;
+        if (!mesh.isMesh) return;
+        swapped.push([mesh, mesh.material]);
+        mesh.material = depthOnly;
+      });
       target.setSize(W, H);
       gl.setRenderTarget(target);
       gl.setClearColor(0x000000, 0);
@@ -158,8 +169,27 @@ function Snapper({ design, root, onReady }: { design: Design; root: React.RefObj
       onReady(null, hash);
       target.dispose();
     };
-  }, [gl, scene, advance, root, design, hash, onReady]);
+  }, [gl, scene, advance, root, shell, design, hash, onReady]);
   return null;
+}
+
+const depthOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
+
+// The basement as built behind the design, once it's painted: its walls hide what's behind them.
+function useShell(scanId: string | undefined) {
+  const [existing, setExisting] = useState<Existing | null>(null);
+  useEffect(() => {
+    if (!scanId) return;
+    let gone = false;
+    loadModel(scanId)
+      .then(({ model }) => !gone && setExisting(model.existing))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [scanId]);
+  const { atlas, status } = useAtlas(existing ? (scanId ?? null) : null, existing);
+  return { existing, atlas: status === "ready" ? atlas : null };
 }
 
 // Somewhere for the light to come from: soft daylight from above, warm pot lights, a little shadow.
@@ -197,22 +227,34 @@ function Lights({ design }: { design: Design }) {
 }
 
 // The hidden canvas. `onReady` gets a snap function once the design (and its models and textures) is
-// in the scene, and again whenever the design changes; null while it isn't ready.
-export function AngleRenderer({ design, solid, ceilingM, size, onReady }: { design: Design; solid: Solid | null; ceilingM: number; size: [number, number]; onReady: (snap: Snap | null, hash: string) => void }) {
+// in the scene, and again whenever the design changes; null while it isn't ready. `scanId`: draw the
+// as-built model of that scan behind the design, once its painting is in (until then, the frame).
+export function AngleRenderer({ design, solid, ceilingM, size, onReady, scanId }: { design: Design; solid: Solid | null; ceilingM: number; size: [number, number]; onReady: (snap: Snap | null, hash: string) => void; scanId?: string }) {
   const root = useRef<THREE.Group>(null);
+  const shell = useRef<THREE.Group>(null);
   // Only the rooms' outlines matter here: furniture moving doesn't rebuild the invisible walls.
   const outline = JSON.stringify(roomBoxes(design));
   const rooms = useMemo(() => JSON.parse(outline) as FloorBox[], [outline]);
+  const { existing, atlas } = useShell(scanId);
+  // Pictures wait for the painting, so none starts from an unpainted model.
+  const [painted, setPainted] = useState(false);
+  const ready = useCallback((snap: Snap | null, hash: string) => onReady(existing && atlas && !painted ? null : snap, hash), [onReady, existing, atlas, painted]);
   return (
     <div aria-hidden style={{ position: "fixed", left: -10 - size[0], top: 0, width: size[0], height: size[1], opacity: 0, pointerEvents: "none" }}>
       <Canvas frameloop="never" dpr={1} shadows gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }} camera={{ position: [0, 1.5, 0] }}>
         <Suspense fallback={null}>
           <Lights design={design} />
-          {solid && <Occluder solid={solid} rooms={rooms} />}
+          {existing && atlas ? (
+            <group ref={shell}>
+              <AsBuiltScene existing={existing} design={design} newWalls={false} atlas={atlas} reveal={false} lights={false} onLoaded={(size) => size >= Math.min(2048, ...Object.keys(atlas.index.levels).map(Number).filter((n) => n >= 1024)) && setPainted(true)} />
+            </group>
+          ) : (
+            solid && <Occluder solid={solid} rooms={rooms} />
+          )}
           <group ref={root}>
             <DesignScene design={design} ceilingM={ceilingM} />
           </group>
-          <Snapper design={design} root={root} onReady={onReady} />
+          <Snapper design={design} root={root} shell={shell} onReady={ready} />
         </Suspense>
       </Canvas>
     </div>
