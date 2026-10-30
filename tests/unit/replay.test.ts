@@ -96,6 +96,38 @@ describe("record and replay", () => {
     expect((await serviceFetch("meta", "https://api.example", "/responses", spark, auth, real as any)).status).toBe(200);
   });
 
+  it("pictures only: a like recorded answer when there's no exact one, logged as loose", async () => {
+    const edit = (bytes: number[], prompt: string) => {
+      const f = new FormData();
+      f.append("model", "muse-image-1.0");
+      f.append("prompt", prompt);
+      f.append("size", "1280x720");
+      f.append("image", new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }), "frame.jpg");
+      return { method: "POST", body: f };
+    };
+    const picture = vi.fn(async () => new Response(json({ data: [{ b64_json: "AAAA" }] }), { headers: { "content-type": "application/json" } }));
+    process.env.REPLAY_LOG = join(dir, "log.jsonl");
+    process.env.META_CACHE = "record";
+    await serviceFetch("meta", "https://api.example", "/images/edits", edit([1], "Renovate into a bedroom."), auth, picture as any);
+    process.env.META_CACHE = "replay";
+    // Not allowed unless asked for.
+    await expect(serviceFetch("meta", "https://api.example", "/images/edits", edit([2], "Renovate into a bedroom."), auth, picture as any)).rejects.toBeInstanceOf(ReplayMiss);
+    // A Spark read recorded too: a different one must still miss, loose or not.
+    const spark = (text: string) => ({ method: "POST", body: json({ model: "muse-spark-1.3", input: [{ role: "user", content: [{ type: "input_text", text }] }] }) });
+    process.env.META_CACHE = "record";
+    await serviceFetch("meta", "https://api.example", "/responses", spark("rules A"), auth, real as any);
+    process.env.META_CACHE = "replay";
+    process.env.REPLAY_LOOSE = "pictures";
+    const res = await serviceFetch("meta", "https://api.example", "/images/edits", edit([2], "Renovate into a bedroom."), auth, picture as any);
+    expect((await res.json()).data[0].b64_json).toBe("AAAA");
+    expect(readFileSync(join(dir, "log.jsonl"), "utf8")).toContain('"event":"loose"');
+    // Never for anything but pictures.
+    await expect(serviceFetch("meta", "https://api.example", "/responses", spark("rules B"), auth, real as any)).rejects.toBeInstanceOf(ReplayMiss);
+    expect(picture).toHaveBeenCalledOnce();
+    delete process.env.REPLAY_LOOSE;
+    delete process.env.REPLAY_LOG;
+  });
+
   it("doesn't save a failed call", async () => {
     process.env.META_CACHE = "record";
     const failing = vi.fn(async () => new Response("busy", { status: 503 }));

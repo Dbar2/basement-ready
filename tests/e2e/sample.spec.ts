@@ -4,8 +4,9 @@
 import { join } from "node:path";
 import { Flow } from "./pages/Flow";
 import { Home } from "./pages/Home";
+import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
-import { Workspace } from "./pages/Workspace";
+import { expectSheets, Workspace } from "./pages/Workspace";
 import { runDir } from "./support/run";
 import { expect, test } from "./support/fixtures";
 import sample from "../../public/samples/sample/result.json" with { type: "json" };
@@ -15,6 +16,7 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
   const wait = new WaitScreen(page);
   const flow = new Flow(page);
   const ws = new Workspace(page);
+  const deck = new StyleDeck(page);
 
   await journey.step("home", () => home.open());
   await journey.step("sample wait screen", async () => {
@@ -24,6 +26,10 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
   });
   const asked = await journey.step("wait screen questions", () => wait.answerAll());
   expect(asked!.length, "the sample asks at least one question").toBeGreaterThan(0);
+  await journey.step("swipe your style: two loved, one passed", async () => {
+    await deck.expectOpen();
+    await deck.swipeAll(["love", "pass", "love"]);
+  });
   await journey.step("answer ready", () => wait.waitForAnswer(60_000));
 
   // ---- 2. Is this your basement? The measured room, its overall width and depth on the drawing ----
@@ -102,8 +108,7 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
     await ws.permit().expectOpen();
   });
   const pdf = await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-sample-permit.pdf`)));
-  expect(pdf!.pageCount, "permit set pages").toBeGreaterThanOrEqual(8);
-  expect(pdf!.index).toMatchObject({ A0: "Cover, key plan and project data", A2: "Basement plan: unit 2", A3: "Main floor: unit 1 (schematic)" });
+  expectSheets(pdf!);
   journey.timing({ take: "sample", kind: "permit", pages: pdf!.pageCount, sheets: pdf!.index });
 
   await journey.step("money", async () => {
