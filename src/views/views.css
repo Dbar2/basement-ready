@@ -39,7 +39,7 @@
   position: absolute;
   border: 2px solid var(--color-card);
   border-radius: var(--radius-1);
-  box-shadow: 0 0 0 2px var(--color-ink), 0 0 0 9999px rgb(15 42 30 / 0.18);
+  box-shadow: 0 0 0 2px var(--color-ink), 0 0 0 9999px color-mix(in srgb, var(--color-ink) 18%, transparent);
   pointer-events: none;
   transition: all var(--dur-2) var(--ease-out);
 }

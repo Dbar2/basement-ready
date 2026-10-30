@@ -90,7 +90,7 @@ a { color: inherit; }
 .nav-links a:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-mint-line); }
 
 /* ---------- Start sheet (two quick questions) ---------- */
-.sheet-backdrop { position: fixed; inset: 0; background: rgb(15 42 30 / 0.28); z-index: 50; display: grid; place-items: center; animation: fade-in var(--dur-2) var(--ease-out); }
+.sheet-backdrop { position: fixed; inset: 0; background: color-mix(in srgb, var(--color-ink) 28%, transparent); z-index: 50; display: grid; place-items: center; animation: fade-in var(--dur-2) var(--ease-out); }
 /* the questions scroll; the buttons sit below them, never on top */
 .sheet { position: relative; width: min(560px, 100%); max-height: calc(100dvh - 48px); display: flex; flex-direction: column; background: var(--color-card); border-radius: var(--radius-2); border: var(--line-ink); box-shadow: var(--shadow-float); animation: sheet-up var(--dur-3) var(--ease-out); }
 .sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: start; gap: 22px; padding: 28px 28px 24px; }
@@ -424,7 +424,7 @@ a { color: inherit; }
 .stage-finish { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; padding: 3px; border-radius: 6px; background: var(--color-card); }
 .stage-finish button { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px 4px 4px; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--color-ink); font: inherit; font-size: 12px; cursor: pointer; }
 .stage-finish button[aria-pressed="true"] { border-color: var(--color-ink); }
-.stage-swatch { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.12); }
+.stage-swatch { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ink) 15%, transparent); }
 .stage-loading { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--color-ink-muted); font-size: 13px; pointer-events: none; }
 .stage-tag { display: inline-flex; gap: 6px; align-items: baseline; padding: 4px 8px; border-radius: var(--radius-1); background: var(--color-card); border: var(--line); color: var(--color-ink); font-size: 12px; white-space: nowrap; pointer-events: none; }
 .stage-tag span { font-family: var(--font-mono); color: var(--color-ink-muted); font-size: 11px; }
@@ -486,7 +486,7 @@ a { color: inherit; }
 @media (max-width: 760px) { .brief-grid { grid-template-columns: 1fr; } }
 @media print {
   @page { size: letter; margin: 10mm; }
-  html, body { background: #fff; }
+  html, body { background: var(--color-card); }
   .brief { padding: 0; gap: 8px; max-width: none; font-size: 10.5px; line-height: 1.35; }
   .brief-actions { display: none; }
   .brief-head { padding-bottom: 6px; }
