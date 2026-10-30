@@ -89,7 +89,8 @@ function lintInPage(opts: { phone: boolean }) {
   for (const el of [...document.body.querySelectorAll("h1,h2,h3,h4,p,span,a,button,label,li,td,th,div")]) {
     if (clipped >= 6) break;
     const hasText = [...el.childNodes].some((c) => c.nodeType === 3 && (c.nodeValue ?? "").trim().length > 1);
-    if (!hasText || !visible(el)) continue;
+    // Screen-reader-only text is 1×1 on purpose.
+    if (!hasText || !visible(el) || el.clientWidth <= 2 || el.clientHeight <= 2) continue;
     const s = getComputedStyle(el);
     const hidesX = ["hidden", "clip"].includes(s.overflowX) || s.textOverflow === "ellipsis";
     const hidesY = ["hidden", "clip"].includes(s.overflowY) || Number(s.webkitLineClamp) > 0;
@@ -222,6 +223,7 @@ export function lintText(text: string): LintIssue[] {
 // An earlier capture's word finding, checked again against today's rules (they get narrower as false
 // alarms turn up): false when the quoted text no longer breaks its rule.
 export function stillHolds(f: { rule: string; what: string }): boolean {
+  if (f.rule === "cut-off-text" && /in [0-2]×[0-2]\)/.test(f.what)) return false;
   const rule = TEXT_RULES.find((r) => r.rule === f.rule);
   const quote = f.what.match(/"([^"]*)"/)?.[1];
   return !rule || quote === undefined || rule.re.test(quote);
