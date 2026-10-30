@@ -93,6 +93,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 - Anything an AI changed says **"Virtually staged"** in a caption line under the photo, in body small, muted. Nothing floats on top of a photo except a callout leader.
 - Placeholders while a photo loads: a flat `--color-surface` block the photo's size, with one line of muted text if it takes more than a second. No shimmer.
 - Camera screens (filming) are the one dark context: the live camera fills the screen, and the guide's panels sit on it in ink. Corners and type follow the same rules; nothing blinks.
+- On the iPhone the camera view is the map (no mini map). Spots not filmed yet keep a still mint glow, never pulsing: it's how you see what's missing (David, Oct 30).
 
 ## Icons
 
