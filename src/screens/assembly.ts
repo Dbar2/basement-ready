@@ -1,9 +1,10 @@
 // What the wait screen draws of the basement, from the scan's `path` and `model` events (server/basement.ts).
 // Two frames:
 // - The walk frame: the `path` event's walk, with each area's 3D (in that area's own frame) set into
-//   it by its `place`. The placement is provisional, so a later event for the same area moves it.
+//   it by its `place`. The placement is provisional, so a later event for the same area moves it; an
+//   area with no placement is shown on its own beside the walk.
 // - The final frame: the whole basement (`area: "all"`), which re-sends the walk in its own frame.
-//   It replaces the walk frame once it's in; the two never overlay, since the turn between them isn't sent.
+//   The final layout can move an area metres, so the walk frame cross-fades out as this comes in.
 type Logged = { type: string; data?: { points?: V2[]; area?: number | "all"; files?: { surfels: string; mesh?: string }; place?: Place | null; path?: V2[] } };
 
 export type V2 = [number, number];
@@ -22,6 +23,20 @@ export function placePoint(p: Place | null, x: number, y: number, z: number): [n
 // The same placement as a three.js group: turned by −angle about y, then scaled, then moved.
 export function placeGroup(p: Place | null): { rotationY: number; scale: number; position: [number, number, number] } {
   return p ? { rotationY: -p.angle, scale: p.scale, position: [p.x, 0, p.z] } : { rotationY: 0, scale: 1, position: [0, 0, 0] };
+}
+
+export type Box2 = { minX: number; maxX: number; minZ: number; maxZ: number };
+
+// Areas the layout couldn't place are shown on their own: in a row beside the walk and the placed
+// areas (`around`), level with their middle, never overlapping them or each other.
+export function besideWalk(around: Box2 | null, boxes: Box2[], gap = 0.8): Place[] {
+  let x = around ? around.maxX + gap : 0;
+  const z = around ? (around.minZ + around.maxZ) / 2 : 0;
+  return boxes.map((b) => {
+    const place = { angle: 0, scale: 1, x: x - b.minX, z: z - (b.minZ + b.maxZ) / 2 };
+    x += b.maxX - b.minX + gap;
+    return place;
+  });
 }
 
 // The newest walk.

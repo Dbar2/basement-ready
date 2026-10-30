@@ -1,21 +1,23 @@
 // The basement putting itself together while the 3D service works (wait screen). First the camera's
 // walk, drawn on the floor like a line on a plan; then each area's surface points fading in in filming
-// order, set into the walk where the layout puts them (src/screens/assembly.ts). When the whole
-// basement is done it takes over in its own frame, with the walk re-drawn in it, and its solid surface
-// fades in over the points. It turns slowly so it reads as 3D. A take without 3D sends no `path` or
+// order, set into the walk where the layout puts them (src/screens/assembly.ts); an area the layout
+// couldn't place sits on its own beside the walk. When the whole basement is done it takes over in its
+// own frame, cross-fading from the walk's view (the final layout can move an area metres), with the
+// walk re-drawn in it, and its solid surface fades in over the points. It turns slowly so it reads as 3D. A take without 3D sends no `path` or
 // `model` events, and the wait screen never shows this.
 import { Line } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
 import * as THREE from "three";
-import { placeGroup, placePoint, type AreaModel, type Place, type V2 } from "../screens/assembly";
+import { besideWalk, placeGroup, placePoint, type AreaModel, type Box2, type Place, type V2 } from "../screens/assembly";
 import { parseMesh, parseSurfels } from "../three/RealScan";
 
 const MAX_POINTS = 45_000; // per area, so a phone keeps up
 const DRAW_S = 3.2; // the walk draws itself in this long
 const REVEAL_S = 2.8; // an area assembles in this long
 const SPIN = 0.09; // radians a second
-const FADE = 1.4; // the solid surface takes over from the points at this rate
+const FADE = 1.4; // things fade in and out at this rate: the solid surface over the points, the walk's view into the final one
+const CROSS_S = 2.4; // the walk's view is gone this long after the whole basement arrives
 
 const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const still = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -62,7 +64,7 @@ function pointsMaterial(cutY: number) {
   return new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    uniforms: { uReveal: { value: 0 }, uFade: { value: 1 }, uCut: { value: cutY }, uScale: { value: 300 } },
+    uniforms: { uReveal: { value: 0 }, uFade: { value: 0 }, uCut: { value: cutY }, uScale: { value: 300 } },
     vertexShader: /* glsl */ `
       attribute float aOrder;
       attribute vec3 color;
@@ -167,29 +169,34 @@ function Placed({ place, children }: { place: Place | null; children: ReactNode 
   return <group ref={group}>{children}</group>;
 }
 
-function Walk({ path, color, y }: { path: V2[]; color: string; y: number }) {
+function Walk({ path, color, y, hidden }: { path: V2[]; color: string; y: number; hidden: boolean }) {
   const line = useRef<ComponentRef<typeof Line>>(null);
-  const head = useRef<THREE.Mesh>(null);
+  const head = useRef<THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>>(null);
   const born = useRef<number | null>(null);
   const points = useMemo(() => path.map(([x, z]) => new THREE.Vector3(x, y + 0.02, z)), [path, y]);
-  useFrame(({ clock }) => {
+  useFrame(({ clock }, dt) => {
     born.current ??= clock.elapsedTime;
     const k = still() ? 1 : Math.min(1, (clock.elapsedTime - born.current) / DRAW_S);
     const segments = Math.max(1, Math.round((points.length - 1) * k));
-    if (line.current) (line.current.geometry as THREE.InstancedBufferGeometry).instanceCount = segments;
+    if (line.current) {
+      (line.current.geometry as THREE.InstancedBufferGeometry).instanceCount = segments;
+      const m = line.current.material as THREE.Material;
+      m.opacity = THREE.MathUtils.damp(m.opacity, hidden ? 0 : 1, FADE, dt);
+    }
     const at = points[Math.min(points.length - 1, segments)];
     if (head.current && at) {
       head.current.position.copy(at);
       head.current.scale.setScalar(1 + 0.25 * Math.sin(clock.elapsedTime * 4));
+      head.current.material.opacity = THREE.MathUtils.damp(head.current.material.opacity, hidden ? 0 : 1, FADE, dt);
     }
   });
   if (points.length < 2) return null;
   return (
     <>
-      <Line ref={line} points={points} color={color} lineWidth={3} />
+      <Line ref={line} points={points} color={color} lineWidth={3} transparent />
       <mesh ref={head}>
         <sphereGeometry args={[0.09, 16, 12]} />
-        <meshBasicMaterial color={color} />
+        <meshBasicMaterial color={color} transparent />
       </mesh>
     </>
   );
@@ -223,6 +230,39 @@ function Rig({ min, max, tilted }: { min: THREE.Vector3; max: THREE.Vector3; til
     camera.lookAt(centre.current);
   });
   return null;
+}
+
+type Bounds = { min: THREE.Vector3; max: THREE.Vector3; floor: number };
+
+const boxOf = (c: Cloud): Box2 => ({ minX: c.min.x, maxX: c.max.x, minZ: c.min.z, maxZ: c.max.z });
+
+// What a view spans: its walk and its points, each set where it's placed.
+function spanOf(walk: V2[] | null, items: { c: Cloud; place: Place | null }[]): Bounds {
+  const min = new THREE.Vector3(Infinity, Infinity, Infinity);
+  const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
+  const add = (x: number, z: number) => {
+    min.x = Math.min(min.x, x);
+    max.x = Math.max(max.x, x);
+    min.z = Math.min(min.z, z);
+    max.z = Math.max(max.z, z);
+  };
+  for (const [x, z] of walk ?? []) add(x, z);
+  for (const { c, place } of items) {
+    for (const x of [c.min.x, c.max.x])
+      for (const z of [c.min.z, c.max.z]) {
+        const [px, , pz] = placePoint(place, x, 0, z);
+        add(px, pz);
+      }
+    min.y = Math.min(min.y, placePoint(place, 0, c.min.y, 0)[1]);
+    max.y = Math.max(max.y, placePoint(place, 0, c.max.y, 0)[1]);
+  }
+  // The floor: the lowest of the points, or the plan's own level before any arrive.
+  if (!Number.isFinite(min.y)) {
+    min.y = 0;
+    max.y = 2.4;
+  }
+  if (!Number.isFinite(min.x)) return { min: new THREE.Vector3(-2, 0, -2), max: new THREE.Vector3(2, 2.4, 2), floor: 0 };
+  return { min, max, floor: min.y };
 }
 
 export default function Assembling({ path, models }: { path: V2[] | null; models: AreaModel[] }) {
@@ -269,38 +309,29 @@ export default function Assembling({ path, models }: { path: V2[] | null; models
     };
   }, [meshUrl]);
 
-  // One frame at a time: the whole basement in its own, or the walk with the areas set into it.
-  const walk = finalCloud ? (final?.path ?? null) : path;
-  const areas = finalCloud ? [] : models.filter((m) => m.area !== "all" && clouds[m.key]);
-  const bounds = useMemo(() => {
-    const min = new THREE.Vector3(Infinity, Infinity, Infinity);
-    const max = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
-    const add = (x: number, z: number) => {
-      min.x = Math.min(min.x, x);
-      max.x = Math.max(max.x, x);
-      min.z = Math.min(min.z, z);
-      max.z = Math.max(max.z, z);
-    };
-    for (const [x, z] of walk ?? []) add(x, z);
-    const boxes = finalCloud ? [{ c: finalCloud, place: null }] : areas.map((m) => ({ c: clouds[m.key], place: m.place }));
-    for (const { c, place } of boxes) {
-      for (const x of [c.min.x, c.max.x])
-        for (const z of [c.min.z, c.max.z]) {
-          const [px, , pz] = placePoint(place, x, 0, z);
-          add(px, pz);
-        }
-      min.y = Math.min(min.y, placePoint(place, 0, c.min.y, 0)[1]);
-      max.y = Math.max(max.y, placePoint(place, 0, c.max.y, 0)[1]);
-    }
-    // The floor: the lowest of the points, or the plan's own level before any arrive.
-    if (!Number.isFinite(min.y)) {
-      min.y = 0;
-      max.y = 2.4;
-    }
-    if (!Number.isFinite(min.x)) return { min: new THREE.Vector3(-2, 0, -2), max: new THREE.Vector3(2, 2.4, 2), floor: 0 };
-    return { min, max, floor: min.y };
+  // The walk's view: the walk, each area where the layout put it, and the ones it couldn't place on their own beside them.
+  const areaKeys = models.filter((m) => m.area !== "all" && clouds[m.key]).map((m) => `${m.key}@${m.place ? Object.values(m.place).join(",") : ""}`).join("|");
+  const walkView = useMemo(() => {
+    const areas = models.filter((m) => m.area !== "all" && clouds[m.key]);
+    const placed = areas.filter((m) => m.place);
+    const unplaced = areas.filter((m) => !m.place);
+    const around = path || placed.length ? spanOf(path, placed.map((m) => ({ c: clouds[m.key], place: m.place }))) : null;
+    const aside = besideWalk(around && { minX: around.min.x, maxX: around.max.x, minZ: around.min.z, maxZ: around.max.z }, unplaced.map((m) => boxOf(clouds[m.key])));
+    const shown = [...placed.map((m) => ({ m, place: m.place })), ...unplaced.map((m, i) => ({ m, place: aside[i] }))];
+    return { shown, bounds: spanOf(path, shown.map(({ m, place }) => ({ c: clouds[m.key], place }))) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walk, finalCloud, areas.map((m) => `${m.key}@${m.place ? Object.values(m.place).join(",") : ""}`).join("|")]);
+  }, [path, areaKeys]);
+  const finalView = useMemo(() => (finalCloud ? { bounds: spanOf(final?.path ?? null, [{ c: finalCloud, place: null }]) } : null), [finalCloud, final?.path]);
+
+  // The whole basement cross-fades in over the walk's view, which then goes.
+  const [walkGone, setWalkGone] = useState(false);
+  useEffect(() => {
+    if (!finalCloud) return;
+    const t = setTimeout(() => setWalkGone(true), still() ? 0 : CROSS_S * 1000);
+    return () => clearTimeout(t);
+  }, [Boolean(finalCloud)]);
+
+  const bounds = (finalView ?? walkView).bounds;
   const colors = useMemo(() => ({ walk: cssVar("--color-mint"), grid: cssVar("--color-mint-line") }), []);
   const phone = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
 
@@ -309,21 +340,26 @@ export default function Assembling({ path, models }: { path: V2[] | null; models
       {/* Lambert divides light by π: these keep the photo's own brightness on the solid surface. */}
       <ambientLight intensity={2.6} />
       <directionalLight position={[3, 8, 4]} intensity={1.2} />
-      <Rig min={bounds.min} max={bounds.max} tilted={Boolean(finalCloud) || areas.length > 0} />
+      <Rig min={bounds.min} max={bounds.max} tilted={Boolean(finalView) || walkView.shown.length > 0} />
       <gridHelper
         args={[40, 80, colors.grid, colors.grid]}
         position={[(bounds.min.x + bounds.max.x) / 2, bounds.floor, (bounds.min.z + bounds.max.z) / 2]}
         material-transparent
         material-opacity={0.16}
       />
-      {walk && <Walk path={walk} color={colors.walk} y={bounds.floor} />}
-      {areas.map((m) => (
-        <Placed key={m.key} place={m.place}>
-          <AreaPoints cloud={clouds[m.key]} hidden={false} />
-        </Placed>
-      ))}
-      {finalCloud && final && (
+      {!walkGone && (
+        <>
+          {path && <Walk key="walk" path={path} color={colors.walk} y={walkView.bounds.floor} hidden={Boolean(finalView)} />}
+          {walkView.shown.map(({ m, place }) => (
+            <Placed key={m.key} place={place}>
+              <AreaPoints cloud={clouds[m.key]} hidden={Boolean(finalView)} />
+            </Placed>
+          ))}
+        </>
+      )}
+      {finalView && finalCloud && final && (
         <group key={final.key}>
+          {final.path && <Walk key="final-walk" path={final.path} color={colors.walk} y={finalView.bounds.floor} hidden={false} />}
           <AreaPoints cloud={finalCloud} hidden={Boolean(solid)} />
           {solid && <SolidSurface geometry={solid} cutY={finalCloud.cutY} />}
         </group>

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { modelsFrom, placeGroup, placePoint, walkFrom } from "../../src/screens/assembly";
+import { besideWalk, modelsFrom, placeGroup, placePoint, walkFrom } from "../../src/screens/assembly";
 
 const area = (i: number, place?: unknown) => ({ type: "model", data: { area: i, files: { surfels: `/api/scans/s/3d/surfels.bin?area=${i}`, mesh: `/api/scans/s/3d/mesh.bin?area=${i}`, scan: "x" }, place } }) as never;
 
@@ -43,6 +43,23 @@ describe("the wait screen's basement: areas set into the walk, then the whole ba
     expect(modelsFrom([area(0, { angle: 0, scale: 0, x: 0, z: 0 })])[0].place).toBeNull();
     expect(modelsFrom([area(0, { angle: Number.NaN, scale: 1, x: 0, z: 0 })])[0].place).toBeNull();
     expect(modelsFrom([area(0)])[0].place).toBeNull();
+  });
+
+  it("shows an area the layout couldn't place on its own, in a row beside the walk, overlapping nothing", () => {
+    const walk = { minX: -1, maxX: 3, minZ: -2, maxZ: 2 };
+    const a = { minX: -2, maxX: 2, minZ: -1, maxZ: 1 }; // 4 m wide, centred on its own origin
+    const b = { minX: 10, maxX: 13, minZ: 5, maxZ: 9 }; // 3 m wide, far from its origin
+    const [pa, pb] = besideWalk(walk, [a, b], 0.8);
+    const moved = (box: typeof a, p: typeof pa) => ({ minX: box.minX + p.x, maxX: box.maxX + p.x, minZ: box.minZ + p.z, maxZ: box.maxZ + p.z });
+    const ma = moved(a, pa), mb = moved(b, pb);
+    expect(ma.minX).toBeCloseTo(3.8);
+    expect(mb.minX).toBeCloseTo(ma.maxX + 0.8);
+    // Level with the middle of the walk, unturned, at its own size.
+    expect((ma.minZ + ma.maxZ) / 2).toBeCloseTo(0);
+    expect((mb.minZ + mb.maxZ) / 2).toBeCloseTo(0);
+    expect([pa.angle, pa.scale, pb.angle, pb.scale]).toEqual([0, 1, 0, 1]);
+    // With nothing placed yet, the first one starts at the middle.
+    expect(besideWalk(null, [a])[0]).toEqual({ angle: 0, scale: 1, x: 2, z: 0 });
   });
 
   it("knows the whole basement by its area or its ?room=all files, and carries the walk re-sent in its frame", () => {
