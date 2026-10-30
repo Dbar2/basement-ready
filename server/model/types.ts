@@ -55,6 +55,36 @@ export type Fixture = {
 
 export type Alarm = { id: string; kind: "smoke" | "co" | "combo"; at: Pt; why: string };
 
+// Furniture lives in the model, so every picture of the design shows it in the same place, and
+// swapping a sofa for a desk (or its colour) changes every angle at once.
+export type FurnitureKind =
+  | "bed"
+  | "sofa"
+  | "armchair"
+  | "desk"
+  | "dining"
+  | "dresser"
+  | "tv"
+  | "rug"
+  | "shelf"
+  | "kitchen"
+  | "fridge"
+  | "vanity"
+  | "toilet"
+  | "shower"
+  | "washer_dryer"
+  | "other";
+
+export type Furniture = {
+  id: string;
+  kind: FurnitureKind;
+  at: Pt; // centre of its footprint
+  rotDeg: number; // about +Y, 0 = facing +z
+  sizeM: Pt; // footprint before rotation
+  colour?: string; // a named finish or a hex, from the mood board
+  roomId?: string;
+};
+
 export type Finishes = { style: string; floor: string; walls: string; kitchen?: string; bath?: string };
 
 // The basement as it is, from the scan and the homeowner's corrections on "Is this your basement?".
@@ -73,7 +103,7 @@ export type Design = {
   id: string;
   name: string;
   layout: "one_bedroom" | "studio" | "two_bedroom" | "custom";
-  proposed: { walls: Wall[]; openings: Opening[]; rooms: Room[]; fixtures: Fixture[]; alarms: Alarm[] };
+  proposed: { walls: Wall[]; openings: Opening[]; rooms: Room[]; fixtures: Fixture[]; alarms: Alarm[]; furniture: Furniture[] };
   finishes: Finishes;
   chosen: boolean;
   updatedAt: string;
@@ -93,7 +123,10 @@ export type Edit =
   | { op: "move_opening"; openingId: string; offsetM: number }
   | { op: "remove_opening"; openingId: string }
   | { op: "set_room"; roomId: string; kind?: RoomKind; name?: string; polygon?: Pt[] }
-  | { op: "set_finishes"; finishes: Partial<Finishes> };
+  | { op: "set_finishes"; finishes: Partial<Finishes> }
+  | { op: "add_furniture"; furniture: Furniture }
+  | { op: "set_furniture"; furnitureId: string; kind?: FurnitureKind; at?: Pt; rotDeg?: number; sizeM?: Pt; colour?: string }
+  | { op: "remove_furniture"; furnitureId: string };
 
 // A rule checked on a design: shown live in the studio, counted on the permit's readiness list.
 export type Check = {
