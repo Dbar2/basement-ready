@@ -119,8 +119,7 @@ struct IntroOverlays: ViewModifier {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   func body(content: Content) -> some View {
-    let onForest = flow.showingLaunch
-    return ZStack {
+    ZStack {
       content
         .accessibilityHidden(flow.showingLaunch || flow.showingGuide)
       if flow.showingGuide {
@@ -135,8 +134,6 @@ struct IntroOverlays: ViewModifier {
           .zIndex(2)
       }
     }
-    // A light status bar while the forest launch shows; the screens underneath ask for light mode.
-    .transformPreference(PreferredColorSchemeKey.self) { if onForest { $0 = .dark } }
   }
 }
 
