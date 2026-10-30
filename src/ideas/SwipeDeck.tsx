@@ -111,8 +111,15 @@ export function SwipeDeck({ deck, cards, slots, state, dispatch, frameSrc, error
           Love it <span aria-hidden="true">→</span>
         </button>
       </div>
-      <p className="deck-count mono" aria-live="polite">
-        {total ? `${Math.min(swiped + 1, total)} of ${total}${left && !topReady ? " · restyling" : ""} · ${state.board.length} loved` : " "}
+      <p className="deck-count" aria-live="polite">
+        {total ? (
+          <>
+            <span className="mono">{Math.min(swiped + 1, total)} of {total}</span>
+            {left && !topReady ? " · restyling" : ""} · <span className="mono">{state.board.length}</span> loved
+          </>
+        ) : (
+          " "
+        )}
       </p>
 
       {bigger && cards.get(bigger) && (
@@ -219,7 +226,7 @@ function DeckCard({ slot, card, depth, reduced, frameSrc, comeBack, register, on
       <Picture from={frameSrc(slot.frame)} src={card?.url} aspect={slot.aspect} alt={`${slot.title}, virtually staged from your own video`} />
       <div className="deck-card-meta">
         <h3>{slot.title}</h3>
-        <p className="mono">
+        <p>
           {card ? `${t.floor} · ${t.walls}` : "Restyling this view…"}
           <span className="deck-staged">Virtually staged · {slot.view}</span>
         </p>

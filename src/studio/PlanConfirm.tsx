@@ -164,9 +164,9 @@ function Confirm({ scanId, model, photos }: { scanId: string; model: Model; phot
 
       <aside className="studio-side" aria-label="Your basement">
         <div className="side-card">
-          <p className="mono side-eyebrow">{taped ? "Scaled to your tape" : e.scale.source === "arkit" ? "Measured by the iPhone app" : photos ? "From your photos, give or take a fifth" : "From the video, give or take a little"}</p>
           <p className="side-big">{fmtArea(area, units)}</p>
-          <p className="muted">Ceiling {e.ceilingM ? fmtLength(e.ceilingM, units) : "not measured"}</p>
+          <p className="muted">Ceiling {e.ceilingM ? <span className="mono">{fmtLength(e.ceilingM, units)}</span> : "not measured"}</p>
+          <p className="side-eyebrow">{taped ? "Scaled to your tape." : e.scale.source === "arkit" ? "Measured by the iPhone app." : photos ? "From your photos, give or take a fifth." : "From the video, give or take a little."}</p>
         </div>
 
         {askTape && !wall && (

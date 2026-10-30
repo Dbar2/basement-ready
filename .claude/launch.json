@@ -17,6 +17,20 @@
       ],
       "port": 5173,
       "url": "https://localhost:5173"
+    },
+    {
+      "name": "basement-ready-alt-ports",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "exec",
+        "concurrently",
+        "-k",
+        "-n",
+        "api,web",
+        "API_PORT=8823 tsx watch server/index.ts",
+        "API_PORT=8823 vite --port 5193 --strictPort"
+      ],
+      "port": 5193
     }
   ]
 }

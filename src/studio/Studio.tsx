@@ -136,7 +136,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
         <div className="studio-title">
           <div>
             <h1>Your basement, designed</h1>
-            <p className="lede">Permit-ready from the start. Drag a wall or a door, walk through it, or describe a change.</p>
+            <p className="lede">Drag a wall or a door, walk through it, or describe a change.</p>
           </div>
           <div className="ws-chips" role="radiogroup" aria-label="Design">
             {model.designs.map((d) => (
@@ -146,7 +146,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
             ))}
             {!existing.confirmedAt && (
               <FlowLink href={stepUrl(scanId, "plan")} className="link-quiet">
-                Check your plan first
+                Check the plan
               </FlowLink>
             )}
           </div>
@@ -159,7 +159,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
           </div>
           <div className="studio-3d" data-shown={pane === "3d"}>
             <View3DBoundary>
-              <Suspense fallback={<p className="viewer-empty mono">Building your basement in 3D…</p>}>
+              <Suspense fallback={<p className="viewer-empty">Building your basement in 3D…</p>}>
                 <Studio3D
                   scanId={scanId}
                   existing={existing}
@@ -182,7 +182,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
                 <button aria-pressed={view === "walk"} onClick={() => setView("walk")}>Walk</button>
               </div>
             </div>
-            <p className="viewer-hint mono">{view === "walk" ? "Drag to look · tap the floor to walk" : "Drag a wall or a green knob · drag elsewhere to turn"}</p>
+            <p className="viewer-hint">{view === "walk" ? "Drag to look · tap the floor to walk" : "Drag a wall or a green knob · drag elsewhere to turn"}</p>
           </div>
           <div className="studio-plan" data-shown={pane === "plan"}>
             <PlanSvg
@@ -256,7 +256,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
           <div className="history" role="group" aria-label="Undo">
             <button className="chip" onClick={hist.undo} disabled={!hist.canUndo}>Undo</button>
             <button className="chip" onClick={hist.redo} disabled={!hist.canRedo}>Redo</button>
-            <span className="mono muted save-state" aria-live="polite">{saved === "saving" ? "Saving…" : saved === "error" ? "Not saved" : "Saved"}</span>
+            <span className="aside save-state" aria-live="polite">{saved === "saving" ? "Saving…" : saved === "error" ? "Not saved" : "Saved"}</span>
           </div>
         </div>
 
@@ -326,7 +326,7 @@ function Checks({ checks, onFix, onShow }: { checks: Check[]; onFix: (c: Check) 
                   {(c.fix || c.at) && (
                     <span className="check-actions">
                       {c.fix && c.ok === false && (
-                        <button className="btn btn-primary btn-small" onClick={() => onFix(c)}>
+                        <button className="btn btn-ghost btn-small" onClick={() => onFix(c)}>
                           {c.fix.label}
                         </button>
                       )}
@@ -388,7 +388,7 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
         }}
       >
         <textarea className="input" rows={3} maxLength={400} placeholder="Make the bedroom a bit bigger" value={ask} onChange={(e) => setAsk(e.target.value)} aria-label="The change you'd like" />
-        <button className="btn btn-primary" type="submit" disabled={busy || !ask.trim()}>
+        <button className="btn btn-ghost" type="submit" disabled={busy || !ask.trim()}>
           {busy ? "Thinking…" : "Propose it"}
         </button>
       </form>
@@ -397,7 +397,7 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
         <div className="proposal" role="status">
           <p>{proposal.summary}</p>
           {proposal.edits.length > 0 && after && costAfter && (
-            <p className="mono muted small">
+            <p className="muted small">
               Checks met {before.ok} → {after.ok}
               {after.fix !== before.fix ? `, to fix ${before.fix} → ${after.fix}` : ""} · cost {cad(costBefore.totalLow)} → {cad(costAfter.totalLow)}
             </p>
@@ -406,7 +406,7 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
           <div className="ws-actions">
             {proposal.edits.length > 0 && (
               <button
-                className="btn btn-primary"
+                className="btn btn-ghost"
                 onClick={() => {
                   onApply(proposal.result);
                   setProposal(null);
