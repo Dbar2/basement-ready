@@ -180,6 +180,11 @@ SPOTS = [
     pose_at([2.0, 1.5, 1.5], [3.9, 1.0, 1.5]),
     pose_at([2.0, 1.5, 1.5], [0.1, 1.0, 1.5]),
     pose_at([2.0, 1.3, 1.5], [2.0, 2.4, 2.4]),
+    # Looking down at the floor, steeply enough to paint it.
+    pose_at([1.0, 1.5, 0.9], [1.1, 0.0, 1.4]),
+    pose_at([3.0, 1.5, 0.9], [2.9, 0.0, 1.4]),
+    pose_at([1.0, 1.5, 2.1], [1.1, 0.0, 1.6]),
+    pose_at([3.0, 1.5, 2.1], [2.9, 0.0, 1.6]),
 ]
 
 
@@ -194,8 +199,8 @@ def test_paint_puts_every_frame_back_where_it_was_filmed():
         want = truth_tile(sd, index["ppm"], got.shape[1], got.shape[0])
         assert entry["frames"], sd["id"]
         if sd["id"] == "ceiling":
-            # One frame looks up: what it saw is painted, the rest filled from it.
-            assert entry["coverage"] > 0.2
+            # One frame looks up: what it saw squarely enough is painted, the rest filled from it.
+            assert entry["coverage"] > 0.15
             continue
         assert entry["coverage"] > (0.9 if sd["kind"] == "wall" else 0.6), sd["id"]
         err = np.abs(got - want).mean()
@@ -313,3 +318,12 @@ def test_paint_the_frames_disagree_on_is_drawn_plain():
     clean, cluttered = sure([]), sure(box)
     assert clean > 0.9
     assert cluttered < clean - 0.05
+
+
+def test_a_floor_seen_only_at_a_shallow_angle_stays_plain():
+    # Standing, looking across the room: the floor is in view, but too shallow to paint without streaks.
+    level = [pose_at([0.5, 1.5, 1.5], [3.9, 1.2, 1.5]), pose_at([3.5, 1.5, 1.5], [0.1, 1.2, 1.5])]
+    job, images, depths = job_for(level)
+    index, _ = paint(job, images, depths)
+    assert index["surfaces"]["floor"]["coverage"] < 0.25
+    assert index["surfaces"]["wall:e"]["coverage"] > 0.8
