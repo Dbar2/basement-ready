@@ -13,20 +13,18 @@ const FPS = 5; // server/pipeline.ts ANALYSIS_FPS: a photo's "seconds" is its fr
 const PER_PHOTO = 4; // at most this many of one thing in one photo
 const MIN_AREA = 0.001; // of the picture: smaller is a speck, not a find
 
-// SAM's "support beam" also outlines every joist, post and stair stringer. A beam lies level: never taller
-// than wide in the picture, which rules out the posts and stringers (the video's tracks too,
-// server/pipeline.ts). A photo keeps one beam: its widest long one (at least this much of the photo wide
-// and this many times wider than tall, in pixels), which may be a little less sure than the bar since its
-// shape vouches for it; else its widest sure level box, so Spark still sees open joists. Tuned on practice
-// photos and checked on real takes (scripts/practice).
+// SAM's "support beam" also outlines every joist, post, stud and stair stringer. A beam is long and level:
+// at least this much of the picture wide and this many times wider than tall (in pixels), which may be a
+// little less sure than the bar since its shape vouches for it. A photo keeps its widest one; a video keeps
+// one at a time (server/videoFinds.ts). Nothing else stands in: the fire rules no longer need a ceiling
+// find (server/assess.ts fireRules). Tuned on practice photos, checked on real takes (scripts/practice).
 export const BEAM = { minWidth: 0.4, minAspect: 2, min: 0.65 };
 
-export const isLevel = (b: SamBox) => b.x2 - b.x1 >= b.y2 - b.y1;
+export const isLongBeam = (b: SamBox, min = BEAM.min) =>
+  (b.c ?? 1) >= min && (b.x2 - b.x1) / b.w >= BEAM.minWidth && b.x2 - b.x1 >= BEAM.minAspect * (b.y2 - b.y1);
 
 function oneBeam(boxes: SamBox[], min: number): SamBox[] {
-  const long = boxes.filter((b) => (b.c ?? 1) >= Math.min(min, BEAM.min) && (b.x2 - b.x1) / b.w >= BEAM.minWidth && b.x2 - b.x1 >= BEAM.minAspect * (b.y2 - b.y1));
-  const pick = long.length ? long : boxes.filter((b) => (b.c ?? 1) >= min && isLevel(b));
-  return pick.sort((a, b) => b.x2 - b.x1 - (a.x2 - a.x1)).slice(0, 1);
+  return boxes.filter((b) => isLongBeam(b, Math.min(min, BEAM.min))).sort((a, b) => b.x2 - b.x1 - (a.x2 - a.x1)).slice(0, 1);
 }
 
 const r3 = (n: number) => Math.round(n * 1000) / 1000;

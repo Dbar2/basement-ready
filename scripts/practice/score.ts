@@ -8,8 +8,9 @@
 //     --labels <file>     labels (default <dir>/labels.json)
 //     --split train|holdout|all     which labelled photos (default all)
 //     --ids a,b           only these photos
-//     --spark none|all|labelled|<id,id>   which photos Spark reads (default none). labelled: those
+//     --spark none|all|labelled|<id,id>   which photos the reader reads (default none). labelled: those
 //                         whose label says what Spark should find
+//     --model <id>        the reader (default the app's, server/assess.ts): e.g. muse-wonder-1.0
 //     --concepts <file>   a JSON list of { concept, kind, label } to try instead of the app's
 //     --out <file>        every photo's finds, SAM's raw boxes and Spark's reading (JSON)
 //     --report <file>     the scores (Markdown)
@@ -23,7 +24,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readWithSpark } from "../../server/assess";
-import { dataUrl, samImage } from "../../server/meta";
+import { dataUrl, samImage, tokenCost } from "../../server/meta";
 import { findInPhotos, mergePhotoFinds } from "../../server/photoFinds";
 import { sniffPhoto, uprightPhoto } from "../../server/photoInput";
 import { CONCEPTS, type Detection } from "../../server/pipeline";
@@ -41,14 +42,15 @@ const LABELS = arg("labels", join(DIR, "labels.json"));
 const SPLIT = arg("split", "all");
 const IDS = arg("ids").split(",").filter(Boolean);
 const SPARK = arg("spark", "none");
+const MODEL = arg("model") || undefined;
 const BUDGET = Number(arg("budget", "10"));
 const DRY = process.argv.includes("--dry");
 const replayDirs = (process.env.REPLAY_DIR ?? "").split(":").filter(Boolean);
 if (!replayDirs.length) throw new Error("Set REPLAY_DIR to a private folder, so every call is saved and reruns are free");
 const LEDGER = arg("ledger", join(replayDirs[0], "practice-spend.jsonl"));
 const concepts: typeof CONCEPTS = arg("concepts") ? JSON.parse(readFileSync(arg("concepts"), "utf8")) : CONCEPTS;
-// Estimates for calls not saved yet. A Spark read of one photo has cost $0.03–0.04.
-const SPARK_ESTIMATE = 0.045;
+// Estimates for calls not saved yet. A Spark read of one photo has cost $0.01–0.04, a Wonder read about $0.06.
+const SPARK_ESTIMATE = MODEL && /wonder/.test(MODEL) ? 0.08 : 0.045;
 
 const all: Record<string, Label> = JSON.parse(readFileSync(LABELS, "utf8")).photos;
 const ids = Object.keys(all)
@@ -102,7 +104,7 @@ async function runPhoto(id: string, misses: Misses): Promise<PhotoResult> {
   let spark: Reading | null = null;
   if (sparkIds.has(id)) {
     try {
-      const read = await readWithSpark({ dir: join(work, id), household: "renter", municipality: "waterloo-on", photos: 1 }, [...detections], "", []);
+      const read = await readWithSpark({ dir: join(work, id), household: "renter", municipality: "waterloo-on", photos: 1, model: MODEL }, [...detections], "", []);
       const known = new Set(detections.map((d) => d.id));
       const status: Record<string, string> = {};
       const claimed: Record<string, string> = {};
@@ -152,12 +154,12 @@ function spentThisRun(log: string) {
     if (e.model === "sam-3.1") {
       sam++;
       usd += PRICES.samImage;
-    } else if (/spark/.test(e.model ?? "")) {
+    } else if (tokenCost(e.model ?? "", {})) {
       spark++;
       const saved = join(replayDirs[0], `${e.key}.json`);
       const body = existsSync(saved) ? JSON.parse(readFileSync(saved, "utf8")).body : null;
       const u = body ? JSON.parse(body).usage ?? {} : {};
-      usd += (u.input_tokens ?? 0) * PRICES.sparkIn + (u.output_tokens ?? 0) * PRICES.sparkOut || SPARK_ESTIMATE;
+      usd += tokenCost(e.model, u)?.usd || SPARK_ESTIMATE;
     }
   }
   return { sam, spark, usd };

@@ -10,13 +10,13 @@ import { finishAssessment, readWithSpark, type AssessContext, type SpeechTurn } 
 import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
 import { enqueuePhotos, photosSoFar, settlePhotos } from "./photos";
-import { findInPhotos, isLevel, mergePhotoFinds } from "./photoFinds";
+import { findInPhotos, mergePhotoFinds } from "./photoFinds";
+import { videoFinds } from "./videoFinds";
 import { MIN_PHOTOS_3D, type PhotoTake } from "./photoInput";
 import { cleanPlans, plansWords, PLANS_ID } from "./plans";
 import { dataUrl, samImage, samVideo, transcribe, uploadFile } from "./meta";
 import type { Property } from "./property";
 import type { Household } from "./rules";
-import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
 import { buildPlan, locate, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
@@ -304,26 +304,8 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   await Promise.all(
     CONCEPTS.map(async (c) => {
       const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
-      // Ignore flickers: an object must hold for half a second to count. A beam lies level (server/photoFinds.ts).
-      const tracks = parseSam(raw)
-        .filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2) && (c.kind !== "beam" || isLevel(bestFrame(t).box)))
-        .slice(0, 6);
-      const found: Detection[] = tracks.map((t, i) => {
-        const b = bestFrame(t);
-        const r = (n: number) => Math.round(n * 1000) / 1000;
-        return {
-          id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
-          kind: c.kind,
-          label: c.label,
-          concept: c.concept,
-          frame: b.frame,
-          seconds: b.frame / ANALYSIS_FPS,
-          box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
-          framesSeen: t.frames.length,
-          confidence: b.box.c ?? null,
-          track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
-        };
-      });
+      // What holds for half a second, and one long, level beam at a time (server/videoFinds.ts).
+      const found = videoFinds(c, raw, ANALYSIS_FPS);
       detections.push(...found);
       await emit("find", found.length ? `Found ${plural(found.length, c.label)}` : `No ${c.label.toLowerCase()} seen`, {
         kind: c.kind,
