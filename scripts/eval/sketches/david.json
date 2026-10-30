@@ -1,0 +1,17 @@
+{
+  "about": "David's basement as he sketched it on Oct 30, 2026, for every take of it (david-*). The roles are what each room is; the doors are which rooms they join. Add his tape numbers under tape as {room, side: long|short, m}.",
+  "rooms": [
+    { "role": "main", "has": ["plumbing"], "note": "the main basement; plumbing for a toilet straight ahead from the stairs" },
+    { "role": "low room", "note": "small low room just to the left at the foot of the stairs; you duck to go in" },
+    { "role": "utility", "has": ["panel", "water_heater", "furnace"], "note": "beside and partly under the stairs" },
+    { "role": "closet", "note": "reached only from the main basement" }
+  ],
+  "stairs": "down into the main basement",
+  "doors": [
+    { "rooms": ["low room", "main"] },
+    { "rooms": ["main", "utility"] },
+    { "rooms": ["main", "utility"], "note": "the utility room has two doors; which rooms the second joins isn't on the sketch" },
+    { "rooms": ["closet", "main"] }
+  ],
+  "tape": []
+}
