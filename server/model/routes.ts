@@ -3,6 +3,7 @@
 // a confirmed plan, and ask muse-spark for a described change. The sample gets the same, saved nowhere.
 import { readFileSync } from "node:fs";
 import type { Context, Hono } from "hono";
+import { clientIp, metaKey, overSpend } from "../limits";
 import { basementFor, loadWorkspace, parseClaims } from "../workspace";
 import { describeChange } from "./describe";
 import { DesignSchema, ExistingSchema, ModelSchema } from "./schema";
@@ -18,8 +19,6 @@ function sampleModel(): Model | null {
   return sample;
 }
 
-// The right-most forwarded address is the one our own proxy saw.
-const clientIp = (c: Context) => c.req.header("x-forwarded-for")?.split(",").at(-1)?.trim() || "unknown";
 const asks = new Map<string, number[]>();
 function allowAsk(ip: string) {
   const now = Date.now();
@@ -71,7 +70,9 @@ export function mountModel(app: Hono, currentUser: (c: Context) => Promise<strin
       if (!a) return c.json({ error: "Not found" }, 404);
       if (!a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
     }
-    if (!process.env.MODEL_API_KEY && !process.env.RELAY_TOKEN) return c.json({ error: "Describing a change needs the AI key on this server." }, 503);
+    if (!metaKey()) return c.json({ error: "Describing a change needs the AI key on this server." }, 503);
+    // Spark's tokens count toward the day's cap on paid calls (server/limits.ts, charged in server/meta.ts).
+    if (await overSpend()) return c.json({ error: "That's all the changes we can make today. They come back at midnight, Eastern time." }, 429);
     const body = await c.req.json().catch(() => null);
     const ask = typeof body?.ask === "string" ? body.ask.trim().slice(0, 400) : "";
     const design = DesignSchema.safeParse(body?.design);
