@@ -66,7 +66,7 @@ function lintInPage(opts: { phone: boolean }) {
   const seen = new Set<string>();
   const rules: [RegExp, string, string, string, string, string][] = [
     [/\b(you|they) qualify\b/i, "you-qualify", "P1", "Says 'qualify'", "Brand rule: never say 'you qualify'. Say 'looks eligible if…' or 'a designer will confirm'.", "copy"],
-    [/\b(approved|guaranteed)\b/i, "approved", "P2", "Says 'approved' or 'guaranteed'", "Brand rule: no fake certainty. Check this isn't claiming an approval we can't give.", "copy"],
+    [/\b(is|are|be|been|get|gets|got|was|were|you're|it's|pre-)\s*approved\b|\bguaranteed?\b|\bapproval is (certain|assured)\b/i, "approved", "P2", "Says 'approved' or 'guaranteed'", "Brand rule: no fake certainty. Check this isn't claiming an approval we can't give.", "copy"],
     [/\b(undefined|NaN|null|Infinity)\b|\[object Object\]/, "leaked-value", "P0", "A programming value shows on screen", "A raw value like undefined, NaN or null is shown to the homeowner.", "correctness"],
     [/±\s*\d+(\.\d+)?\s*%|\b\d+(\.\d+)?\s*%\s*(error|confidence|accuracy|certain)|\bconfidence\b|expectedErrorPct|\berror\s*(rate|margin|pct)\b/i, "internal-stats", "P1", "Internal error statistics shown", "Brand rule: no internal error statistics to users. Say what we know in plain words.", "copy"],
   ];
@@ -204,7 +204,7 @@ function lintInPage(opts: { phone: boolean }) {
 // The same word rules for text that isn't a web page (PDF pages). No boxes: the page is the place.
 const TEXT_RULES: { re: RegExp; rule: string; severity: LintIssue["severity"]; category: LintIssue["category"]; title: string; why: string }[] = [
   { re: /\b(you|they) qualify\b/i, rule: "you-qualify", severity: "P1", category: "copy", title: "Says 'qualify'", why: "Brand rule: never say 'you qualify'. Say 'looks eligible if…' or 'a designer will confirm'." },
-  { re: /\b(approved|guaranteed)\b/i, rule: "approved", severity: "P2", category: "copy", title: "Says 'approved' or 'guaranteed'", why: "Brand rule: no fake certainty. Check this isn't claiming an approval we can't give." },
+  { re: /\b(is|are|be|been|get|gets|got|was|were|you're|it's|pre-)\s*approved\b|\bguaranteed?\b|\bapproval is (certain|assured)\b/i, rule: "approved", severity: "P2", category: "copy", title: "Says 'approved' or 'guaranteed'", why: "Brand rule: no fake certainty. Check this isn't claiming an approval we can't give." },
   { re: /\b(undefined|NaN|Infinity)\b|\[object Object\]/, rule: "leaked-value", severity: "P0", category: "correctness", title: "A programming value is printed", why: "A raw value like undefined or NaN is in the document." },
   { re: /\b\d+(\.\d+)?\s*%\s*(error|confidence|accuracy)|\bconfidence\b|expectedErrorPct/i, rule: "internal-stats", severity: "P1", category: "copy", title: "Internal error statistics printed", why: "Brand rule: no internal error statistics to users." },
 ];
@@ -217,6 +217,14 @@ export function lintText(text: string): LintIssue[] {
     out.push({ rule: r.rule, severity: r.severity, category: r.category, title: r.title, what: `${lines.length} line${lines.length > 1 ? "s" : ""}, e.g. "${lines[0].trim().slice(0, 120)}" — ${r.why}`, fix: "Reword it." });
   }
   return out;
+}
+
+// An earlier capture's word finding, checked again against today's rules (they get narrower as false
+// alarms turn up): false when the quoted text no longer breaks its rule.
+export function stillHolds(f: { rule: string; what: string }): boolean {
+  const rule = TEXT_RULES.find((r) => r.rule === f.rule);
+  const quote = f.what.match(/"([^"]*)"/)?.[1];
+  return !rule || quote === undefined || rule.re.test(quote);
 }
 
 export const lint = (page: Page, phone: boolean) => page.evaluate(lintInPage, { phone }) as Promise<LintIssue[]>;
