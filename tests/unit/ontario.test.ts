@@ -96,7 +96,9 @@ describe("a Toronto address", () => {
     expect(out.signer).toBe("brief");
     expect(out.forms.map((f) => f.id)).toEqual(["on_application"]);
     expect(urls).toEqual([expect.stringMatching(/^https:\/\/www\.ontario\.ca\/files\/.*permit-to-construct/)]);
-    expect(out.sheets[0].notes[0]).toBe("Draft, for you or a BCIN designer to check before you submit");
+    // A review copy, with a designer still to choose before it can be submitted.
+    expect(out.copy).toBe("review");
+    expect(out.readiness.items.find((i) => i.id === "designer")?.done).toBe(false);
   });
 
   it("plans the do-it-yourself route with the City of Toronto's permit and the Code's inspections", () => {
@@ -239,7 +241,8 @@ describe("the demo house", () => {
   it("says so on the papers instead of printing a blank address", async () => {
     const demo = { ...sample, demo: true };
     const out = await buildPermitPackage({ result: demo, municipality: "waterloo-on", address: "", profile: null, state: {}, site: null, aerialJpeg: null, favourites: [], share: true, today: "2026-10-30" });
-    expect(out.pages).toBeGreaterThan(8);
+    // The share copy: the eight drawing sheets, no forms.
+    expect(out.pages).toBe(8);
     const values = formValues({ profile: null, address: "", result: demo, site: null, state: {} }, "Waterloo", "scope", 30, 1, "2026-10-30");
     expect(values.street).toBe(DEMO_ADDRESS);
     const apps = applications({ scanId: "x", result: { ...demo, grants: [{ id: "cmhc_refinance_secondary_suite", shortName: "CMHC refinance", qualify: "ask", status: "open", value: "financing", source: { title: "CMHC", url: "https://example.org" } }] }, profile: null, state: {}, address: "", municipality: "Waterloo", site: null, areaM2: 30, bedrooms: 1, scope: "scope" });

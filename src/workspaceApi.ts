@@ -39,9 +39,46 @@ export type WorkspaceState = {
   ideas?: { kind?: "one_bedroom" | "studio" | null; side?: PlanSide | null; finish?: "light" | "warm" | "deep" | null; favourites?: Favourite[] };
   build?: { path?: "hire" | "diy" | "mix" | null; pros?: Pro[] };
   apply?: Record<string, { sentAt?: string | null }>;
-  permit?: { submittedAt?: string | null; permitNumber?: string | null; signer?: "owner" | "designer" | null };
+  permit?: PermitInputs;
   looks?: Record<string, Look>;
   model?: Model; // the basement and its designs (server/model/types.ts)
+};
+
+// What the owner adds for the permit set (server/workspace.ts PermitSchema).
+export type PermitInputs = {
+  submittedAt?: string | null;
+  permitNumber?: string | null;
+  signer?: "owner" | "designer" | null;
+  walls?: { id: string; mm?: number | null }[];
+  windows?: { id: string; widthMm?: number | null; heightMm?: number | null; sillMm?: number | null }[];
+  lotLines?: { id: string; mm?: number | null }[];
+  upstairs?: { bedrooms: { floor: number; at: [number, number] }[]; none?: boolean | null };
+  reviewed?: { sheet: string; key: string }[];
+  designer?: { name?: string | null; bcin?: string | null; firm?: string | null; firmBcin?: string | null; email?: string | null; phone?: string | null };
+};
+
+export type ReadyItem = { id: string; group: "tape" | "windows" | "owner" | "upstairs" | "lot" | "designer" | "review"; label: string; detail: string; done: boolean };
+export type PermitWindow = { id: string; tag: string; room: string; widthM: number; heightM: number | null; sillM: number | null; change: "keep" | "enlarge" | "new"; escape: boolean; taped: boolean; was: { widthM: number; heightM: number | null } | null };
+// Where the permit set stands (server/workspaceRoutes.ts permitPayload).
+export type PermitStatus = {
+  left: number;
+  items: ReadyItem[];
+  reviewKey: string;
+  canSubmit: boolean;
+  sheets: { number: string; title: string }[];
+  mainWalls: { id: string; label: string; scanM: number; tapedM: number | null }[];
+  windows: PermitWindow[];
+  overhead: boolean;
+  footprint: { widthM: number; depthM: number; stair: { u0: number; v0: number; u1: number; v1: number } | null; storeys: number } | null;
+  designer: {
+    needed: boolean;
+    reasons: string[];
+    signer: "owner" | "designer";
+    ownerAllowed: boolean;
+    quarts: string;
+    filters: { label: string; value: string }[];
+    email: { subject: string; body: string } | null;
+  };
 };
 
 export type SiteGeometry = {
@@ -184,12 +221,39 @@ async function saveBlob(res: Response, name: string) {
 // The sample's documents come from routes that take its workspace (and money answers) with the request.
 const sampleBody = (extra: object = {}) => JSON.stringify({ ...sampleWorkspace(), ...extra });
 
-export async function downloadPermit(scanId: string, share = false) {
-  if (isSample(scanId)) return saveBlob(await fetch("/api/sample/permit.pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: sampleBody() }), "permit-package-sample.pdf");
-  return saveBlob(await fetch(`/api/scans/${scanId}/permit.pdf${share ? "?share=1" : ""}`, { headers: await headers() }), share ? "permit-drawings.pdf" : "permit-package.pdf");
+export type PermitCopy = "review" | "submit" | "share";
+
+async function permitPdf(scanId: string, copy: PermitCopy) {
+  return isSample(scanId)
+    ? fetch("/api/sample/permit.pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: sampleBody({ copy }) })
+    : fetch(`/api/scans/${scanId}/permit.pdf?copy=${copy}`, { headers: await headers() });
 }
 
-export const shareLink = (scanId: string) => `${window.location.origin}/api/scans/${scanId}/permit.pdf?share=1`;
+export async function downloadPermit(scanId: string, copy: PermitCopy = "review") {
+  const name = copy === "submit" ? "permit-drawings-submit.pdf" : copy === "share" ? "permit-drawings.pdf" : "permit-drawings-review.pdf";
+  return saveBlob(await permitPdf(scanId, copy), name);
+}
+
+// The review copy opened at one sheet, in a tab opened right away so the browser allows it.
+export async function openSheet(scanId: string, page: number) {
+  const tab = window.open("about:blank", "_blank");
+  const res = await permitPdf(scanId, "review");
+  if (!res.ok) {
+    tab?.close();
+    throw new Error((await res.json().catch(() => ({}))).error ?? "That didn't open. Try again.");
+  }
+  const url = URL.createObjectURL(await res.blob());
+  if (tab) tab.location.href = `${url}#page=${page}`;
+  else window.location.href = `${url}#page=${page}`;
+}
+
+export async function getPermitStatus(scanId: string): Promise<PermitStatus> {
+  const res = isSample(scanId) ? await fetch("/api/sample/permit/status", { method: "POST", headers: { "Content-Type": "application/json" }, body: sampleBody() }) : await fetch(`/api/scans/${scanId}/permit/status`, { headers: await headers() });
+  if (!res.ok) throw new Error("We couldn't check the permit set.");
+  return res.json();
+}
+
+export const shareLink = (scanId: string) => `${window.location.origin}/api/scans/${scanId}/permit.pdf?copy=share`;
 
 export async function downloadForm(scanId: string, formId: string) {
   return saveBlob(await fetch(`/api/scans/${scanId}/forms/${formId}.pdf`, { headers: await headers() }), `${formId}.pdf`);

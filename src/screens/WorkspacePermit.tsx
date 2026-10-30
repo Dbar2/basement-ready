@@ -1,14 +1,16 @@
-// The Permit tab: we make the permit package here, the way a permit service would. Who draws and
-// signs it in this city, five measurements only a tape can give, the entrance and parking traced on
-// the aerial photo, then one PDF to download (drawings, the city's forms filled in, how to submit)
-// and the city's portal with what to upload where.
+// The Permit tab: the permit set, made the way a designer would. What's left before it can be
+// submitted, one tap each: tape numbers for the main walls, the ceiling and each window, the owner's
+// details, the bedrooms upstairs, a window wall's distance to the lot line, each sheet looked over,
+// and a BCIN designer where one is needed. Then the clean submit copy, the City's portal, and what to
+// upload where. The entrance and parking are traced on the aerial photo for the site plan.
 import { useEffect, useRef, useState } from "react";
 import { aerialUrl } from "../api";
-import { downloadForm, downloadPermit, getDiy, shareLink, type DiyPlan, type SiteFeature } from "../workspaceApi";
+import { downloadForm, downloadPermit, getDiy, getPermitStatus, mailto, openSheet, shareLink, type DiyPlan, type PermitInputs, type PermitStatus, type ReadyItem, type SiteFeature } from "../workspaceApi";
 import type { TabProps } from "./Workspace";
-import { ProfileLine } from "./WorkspaceProfile";
+import { ProfileForm, ProfileLine } from "./WorkspaceProfile";
 
 const mm = (v: number | null | undefined) => (v == null ? "" : String(v));
+const num = (s: string) => (s.trim() === "" ? null : Math.max(0, Math.round(Number(s))) || null);
 
 function Source({ s }: { s: { title: string; url: string; section?: string | null } }) {
   return (
@@ -18,38 +20,294 @@ function Source({ s }: { s: { title: string; url: string; section?: string | nul
   );
 }
 
-function Tape(props: TabProps & { egressWidthM: number | null }) {
-  const { ws, save, egressWidthM } = props;
-  const t = ws.state.tape ?? {};
-  const [draft, setDraft] = useState({ egressWidthMm: mm(t.egressWidthMm), egressHeightMm: mm(t.egressHeightMm), egressSillMm: mm(t.egressSillMm), ceilingMm: mm(t.ceilingMm), beamMm: mm(t.beamMm) });
-  const fields: { key: keyof typeof draft; label: string; help: string }[] = [
-    { key: "egressWidthMm", label: "Bedroom window: clear width", help: egressWidthM ? `The video says about ${Math.round(egressWidthM * 1000)} mm. Measure the opening, not the frame.` : "The opening, not the frame." },
-    { key: "egressHeightMm", label: "Bedroom window: clear height", help: "With the window open as far as it goes." },
-    { key: "egressSillMm", label: "Bedroom window: floor to sill", help: "From the finished floor to the bottom of the opening." },
-    { key: "ceilingMm", label: "Ceiling height", help: "Floor to the underside of the joists, where the unit's ceiling will be." },
-    { key: "beamMm", label: "Under the lowest beam or duct", help: "Floor to the bottom of the lowest beam or duct in the unit." },
-  ];
-  const commit = () => {
-    const n = (s: string) => (s.trim() === "" ? null : Math.max(0, Math.min(5000, Math.round(Number(s)))) || null);
-    void save({ state: { tape: { egressWidthMm: n(draft.egressWidthMm), egressHeightMm: n(draft.egressHeightMm), egressSillMm: n(draft.egressSillMm), ceilingMm: n(draft.ceilingMm), beamMm: n(draft.beamMm) } } });
-  };
+type EditorProps = TabProps & { status: PermitStatus; item: ReadyItem; savePermit: (patch: Partial<PermitInputs>) => Promise<void>; done: () => void };
+
+// Numbers in millimetres, saved together.
+function MmFields({ fields, onSave }: { fields: { key: string; label: string; value: number | null | undefined; help?: string }[]; onSave: (v: Record<string, number | null>) => Promise<void> }) {
+  const [draft, setDraft] = useState<Record<string, string>>(Object.fromEntries(fields.map((f) => [f.key, mm(f.value)])));
+  const [busy, setBusy] = useState(false);
+  const ready = fields.every((f) => (draft[f.key] ?? "").trim() !== "");
   return (
-    <section className="block">
-      <h2>Five numbers from a tape</h2>
-      <p className="lede">The video can't measure these closely enough for a permit. In millimetres; they go straight onto the drawings.</p>
+    <form
+      className="ws-ready-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        void onSave(Object.fromEntries(fields.map((f) => [f.key, num(draft[f.key] ?? "")]))).finally(() => setBusy(false));
+      }}
+    >
       <div className="ws-tape">
         {fields.map((f) => (
           <label key={f.key} className="field">
             <span>{f.label}</span>
             <span className="ws-mm">
-              <input className="input" inputMode="numeric" value={draft[f.key]} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.replace(/[^0-9]/g, "") })} onBlur={commit} />
+              <input className="input" inputMode="numeric" value={draft[f.key] ?? ""} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.replace(/[^0-9]/g, "") })} />
               <span className="mono">mm</span>
             </span>
-            <span className="field-help">{f.help}</span>
+            {f.help && <span className="field-help">{f.help}</span>}
           </label>
         ))}
       </div>
-    </section>
+      <button className="btn btn-primary" disabled={busy || !ready}>
+        {busy ? "Saving…" : "Save"}
+      </button>
+    </form>
+  );
+}
+
+const upsert = <T extends { id: string }>(list: T[] | undefined, item: T) => [...(list ?? []).filter((x) => x.id !== item.id), item];
+
+// Tap where each bedroom of unit 1 is, over the house's outline (the basement's, with its stair).
+function Upstairs({ ws, status, savePermit, done }: EditorProps) {
+  const fp = status.footprint;
+  const up = ws.state.permit?.upstairs ?? { bedrooms: [] };
+  const [floor, setFloor] = useState(1);
+  const svgRef = useRef<SVGSVGElement>(null);
+  if (!fp) return <p className="muted">There's no outline of the house to tap on yet.</p>;
+  const W = 1000, H = Math.round((1000 * fp.depthM) / fp.widthM);
+  const floors = Math.max(1, Math.min(3, fp.storeys));
+  const tap = (e: React.PointerEvent<SVGSVGElement>) => {
+    const box = svgRef.current!.getBoundingClientRect();
+    const at: [number, number] = [Math.round(((e.clientX - box.left) / box.width) * 1000) / 1000, Math.round(((e.clientY - box.top) / box.height) * 1000) / 1000];
+    const near = up.bedrooms.findIndex((b) => b.floor === floor && Math.hypot((b.at[0] - at[0]) * W, (b.at[1] - at[1]) * H) < 60);
+    const bedrooms = near >= 0 ? up.bedrooms.filter((_, i) => i !== near) : [...up.bedrooms, { floor, at }];
+    void savePermit({ upstairs: { bedrooms, none: false } });
+  };
+  const s = fp.stair;
+  return (
+    <div className="ws-upstairs">
+      {floors > 1 && (
+        <div className="ws-chips" role="tablist">
+          {Array.from({ length: floors }, (_, i) => (
+            <button key={i} className="chip" aria-pressed={floor === i + 1} onClick={() => setFloor(i + 1)}>
+              {i === 0 ? "Main floor" : i === 1 ? "Second floor" : "Third floor"}
+            </button>
+          ))}
+        </div>
+      )}
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} onPointerDown={tap} role="img" aria-label="The house's outline: tap where each bedroom is">
+        <rect x={4} y={4} width={W - 8} height={H - 8} className="ws-up-house" />
+        {s && <rect x={s.u0 * W} y={s.v0 * H} width={(s.u1 - s.u0) * W} height={(s.v1 - s.v0) * H} className="ws-up-stair" />}
+        {s && (
+          <text x={((s.u0 + s.u1) / 2) * W} y={((s.v0 + s.v1) / 2) * H + 10} textAnchor="middle" className="ws-up-label">
+            Stairs
+          </text>
+        )}
+        {up.bedrooms
+          .filter((b) => b.floor === floor)
+          .map((b, i) => (
+            <g key={i}>
+              <rect x={b.at[0] * W - 90} y={b.at[1] * H - 90} width={180} height={180} className="ws-up-bed" />
+              <text x={b.at[0] * W} y={b.at[1] * H + 12} textAnchor="middle" className="ws-up-label">
+                Bedroom
+              </text>
+            </g>
+          ))}
+      </svg>
+      <div className="ws-actions">
+        <button className="btn btn-primary" disabled={!up.bedrooms.length} onClick={done}>
+          Done
+        </button>
+        <label className="ws-check">
+          <input type="checkbox" checked={Boolean(up.none)} onChange={(e) => void savePermit({ upstairs: { bedrooms: e.target.checked ? [] : up.bedrooms, none: e.target.checked } })} />
+          <span>Unit 1 has no bedrooms</span>
+        </label>
+      </div>
+      <p className="field-help">Tap a bedroom again to take it away. Each gets a smoke alarm on the drawings, and one goes outside them.</p>
+    </div>
+  );
+}
+
+function Designer({ scanId, ws, status, savePermit }: EditorProps) {
+  const d = ws.state.permit?.designer ?? {};
+  const [draft, setDraft] = useState({ name: d.name ?? "", bcin: d.bcin ?? "", firm: d.firm ?? "", firmBcin: d.firmBcin ?? "", email: d.email ?? "", phone: d.phone ?? "" });
+  const [busy, setBusy] = useState(false);
+  const field = (key: keyof typeof draft, label: string, inputMode?: "numeric" | "email" | "tel") => (
+    <label className="field">
+      <span>{label}</span>
+      <input className="input" inputMode={inputMode} value={draft[key]} onChange={(e) => setDraft({ ...draft, [key]: e.target.value })} />
+    </label>
+  );
+  const email = status.designer.email;
+  return (
+    <div className="ws-designer">
+      {status.designer.reasons.length > 0 && (
+        <ul className="ws-checklist">
+          {status.designer.reasons.map((r) => (
+            <li key={r}>{r}</li>
+          ))}
+        </ul>
+      )}
+      <p>
+        Find one on the province's registry, QuARTS:{" "}
+        <a href={status.designer.quarts} target="_blank" rel="noreferrer">
+          search qualified designers <span aria-hidden>→</span>
+        </a>
+      </p>
+      <dl className="ws-filters">
+        {status.designer.filters.map((f) => (
+          <div key={f.label}>
+            <dt>{f.label}</dt>
+            <dd>{f.value}</dd>
+          </div>
+        ))}
+      </dl>
+      {email && scanId !== "sample" && (
+        <p>
+          <a className="btn btn-ghost" href={mailto(draft.email, email.subject, email.body)}>
+            Email them the brief
+          </a>{" "}
+          <span className="muted">With a link to the drawings: no forms, no phone or email.</span>
+        </p>
+      )}
+      <form
+        className="ws-ready-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setBusy(true);
+          const clean = Object.fromEntries(Object.entries(draft).map(([k, v]) => [k, v.trim() || null]));
+          void savePermit({ signer: "designer", designer: clean }).finally(() => setBusy(false));
+        }}
+      >
+        <div className="ws-row">
+          {field("name", "Designer's name")}
+          {field("bcin", "BCIN", "numeric")}
+          {field("firm", "Firm (if any)")}
+          {field("firmBcin", "Firm's BCIN", "numeric")}
+          {field("email", "Email", "email")}
+          {field("phone", "Phone", "tel")}
+        </div>
+        <button className="btn btn-primary" disabled={busy || !draft.name.trim() || !draft.bcin.trim()}>
+          {busy ? "Saving…" : "Put them on the drawings"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Editor(props: EditorProps) {
+  const { item, status, ws, scanId, save, savePermit, done } = props;
+  const [opening, setOpening] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [kind, id] = item.id.split(/:(.*)/s);
+  if (kind === "wall") {
+    const w = status.mainWalls.find((x) => x.id === id);
+    return <MmFields fields={[{ key: "mm", label: w ? `Taped length, ${w.label}` : "Taped length", value: (ws.state.permit?.walls ?? []).find((x) => x.id === id)?.mm }]} onSave={async (v) => { await savePermit({ walls: upsert(ws.state.permit?.walls, { id, mm: v.mm }) }); done(); }} />;
+  }
+  if (kind === "heights") {
+    const t = ws.state.tape ?? {};
+    const fields = [{ key: "ceilingMm", label: "Ceiling height", value: t.ceilingMm, help: "Floor to the underside of the joists, where unit 2's ceiling goes." }];
+    if (status.overhead) fields.push({ key: "beamMm", label: "Under the lowest beam or duct", value: t.beamMm, help: "Floor to the bottom of the lowest beam or duct in unit 2." });
+    return <MmFields fields={fields} onSave={async (v) => { await save({ state: { tape: { ...t, ...v } } }); done(); }} />;
+  }
+  if (kind === "window") {
+    const w = status.windows.find((x) => x.id === id);
+    const now = (ws.state.permit?.windows ?? []).find((x) => x.id === id);
+    const t = ws.state.tape ?? {};
+    return (
+      <MmFields
+        fields={[
+          { key: "widthMm", label: `${w?.tag ?? "Window"}: clear width`, value: now?.widthMm ?? (w?.escape ? t.egressWidthMm : null), help: "The opening, with the window open as far as it goes." },
+          { key: "heightMm", label: "Clear height", value: now?.heightMm ?? (w?.escape ? t.egressHeightMm : null) },
+          { key: "sillMm", label: "Floor to sill", value: now?.sillMm ?? (w?.escape ? t.egressSillMm : null), help: "From the finished floor to the bottom of the opening." },
+        ]}
+        onSave={async (v) => {
+          await savePermit({ windows: upsert(ws.state.permit?.windows, { id, widthMm: v.widthMm, heightMm: v.heightMm, sillMm: v.sillMm }) });
+          // The escape window's sizes feed the materials list too.
+          if (w?.escape) await save({ state: { tape: { ...t, egressWidthMm: v.widthMm, egressHeightMm: v.heightMm, egressSillMm: v.sillMm } } });
+          done();
+        }}
+      />
+    );
+  }
+  if (kind === "lot") {
+    const now = (ws.state.permit?.lotLines ?? []).find((x) => x.id === id);
+    return <MmFields fields={[{ key: "mm", label: "Wall to the lot line", value: now?.mm }]} onSave={async (v) => { await savePermit({ lotLines: upsert(ws.state.permit?.lotLines, { id, mm: v.mm }) }); done(); }} />;
+  }
+  if (kind === "owner") {
+    if (!ws.profile) return <ProfileForm initial={null} prefill={ws.prefill} onSave={async (profile) => { await save({ profile }); done(); }} />;
+    return <ProfileForm initial={ws.profile} prefill={ws.prefill} onSave={async (profile) => { await save({ profile }); done(); }} onCancel={done} />;
+  }
+  if (kind === "upstairs") return <Upstairs {...props} />;
+  if (kind === "designer") return <Designer {...props} />;
+  if (kind === "sheet") {
+    const page = status.sheets.findIndex((s) => s.number === id) + 1;
+    const reviewed = ws.state.permit?.reviewed ?? [];
+    return (
+      <div className="ws-actions">
+        <button
+          className="btn btn-ghost"
+          disabled={opening}
+          onClick={() => {
+            setOpening(true);
+            setError(null);
+            void openSheet(scanId, page)
+              .catch((e) => setError(e instanceof Error ? e.message : "That didn't open."))
+              .finally(() => setOpening(false));
+          }}
+        >
+          {opening ? "Opening…" : `Open ${id}`}
+        </button>
+        <button className="btn btn-primary" onClick={() => void savePermit({ reviewed: [...reviewed.filter((r) => r.sheet !== id), { sheet: id, key: status.reviewKey }] }).then(done)}>
+          It matches my basement
+        </button>
+        {error && <p className="error" role="alert">{error}</p>}
+      </div>
+    );
+  }
+  return null;
+}
+
+const GROUPS: { group: ReadyItem["group"]; title: string }[] = [
+  { group: "tape", title: "Tape numbers" },
+  { group: "windows", title: "Windows" },
+  { group: "owner", title: "You" },
+  { group: "upstairs", title: "Upstairs" },
+  { group: "lot", title: "Lot line" },
+  { group: "designer", title: "Designer" },
+  { group: "review", title: "Look over each sheet" },
+];
+
+// "N things left before you can submit", one tap each.
+function Readiness(props: TabProps & { status: PermitStatus }) {
+  const { status, ws, save } = props;
+  const [open, setOpen] = useState<string | null>(null);
+  const savePermit = (patch: Partial<PermitInputs>) => save({ state: { permit: { ...(ws.state.permit ?? {}), ...patch } } });
+  const total = status.items.length;
+  return (
+    <div className="ws-ready">
+      <div className="ws-ready-bar" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={total - status.left}>
+        <span style={{ width: `${((total - status.left) / Math.max(1, total)) * 100}%` }} />
+      </div>
+      {GROUPS.map(({ group, title }) => {
+        const items = status.items.filter((i) => i.group === group);
+        if (!items.length) return null;
+        return (
+          <div key={group} className="ws-ready-group">
+            <h3>{title}</h3>
+            <ul>
+              {items.map((item) => (
+                <li key={item.id} data-done={item.done || undefined} data-open={open === item.id || undefined}>
+                  <button className="ws-ready-item" aria-expanded={open === item.id} onClick={() => setOpen(open === item.id ? null : item.id)}>
+                    <span className="ws-ready-tick" aria-hidden>
+                      {item.done ? "✓" : ""}
+                    </span>
+                    <span>{item.label}</span>
+                    <span className="ws-ready-state">{item.done ? "Done" : "To do"}</span>
+                  </button>
+                  {open === item.id && (
+                    <div className="ws-ready-edit">
+                      {item.group !== "review" && item.group !== "owner" && <p className="field-help">{item.detail}</p>}
+                      <Editor {...props} item={item} savePermit={savePermit} done={() => setOpen(null)} />
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -155,14 +413,17 @@ function SiteTracer({ ws, save, r }: TabProps) {
 export function PermitTab(props: TabProps) {
   const { r, scanId, ws, save } = props;
   const [plan, setPlan] = useState<DiyPlan | null>(null);
+  const [status, setStatus] = useState<PermitStatus | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     void getDiy(scanId).then(setPlan).catch(() => setPlan(null));
   }, [scanId, ws.state.tape, ws.state.ideas]);
+  useEffect(() => {
+    void getPermitStatus(scanId).then(setStatus).catch(() => setStatus(null));
+  }, [scanId, ws.state, ws.profile]);
   const permit = plan?.permit ?? null;
-  const designer = ws.state.permit?.signer === "designer" || permit?.signer === "brief";
   const run = async (key: string, f: () => Promise<void>) => {
     setBusy(key);
     setError(null);
@@ -174,32 +435,28 @@ export function PermitTab(props: TabProps) {
       setBusy(null);
     }
   };
-  const egress = r.layout?.window ?? null;
-  const fillable = (permit?.forms ?? []).filter((f) => f.fill === "acroform" && f.url && !(f.required === "owner_designer" && designer));
+  const ownerSigns = status?.designer.signer === "owner";
+  const fillable = (permit?.forms ?? []).filter((f) => f.fill === "acroform" && f.url && !(f.required === "owner_designer" && !ownerSigns));
 
   return (
     <div className="ws-permit">
       <section className="block">
-        <h2>Your permit package</h2>
-        <p className="lede">Drawings to scale from your scan, the City of {plan?.city ?? r.city ?? "your city"}'s forms filled in, and how to submit. You apply as the owner.</p>
+        <h2>{!status ? "Your permit set" : status.left ? `${status.left} thing${status.left === 1 ? "" : "s"} left before you can submit` : "Ready to submit"}</h2>
+        <p className="lede">
+          {status?.left
+            ? `Drawings to scale from your scan, the City of ${plan?.city ?? r.city ?? "your city"}'s forms filled in. Answer each one below; the submit copy comes when nothing is left.`
+            : `The clean set for the City of ${plan?.city ?? r.city ?? "your city"}: no draft marks, nothing left to fill in. Sign the statement box on each sheet, then upload it.`}
+        </p>
         {ws.profile && <ProfileLine {...props} />}
-        {permit && (
-          <div className="ws-signer">
-            <h3>Who draws and signs it</h3>
-            <p>{designer && permit.signer === "owner" ? "A designer finishes and signs these drawings: the package becomes their design brief." : permit.signerNote}</p>
-            {!permit.signerVerified && <p className="muted">The City's own pages disagree on this. Ask before you submit.</p>}
-            <Source s={permit.signerSource} />
-            {permit.signer === "owner" && (
-              <label className="ws-check">
-                <input type="checkbox" checked={ws.state.permit?.signer === "designer"} onChange={(e) => void save({ state: { permit: { ...(ws.state.permit ?? {}), signer: e.target.checked ? "designer" : "owner" } } })} />
-                <span>A designer will finish and sign it</span>
-              </label>
-            )}
-          </div>
-        )}
+        {status && <Readiness {...props} status={status} />}
         <div className="ws-download">
-          <button className="btn btn-primary" disabled={busy !== null} onClick={() => void run("all", () => downloadPermit(scanId))}>
-            {busy === "all" ? "Making your package…" : "Download permit package"}
+          {status?.canSubmit && (
+            <button className="btn btn-primary" disabled={busy !== null} onClick={() => void run("submit", () => downloadPermit(scanId, "submit"))}>
+              {busy === "submit" ? "Making the submit copy…" : "Download the submit copy"}
+            </button>
+          )}
+          <button className={status?.canSubmit ? "btn btn-ghost" : "btn btn-primary"} disabled={busy !== null} onClick={() => void run("review", () => downloadPermit(scanId, "review"))}>
+            {busy === "review" ? "Making your review copy…" : "Download the review copy"}
           </button>
           {permit && (
             <a className="btn btn-ghost" href={permit.portal.url} target="_blank" rel="noreferrer">
@@ -217,7 +474,6 @@ export function PermitTab(props: TabProps) {
             </button>
           )}
         </div>
-        {!ws.profile && <p className="muted">Add who owns the house above and the forms come filled in with your names.</p>}
         {error && <p className="error" role="alert">{error}</p>}
         {fillable.length > 0 && scanId !== "sample" && (
           <p className="ws-forms">
@@ -229,9 +485,22 @@ export function PermitTab(props: TabProps) {
             ))}
           </p>
         )}
+        {permit && status && (
+          <div className="ws-signer">
+            <h3>Who signs the drawings</h3>
+            <p>{ownerSigns ? "You do, as the homeowner: the Code lets you design a unit in your own house. Schedule 1 says \"Homeowner\"." : status.designer.needed ? "A BCIN designer checks, finishes and signs them." : "Your designer signs them: their name and BCIN go in each sheet's statement box."}</p>
+            {!permit.signerVerified && <p className="muted">The City's own pages disagree on this. Ask before you submit.</p>}
+            <Source s={permit.signerSource} />
+            {status.designer.ownerAllowed && (
+              <label className="ws-check">
+                <input type="checkbox" checked={ws.state.permit?.signer === "designer"} onChange={(e) => void save({ state: { permit: { ...(ws.state.permit ?? {}), signer: e.target.checked ? "designer" : "owner" } } })} />
+                <span>I'd rather a designer finished and signed it</span>
+              </label>
+            )}
+          </div>
+        )}
       </section>
 
-      <Tape {...props} egressWidthM={egress?.widthM ?? null} />
       <SiteTracer {...props} />
 
       {permit && (
