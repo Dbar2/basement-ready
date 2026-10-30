@@ -1,6 +1,9 @@
-// Fresh Air (brand/tokens.css): forest ink, mint as a fill only, find colours always with a label.
-// The web uses Hanken Grotesk and Geist Mono; the app uses the system's own heavy sans and mono.
+// Drawing Set (brand/ui.md): every screen is a sheet of an architect's drawing set. Forest ink on a
+// light sheet, hairlines instead of cards, one mint rectangle button per screen, mint as a fill only.
+// Type is Hanken Grotesk and Geist Mono (mono only for figures: 2.10 m, Wall 2 of 4, 0:42), bundled in
+// Resources/Fonts; if a font ever fails to load, the system's own sans and mono stand in.
 import SwiftUI
+import UIKit
 
 extension Color {
   init(hex: UInt32, opacity: Double = 1) {
@@ -15,7 +18,8 @@ enum Brand {
   static let border = Color(hex: 0xD5DDD4)
   static let ink = Color(hex: 0x0F2A1E)
   static let inkMuted = Color(hex: 0x4A5D52)
-  static let mint = Color(hex: 0x4BE38A) // fill only on light; lines are fine on the dark map
+  static let mint = Color(hex: 0x4BE38A) // fill only: the primary button, a picked state, scan points
+  static let mintPress = Color(hex: 0x3FCF7B) // the primary button while pressed
   static let mintLine = Color(hex: 0x2E9A5C)
   static let accentText = Color(hex: 0x1F7A4A)
   static let stop = Color(hex: 0xB42318)
@@ -33,33 +37,74 @@ enum Brand {
     }
   }
 
-  static func display(_ size: CGFloat) -> Font { .system(size: size, weight: .heavy) }
-  static func body(_ size: CGFloat = 17, _ weight: Font.Weight = .regular) -> Font { .system(size: size, weight: weight) }
-  static func mono(_ size: CGFloat = 15, _ weight: Font.Weight = .medium) -> Font { .system(size: size, weight: weight, design: .monospaced) }
+  static func display(_ size: CGFloat) -> Font { font(sans, size, .black) } // titles, 900
+  static func heading(_ size: CGFloat) -> Font { font(sans, size, .heavy) } // 800
+  static func body(_ size: CGFloat = 17, _ weight: Font.Weight = .regular) -> Font { font(sans, size, weight) }
+  // Figures only: measurements, money, counts, times, step numbers. Never a sentence.
+  static func mono(_ size: CGFloat = 15, _ weight: Font.Weight = .regular) -> Font { font(monoFamily, size, weight, design: .monospaced) }
+
+  private static let sans = "Hanken Grotesk"
+  private static let monoFamily = "Geist Mono"
+  private static func font(_ family: String, _ size: CGFloat, _ weight: Font.Weight, design: Font.Design = .default) -> Font {
+    available.contains(family) ? .custom(family, size: size).weight(weight) : .system(size: size, weight: weight, design: design)
+  }
+  private static let available = Set(UIFont.familyNames)
 }
 
-// The primary button: mint fill, forest text.
-struct MintButton: ButtonStyle {
+// Spacing and corners (brand/ui.md).
+enum Space {
+  static let s1: CGFloat = 4, s2: CGFloat = 8, s3: CGFloat = 16, s4: CGFloat = 24, s5: CGFloat = 40, s6: CGFloat = 64
+}
+
+enum Radius {
+  static let small: CGFloat = 4 // photos, inputs, the map
+  static let control: CGFloat = 6 // buttons, frames
+}
+
+extension Text {
+  // A title: display weight, set tight.
+  func display(_ size: CGFloat) -> Text { font(Brand.display(size)).kerning(-size * 0.045) }
+  func heading(_ size: CGFloat) -> Text { font(Brand.heading(size)).kerning(-size * 0.03) }
+}
+
+// The one primary action on a screen: mint rectangle, forest text, 6 pt corners.
+struct PrimaryButton: ButtonStyle {
   var enabled = true
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .font(Brand.body(18, .semibold))
+      .font(Brand.body(18, .bold))
       .foregroundStyle(Brand.ink)
-      .frame(maxWidth: .infinity, minHeight: 56)
-      .background(Brand.mint.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.45), in: Capsule())
+      .frame(maxWidth: .infinity, minHeight: 52)
+      .background(enabled ? (configuration.isPressed ? Brand.mintPress : Brand.mint) : Brand.mint.opacity(0.45),
+                  in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+      .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
   }
 }
 
-// The quiet button: forest outline on light, light outline on dark.
-struct OutlineButton: ButtonStyle {
-  var onDark = false
+// A choice (not the primary): a hairline rectangle; picked = ink fill, card text.
+struct ChoiceButton: ButtonStyle {
+  var picked = false
   func makeBody(configuration: Configuration) -> some View {
-    let tint = onDark ? Brand.bg : Brand.ink
     configuration.label
       .font(Brand.body(17, .semibold))
-      .foregroundStyle(tint)
-      .frame(maxWidth: .infinity, minHeight: 52)
-      .overlay(Capsule().stroke(tint.opacity(configuration.isPressed ? 0.5 : 0.9), lineWidth: 1.5))
-      .contentShape(Capsule())
+      .foregroundStyle(picked ? Brand.card : Brand.ink)
+      .frame(maxWidth: .infinity, minHeight: 48)
+      .background(picked ? Brand.ink : .clear, in: RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Radius.control, style: .continuous).stroke(Brand.ink, lineWidth: 1))
+      .contentShape(RoundedRectangle(cornerRadius: Radius.control, style: .continuous))
+      .opacity(configuration.isPressed ? 0.7 : 1)
+  }
+}
+
+// A secondary action: underlined ink text, at least 44 pt tall to tap.
+struct TextLink: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(Brand.body(17, .semibold))
+      .foregroundStyle(Brand.ink)
+      .underline(true, color: Brand.mintLine)
+      .frame(minHeight: 44)
+      .contentShape(Rectangle())
+      .opacity(configuration.isPressed ? 0.6 : 1)
   }
 }
