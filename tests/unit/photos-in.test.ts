@@ -175,19 +175,20 @@ describe("SAM on each photo", () => {
     expect(photoFinds(0, WINDOW, "")).toEqual([]);
   });
 
-  it("keeps one long, level beam a photo: not the joists or posts SAM also calls beams", () => {
-    // A beam across the ceiling, sure enough for its shape.
-    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.65]))).toHaveLength(1);
-    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.55]))).toHaveLength(0);
-    // A post (taller than wide) and a short piece of joist are left out, however sure.
-    expect(photoFinds(0, BEAM, sam([600, 100, 660, 900, 0.95]))).toHaveLength(0);
-    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9]))).toHaveLength(0);
-    // Wide but not level: a block of ceiling, not a member.
-    expect(photoFinds(0, BEAM, sam([0, 0, 700, 400, 0.9]))).toHaveLength(0);
-    // Of several long ones, the widest.
-    const one = photoFinds(0, BEAM, sam([100, 50, 700, 120, 0.8], [0, 200, 1200, 320, 0.7], [200, 400, 800, 450, 0.9]));
+  it("keeps one beam a photo: the widest long, level one before the joists and posts SAM also calls beams", () => {
+    // A beam across the ceiling counts from 0.65: its shape vouches for it.
+    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.66]))).toHaveLength(1);
+    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.6]))).toHaveLength(0);
+    // A long one wins over a surer joist or post, and of several long ones the widest.
+    const one = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.95], [600, 100, 660, 900, 0.95], [100, 50, 700, 120, 0.8], [0, 200, 1200, 320, 0.67]));
     expect(one).toHaveLength(1);
     expect(one[0].box).toMatchObject({ x: 0, w: 0.938 });
+    // With no long one, the widest sure box stands in, so the open joists still show; four joists are one find.
+    const joists = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9], [500, 40, 640, 70, 0.75], [700, 30, 900, 60, 0.8], [900, 20, 1000, 50, 0.72]));
+    expect(joists).toHaveLength(1);
+    expect(joists[0].box.x).toBe(0.078);
+    // Unsure joists don't.
+    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.68]))).toHaveLength(0);
   });
 
   it("counts a duct from 0.55 sure", () => {
