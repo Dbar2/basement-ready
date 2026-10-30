@@ -1,9 +1,13 @@
 // A 3D render of the design over a real frame (the guide, made in the browser by src/views/AngleRender.tsx)
 // turned into a photo by Muse Image, then held to it by SAM 3.1: the windows, doors and stairs stay
-// where the frame has them, and every piece of furniture shows up where the render put it. One retry;
+// where the frame has them, nothing is added (a window, stairs or a fridge the design doesn't have),
+// every new wall is still there (its door shows where the render drew it), and every piece of
+// furniture shows up where the render put it. One retry, told what went wrong;
 // after that the render itself is the picture, labelled as one. Pictures are cached by angle and
 // design (by what the angle shows of it: a change out of view keeps the picture as it is), so nothing
 // is paid for twice, and every one is labelled "virtually staged".
+import type { Finishes } from "../model/types";
+import { finishWords } from "./finishWords";
 import type { Anchor } from "./load";
 
 type Box = { x: number; y: number; w: number; h: number };
@@ -93,21 +97,41 @@ export function nothingAdded(anchors: Anchor[], found: Map<string, Box[]>) {
   return ADDED_KINDS.every((k) => (found.get(k) ?? []).every((f) => anchors.some((a) => a.kind === k && (sameBox(a.box, f) || inter(f, a.box) / (area(f) || 1) >= 0.6))));
 }
 
+// Nor a piece the design doesn't have: Muse Image sometimes makes a tall new wall beside the kitchen
+// into a fridge. A fridge is only where a kitchen (its fridge is at the end of the run) or a fridge is drawn.
+export const ADDED_PIECES = [{ concept: "refrigerator", where: ["kitchen", "fridge"], what: "a fridge" }] as const;
+export function piecesAdded(items: DrawnItem[], found: Map<string, Box[]>) {
+  return ADDED_PIECES.filter((p) => (found.get(p.concept) ?? []).some((f) => !items.some((i) => (p.where as readonly string[]).includes(i.kind) && inter(f, i.box) / (area(f) || 1) >= 0.5))).map((p) => p.what);
+}
+
 const list = (words: string[]) => (words.length <= 1 ? words.join("") : `${words.slice(0, -1).join(", ")} and ${words.at(-1)}`);
 
-export function picturePrompt(items: DrawnItem[], finishes: { style?: string; floor?: string; walls?: string }) {
+// What Muse Image is asked for: virtual staging of their own photo. Every angle of a design gets the
+// same words for its floor, walls, ceiling, colours and light (server/views/finishWords.ts), so the
+// angles agree with each other and with what was picked. The guide's new walls are drawn plain, so it
+// says what they are; everything loose in the basement goes, and nothing is added that wasn't drawn.
+export function picturePrompt(items: DrawnItem[], finishes: PictureInput["finishes"], again = "") {
+  const f = finishWords(finishes);
   const pieces = [...new Map(items.filter((i) => i.share >= 0.005).map((i) => [i.id, i])).values()]
     .sort((a, b) => b.share - a.share)
     .slice(0, 6)
-    .map((i) => `${i.colour ? `the ${i.colour} ` : "the "}${i.label.toLowerCase()}`);
+    .map((i) => {
+      const colour = i.colour ?? f.colour(i.kind);
+      return `the ${colour ? `${colour.toLowerCase()} ` : ""}${i.label.toLowerCase()}`;
+    });
   return [
-    "This is a real photo of a basement with a 3D design drawn into it.",
-    "Turn it into one photorealistic interior photo of the finished room.",
-    "Keep the camera, the room's shape, the ceiling height and every window, door and stair exactly where they are and the same size.",
+    "This is a real photo of an unfinished basement with a renovation design drawn into it in 3D.",
+    "Make it one photorealistic photo of the same basement after the renovation, finished and furnished exactly as drawn, like a professional real estate photo.",
+    "Keep the camera, the room's shape, the ceiling height and every window, door and stair exactly where they are and the same size. Add no window or stair, and no door that isn't drawn.",
+    "The plain walls drawn in are new drywall walls, around the stairs or a room: keep each one a wall exactly where it is drawn (never a fridge, cabinet or furniture), finished from the floor to the ceiling with baseboards, and keep any door drawn in one as a closed painted door.",
     pieces.length ? `Keep ${list(pieces)} exactly where they are drawn, the same size, shape and colour, and make each one real.` : "",
-    "Do not add or move any big furniture.",
-    `Finish the floor in ${finishes.floor || "light oak vinyl plank"} and the walls and ceiling in smooth ${finishes.walls || "warm white"} drywall with slim recessed lights. Clear away boxes, tools and clutter.`,
-    `Style: ${finishes.style || "bright, calm and uncluttered"}.`,
+    "Add no other furniture, rugs or appliances.",
+    "Clear away everything loose, wherever it is: boxes, storage shelves, tools, exercise machines, laundry, things hanging from the ceiling and clutter.",
+    "A furnace, water heater or electrical panel in view stays in view, in the open, exactly where it is, with the wall behind it finished like the rest: build no wall, niche, panel or closet around it.",
+    `Floor: ${f.floor}, everywhere. Walls: every wall, old and new, smooth painted drywall, all the same ${f.walls}. Ceiling: ${f.ceiling}. Cover any bare studs, joists or wood framing in drywall too, but keep the stairs as they are.`,
+    `Style: ${f.feel}.`,
+    "Light: bright, even, warm-white light from the ceiling lights.",
+    again,
   ]
     .filter(Boolean)
     .join(" ");
@@ -123,7 +147,8 @@ export type PictureInput = {
   anchors: Anchor[]; // the windows, doors and stairs the video tracked here: they must stay where they are
   known?: Anchor[]; // everything really in the frame (SAM on the frame itself): nothing else may appear
   hidden?: Box[]; // where the design's new walls stand: a real door behind one needn't show
-  finishes: { style?: string; floor?: string; walls?: string };
+  doors?: Box[]; // the design's new doors that show, whole: a photo with no door there lost its wall
+  finishes: Partial<Pick<Finishes, "style" | "floor" | "walls">>;
 };
 
 // How much of `a` the boxes cover together, sampled on a 10 × 10 grid (a stair walled in on two sides
@@ -159,31 +184,35 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
   const keep = input.anchors.filter((a) => coveredBy(a.box, input.hidden ?? []) < 0.5 && !(atEdge(a.box) && area(a.box) < 0.05));
   const known = [...input.anchors, ...(input.known ?? [])];
   // SAM looks for every window and stair in the picture, not only the ones the frame had.
-  const anchorKinds = [...new Set<Anchor["kind"]>([...ADDED_KINDS, ...keep.map((a) => a.kind)])];
+  const anchorKinds = [...new Set<Anchor["kind"]>([...ADDED_KINDS, ...keep.map((a) => a.kind), ...(input.doors?.length ? (["door"] as const) : [])])];
   const keptKinds = [...new Set(keep.map((a) => a.kind))];
-  const prompt = picturePrompt(input.items, input.finishes);
-  let last = "";
+  let last = "", again = "";
   for (let attempt = 1; attempt <= 2; attempt++) {
     if (attempt > 1 && !(await work.canSpend())) break;
     let jpeg: Buffer;
     try {
-      jpeg = await work.resize(await work.edit(input.guide, prompt, `${w}x${h}`), w, h);
+      jpeg = await work.resize(await work.edit(input.guide, picturePrompt(input.items, input.finishes, again), `${w}x${h}`), w, h);
     } catch (err) {
       last = err instanceof Error ? err.message : String(err);
       console.error(`[views] ${input.angleId}: ${last}`);
       continue;
     }
-    const [anchorBoxes, itemBoxes] = await Promise.all([
+    const [anchorBoxes, itemBoxes, pieceBoxes] = await Promise.all([
       Promise.all(anchorKinds.map(async (k) => [k, await work.boxes(jpeg, ANCHOR_CONCEPT[k]).catch(() => [])] as const)),
       Promise.all(kinds.map(async (k) => [k, await work.boxes(jpeg, CONCEPT[k]).catch(() => [])] as const)),
+      Promise.all(ADDED_PIECES.map(async (p) => [p.concept, await work.boxes(jpeg, p.concept).catch(() => [])] as const)),
     ]);
     const anchorsOk = anchorsKept(keep, new Map(anchorBoxes));
     const added = !nothingAdded(known, new Map(anchorBoxes));
+    const extra = piecesAdded(input.items, new Map(pieceBoxes));
+    // A new wall Muse Image took away takes its door with it.
+    const lostDoors = (input.doors ?? []).filter((d) => !foundWhereDrawn(d, new Map(anchorBoxes).get("door") ?? []));
     const found = new Map(itemBoxes);
     const missing = items.filter((i) => !foundWhereDrawn(i.box, found.get(i.kind) ?? []));
-    if (anchorsOk && !added && !missing.length) {
+    if (anchorsOk && !added && !lostDoors.length && !extra.length && !missing.length) {
       const what = [
         keptKinds.length ? `${list(keptKinds.map((k) => (k === "window" ? "windows" : k === "door" ? "doors" : "stairs")))} kept where they are` : "no windows or stairs added",
+        input.doors?.length ? `the new ${input.doors.length > 1 ? "doors" : "door"} where the design puts ${input.doors.length > 1 ? "them" : "it"}` : "",
         items.length ? `${list([...new Set(items.map((i) => i.label.toLowerCase()))])} where the design puts ${items.length > 1 ? "them" : "it"}` : "",
       ].filter(Boolean);
       const meta: PictureMeta = {
@@ -199,7 +228,25 @@ export async function makePicture(input: PictureInput, work: PictureWork, now = 
       await work.save(jpeg, meta);
       return meta;
     }
-    last = !anchorsOk ? "a window, door or the stairs moved" : added ? "a window or stairs appeared that aren't there" : `${list(missing.map((i) => i.label.toLowerCase()))} moved`;
+    last = !anchorsOk
+      ? "a window, door or the stairs moved"
+      : added
+        ? "a window or stairs appeared that aren't there"
+        : lostDoors.length
+          ? "a new wall or its door is missing"
+          : extra.length
+            ? `${list(extra)} appeared that isn't in the design`
+            : `${list(missing.map((i) => i.label.toLowerCase()))} moved`;
+    // The second try is told what went wrong with the first.
+    again = !anchorsOk
+      ? "Above all, keep every window, door and stair exactly where it is in the photo."
+      : added
+        ? "Above all, add no window and no stairs anywhere."
+        : lostDoors.length
+          ? "Above all, keep every plain wall drawn in, and the door drawn in it, exactly where they are drawn."
+          : extra.length
+            ? `Above all, add no ${list(extra.map((x) => x.replace(/^an? /, "")))}: the tall plain shapes drawn in are walls.`
+            : `Above all, keep ${list(missing.map((i) => `the ${i.label.toLowerCase()}`))} exactly where drawn.`;
     console.log(`[views] ${input.angleId} attempt ${attempt}: ${last}`);
   }
   return render(last && !/Muse|Meta|fetch|timed? ?out/i.test(last) ? `The 3D design drawn over your frame (in the photo, ${last})` : "The 3D design drawn over your frame", 2);
