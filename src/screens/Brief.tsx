@@ -46,7 +46,7 @@ export function Brief() {
       <header className="brief-head">
         <Logo />
         <div>
-          <p className="mono">Basement suite plan · {today}</p>
+          <p className="aside">Basement suite plan · {today}</p>
           <p className="mono">{p ? `${p.address}, ${p.municipality}` : r.city ?? ""}</p>
         </div>
       </header>

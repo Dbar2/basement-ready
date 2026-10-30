@@ -10,7 +10,7 @@
 import { and, eq, inArray } from "drizzle-orm";
 import { frameViews, jpegSize, keptInPlace, pickFrames, type FrameView } from "../concepts";
 import { db, schema } from "../db";
-import { enqueueOnce } from "../jobs";
+import { enqueue, enqueueOnce } from "../jobs";
 import { overSpend } from "../limits";
 import { museEdit } from "../meta";
 import type { Detection } from "../pipeline";
@@ -339,7 +339,7 @@ export async function cardsSoFar(scanId: string): Promise<Deck> {
     .where(and(eq(schema.scanEvents.scanId, scanId), inArray(schema.scanEvents.type, ["card", "cards"])))
     .orderBy(schema.scanEvents.id);
   const decks = rows.filter((e) => e.type === "cards").map((e) => e.data as { status: Deck["status"]; slots: Slot[] });
-  const plan = decks.find((d) => d.slots?.length) ?? null;
+  const plan = decks.findLast((d) => d.slots?.length) ?? null;
   const final = decks.at(-1);
   const each = rows.filter((e) => e.type === "card").map((e) => e.data as Card | { n: number; dropped: true });
   return {
@@ -348,6 +348,14 @@ export async function cardsSoFar(scanId: string): Promise<Deck> {
     cards: each.filter((c): c is Card => !("dropped" in c)).sort((a, b) => a.n - b.n),
     dropped: each.filter((c) => "dropped" in c).map((c) => c.n),
   };
+}
+
+// After a deck failed, "Try again" deals a fresh one: the deck reads as waiting at once, so the screen
+// keeps asking until the new cards arrive.
+export async function retryCards(scanId: string) {
+  const [scan] = await db.select({ startedAt: schema.scans.startedAt }).from(schema.scans).where(eq(schema.scans.id, scanId));
+  await event(scanId, scan?.startedAt ?? null, "cards", "Dealing the cards again", { status: "waiting", slots: [] });
+  return enqueue("cards", { scanId });
 }
 
 // Queued once per scan attempt, when the deck first opens.

@@ -1,19 +1,20 @@
-/* Basement Ready: Fresh Air. The only file allowed to define raw colour values. */
+/* Basement Ready: Fresh Air colours, Drawing Set UI (brand/ui.md). The only file allowed to define raw colour values. */
 
 :root {
   /* surfaces */
-  --color-bg: #F4F6F2;          /* light green-grey white */
-  --color-card: #FBFCFA;        /* raised card */
-  --color-surface: #E6EBE4;     /* panels, viewer frame */
-  --color-border: #D5DDD4;
+  --color-bg: #F4F6F2;          /* light green-grey white: the sheet */
+  --color-card: #FBFCFA;        /* paper inside a drawing frame (plans, inputs) */
+  --color-surface: #E6EBE4;     /* the 3D viewer, photo placeholders, quiet fills */
+  --color-border: #D5DDD4;      /* hairlines between rows */
 
   /* ink */
-  --color-ink: #0F2A1E;         /* deep forest green: all text, logo, structure lines */
+  --color-ink: #0F2A1E;         /* deep forest green: all text, the logo, frame and structure lines */
   --color-ink-muted: #4A5D52;
 
-  /* accent: mint is a FILL only (buttons, scan glow). Never text or thin lines on light. */
+  /* accent: mint is a FILL only (the one primary button, selected states, scan points). Never text or thin lines on light. */
   --color-mint: #4BE38A;
   --color-mint-ink: #0F2A1E;    /* text on mint */
+  --color-mint-press: #3FCF7B;  /* the primary button while pressed or hovered; forest on it is 7.6:1 */
   --color-mint-line: #2E9A5C;   /* mint-family lines, rings and large UI on light */
   --color-accent-text: #1F7A4A; /* green for small text and links */
 
@@ -33,19 +34,37 @@
   /* type */
   --font-display: "Hanken Grotesk", system-ui, sans-serif;
   --font-body: "Hanken Grotesk", system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, monospace;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
 
-  /* space */
+  /* type scale (brand/ui.md): one display title per screen, then h2 and h3, body, small, and mono for figures */
+  --text-display: clamp(34px, 5.2vw, 60px);
+  --text-h2: clamp(24px, 2.6vw, 30px);
+  --text-h3: 19px;
+  --text-body: 16px;
+  --text-small: 14px;
+  --text-figure: 13px;          /* Geist Mono measurements beside text */
+  --text-tiny: 12px;            /* plan labels, the title block */
+
+  /* space: an 8 px drawing grid, with 4 for hairline gaps */
   --space-1: 4px;  --space-2: 8px;  --space-3: 16px;
   --space-4: 24px; --space-5: 40px; --space-6: 64px; --space-7: 104px;
+  --gutter: clamp(16px, 4vw, 56px);  /* the sheet's side margin */
 
-  /* shape and motion */
-  --radius-1: 8px;
-  --radius-2: 16px;
-  --radius-pill: 999px;
-  --shadow-card: 0 1px 0 rgb(15 42 30 / 0.05), 0 16px 40px -16px rgb(15 42 30 / 0.22);
+  /* lines and shape: drawn, not floated */
+  --line: 1px solid var(--color-border);
+  --line-ink: 1px solid var(--color-ink);
+  --radius-1: 4px;              /* photos, inputs, small frames */
+  --radius-2: 6px;              /* buttons, drawing frames */
+  --radius-pill: 999px;         /* only dots and the record button, never a button with words */
+  --shadow-card: none;          /* nothing on the sheet casts a shadow */
+  --shadow-float: 0 12px 32px -16px rgb(15 42 30 / 0.35); /* dialogs and menus that open over the sheet */
+  --control-h: 48px;            /* primary and secondary buttons */
+  --control-h-sm: 40px;         /* toggles and chips; their hit area is still 44 px */
+
+  /* motion: each section has its own (brand/ui.md), all off with reduced motion */
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --dur-1: 160ms; --dur-2: 320ms; --dur-3: 640ms;
+  --ease-draw: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-1: 160ms; --dur-2: 320ms; --dur-3: 640ms; --dur-draw: 900ms;
 }
 
 /* The verdict colour follows the result: <section data-verdict="fix"> */

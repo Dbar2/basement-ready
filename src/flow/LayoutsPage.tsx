@@ -50,8 +50,8 @@ export function LayoutsPage() {
         <div className="flow-title">
           <h1>Pick a layout</h1>
           <p className="lede">
-            {model ? `${model.designs.length} ways to lay out your basement, each drawn on your plan and permit-ready from the start.` : "Drawing the layouts on your plan…"}
-            {model && !model.existing.confirmedAt && " They're drawn on the plan as measured: check it first to make them exact."}
+            {model ? `${model.designs.length} ways to lay out your basement, drawn on your plan.` : "Drawing the layouts on your plan…"}
+            {model && !model.existing.confirmedAt && " Check the plan first to make them exact."}
           </p>
         </div>
         {error ? (
@@ -69,8 +69,8 @@ export function LayoutsPage() {
       <FlowFoot
         scanId={scanId}
         step="layouts"
-        next={{ label: chosen ? `Design ${chosen.name.toLowerCase()} in 3D` : "Design it in 3D", href: stepUrl(scanId, "studio"), disabled: !chosen }}
-        extra={<span className="mono muted save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "error" ? "Not saved" : ""}</span>}
+        next={{ label: "Design it in 3D", href: stepUrl(scanId, "studio"), disabled: !chosen }}
+        extra={<span className="aside save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "error" ? "Not saved" : ""}</span>}
       />
     </div>
   );
@@ -81,7 +81,7 @@ function Decision({ scanId, r }: { scanId: string; r: ScanResult }) {
   const upTo = r.money?.total ?? 0;
   return (
     <aside className="decision-card" data-verdict={r.verdict} aria-label="Your answer">
-      <p className="eyebrow mono">{r.verdict === "no" ? "Not likely as it is" : r.verdict === "fix" ? "Likely, after fixes" : "Likely"} · {scanId === "sample" ? "the example" : r.demo ? "the demo house" : (r.city ?? "your basement")}</p>
+      <p className="eyebrow">{r.verdict === "no" ? "Not likely as it is" : r.verdict === "fix" ? "Likely, after fixes" : "Likely"} · {scanId === "sample" ? "the example" : r.demo ? "the demo house" : (r.city ?? "your basement")}</p>
       {scanId === "sample" && <p className="muted small">{EXAMPLE_LABEL}</p>}
       {r.demo && <p className="muted small">{DEMO_LABEL}</p>}
       <h2>{r.headline}</h2>
