@@ -164,7 +164,7 @@ def truth_for(take: str) -> dict | None:
     for k, r in enumerate(cfg["rooms"]):
         x0, y0, x1, y1 = r["rect"]
         info = tj["rooms"][k] if k < len(tj.get("rooms", [])) else {}
-        rooms.append({"name": r["name"], "polygon": [_w(x0, y0), _w(x1, y0), _w(x1, y1), _w(x0, y1)], "ceilingM": info.get("ceilingHeightM"), "rect": (x0, y0, x1, y1)})
+        rooms.append({"name": r["name"], "polygon": [_w(x0, y0), _w(x1, y0), _w(x1, y1), _w(x0, y1)], "ceilingM": info.get("ceilingHeightM"), "rect": (x0, y0, x1, y1), "entered": not r.get("peek")})
 
     def room_at(x, y):
         for k, r in enumerate(cfg["rooms"]):
@@ -376,8 +376,18 @@ def score_plan(world: dict, truth: dict) -> dict:
             ov_found += 1
             if t["heightM"] and hit[0].get("heightM"):
                 ov_h.append(abs(hit[0]["heightM"] - t["heightM"]))
+    # Rooms the camera only looked into from a doorway: found, drawn as seen from the door, and how big.
+    peek = []
+    for i, r in enumerate(tr):
+        if r.get("entered", True):
+            continue
+        j = t2p.get(i)
+        got = pr[j] if j is not None else None
+        peek.append({"room": r["name"], "found": got is not None, "markedFromDoor": bool(got and got.get("entered") is False),
+                     "errPct": round(100 * (_poly_area(got["polygon"]) - _poly_area(r["polygon"])) / _poly_area(r["polygon"]), 1) if got else None})
     return {
         "rooms": {"true": len(tr), "plan": len(pr), "matched": len(pairs), "footprintIoU": round(fiou, 3), "perRoom": areas},
+        "doorwayRooms": peek,
         "walls": wall_error(tr, pr),
         "adjacency": adj,
         "doors": doors,

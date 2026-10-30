@@ -363,7 +363,7 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   // An app take's areas share the phone's world: one plan of the whole basement, with SAM's finds in it,
   // checked against the depth and by Spark. Without it the plan is drawn from each area's box, as before.
   const floorPlan = basement3d?.tracked
-    ? await readBasementPlan(work, basement3d, detections, { said: transcript.transcript, log: (text) => emit("log", text) }).catch((err) => {
+    ? await readBasementPlan(work, basement3d, detections, { said: transcript.transcript, log: (text) => emit("log", text), save: (png) => storage.put(keys.basement3d(scanId, "plan.png"), png, "image/png") }).catch((err) => {
         console.error(`[plan] ${scanId}: ${err instanceof Error ? err.message : err}`);
         return null;
       })

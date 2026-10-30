@@ -51,7 +51,7 @@ bundle.cams.forEach((c: number[] | null, n: number) => {
 const first = await runFloorPlan(scans, cams);
 const placed = fromFloorPlan(first, scans, spans, idx, pos);
 if (!placed) throw new Error("no rooms in the plan");
-const b: BasementScan = { ...placed, tracked: { cameras: cams, plan: first } };
+const b: BasementScan = { ...placed, tracked: { cameras: cams, frames: idx, plan: first } };
 console.log("placements", JSON.stringify(b.placements));
 
 // --dry: the plan and Spark's review only, printed; nothing written.

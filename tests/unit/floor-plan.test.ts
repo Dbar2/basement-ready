@@ -9,7 +9,7 @@ import { polygonArea } from "../../server/model/geometry";
 const plans: BasementPlan[] = [];
 vi.mock("../../server/scan3d", async (orig) => ({
   ...(await orig<typeof import("../../server/scan3d")>()),
-  runFloorPlan: vi.fn(async (_scans: unknown, _cams: unknown, extras: { edits?: { n: number; op: string }[] }) => {
+  runFloorPlan: vi.fn(async (_scans: unknown, _cams: unknown, extras: { edits?: { n: number; op: string }[]; hints?: Record<string, unknown> }) => {
     const plan = structuredClone(plans[Math.min(plans.length - 1, extras.edits?.length ? 1 : 0)]);
     // The 3D service keeps a merge, refuses anything else.
     plan.edits = (extras.edits ?? []).map((e) => ({ ...e, ok: e.op === "merge", why: e.op === "merge" ? "open along 3.0 m" : "no wall in the points there" }));
@@ -18,7 +18,8 @@ vi.mock("../../server/scan3d", async (orig) => ({
 }));
 vi.mock("../../server/limits", () => ({ overSpend: vi.fn(async () => false) }));
 
-const { readBasementPlan, toEdits, inside } = await import("../../server/floorplan");
+const { readBasementPlan, toEdits, inside, applyWatch } = await import("../../server/floorplan");
+const { runFloorPlan } = await import("../../server/scan3d");
 
 // The main room 6 × 4 m, a 1.2 × 2.4 m low room beside it behind a 12 cm partition with a door, a stair
 // along the main room's top wall, a furnace in the low room's corner.
@@ -143,6 +144,47 @@ describe("Spark's corrections, checked by the points", () => {
     const out = (await readBasementPlan("/nowhere", b, [], { ask, review: false }))!;
     expect(ask).not.toHaveBeenCalled();
     expect(out.review).toBeNull();
+  });
+});
+
+describe("the whole-take watch on the plan", () => {
+  // The main room r1 (entered) and the low room r2, which the camera only looked into from r1's side.
+  const looked = () => {
+    const p = plan();
+    Object.assign(p.rooms[0], { entered: true });
+    Object.assign(p.rooms[1], { entered: false, seenFrom: "r1", cameras: 0 });
+    return p;
+  };
+  // Cameras every 3rd frame at 5 fps, all in r1 (phone's world = plan frame turned by the plan's 0.1 rad).
+  const frames = [0, 3, 6, 9, 12, 15];
+  const at = (u: number, v: number) => [u * Math.cos(0.1) - v * Math.sin(0.1), 1.4, u * Math.sin(0.1) + v * Math.cos(0.1)];
+  const cams = frames.map(() => at(3, 2));
+  const watch = {
+    rooms: [
+      { id: "r1", name: "Rec room", spokenName: "the gym", kind: "room", visits: [[0, 4]] as [number, number][], entered: true, seenFrom: null },
+      { id: "r2", name: "Closet", kind: "closet", visits: [], entered: false, seenFrom: "r1" },
+      { id: "r3", name: "Furnace room", kind: "room", visits: [], entered: false, seenFrom: "r1" },
+    ],
+    doors: [{ from: "r1", to: "r2", kind: "door" }],
+  };
+
+  it("names the plan's rooms from the watch and finds the one seen from the door", () => {
+    const p = looked();
+    const missing = applyWatch(p, watch, cams, frames);
+    expect(p.rooms[0].name).toBe("the gym");
+    expect(p.rooms[1]).toMatchObject({ name: "Closet", kind: "closet" });
+    expect(missing.map((r) => r.name)).toEqual(["Furnace room"]);
+  });
+
+  it("tells the planner to look for a room nobody went into, and says which it couldn't place", async () => {
+    plans.length = 0;
+    plans.push(looked());
+    const b = { scans: [], tracked: { cameras: cams, frames, plan: {} }, watch: Promise.resolve(watch) } as unknown as BasementScan;
+    const out = (await readBasementPlan("/nowhere", b, [], { review: false }))!;
+    const extras = vi.mocked(runFloorPlan).mock.calls.at(-1)![2] as { hints: Record<string, unknown> };
+    expect(extras.hints.peek).toBe(2);
+    expect(out.review?.notPlaced).toEqual(["Furnace room"]);
+    expect(out.rooms[1].name).toBe("Closet");
   });
 });
 

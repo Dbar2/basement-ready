@@ -6,7 +6,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BasementPlan } from "../src/api";
-import type { BasementScan } from "./basement";
+import type { BasementScan, WatchLike } from "./basement";
 import { overSpend } from "./limits";
 import { outputText, responses } from "./meta";
 import type { Detection } from "./pipeline";
@@ -87,6 +87,50 @@ export function keyframes(work: string, scans: Scan3d[], perArea = KEYFRAMES_PER
   return out;
 }
 
+const insidePoly = (poly: [number, number][], p: [number, number]) => {
+  let r = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, zi] = poly[i], [xj, zj] = poly[j];
+    if (zi > p[1] !== zj > p[1] && p[0] < xi + ((p[1] - zi) * (xj - xi)) / (zj - zi)) r = !r;
+  }
+  return r;
+};
+
+// The watched rooms on the plan's rooms: a room the camera was inside goes to the plan room its camera
+// positions fell in most; a room only seen from a doorway goes to a plan room nobody entered, off the room
+// it was seen from. The plan's rooms get the watch's names and kinds (a closet, a hall); measurements stay
+// the 3D's. Returns the watched rooms the plan has nothing for.
+export function applyWatch(plan: BasementPlan, watch: WatchLike, cameras: number[][], frames: number[], fps = 5) {
+  const c = Math.cos(-plan.rotation), s = Math.sin(-plan.rotation);
+  const uv = cameras.map(([x, , z]): [number, number] => [c * x - s * z, s * x + c * z]);
+  const matched = new Map<string, string>(); // watched id -> plan room id
+  for (const w of watch.rooms) {
+    if (!w.entered) continue;
+    const counts = new Map<string, number>();
+    frames.forEach((n, i) => {
+      if (!w.visits.some(([a, b]) => n >= a * fps && n < b * fps)) return;
+      const r = plan.rooms.find((x) => insidePoly(x.polygon, uv[i]));
+      if (r) counts.set(r.id, (counts.get(r.id) ?? 0) + 1);
+    });
+    const best = [...counts].sort((a, b) => b[1] - a[1])[0];
+    if (best && ![...matched.values()].includes(best[0])) matched.set(w.id, best[0]);
+  }
+  for (const w of watch.rooms) {
+    if (w.entered) continue;
+    const from = w.seenFrom ? matched.get(w.seenFrom) : undefined;
+    const r = plan.rooms.find((x) => !(x as { entered?: boolean }).entered && ![...matched.values()].includes(x.id) && (!from || (x as { seenFrom?: string }).seenFrom === from));
+    if (r) matched.set(w.id, r.id);
+  }
+  for (const w of watch.rooms) {
+    const r = plan.rooms.find((x) => x.id === matched.get(w.id));
+    if (!r) continue;
+    r.name = (w.spokenName || w.name || r.name)?.slice(0, 40);
+    if (w.kind === "closet" && r.areaM2 <= 5) r.kind = "closet";
+    else if (w.kind === "hall") r.kind = "hall";
+  }
+  return watch.rooms.filter((w) => !matched.has(w.id));
+}
+
 // A point inside a polygon, near its middle (the middle of an L isn't in it).
 export function inside(poly: [number, number][]): [number, number] {
   const xs = poly.map((p) => p[0]), zs = poly.map((p) => p[1]);
@@ -163,7 +207,8 @@ Corrections, only ones you can see in the pictures (each is checked against the 
 - {"op":"kind","room":"R3","kind":"closet","name":"Closet","why":"..."}: kinds: closet, mechanical (furnace or utility room), stairs, bathroom, laundry, storage, hall, other
 - {"op":"door","rooms":["R1","R2"],"why":"..."}: a door joins these rooms that the plan doesn't show
 - {"op":"no_door","door":"D2","why":"..."}: there's no door there
-"unsure": walls whose place you doubt from the frames. Leave corrections empty when the plan looks right. At most 6 corrections.`;
+"unsure": walls whose place you doubt from the frames. Leave corrections empty when the plan looks right. At most 6 corrections.
+When "watchedTheWholeVideo" is given, it's what a model that watched the whole video saw: the rooms in order, which the camera only looked into from a doorway (enteredByCamera false), and the doors between them. Its room count and doors are good evidence; its sizes aren't. A room nobody walked into is drawn from what the camera saw through its door, so its walls are less sure.`;
 
 function summary(plan: BasementPlan) {
   return {
@@ -174,9 +219,13 @@ function summary(plan: BasementPlan) {
   };
 }
 
-export async function askSpark(plan: BasementPlan, renders: NonNullable<FloorPlanResult["renders"]>, said: string) {
+export async function askSpark(plan: BasementPlan, renders: NonNullable<FloorPlanResult["renders"]>, said: string, watch?: WatchLike | null) {
+  const watched = watch && {
+    rooms: watch.rooms.map((r) => ({ id: r.id, name: r.spokenName || r.name, kind: r.kind, enteredByCamera: r.entered, seenFrom: r.seenFrom })),
+    doors: watch.doors.map((d) => ({ from: d.from, to: d.to, kind: d.kind })),
+  };
   const content: unknown[] = [
-    { type: "input_text", text: JSON.stringify({ plan: summary(plan), homeownerSaid: said.slice(0, 1500) || "(nothing)" }) },
+    { type: "input_text", text: JSON.stringify({ plan: summary(plan), homeownerSaid: said.slice(0, 1500) || "(nothing)", ...(watched ? { watchedTheWholeVideo: watched } : {}) }) },
     { type: "input_text", text: "From above:" },
     { type: "input_image", image_url: `data:image/png;base64,${renders.topDown}` },
     ...renders.frames.flatMap((f, i) => [
@@ -203,14 +252,20 @@ export async function readBasementPlan(
   work: string,
   b: BasementScan,
   detections: Detection[],
-  opts: { said?: string; review?: boolean; log?: (text: string) => Promise<void>; ask?: typeof askSpark } = {},
+  // save: the final plan drawn from above over the points (PNG), for anything else that reads the plan.
+  opts: { said?: string; review?: boolean; log?: (text: string) => Promise<void>; ask?: typeof askSpark; save?: (png: Buffer) => Promise<unknown> } = {},
 ): Promise<BasementPlan | null> {
   if (!b.tracked) return null;
   const ask = opts.ask ?? askSpark;
-  const hints = hintsFrom(b.scans, detections);
+  // The whole-take watch lands well before the 3D; don't hold the plan up long if it hasn't.
+  const watch = b.watch ? await Promise.race([b.watch.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 30_000))]) : null;
+  const hints: Record<string, unknown> = hintsFrom(b.scans, detections);
+  // A room the watch saw only from its doorway: keep looking for small rooms nobody went into.
+  const peek = watch?.rooms.filter((r) => !r.entered).length ?? 0;
+  if (peek) hints.peek = peek;
   const frames = keyframes(work, b.scans);
   const review = opts.review ?? true;
-  let res = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints, keyframes: frames, render: review });
+  let res = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints, keyframes: frames, render: true });
   if (!res.plan) return null;
   const edits: Record<string, unknown>[] = [];
   const unsure: [number, number][] = [];
@@ -219,7 +274,8 @@ export async function readBasementPlan(
   while (review && rounds < ROUNDS && res.renders && !(await overSpend())) {
     rounds++;
     await opts.log?.(rounds === 1 ? "Checking the floor plan against the video" : "Checking the floor plan again");
-    const said = await ask(res.plan!, res.renders, opts.said ?? "").catch((err) => {
+    if (watch) applyWatch(res.plan!, watch, b.tracked.cameras, b.tracked.frames);
+    const said = await ask(res.plan!, res.renders, opts.said ?? "", watch).catch((err) => {
       console.error(`[plan] Spark: ${err instanceof Error ? err.message : err}`);
       return null;
     });
@@ -232,7 +288,7 @@ export async function readBasementPlan(
     const fresh = toEdits(res.plan!, said.corrections).map((e, i) => ({ ...e, n: edits.length + i + 1 }));
     if (!fresh.length) break;
     edits.push(...fresh);
-    res = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints, edits, keyframes: frames, render: rounds < ROUNDS });
+    res = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints, edits, keyframes: frames, render: true });
     if (!res.plan) return null;
     const ids = new Set(fresh.map((e) => e.n));
     const kept = res.plan.edits.filter((e) => ids.has(e.n as number) && e.ok).length;
@@ -240,11 +296,13 @@ export async function readBasementPlan(
     if (!kept) break;
   }
   const plan = res.plan;
+  if (res.renders?.topDown) await opts.save?.(Buffer.from(res.renders.topDown, "base64")).catch(() => {});
+  const missing = watch ? applyWatch(plan, watch, b.tracked.cameras, b.tracked.frames) : [];
   // Walls Spark doubted are guesses too: the plan screen asks about them.
   for (const p of unsure) {
     const w = plan.walls.reduce<(typeof plan.walls)[number] | null>((best, x) => (!best || Math.hypot(mid(x)[0] - p[0], mid(x)[1] - p[1]) < Math.hypot(mid(best)[0] - p[0], mid(best)[1] - p[1]) ? x : best), null);
     if (w && Math.hypot(mid(w)[0] - p[0], mid(w)[1] - p[1]) < 0.4) w.guess = true;
   }
-  plan.review = review ? { rounds, unsure: plan.walls.filter((w) => w.guess).map((w) => w.id), ...(note ? { note } : {}) } : null;
+  plan.review = review || missing.length ? { rounds, unsure: plan.walls.filter((w) => w.guess).map((w) => w.id), ...(note ? { note } : {}), ...(missing.length ? { notPlaced: missing.map((r) => r.spokenName || r.name) } : {}) } : null;
   return plan;
 }
