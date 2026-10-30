@@ -75,7 +75,7 @@ function netArea(room: Room, others: Room[]) {
 }
 
 // Openings whose centre sits on a room's outline.
-function openingsOn(room: Room, design: Design, kind: Opening["kind"]) {
+export function openingsOn(room: Room, design: Design, kind: Opening["kind"]) {
   const { walls, openings } = design.proposed;
   return openings.filter((o) => {
     const w = walls.find((x) => x.id === o.wallId);

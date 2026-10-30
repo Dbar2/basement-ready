@@ -21,8 +21,9 @@ import { flipRows, idBoxes, idColour, type IdImage } from "./objectId";
 
 export type AngleView = Angle & { frameUrl: string; group: "design" | number };
 // `hash`: the design's. `view`: what this angle shows of it (its visible pieces, walls, rooms and
-// finishes): two designs that look the same from here share one picture.
-export type Rendered = { hash: string; view: string; guide: Blob; url: string; ids: IdImage; items: DrawnItem[] };
+// finishes): two designs that look the same from here share one picture. `walls`: where the design's
+// new walls stand in the picture, hiding whatever real door or window is behind them.
+export type Rendered = { hash: string; view: string; guide: Blob; url: string; ids: IdImage; items: DrawnItem[]; walls: DrawnItem["box"][] };
 export type Snap = (angle: AngleView, frame: CanvasImageSource) => Promise<Rendered>;
 
 // A camera from OpenCV intrinsics (pixels) and a camera-to-basement pose (OpenCV axes).
@@ -162,7 +163,8 @@ function Snapper({ design, root, shell, onReady }: { design: Design; root: React
       const guide = await new Promise<Blob>((resolve, reject) => out.toBlob((b) => (b ? resolve(b) : reject(new Error("no picture"))), "image/jpeg", 0.9));
       const shown = new Set(items.map((i) => i.id));
       const view = designHash({ finishes: design.finishes, proposed: { ...design.proposed, furniture: design.proposed.furniture.filter((f) => shown.has(f.id)) } });
-      return { hash, view, guide, url: URL.createObjectURL(guide), ids: img, items };
+      const walls = [...idBoxes(img)].filter(([id, { share }]) => id.startsWith("wall:") && share > 0.002).map(([, { box }]) => box);
+      return { hash, view, guide, url: URL.createObjectURL(guide), ids: img, items, walls };
     };
     onReady(snap, hash);
     return () => {
