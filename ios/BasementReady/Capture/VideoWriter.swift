@@ -41,6 +41,8 @@ final class VideoWriter: @unchecked Sendable {
         AVVideoAverageBitRateKey: Self.bitsPerSecond,
         AVVideoExpectedSourceFrameRateKey: Int(Self.maxFPS),
         AVVideoMaxKeyFrameIntervalKey: Int(Self.maxFPS),
+        // No B-frames: the encoder holds fewer pictures and the file is written as it's filmed.
+        AVVideoAllowFrameReorderingKey: false,
       ],
     ])
     input.expectsMediaDataInRealTime = true
