@@ -220,7 +220,10 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     if (!a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
     const patch = cleanPatch(await c.req.json().catch(() => null));
     if ("error" in patch) return c.json({ error: patch.error }, 400);
-    return c.json(await saveWorkspace(a.basement.id, patch));
+    const saved = await saveWorkspace(a.basement.id, patch);
+    // A changed plan is painted again for the as-built 3D (server/asBuilt.ts); an unchanged one is a no-op.
+    if (patch.state?.model) void import("./asBuilt").then((m) => m.paintAsBuiltLater(a.id));
+    return c.json(saved);
   });
 
   // ---- Permit package and forms ----
