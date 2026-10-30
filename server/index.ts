@@ -32,6 +32,7 @@ import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
 import { keys, storage, type Scan3dFile } from "./storage";
 import { mountWorkspace } from "./workspaceRoutes";
+import { mountModel } from "./model/routes";
 import { answerFor, asksFor, mountAnswers, NOT_YOURS, ownerOf, saveAnswer, savedAnswers } from "./answers";
 import { FAILURE, failureOf } from "./failure";
 import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger, USED_UP } from "./limits";
@@ -529,6 +530,7 @@ app.post("/api/scans/:id/replan", async (c) => {
 
 // The workspace: owner profile, permit package, materials, applications, looks (server/workspaceRoutes.ts).
 mountWorkspace(app, currentUser);
+mountModel(app, currentUser);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {

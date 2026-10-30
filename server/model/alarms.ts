@@ -1,0 +1,64 @@
+// Smoke and CO alarms for a design, by the code's rules: in each sleeping room, between the sleeping
+// rooms and the rest of the suite, CO beside where people sleep when anything burns fuel, and CO in a
+// fuel-burning furnace room (Building Code 9.10.19, 9.32.3.9A, 9.32.3.9B). The same placement as the
+// permit sheets' (server/permit/plans.ts placeAlarms), on the model's rooms, so it runs after every edit.
+import { along, bounds, clamp, dist, r2 } from "./geometry";
+import type { Alarm, Design, Fixture, Pt, Room } from "./types";
+
+// Anything that may burn gas: a furnace or a water heater.
+export const burnsFuel = (fixtures: Fixture[]) => fixtures.some((f) => f.kind === "furnace" || f.kind === "water_heater");
+
+// On the ceiling, a little off the room's middle so the room's name stays readable on the plan.
+const spot = (r: Room): Pt => {
+  const b = bounds(r.polygon);
+  return [r2((b.minX + b.maxX) / 2), r2(b.minZ + (b.maxZ - b.minZ) * 0.25)];
+};
+
+export function placeAlarms(design: Pick<Design, "layout" | "proposed">, fuelBurning: boolean): Alarm[] {
+  const { rooms, openings, walls } = design.proposed;
+  const suite = rooms.filter((r) => r.unit === 2);
+  const beds = suite.filter((r) => r.kind === "bedroom");
+  const living = [...suite.filter((r) => r.kind === "living")].sort((a, b) => area(b) - area(a))[0] ?? null;
+  const studio = design.layout === "studio";
+  const doors = openings.flatMap((o) => {
+    const w = o.kind === "door" ? walls.find((x) => x.id === o.wallId) : null;
+    return w ? [along(w, o.offsetM)] : [];
+  });
+  const out: Omit<Alarm, "id">[] = [];
+  for (const bed of beds) {
+    const c = spot(bed);
+    out.push({ kind: studio && fuelBurning ? "combo" : "smoke", at: c, why: studio ? "In the sleeping area" : "In each bedroom" });
+    if (studio || !living) continue;
+    // Outside the bedroom door, in the living space: between the bedroom and the rest of the suite.
+    const door = [...doors].sort((p, q) => dist(p, c) - dist(q, c))[0];
+    const lc = spot(living);
+    const at = door ?? lc;
+    const lb = bounds(living.polygon);
+    const inLiving: Pt = [
+      r2(clamp(at[0] + Math.sign(lc[0] - at[0] || 1) * 0.6, lb.minX + 0.4, lb.maxX - 0.4)),
+      r2(clamp(at[1] + Math.sign(lc[1] - at[1] || 1) * 0.6, lb.minZ + 0.4, lb.maxZ - 0.4)),
+    ];
+    out.push({ kind: fuelBurning ? "combo" : "smoke", at: inLiving, why: fuelBurning ? "Outside the bedroom: smoke, and CO next to where people sleep" : "Between the bedroom and the rest of the suite" });
+  }
+  if (!beds.length && living) out.push({ kind: fuelBurning ? "combo" : "smoke", at: spot(living), why: "One per storey of the suite" });
+  // A service room with a fuel-burning furnace gets its own CO alarm, and a bedroom that shares a
+  // wall with it gets CO inside the bedroom too.
+  const mech = rooms.find((r) => r.kind === "mechanical");
+  if (fuelBurning && mech) {
+    out.push({ kind: "co", at: spot(mech), why: "In the room with the fuel-burning furnace" });
+    const mb = bounds(mech.polygon);
+    for (const alarm of out) {
+      const bed = beds.find((b) => dist(spot(b), alarm.at) < 0.01);
+      if (!bed) continue;
+      const bb = bounds(bed.polygon);
+      const touches = bb.minX <= mb.maxX + 0.05 && mb.minX <= bb.maxX + 0.05 && bb.minZ <= mb.maxZ + 0.05 && mb.minZ <= bb.maxZ + 0.05;
+      if (touches) Object.assign(alarm, { kind: "combo", why: "In the bedroom, which shares a wall with the furnace room" });
+    }
+  }
+  return out.map((a, i) => ({ id: `alarm-${i + 1}`, ...a }));
+}
+
+function area(r: Room) {
+  const b = bounds(r.polygon);
+  return (b.maxX - b.minX) * (b.maxZ - b.minZ);
+}

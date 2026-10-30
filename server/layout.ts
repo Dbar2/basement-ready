@@ -3,7 +3,8 @@
 // window, rooms meet minimum sizes, the stairs and furnace stay clear, and the bathroom goes where the
 // plumbing already comes up through the floor. A designer refines it; this is so a homeowner can see
 // their basement as a home.
-import { nearestSide, type Plan, type Side } from "./plan";
+import type { Plan, Side } from "./plan";
+import { nearestSide } from "./side";
 
 export type ZoneKind = "bedroom" | "bathroom" | "kitchen" | "living" | "stairs" | "mechanical";
 export type Rect = { x0: number; z0: number; x1: number; z1: number };
