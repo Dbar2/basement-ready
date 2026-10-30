@@ -78,7 +78,14 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
 
   useEffect(() => {
     void getScan(scanId).then(async (s) => {
-      setReadOnly(scanId !== "sample" && !s.canEdit);
+      const shared = scanId !== "sample" && !s.canEdit;
+      setReadOnly(shared);
+      // A shared link never asks for the owner's workspace: it isn't theirs to open.
+      if (shared) setWs({ profile: null, state: {}, prefill: { legalDescription: null, pin: null, rollNumber: null, fromOtherBasement: null }, site: null, locked: "This is a shared link: the permit, money and build tabs open on the device that filmed it, or when its owner signs in." });
+      else
+        void getWorkspace(scanId)
+          .then(setWs)
+          .catch(() => setWs({ profile: null, state: {}, prefill: { legalDescription: null, pin: null, rollNumber: null, fromOtherBasement: null }, site: null, locked: "We couldn't open your workspace. Try again in a moment." }));
       // The sample's answers from the wait screen, applied the way a real scan applies them, over
       // the money answers the sample comes with.
       const told = Object.fromEntries((s.result?.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer]));
@@ -97,9 +104,6 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
       }
       setR(s.result);
     });
-    void getWorkspace(scanId)
-      .then(setWs)
-      .catch(() => setWs({ profile: null, state: {}, prefill: { legalDescription: null, pin: null, rollNumber: null, fromOtherBasement: null }, site: null, locked: "We couldn't open your workspace. Try again in a moment." }));
   }, [scanId]);
 
   // The photos arrive a little after the answer: check back until they're in, for a few minutes at most.

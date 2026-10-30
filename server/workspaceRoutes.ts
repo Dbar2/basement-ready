@@ -23,6 +23,13 @@ const UUID = /^[0-9a-f-]{36}$/;
 const SAMPLE = "public/samples/sample";
 // The sample's looks are committed with it, so it runs with no keys (scripts/sample-looks.ts makes them).
 export const sampleLookFile = (style: string, n: number) => `${SAMPLE}/looks/${style}/${n}.jpg`;
+// Each committed look as it was made, with what SAM's check found.
+function committedLook(style: string): any | null {
+  const file = `${SAMPLE}/looks/looks.json`;
+  if (!existsSync(file)) return null;
+  const look = JSON.parse(readFileSync(file, "utf8"))[style];
+  return look?.items?.every((it: { n: number }) => existsSync(sampleLookFile(style, it.n))) ? look : null;
+}
 const OVER_SPEND = "Today's limit for new photos is used up. They come back at midnight, Eastern time.";
 // A look still pending after this was cut off by a restart: it's offered again.
 const LOOK_STALE_MS = 3 * 60 * 1000;
@@ -331,6 +338,8 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
   app.post("/api/sample/looks", async (c) => {
     const style = String((await c.req.json().catch(() => ({}))).style ?? "");
     if (!STYLES[style]) return c.json({ error: "Pick a look." }, 400);
+    const committed = committedLook(style);
+    if (committed) return c.json({ look: committed });
     const result = sampleResult();
     const items = (result.concepts?.items ?? []) as { n: number; frame: number; title: string }[];
     const ready = (await Promise.all(items.map(async (it) => (existsSync(sampleLookFile(style, it.n)) || (await storage.get(lookKey("sample", style, it.n))) ? it : null)))).filter(Boolean);
