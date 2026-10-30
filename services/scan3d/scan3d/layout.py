@@ -997,15 +997,14 @@ def read_plan(
         dil = cv2.dilate(grown.astype(np.float32), np.ones((3, 3), np.uint8)).astype(np.int32)
         add = (grown == 0) & (free > 0) & (dil > 0)
         grown[add] = dil[add]
-    # Open floor nobody claimed is a room too: where the person stood (a cluttered room's floor), or floor
-    # the camera saw without going in (a room looked into from its doorway).
+    # Open floor nobody claimed is a room too where the person stood (a cluttered room's floor), and, when
+    # the whole-take watch saw a room only from its doorway, floor the camera saw without going in.
     left = ((free > 0) & (grown == 0)).astype(np.uint8)
     n_left, left_lab = cv2.connectedComponents(left)
-    min_seen = CLOSET_M2 if hints.get("peek") else MIN_ROOM_M2
     for k in range(1, n_left):
         piece = left_lab == k
         a = piece.sum() * CELL * CELL
-        if (a >= MIN_ROOM_M2 and (walked[piece] > 0).sum() >= 3) or (a >= min_seen and floor_pts[piece].mean() >= 0.3):
+        if (a >= MIN_ROOM_M2 and (walked[piece] > 0).sum() >= 3) or (hints.get("peek") and a >= CLOSET_M2 and floor_pts[piece].mean() >= 0.3):
             grown[piece] = grown.max() + 1
 
     # 6. Floor next to the open floor (clutter, a hidden corner) joins the room it's reachable from
@@ -1094,12 +1093,13 @@ def read_plan(
                 continue
             if not sliver and area >= MIN_ROOM_M2 and enclosed(labels, k, blocked, footprint) >= 0.6:
                 continue
-            touching = sum(contact(labels, k, o) for o in np.unique(labels[labels > 0]) if o != k)
-            if not sliver and area >= CLOSET_M2 and 0 < touching <= DOOR_MAX_M and not (walked[mask] > 0).any():
-                continue  # through a door, and nobody went in: a closet looked into from its doorway
-            if ext < 1.2 and facing.get(k, 0.0) >= 0.6 and split_ghost(labels, k):
+            ghost = ext < 1.2 and facing.get(k, 0.0) >= 0.6
+            if ghost and split_ghost(labels, k):
                 changed = True
                 break
+            touching = sum(contact(labels, k, o) for o in np.unique(labels[labels > 0]) if o != k)
+            if not sliver and not ghost and area >= CLOSET_M2 and 0 < touching <= DOOR_MAX_M and not (walked[mask] > 0).any():
+                continue  # through a door, and nobody went in: a closet looked into from its doorway
             touch = {o: contact(labels, k, o) for o in np.unique(labels[labels > 0]) if o != k}
             touch = {o: v for o, v in touch.items() if v > 0}
             if touch:
