@@ -2,7 +2,7 @@
 // page heading, source references, draft notice and the scroll reveal.
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Logo, Mark } from "../components/Logo";
-import { NAV, PATHS, SITE } from "./site";
+import { DATA_CREDIT, NAV, PATHS, SITE } from "./site";
 import { SOURCES, type Source, type SourceId } from "./sources";
 import "./marketing.css";
 
@@ -106,7 +106,7 @@ export function SiteFooter() {
         <a href={PATHS.terms}>Terms</a>
       </nav>
       <p className="mk-footer-small">
-        Built in Waterloo, Ontario by {SITE.builder}. Free for homeowners. The code is open source.
+        Built in Waterloo, Ontario by {SITE.builder}. Free for homeowners. The code is open source. {DATA_CREDIT}
       </p>
     </footer>
   );

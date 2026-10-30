@@ -123,8 +123,10 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
     a: (
       <p>
         All of Ontario, with Waterloo Region in depth. Waterloo, Kitchener and Cambridge get their own zoning rules,
-        permit steps, fees and local money. Anywhere else in Ontario, you get the provincial rules with a note on what
-        to confirm with your City. <a href={PATHS.cities}>See what's covered</a>.
+        fees, grants, forms and permit steps. Woolwich, Wilmot, North Dumfries and Wellesley get Ontario's rules plus
+        the Region's loan. Anywhere else in Ontario, you get the province's rules under your municipality's name, with
+        a note on what to confirm locally. Outside Ontario, try the demo house. <a href={PATHS.cities}>See what's
+        covered</a>.
       </p>
     ),
   },

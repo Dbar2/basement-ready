@@ -17,8 +17,8 @@ export const SOURCES = {
     title: "Planning Act, R.S.O. 1990, c. P.13",
     publisher: "Government of Ontario",
     url: "https://www.ontario.ca/laws/statute/90p13",
-    section: "s. 35.1(1)",
-    retrieved: CHECKED,
+    section: "s. 35.1(1)–(1.3): up to three units, one parking space per added unit, no minimum size",
+    retrieved: "2026-10-30",
   },
   aruRegulation: {
     title: "O. Reg. 299/19: Additional Residential Units",
@@ -147,6 +147,18 @@ export const SOURCES = {
     url: "https://homestars.com/home-constructions-renovations/price-guides/basement-development-cost",
     section: "Independent heating for a legal suite",
     retrieved: CHECKED,
+  },
+  cmhcRefinance: {
+    title: "Refinance for building secondary suites",
+    publisher: "Canada Mortgage and Housing Corporation",
+    url: "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/refinance",
+    retrieved: CHECKED,
+  },
+  ontarioApplication: {
+    title: "Application for a Permit to Construct or Demolish (2026)",
+    publisher: "Government of Ontario",
+    url: "https://www.ontario.ca/files/2026-01/mmah-building-development-application-for-a-permit-to-construct-or-demolish-2026-en-2026-01-27.pdf",
+    retrieved: "2026-10-30",
   },
   costLegalToronto: {
     title: "Cost to make a basement legal in Toronto",
