@@ -81,6 +81,14 @@ struct StartView: View {
               .foregroundStyle(Brand.inkMuted)
               .multilineTextAlignment(.center)
               .frame(maxWidth: .infinity)
+            Button { IntroFlow.shared.openGuide() } label: {
+              Label("How to film", systemImage: "questionmark.circle")
+                .font(Brand.body(16, .semibold))
+                .foregroundStyle(Brand.accentText)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .accessibilityHint("Four short tips before you start")
             if let last, last.resultURL != nil {
               Button { onOpenLast(last) } label: {
                 Text("Your last scan")
