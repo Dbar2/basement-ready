@@ -12,7 +12,7 @@ export const WEB_PORT = Number(process.env.QA_WEB_PORT ?? 48173);
 export const replayAvailable = () => existsSync(join(ROOT, "server/replay.ts"));
 export const replayDirs = () => [join(MEDIA_ROOT, "private/replay"), join(ROOT, "tests/fixtures/replay")].filter((d) => existsSync(d));
 
-function apiEnv(runDir: string): NodeJS.ProcessEnv {
+function apiEnv(runDir: string, takes: boolean): NodeJS.ProcessEnv {
   // Only what the server needs: never the Anthropic key, never the Meta key.
   const keep = ["PATH", "HOME", "TMPDIR", "SHELL", "USER", "LANG", "TERM"];
   const base = Object.fromEntries(keep.filter((k) => process.env[k]).map((k) => [k, process.env[k]!]));
@@ -24,7 +24,10 @@ function apiEnv(runDir: string): NodeJS.ProcessEnv {
     LOCAL_STORAGE_DIR: join(runDir, "server/storage"),
     STORAGE: "local",
     DATABASE_URL: "",
-    MODEL_API_KEY: "",
+    // A take's upload is refused without a Meta key (server/limits.ts), so takes get a placeholder that
+    // can't reach anything: Meta's address below doesn't exist and replay answers first. The example runs
+    // with no key at all, as on a fresh checkout.
+    MODEL_API_KEY: takes ? "qa-replay-placeholder" : "",
     RELAY_TOKEN: "",
     // Never reached: replay answers before a request goes out, and a miss fails instead of spending.
     META_API_BASE: "http://meta.qa.invalid/v1",
@@ -65,7 +68,7 @@ export type Servers = { baseURL: string; stop: () => Promise<void>; logs: string
 
 // web "dev": Vite's dev server (fast). web "build": the production bundle through `vite preview`, which
 // is what the live site serves.
-export async function startServers(runDir: string, web: "dev" | "build"): Promise<Servers> {
+export async function startServers(runDir: string, web: "dev" | "build", opts: { takes?: boolean } = {}): Promise<Servers> {
   const logs: string[] = [];
   const procs: ChildProcess[] = [];
   const keepLog = (name: string) => (d: Buffer) => {
@@ -94,8 +97,8 @@ export async function startServers(runDir: string, web: "dev" | "build"): Promis
     for (const d of ["pglite", "storage", "dist"]) rmSync(join(runDir, "server", d), { recursive: true, force: true });
   };
   try {
-    const api = run("api", ["tsx", "server/index.ts"], apiEnv(runDir));
-    const webEnv = { ...apiEnv(runDir), API_PORT: String(API_PORT) };
+    const api = run("api", ["tsx", "server/index.ts"], apiEnv(runDir, Boolean(opts.takes)));
+    const webEnv = { ...apiEnv(runDir, false), API_PORT: String(API_PORT) };
     if (web === "build") {
       const out = join(runDir, "server/dist");
       const build = run("build", ["vite", "build", "--outDir", out, "--emptyOutDir"], webEnv);

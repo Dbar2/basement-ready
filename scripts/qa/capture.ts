@@ -424,7 +424,9 @@ class LaneRun {
   private async planOf(scan: string): Promise<{ existing: any } | null> {
     return this.page
       .evaluate(async (scan) => {
-        const r = await fetch(`/api/scans/${scan}/model`);
+        // A real scan's model is the owner's: send this device's claims as the app does (src/api.ts authHeaders).
+        const claims = localStorage.getItem("br-claims");
+        const r = await fetch(`/api/scans/${scan}/model`, { headers: claims ? { "x-claims": encodeURIComponent(claims) } : {} });
         if (!r.ok) return null;
         const j = await r.json();
         return j?.model?.existing ? { existing: j.model.existing } : null;
