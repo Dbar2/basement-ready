@@ -172,10 +172,29 @@ describe("SAM on each photo", () => {
     expect(found[0]).toMatchObject({ kind: "window", label: "Window", frame: 3, seconds: 0.6, framesSeen: 1, confidence: 0.7 });
     expect(found[0].track).toEqual([[3, 0.625, 0.521, 0.234, 0.417]]);
     expect(found.map((d) => d.id)).toEqual(["window-window-p3-1", "window-window-p3-2"]);
-    // A beam has to be surer, as in the live finds.
-    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.65]))).toHaveLength(0);
-    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.75]))).toHaveLength(1);
     expect(photoFinds(0, WINDOW, "")).toEqual([]);
+  });
+
+  it("keeps one beam a photo: the widest long, level one before the joists and posts SAM also calls beams", () => {
+    // A beam across the ceiling counts from 0.65: its shape vouches for it.
+    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.66]))).toHaveLength(1);
+    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.6]))).toHaveLength(0);
+    // A long one wins over a surer joist or post, and of several long ones the widest.
+    const one = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.95], [600, 100, 660, 900, 0.95], [100, 50, 700, 120, 0.8], [0, 200, 1200, 320, 0.67]));
+    expect(one).toHaveLength(1);
+    expect(one[0].box).toMatchObject({ x: 0, w: 0.938 });
+    // With no long one, the widest sure box stands in, so the open joists still show; four joists are one find.
+    const joists = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9], [500, 40, 640, 70, 0.75], [700, 30, 900, 60, 0.8], [900, 20, 1000, 50, 0.72]));
+    expect(joists).toHaveLength(1);
+    expect(joists[0].box.x).toBe(0.078);
+    // Unsure joists don't.
+    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.68]))).toHaveLength(0);
+  });
+
+  it("counts a duct from 0.55 sure", () => {
+    const DUCT = CONCEPTS.find((c) => c.label === "Duct")!;
+    expect(photoFinds(0, DUCT, sam([0, 0, 900, 200, 0.57]))).toHaveLength(1);
+    expect(photoFinds(0, DUCT, sam([0, 0, 900, 200, 0.52]))).toHaveLength(0);
   });
 
   it("reads every photo for every thing, and hears each photo's finds as it lands, in order", async () => {

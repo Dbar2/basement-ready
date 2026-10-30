@@ -5,7 +5,7 @@
 // the room's 3D puts it. The finds keep the video's Detection shape: one photo is one frame.
 import { minConfidence } from "./live";
 import type { Detection } from "./pipeline";
-import { parseSam } from "./sam";
+import { parseSam, type SamBox } from "./sam";
 
 type Concept = { concept: string; kind: string; label: string };
 
@@ -13,14 +13,27 @@ const FPS = 5; // server/pipeline.ts ANALYSIS_FPS: a photo's "seconds" is its fr
 const PER_PHOTO = 4; // at most this many of one thing in one photo
 const MIN_AREA = 0.001; // of the picture: smaller is a speck, not a find
 
+// SAM's "support beam" also outlines every joist and post. A photo keeps one beam: its widest long, level
+// box (at least this much of the photo wide and this many times wider than tall, in pixels), which may be a
+// little less sure than the bar since its shape vouches for it; else its widest sure box, so Spark still
+// sees the open joists. Tuned on practice photos and checked on real takes (scripts/practice).
+export const BEAM = { minWidth: 0.4, minAspect: 2, min: 0.65 };
+
+function oneBeam(boxes: SamBox[], min: number): SamBox[] {
+  const long = boxes.filter((b) => (b.c ?? 1) >= Math.min(min, BEAM.min) && (b.x2 - b.x1) / b.w >= BEAM.minWidth && b.x2 - b.x1 >= BEAM.minAspect * (b.y2 - b.y1));
+  const pick = long.length ? long : boxes.filter((b) => (b.c ?? 1) >= min);
+  return pick.sort((a, b) => b.x2 - b.x1 - (a.x2 - a.x1)).slice(0, 1);
+}
+
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const slug = (label: string) => label.toLowerCase().replace(/\s+/g, "-");
 
 // One photo's sure finds of one thing, biggest first.
 export function photoFinds(frame: number, c: Concept, raw: string, min = minConfidence(c.concept)): Detection[] {
-  return parseSam(raw)
+  const boxes = parseSam(raw)
     .map((t) => t.frames[0]?.box)
-    .filter((b): b is NonNullable<typeof b> => Boolean(b) && b.w > 0 && b.h > 0 && (b.c ?? 1) >= min)
+    .filter((b): b is SamBox => Boolean(b) && b.w > 0 && b.h > 0);
+  return (c.kind === "beam" ? oneBeam(boxes, min) : boxes.filter((b) => (b.c ?? 1) >= min))
     .map((b) => ({ x: b.x1 / b.w, y: b.y1 / b.h, w: (b.x2 - b.x1) / b.w, h: (b.y2 - b.y1) / b.h, c: b.c ?? null }))
     .filter((b) => b.w * b.h >= MIN_AREA)
     .sort((a, b) => b.w * b.h - a.w * a.h)
