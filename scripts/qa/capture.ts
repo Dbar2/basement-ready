@@ -247,7 +247,7 @@ class LaneRun {
       if (this.wants("home-story").length) await this.story(scan);
     }
 
-    const ws = ["wait", "workspace-plan", "workspace-ideas", "workspace-permit", "workspace-money", "workspace-build", "layout-3d", "scan-3d", "plan-overlay", "permit-pdf"];
+    const ws = ["wait", "layout-3d", "scan-3d", "plan-overlay", "permit-pdf", "book-pdf", ...SCREENS.filter((d) => d.tab).map((d) => d.id)];
     if (ws.some((s) => this.wants(s, scan).length)) await this.workspace(scan);
 
     // Every page with a route of its own under the scan, in plan order.
@@ -255,8 +255,7 @@ class LaneRun {
       const screen = def.id;
       const shot = this.one(screen, scan);
       const three = this.wants(`${screen}-3d`, scan);
-      const pdf = screen === "book" ? this.one("book-pdf", scan) : undefined;
-      if (!shot && !three.length && !pdf) continue;
+      if (!shot && !three.length) continue;
       try {
         await this.goto(def.route.replace("{scan}", scan));
       } catch (e) {
@@ -270,7 +269,6 @@ class LaneRun {
       }
       if (shot) await this.pageShot(shot);
       if (three.length) await this.cameras(three, scan);
-      if (pdf) await this.download(pdf, "book", () => p.getByRole("button", { name: /Download the book/ }).click());
     }
   }
 
@@ -295,25 +293,69 @@ class LaneRun {
           await this.goto(`/scans/${scan}?tab=plan`);
           continue;
         }
-        const go = p.getByRole("button", { name: /^(Skip and see my plan|See my plan)/ });
+        // The wait screen's way on, in this build's words or the last one's.
+        const go = p.getByRole("button", { name: /^(Skip, check my plan|Is this your basement\?|See the answer|Skip and see my plan|See my plan)/ });
         if (await go.first().isVisible().catch(() => false)) await go.first().click().catch(() => {});
         await p.waitForTimeout(1000);
       }
     } catch (e) {
-      const first = this.wants("workspace-plan", scan)[0] ?? wait;
+      const first = this.wants("workspace-answer", scan)[0] ?? wait;
       if (first) await this.failed(first, e);
       return;
     }
 
-    const tab = async (name: string) => {
-      await p.getByRole("tablist", { name: "Workspace" }).getByRole("tab", { name, exact: true }).click();
-      await p.waitForTimeout(400);
-      await this.fillProfile();
+    // Each tab in plan order. A tab this build doesn't have is skipped.
+    const open = async (names: string[]) => {
+      const list = p.getByRole("tablist", { name: "Workspace" });
+      for (const name of names) {
+        const t = list.getByRole("tab", { name, exact: true });
+        if (await t.isVisible().catch(() => false)) {
+          await t.click();
+          await p.waitForTimeout(400);
+          await this.fillProfile();
+          return true;
+        }
+      }
+      return false;
     };
+    for (const def of SCREENS.filter((d) => d.tab)) {
+      const shot = this.one(def.id, scan);
+      const extra = ({
+        "workspace-book": [this.one("book-pdf", scan)],
+        "workspace-answer": [...this.wants("layout-3d", scan), ...this.wants("scan-3d", scan), this.one("plan-overlay", scan)],
+        "workspace-permit": [this.one("permit-pdf", scan)],
+      } as Record<string, (Shot | undefined)[]>)[def.id]?.filter(Boolean) ?? [];
+      if (!shot && !extra.length) continue;
+      try {
+        if (!(await open(def.tab!))) {
+          this.ctx.say(`  ${def.id}: no "${def.tab!.join('" or "')}" tab on this build, skipped`);
+          continue;
+        }
+      } catch (e) {
+        if (shot) await this.failed(shot, e);
+        continue;
+      }
+      if (shot) await this.pageShot(shot);
+      if (def.id === "workspace-book") {
+        const pdf = this.one("book-pdf", scan);
+        if (pdf) await this.download(pdf, "book", () => p.getByRole("button", { name: /Download the book/ }).click());
+      }
+      if (def.id === "workspace-answer") await this.answer3d(scan);
+      if (def.id === "workspace-permit") {
+        const pdf = this.one("permit-pdf", scan);
+        if (pdf) {
+          await this.download(pdf, "review", () => p.getByRole("button", { name: /Download the review copy/ }).click());
+          const submit = p.getByRole("button", { name: /Download the submit copy/ });
+          if (await submit.isVisible().catch(() => false)) await this.download(pdf, "submit", () => submit.click());
+        }
+      }
+    }
+  }
 
-    const plan = this.one("workspace-plan", scan);
-    if (plan) await this.pageShot(plan);
-    // Two 3D views on this tab: the starting layout in the room, and the scan as it really is.
+  // The answer's two 3D views: the starting layout in the room, and the scan as it really is.
+  async answer3d(scan: string) {
+    const p = this.page;
+    await p.evaluate(() => window.scrollTo(0, 0));
     const layout3d = this.wants("layout-3d", scan);
     if (layout3d.length) {
       await this.show3d(STAGED_VIEW);
@@ -326,28 +368,6 @@ class LaneRun {
       await p.waitForTimeout(3000); // the scan rises from the floor (src/three/RealScan.tsx REVEAL_S)
       if (scan3d.length) await this.cameras(scan3d, scan, { within: SCAN_VIEW });
       if (overlay) await this.overlay(overlay, scan);
-    }
-    for (const [screen, name] of [
-      ["workspace-ideas", "Ideas"],
-      ["workspace-permit", "Permit"],
-      ["workspace-money", "Money"],
-      ["workspace-build", "Build"],
-    ] as const) {
-      const shot = this.one(screen, scan);
-      const pdf = screen === "workspace-permit" ? this.one("permit-pdf", scan) : undefined;
-      if (!shot && !pdf) continue;
-      try {
-        await tab(name);
-      } catch (e) {
-        if (shot) await this.failed(shot, e);
-        continue;
-      }
-      if (shot) await this.pageShot(shot);
-      if (pdf) {
-        await this.download(pdf, "review", () => p.getByRole("button", { name: /Download the review copy/ }).click());
-        const submit = p.getByRole("button", { name: /Download the submit copy/ });
-        if (await submit.isVisible().catch(() => false)) await this.download(pdf, "submit", () => submit.click());
-      }
     }
   }
 
