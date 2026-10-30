@@ -8,6 +8,8 @@ import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
 import { ScanPage } from "./screens/ScanPage";
 import { Start } from "./screens/Start";
+import { PlanConfirm } from "./studio/PlanConfirm";
+import { Studio } from "./studio/Studio";
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -17,6 +19,10 @@ export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/
 
 // The one-page plan to hand a designer, made to print or save as a PDF.
 const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
+
+// "Is this your basement?", then the design in 3D (src/studio).
+const planRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/plan", component: PlanConfirm });
+const studioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/studio", component: Studio });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -57,7 +63,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });

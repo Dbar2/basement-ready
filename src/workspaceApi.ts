@@ -2,6 +2,7 @@
 // package, the materials list, the applications and the looks. The sample basement keeps its
 // workspace in this browser and gets its documents from stateless routes.
 import type { Grant, MoneyQuestion, PlanSide } from "./api";
+import type { Model } from "../server/model/types";
 
 export type Profile = {
   owners: { first: string; last: string }[];
@@ -40,6 +41,7 @@ export type WorkspaceState = {
   apply?: Record<string, { sentAt?: string | null }>;
   permit?: { submittedAt?: string | null; permitNumber?: string | null; signer?: "owner" | "designer" | null };
   looks?: Record<string, Look>;
+  model?: Model; // the basement and its designs (server/model/types.ts)
 };
 
 export type SiteGeometry = {
@@ -135,7 +137,7 @@ const SAMPLE_WS = "br-sample-workspace";
 const isSample = (scanId: string) => scanId === "sample";
 
 // This browser's claim tokens and, when signed in, the Clerk session: what the server checks.
-async function headers(json = false): Promise<Record<string, string>> {
+export async function headers(json = false): Promise<Record<string, string>> {
   const h: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
   try {
     const claims = localStorage.getItem("br-claims");

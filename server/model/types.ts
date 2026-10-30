@@ -15,6 +15,7 @@ export type Wall = {
   thicknessM: number;
   kind: "foundation" | "existing" | "new";
   rating: Rating;
+  guess?: boolean; // the camera never saw it: its place is a guess until they confirm the plan
 };
 
 export type Opening = {
@@ -40,6 +41,7 @@ export type Room = {
   name: string;
   unit: 1 | 2 | "shared";
   ceilingM?: number | null;
+  ceilingRating?: Rating; // the floor above, as a fire separation: 15 minutes over the suite
 };
 
 export type FixtureKind = "furnace" | "water_heater" | "panel" | "plumbing" | "beam" | "duct" | "bulkhead" | "post" | "stairs";
@@ -51,6 +53,7 @@ export type Fixture = {
   sizeM?: Pt; // footprint, along x and z
   heightM?: number | null; // beams, ducts, bulkheads: floor to their underside
   detectionId?: string;
+  guess?: boolean; // seen on video but not placed by the 3D: they drag it where it is
 };
 
 export type Alarm = { id: string; kind: "smoke" | "co" | "combo"; at: Pt; why: string };
@@ -64,7 +67,9 @@ export type Existing = {
   rooms: Room[];
   fixtures: Fixture[];
   ceilingM: number | null;
-  scale: { source: "arkit" | "model" | "user_measurement" | "tape"; tapeM?: { wallId: string; lengthM: number }[] };
+  // factor: how much the scan's own sizes were multiplied by to match their tape (1 untouched), so the
+  // 3D is drawn at the same scale as the plan.
+  scale: { source: "arkit" | "model" | "user_measurement" | "tape"; tapeM?: { wallId: string; lengthM: number }[]; factor?: number };
   confirmedAt: string | null; // when they said yes, this is my basement
 };
 
@@ -89,10 +94,17 @@ export type Edit =
   | { op: "move_wall"; wallId: string; a: Pt; b: Pt }
   | { op: "add_wall"; wall: Wall }
   | { op: "remove_wall"; wallId: string }
+  | { op: "set_wall"; wallId: string; rating?: Rating; kind?: Wall["kind"]; thicknessM?: number }
   | { op: "add_opening"; opening: Opening }
   | { op: "move_opening"; openingId: string; offsetM: number }
+  | { op: "set_opening"; openingId: string; widthM?: number; heightM?: number | null; sillM?: number | null; rating?: "20min" | null; swing?: "left" | "right" | null }
   | { op: "remove_opening"; openingId: string }
-  | { op: "set_room"; roomId: string; kind?: RoomKind; name?: string; polygon?: Pt[] }
+  | { op: "add_room"; room: Room }
+  | { op: "set_room"; roomId: string; kind?: RoomKind; name?: string; polygon?: Pt[]; unit?: Room["unit"]; ceilingRating?: Rating }
+  | { op: "remove_room"; roomId: string }
+  | { op: "add_fixture"; fixture: Fixture }
+  | { op: "set_fixture"; fixtureId: string; kind?: FixtureKind; at?: Pt; sizeM?: Pt; heightM?: number | null }
+  | { op: "remove_fixture"; fixtureId: string }
   | { op: "set_finishes"; finishes: Partial<Finishes> };
 
 // A rule checked on a design: shown live in the studio, counted on the permit's readiness list.
@@ -103,4 +115,5 @@ export type Check = {
   detail: string;
   ruleId?: string; // the rule pack's id, for the citation
   fix?: { label: string; edits: Edit[] };
+  at?: Pt; // where on the plan it is, to point at it
 };
