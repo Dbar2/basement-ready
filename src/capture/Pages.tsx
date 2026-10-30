@@ -2,7 +2,7 @@
 import type { ReactNode } from "react";
 import { MAX_SEC, MIN_SEC, TIPS } from "./checklist";
 import { Icon } from "./drawing";
-import { detectPlatform, formatTime, type Platform, type ProblemKind } from "./media";
+import { detectPlatform, type Platform, type ProblemKind } from "./media";
 
 function Page({ eyebrow, title, onClose, children, actions }: { eyebrow: string; title: string; onClose: () => void; children: ReactNode; actions: ReactNode }) {
   return (
@@ -43,38 +43,27 @@ const HOW = [
     ),
   },
   {
-    title: "Paint it all green",
-    body: "Walls, ceiling and the floor by the walls fill in on screen as you film. Tilt up and down to finish them.",
-    // The unrolled basement from the filming screen: ceiling above, three wall bands, floor below.
+    title: "Watch the map fill in",
+    body: "A live map shows where you are and what's filmed. Dashed sides still need filming.",
+    // The map from the filming screen: walls found, one side dashed, the camera and its view.
     art: (
       <>
-        {Array.from({ length: 8 }, (_, c) => {
-          const x = 4 + c * 10;
-          const on = (row: number) => (row === 0 ? c >= 1 && c <= 3 : row === 4 ? c <= 2 : c <= 4);
-          return (
-            <g key={c}>
-              <path d={`M${x} 14h9l-1.5-9h-6z`} className={on(0) ? "how-fill" : "how-empty"} />
-              {[16, 27, 38].map((y, i) => (
-                <rect key={y} x={x} y={y} width="9" height="9.5" className={on(i + 1) ? "how-fill" : "how-empty"} />
-              ))}
-              <path d={`M${x} 49h9l-1.5 9h-6z`} className={on(4) ? "how-fill" : "how-empty"} />
-            </g>
-          );
-        })}
-        <path d="M32 19v-5h5M50 14h5v5M32 44v5h5M50 49h5v-5" className="how-line" />
+        <path d="M74 10H14v44h60" className="how-line" />
+        <path d="M74 10v44" className="how-path" />
+        <path d="M50 32l15-9a17 17 0 0 1 0 18z" className="how-fill" />
+        <circle cx="50" cy="32" r="3.6" className="how-dot" />
       </>
     ),
   },
   {
-    title: "Say what you'd like",
-    body: "The guide talks you through it and asks as you go. Not sure yet? Tap an idea.",
-    // A speech bubble, and a phone listening.
+    title: "Just listen",
+    body: "The guide talks you through it and says what it sees. Nothing to tap or answer.",
+    // A speech bubble, and the guide's voice.
     art: (
       <>
         <path d="M8 10h50v28H28l-10 10V38H8z" className="how-fill how-line" />
         <path d="M16 19h34M16 27h22" className="how-line" />
-        <rect x="64" y="14" width="16" height="38" rx="3" className="how-line" />
-        <path d="M68.5 38v4M72 34v8M75.5 36v6" className="how-line" />
+        <path d="M66 18a14 14 0 0 1 0 20M73 12a22 22 0 0 1 0 32" className="how-line" />
       </>
     ),
   },
@@ -84,7 +73,7 @@ export function IntroPage({ recordable, busy, onStart, onUpload, onClose }: Comm
   const ios = detectPlatform() === "ios-safari";
   return (
     <Page
-      eyebrow={`About ${formatTime(MAX_SEC)} of filming`}
+      eyebrow={`Up to ${MAX_SEC / 60} minutes of filming`}
       title="Film it with a guide."
       onClose={onClose}
       actions={

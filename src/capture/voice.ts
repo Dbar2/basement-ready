@@ -1,11 +1,13 @@
-// The guide's voice. Pre-made clips (public/voice/<line>.mp3, made by `pnpm voice`) play through the
+// The guide's voice. Pre-made clips (public/voice/<clip>.mp3, made by `pnpm voice`) play through the
 // one shared AudioContext, which iOS keeps on the loudspeaker while the mic records. Every clip is
-// fetched and decoded on the first tap, before filming starts. The phone's own speech voice is never
-// used: if a clip is missing, only the caption shows. Each line's time is logged so the server can cut
-// our own voice out of the transcript.
+// fetched on the first tap, before filming starts; the task lines are decoded then too, the rest when
+// they're first wanted, so a few dozen reactions don't sit in memory as raw audio. Lines with several
+// ways of saying them take turns. The phone's own speech voice is never used: if a clip is missing,
+// only the caption shows. Each line's time is logged so the server can cut our own voice out of the
+// transcript.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { audioContext, keepAudio } from "./audio";
-import { DIRECTION_LINES, LINE_KIND, LINES, type LineId, type LineKind } from "./script";
+import { clipId, CLIPS, DIRECTION_LINES, LINE_KIND, LINES, type LineId, type LineKind } from "./script";
 
 export type Spoken = { id: LineId; startMs: number; endMs: number };
 
@@ -21,9 +23,10 @@ export const NAG_REPEAT_MS = 45_000;
 export const DIRECTION_MS = 14_000;
 // How long a caption stays up after its line ends, so a stale line doesn't sit on the camera.
 const CAPTION_HOLD_MS = 6000;
-// A line waiting its turn goes stale: a direction is wrong a few seconds later, a task isn't.
-const STALE_MS: Record<LineKind, number> = { task: 15_000, reply: 10_000, praise: 5_000, nag: 3_000 };
-const RANK: Record<LineKind, number> = { task: 3, reply: 3, praise: 2, nag: 1 };
+// A line waiting its turn goes stale: a direction is wrong a few seconds later, a task isn't, and a
+// remark about what's on camera is old news once the camera has moved on.
+const STALE_MS: Record<LineKind, number> = { task: 15_000, reply: 10_000, time: 10_000, react: 6_000, praise: 5_000, nag: 3_000, cheer: 3_000 };
+const RANK: Record<LineKind, number> = { task: 3, reply: 3, time: 3, react: 2, praise: 2, nag: 1, cheer: 0 };
 const NAGS = new Set<LineId>(["slow_down", "too_dark"]);
 
 type Waiting = { id: LineId; at: number; again: boolean };
@@ -87,82 +90,112 @@ export class VoiceQueue {
   }
 }
 
-// ---------- telling talk from noise ----------
+// ---------- which way of saying it ----------
 
-// About 1.5 s of steady talking. Nothing counts while the guide speaks or just after, since the mic
-// hears the guide too; brief dips between words don't break a run.
-export const TALK_MS = 1500;
-const ECHO_MS = 500;
-const DIP_MS = 350;
+// Takes turns through a line's variants, starting from the first each take.
+export class Variants {
+  private next = new Map<LineId, number>();
 
-export class TalkMeter {
-  private start: number | null = null;
-  private loudAt = -Infinity;
-
-  // One mic reading. Returns true once the homeowner has talked long enough.
-  push(loud: boolean, at: number, guide: { speaking: boolean; lastEnd: number }) {
-    if (guide.speaking || at - guide.lastEnd < ECHO_MS) {
-      this.start = null;
-      return false;
-    }
-    if (loud) {
-      this.start ??= at;
-      this.loudAt = at;
-    } else if (at - this.loudAt > DIP_MS) this.start = null;
-    return this.start != null && at - this.start >= TALK_MS;
+  pick(id: LineId): number {
+    const n = this.next.get(id) ?? 0;
+    this.next.set(id, (n + 1) % LINES[id].length);
+    return n;
   }
 
   reset() {
-    this.start = null;
+    this.next.clear();
   }
 }
 
 // ---------- the hook ----------
 
-const IDS = Object.keys(LINES) as LineId[];
+const CLIP_IDS = Object.keys(CLIPS);
+// Decoded up front: what the guide says first and the tasks it moves through.
+const EAGER = new Set((Object.keys(LINES) as LineId[]).filter((id) => LINE_KIND[id] === "task"));
+// How long a line that's due may wait for its clip to decode before it shows as a caption only.
+const DECODE_WAIT_MS = 400;
 
 export function useVoice(active: boolean, startedAt: number) {
   const [caption, setCaption] = useState<{ id: LineId; text: string } | null>(null);
   const [speaking, setSpeaking] = useState(false);
   const [muted, setMuted] = useState(false);
-  const clips = useRef(new Map<LineId, AudioBuffer>());
-  const loading = useRef(new Map<LineId, Promise<void>>());
+  const bytes = useRef(new Map<string, ArrayBuffer>());
+  const clips = useRef(new Map<string, AudioBuffer>());
+  const fetching = useRef(new Map<string, Promise<void>>());
+  const decoding = useRef(new Map<string, Promise<AudioBuffer | null>>());
   const queue = useRef(new VoiceQueue());
+  const variants = useRef(new Variants());
   const log = useRef<Spoken[]>([]);
   const mutedRef = useRef(muted);
   mutedRef.current = muted;
   const startedRef = useRef(startedAt);
   startedRef.current = startedAt;
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const hideRef = useRef(0);
   const sourceRef = useRef<AudioBufferSourceNode | null>(null);
 
-  // Fetch and decode every clip. Call from a tap (Start camera); calling again retries any that failed.
-  // Resolves once the intro is ready, or after `waitMs` at the most.
-  const prepare = useCallback((waitMs = 2500): Promise<void> => {
+  // One clip, decoded once. Resolves null if it isn't there.
+  const decode = useCallback((clip: string): Promise<AudioBuffer | null> => {
+    const ready = clips.current.get(clip);
+    if (ready) return Promise.resolve(ready);
+    const running = decoding.current.get(clip);
+    if (running) return running;
     const ctx = audioContext();
-    keepAudio(true);
-    if (!ctx) return Promise.resolve();
-    for (const id of IDS) {
-      if (clips.current.has(id) || loading.current.has(id)) continue;
-      const job = fetch(`/voice/${id}.mp3`)
-        .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))
-        .then((b) => ctx.decodeAudioData(b))
-        .then((buf) => void clips.current.set(id, buf))
-        .catch(() => console.warn(`[voice] no clip for "${id}": its caption shows without sound`))
-        .finally(() => loading.current.delete(id));
-      loading.current.set(id, job);
-    }
-    const intro = loading.current.get("intro") ?? Promise.resolve();
-    return Promise.race([intro, new Promise<void>((r) => setTimeout(r, waitMs))]);
+    if (!ctx) return Promise.resolve(null);
+    const data = bytes.current.get(clip);
+    // Still downloading: decode once it's here.
+    if (!data) return (fetching.current.get(clip) ?? Promise.resolve()).then(() => (bytes.current.has(clip) ? decode(clip) : null));
+    // decodeAudioData takes the buffer over, so hand it a copy and keep the bytes for a retry.
+    const job = ctx
+      .decodeAudioData(data.slice(0))
+      .then((buf) => {
+        clips.current.set(clip, buf);
+        return buf;
+      })
+      .catch(() => null)
+      .finally(() => decoding.current.delete(clip));
+    decoding.current.set(clip, job);
+    return job;
   }, []);
 
-  const play = useCallback((id: LineId) => {
-    const text = LINES[id];
+  // Fetch every clip, and decode the task lines. Call from a tap (Start camera); calling again retries
+  // any that failed. Resolves once the intro is ready, or after `waitMs` at the most.
+  const prepare = useCallback(
+    (waitMs = 2500): Promise<void> => {
+      const ctx = audioContext();
+      keepAudio(true);
+      if (!ctx) return Promise.resolve();
+      for (const clip of CLIP_IDS) {
+        if (bytes.current.has(clip) || fetching.current.has(clip)) continue;
+        const line = clip.replace(/_\d$/, "") as LineId;
+        const job = fetch(`/voice/${clip}.mp3`)
+          .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status}`))))
+          .then((b) => {
+            bytes.current.set(clip, b);
+            if (EAGER.has(line)) return decode(clip).then(() => undefined);
+          })
+          .catch(() => console.warn(`[voice] no clip "${clip}": its caption shows without sound`))
+          .finally(() => fetching.current.delete(clip));
+        fetching.current.set(clip, job);
+      }
+      const intro = fetching.current.get("intro") ?? Promise.resolve();
+      return Promise.race([intro, new Promise<void>((r) => setTimeout(r, waitMs))]);
+    },
+    [decode],
+  );
+
+  const play = useCallback(async (id: LineId) => {
+    const variant = variants.current.pick(id);
+    const text = LINES[id][variant];
+    const clipName = clipId(id, variant);
     clearTimeout(hideRef.current);
     setCaption({ id, text });
     setSpeaking(true);
     const ctx = audioContext();
-    const clip = clips.current.get(id);
+    const clip = clips.current.get(clipName) ?? (await Promise.race([decode(clipName), new Promise<null>((r) => setTimeout(() => r(null), DECODE_WAIT_MS))]));
+    // Filming stopped while it decoded.
+    if (!activeRef.current) return;
     const startMs = Math.round(performance.now() - startedRef.current);
     let done = false;
     let failSafe = 0;
@@ -188,14 +221,15 @@ export function useVoice(active: boolean, startedAt: number) {
     failSafe = window.setTimeout(() => finish(true), clip.duration * 1000 + 1500);
     sourceRef.current = src;
     src.start();
-  }, []);
+  }, [decode]);
 
-  // Ask for a line; the queue decides when, or whether, it plays.
+  // Ask for a line; the queue decides when, or whether, it plays. Its clips start decoding now.
   const say = useCallback(
     (id: LineId, opts: { again?: boolean } = {}) => {
-      if (active) queue.current.request(id, performance.now(), opts);
+      if (!active || !queue.current.request(id, performance.now(), opts)) return;
+      for (let i = 0; i < LINES[id].length; i++) void decode(clipId(id, i));
     },
-    [active],
+    [active, decode],
   );
 
   // Start the next line whenever the queue allows.
@@ -203,10 +237,11 @@ export function useVoice(active: boolean, startedAt: number) {
     if (!active) return;
     log.current = [];
     queue.current.reset();
+    variants.current.reset();
     keepAudio(true);
     const tick = () => {
       const id = queue.current.next(performance.now());
-      if (id) play(id);
+      if (id) void play(id);
     };
     const timer = window.setInterval(tick, 150);
     return () => clearInterval(timer);
@@ -233,8 +268,8 @@ export function useVoice(active: boolean, startedAt: number) {
     setMuted,
     say,
     prepare,
-    // For the talk meter: is the guide talking, and when did it last stop.
-    guide: () => ({ speaking: queue.current.playing != null, lastEnd: queue.current.lastEnd }),
+    // When the guide last finished a line (-Infinity before any); now, if it's talking.
+    lastSpoke: () => (queue.current.playing != null ? performance.now() : queue.current.lastEnd),
     spoken: () => log.current,
   };
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { LineId } from "../../src/capture/script";
-import { DIRECTION_MS, GAP_MS, NAG_REPEAT_MS, REPEAT_MS, TALK_MS, TalkMeter, VoiceQueue } from "../../src/capture/voice";
+import { existsSync } from "node:fs";
+import { CLIPS, clipId, LINE_KIND, LINES, type LineId } from "../../src/capture/script";
+import { DIRECTION_MS, GAP_MS, NAG_REPEAT_MS, REPEAT_MS, Variants, VoiceQueue } from "../../src/capture/voice";
 
 // Plays lines to the end (each takes `lineMs`), asking for lines on the way as `asks` says.
 function run(q: VoiceQueue, asks: [number, LineId][], to: number, lineMs = 3000) {
@@ -125,31 +126,92 @@ describe("the guide's voice queue", () => {
   });
 });
 
-describe("telling the homeowner's talk from the guide's echo", () => {
-  const quiet = { speaking: false, lastEnd: -Infinity };
+describe("reacting to what the camera sees, without crowding the tasks", () => {
+  it("puts the clock and tasks first, then remarks about what's on camera, then nags, then encouragement", () => {
+    const q = new VoiceQueue();
+    q.request("encourage", 0);
+    q.request("slow_down", 0);
+    q.request("furnace_found", 0);
+    q.request("time_minute", 0);
+    expect(q.next(10)).toBe("time_minute");
 
-  it("needs about 1.5 s of steady talking, with short dips allowed", () => {
-    const m = new TalkMeter();
-    let heard = false;
-    for (let t = 0; t <= TALK_MS + 100 && !heard; t += 100) heard = m.push(t !== 600 && t !== 700, t, quiet);
-    expect(heard).toBe(true);
+    const r = new VoiceQueue();
+    r.request("encourage", 0);
+    r.request("turn_around", 0);
+    r.request("plumbing_found", 0);
+    expect(r.next(10)).toBe("plumbing_found");
+    r.ended(2000);
+    // Both waited out the gap: the direction and the cheer are stale by now.
+    expect(r.next(2000 + GAP_MS)).toBeNull();
+
+    const c = new VoiceQueue();
+    c.request("encourage", 0);
+    c.request("turn_around", 0);
+    expect(c.next(10)).toBe("turn_around");
   });
 
-  it("starts over after a real pause", () => {
-    const m = new TalkMeter();
-    for (let t = 0; t < 1000; t += 100) m.push(true, t, quiet);
-    for (let t = 1000; t < 1600; t += 100) m.push(false, t, quiet);
-    expect(m.push(true, 1600, quiet)).toBe(false);
-    expect(m.push(true, 2400, quiet)).toBe(false);
+  it("drops a remark about a find once the camera has moved on", () => {
+    const q = new VoiceQueue();
+    q.request("intro", 0);
+    q.next(0);
+    q.request("furnace_found", 1000);
+    q.ended(4000);
+    // 6 s after it was found is the most a remark waits.
+    expect(q.next(4000 + GAP_MS)).toBeNull();
+    q.request("heater_found", 20_000);
+    expect(q.next(20_000)).toBe("heater_found");
   });
 
-  it("ignores everything while the guide speaks and for half a second after", () => {
-    const m = new TalkMeter();
-    for (let t = 0; t <= 4000; t += 100) expect(m.push(true, t, { speaking: true, lastEnd: -Infinity })).toBe(false);
-    for (let t = 4000; t < 4500; t += 100) expect(m.push(true, t, { speaking: false, lastEnd: 4000 })).toBe(false);
-    // Counting starts only now, so it takes the full 1.5 s from here.
-    expect(m.push(true, 4500, { speaking: false, lastEnd: 4000 })).toBe(false);
-    expect(m.push(true, 5900, { speaking: false, lastEnd: 4000 })).toBe(false);
-    expect(m.push(true, 6000, { speaking: false, lastEnd: 4000 })).toBe(true);
+  it("counts the map's 'that side isn't filmed' lines against the same direction allowance", () => {
+    const q = new VoiceQueue();
+    q.request("turn_around", 0);
+    expect(q.next(0)).toBe("turn_around");
+    q.ended(2500);
+    expect(q.request("turn_left", 10_000)).toBe(false);
+    expect(q.request("turn_left", DIRECTION_MS)).toBe(true);
+  });
+
+  it("never says the clock and a remark back to back without the gap", () => {
+    const asks: [number, LineId][] = [
+      [0, "map_ready"],
+      [500, "furnace_found"],
+      [600, "time_half"],
+      [700, "new_space"],
+      [800, "encourage"],
+    ];
+    const said = run(new VoiceQueue(), asks, 40_000, 2500);
+    for (let i = 1; i < said.length; i++) expect(said[i].at - (said[i - 1].at + 2500)).toBeGreaterThanOrEqual(GAP_MS);
+  });
+});
+
+describe("two or three ways of saying a line", () => {
+  it("takes turns through the variants, starting from the first each take", () => {
+    const v = new Variants();
+    const n = LINES.furnace_found.length;
+    expect(n).toBeGreaterThanOrEqual(2);
+    const picks = Array.from({ length: n + 1 }, () => v.pick("furnace_found"));
+    expect(picks.slice(0, n)).toEqual(Array.from({ length: n }, (_, i) => i));
+    expect(picks[n]).toBe(0);
+    expect(v.pick("intro")).toBe(0);
+    expect(v.pick("intro")).toBe(0);
+    v.reset();
+    expect(v.pick("furnace_found")).toBe(0);
+  });
+
+  it("names a clip for every variant, and every clip exists in public/voice", () => {
+    for (const id of Object.keys(LINES) as LineId[]) {
+      LINES[id].forEach((text, i) => expect(CLIPS[clipId(id, i)]).toBe(text));
+    }
+    const missing = Object.keys(CLIPS).filter((c) => !existsSync(`public/voice/${c}.mp3`));
+    expect(missing).toEqual([]);
+  });
+
+  it("keeps lines short, and reactions come in two or three versions", () => {
+    for (const [id, variants] of Object.entries(LINES) as [LineId, readonly string[]][]) {
+      // Tasks may run a little longer; everything said in passing stays under 15 words.
+      for (const text of variants) expect(text.split(/\s+/).length).toBeLessThanOrEqual(LINE_KIND[id] === "task" ? 17 : 14);
+      if (LINE_KIND[id] === "react" || LINE_KIND[id] === "cheer" || LINE_KIND[id] === "time") expect(variants.length).toBeGreaterThanOrEqual(2);
+      expect(variants.length).toBeLessThanOrEqual(3);
+    }
   });
 });

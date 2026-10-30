@@ -1,5 +1,6 @@
 // Drives the real recorder in Chrome with a video file as the camera, to see the live scan work.
-// Usage: pnpm try:live path/to/fakecam.y4m [seconds]   (needs `pnpm dev` running; spends ~$0.25 of SAM calls)
+// Usage: pnpm try:live path/to/fakecam.y4m [seconds]   (needs `pnpm dev` running, and `pnpm dev:scan3d` for the
+// live map; spends ~$0.25 of SAM calls a minute)
 // Make a camera file: ffmpeg -i basement.mov -t 50 -vf "scale=480:854:force_original_aspect_ratio=increase,crop=480:854,fps=15" -pix_fmt yuv420p cam.y4m
 import { existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
@@ -58,7 +59,7 @@ await page.getByRole("button", { name: "Start", exact: true }).click();
 await page.evaluate(() => {
   let a = 0;
   window.setInterval(() => {
-    const task = document.querySelector(".cov-panel .guide-task")?.textContent ?? "";
+    const task = document.querySelector(".map-panel .guide-task")?.textContent ?? "";
     const still = task.startsWith("Step back");
     if (!still) a = (a + 2) % 360;
     const beta = task.startsWith("Tilt up") ? 140 : task.startsWith("Tilt down") ? 40 : 85;
@@ -69,34 +70,27 @@ await page.evaluate(() => {
   }, 100);
 });
 
-let movedOn = false;
 for (let t = 5; t <= seconds; t += 5) {
   await page.waitForTimeout(5000);
   const state = await page.evaluate(() => ({
-    task: document.querySelector(".cov-panel .guide-task")?.textContent ?? null,
+    task: document.querySelector(".map-panel .guide-task")?.textContent ?? null,
     voice: document.querySelector(".guide-voice p")?.textContent ?? null,
-    shown: document.querySelector(".cov-count")?.textContent ?? null,
-    painted: document.querySelector(".cov-legend")?.textContent ?? null,
+    shown: document.querySelector(".map-count")?.textContent ?? null,
+    map: document.querySelector(".map-canvas") ? "3d" : (document.querySelector(".map-compass p")?.textContent ?? null),
+    status: document.querySelector(".map-status")?.textContent ?? null,
     turn: document.querySelector(".guide-turn span")?.textContent ?? null,
-    live3d: Boolean(document.querySelector(".cov-3d")),
     flash: document.querySelector(".cap-flash-label")?.textContent ?? null,
   }));
   console.log(`${String(t).padStart(3)}s`, JSON.stringify(state));
-  // Stopped by itself at 2 minutes: that's the review.
+  // Stopped by itself at the time limit: that's the review.
   if (!state.task) break;
   await page.screenshot({ path: `${out}/t${String(t).padStart(3, "0")}.png` });
-  // Answer the "what would you like this space to be?" task once, the way someone would.
-  if (state.task?.startsWith("What would you like") && !movedOn) {
-    movedOn = true;
-    // The card can close itself first if it already heard talking.
-    if (await page.getByRole("button", { name: "Bedroom for a parent" }).click({ timeout: 2000 }).then(() => true, () => false)) {
-      console.log("     → tapped Bedroom for a parent");
-    }
-  }
+  // Nothing is ever asked on screen while filming.
+  if (await page.locator(".map-panel button", { hasText: /Bedroom|Rental|Rec room|Not sure/ }).count()) console.log("     ✗ a question showed while filming");
 }
 
-// Open the assembling 3D from the coverage panel, the way you'd check it before stopping.
-const open3d = page.locator(".cov-3d");
+// Open the assembling 3D from the map, the way you'd check it before stopping.
+const open3d = page.locator(".map-open");
 if (await open3d.count()) {
   await open3d.click();
   await page.waitForTimeout(2500);

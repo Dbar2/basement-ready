@@ -1,6 +1,6 @@
 // What we ask people to film, in the order a walk-through usually goes.
 
-export type ChecklistId = "stairs" | "windows" | "ceiling" | "furnace" | "door" | "plans";
+export type ChecklistId = "stairs" | "windows" | "ceiling" | "furnace" | "door";
 
 export type ChecklistItem = { id: ChecklistId; label: string; short: string; hint: string };
 
@@ -10,7 +10,6 @@ export const CHECKLIST: readonly ChecklistItem[] = [
   { id: "ceiling", short: "Ceiling", label: "The ceiling", hint: "Point your phone up and hold it for 3 seconds." },
   { id: "furnace", short: "Furnace", label: "The furnace room", hint: "Show the furnace and the electrical panel." },
   { id: "door", short: "Door", label: "Any outside door", hint: "A door straight outside, if there is one." },
-  { id: "plans", short: "Plans", label: "Say what you want", hint: "“Kitchen here, Mom's room here, bright and simple.” Point as you say it." },
 ];
 
 export const TIPS = [
@@ -20,5 +19,5 @@ export const TIPS = [
 ];
 
 export const MIN_SEC = 30;
-export const MAX_SEC = 180; // a whole basement, several rooms, in one take
+export const MAX_SEC = 300; // a whole basement, several rooms, in one take
 export const CEILING_HOLD_MS = 3000;
