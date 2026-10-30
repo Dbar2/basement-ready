@@ -281,6 +281,14 @@ function RoomFloor({ box, finishKey, id }: { box: FloorBox; finishKey: FinishKey
   );
 }
 
+// Only the furniture, in the design's finish: for a scene that draws the walls its own way (the studio).
+export function DesignFurniture({ design }: { design: Design }) {
+  const maps = useMaps();
+  const finishKey = finishKeyFor(design);
+  const mats = useMemo(() => makeMats(FINISHES[finishKey], maps), [finishKey, maps]);
+  return <MatsCtx.Provider value={mats}>{design.proposed.furniture.map((f) => <FurnitureMesh key={f.id} f={f} />)}</MatsCtx.Provider>;
+}
+
 // The whole design. `floors`: draw the new floor in its rooms (the pictures do; the studio may not).
 export function DesignScene({ design, ceilingM = 2.3, floors = true }: { design: Design; ceilingM?: number; floors?: boolean }) {
   const maps = useMaps();

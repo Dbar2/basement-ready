@@ -1,18 +1,20 @@
-// /scans/:id/studio, "Your basement, designed": the chosen design inside their real scan, permit-ready
-// from the start. Walk it, drag walls and doors in the 3D or on the plan, tap a fix, or describe a
-// change for muse-spark to propose. The checks and the cost follow every edit; it saves as you go.
-import { Link, useParams } from "@tanstack/react-router";
+// /scans/:id/studio, "Your basement, designed" (step 4 of the flow): the layout they picked inside their
+// real scan, permit-ready from the start. Walk it, drag walls and doors in the 3D or on the plan, tap a
+// fix, or describe a change for muse-spark to propose. The checks and the quote follow every edit; it
+// saves as you go. Then the pictures.
+import { useParams } from "@tanstack/react-router";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { checkDesign, tally } from "../../server/model/checks";
 import { applyEdit, applyEdits } from "../../server/model/edit";
 import { wallLength } from "../../server/model/geometry";
 import type { Check, Design, Edit, Model, Opening, Pt, Wall } from "../../server/model/types";
-import { Logo } from "../components/Logo";
+import { FlowFoot, FlowHead, FlowLink } from "../flow/FlowNav";
+import { stepUrl } from "../flow/flow";
 import { fmtLength, type Units } from "../components/FloorPlan";
 import { lazy3d, View3DBoundary } from "../components/View3D";
 import { describeChange, loadModel, saveModel, type Proposal } from "./api";
-import { cad, quoteFor } from "./cost";
+import { basisOf, cad, quoteFor } from "./cost";
 import { useHistory } from "./history";
 import { frameOf, PlanSvg, type Picked } from "./PlanSvg";
 import type { View } from "./Studio3D";
@@ -51,11 +53,8 @@ export function Studio() {
   }, [scanId]);
   return (
     <MotionConfig reducedMotion="user">
-      <main className="studio-page">
-        <header className="studio-head">
-          <Logo />
-          <Link to="/scans/$scanId" params={{ scanId }} className="link-quiet">Back to your answer</Link>
-        </header>
+      <div className="flow-page studio-page">
+        <FlowHead scanId={scanId} step="studio" />
         {error ? (
           <p className="error studio-wait">{error}</p>
         ) : model && model.designs.length ? (
@@ -63,11 +62,12 @@ export function Studio() {
         ) : model ? (
           <p className="studio-wait muted">There's no design for this basement yet: it needs a measured plan.</p>
         ) : (
-          <div className="studio-wait" aria-busy="true">
+          <div className="studio-wait flow-body" aria-busy="true">
             <div className="skeleton skeleton-3d" />
           </div>
         )}
-      </main>
+        <FlowFoot scanId={scanId} step="studio" next={{ label: "See it in pictures", href: stepUrl(scanId, "pictures"), disabled: !model?.designs.length }} />
+      </div>
     </MotionConfig>
   );
 }
@@ -131,7 +131,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
   const door = picked?.kind === "opening" ? design.proposed.openings.find((o) => o.id === picked.id && o.kind === "door") : null;
 
   return (
-    <div className="studio-body">
+    <div className="studio-body flow-body">
       <section className="studio-main">
         <div className="studio-title">
           <div>
@@ -144,9 +144,11 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
                 {d.name}
               </button>
             ))}
-            <Link to="/scans/$scanId/plan" params={{ scanId }} className="link-quiet">
-              {existing.confirmedAt ? "Your plan" : "Check your plan first"}
-            </Link>
+            {!existing.confirmedAt && (
+              <FlowLink href={stepUrl(scanId, "plan")} className="link-quiet">
+                Check your plan first
+              </FlowLink>
+            )}
           </div>
         </div>
 
@@ -246,7 +248,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
             Meets {count.ok} checks{count.fix ? ` · ${count.fix} to fix` : ""}
           </button>
           <button className="status-chip" data-state="cost" aria-expanded={panel === "cost"} onClick={() => setPanel((p) => (p === "cost" ? null : "cost"))}>
-            {cad(quote.totalLow)}–{cad(quote.totalHigh)} materials
+            {cad(quote.totalLow)}–{cad(quote.totalHigh)} hired out
           </button>
           <button className="status-chip" data-state="ask" aria-expanded={panel === "describe"} onClick={() => setPanel((p) => (p === "describe" ? null : "describe"))}>
             Describe a change
@@ -266,16 +268,16 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
           )}
           {panel === "cost" && (
             <motion.div key="cost" className="side-card" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-              <h2>What the materials cost</h2>
+              <h2>What it costs</h2>
               <ul className="trades">
-                {quote.byTrade.map((t) => (
+                {quote.byTrade.filter((t) => t.high > 0).map((t) => (
                   <li key={t.trade}>
-                    <span>{t.trade}</span>
+                    <span>{t.label}</span>
                     <span className="mono">{cad(t.low)}–{cad(t.high)}</span>
                   </li>
                 ))}
               </ul>
-              <p className="muted small">{quote.basis}</p>
+              <p className="muted small">{basisOf(quote)}</p>
             </motion.div>
           )}
           {panel === "describe" && (
@@ -397,7 +399,7 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
           {proposal.edits.length > 0 && after && costAfter && (
             <p className="mono muted small">
               Checks met {before.ok} → {after.ok}
-              {after.fix !== before.fix ? `, to fix ${before.fix} → ${after.fix}` : ""} · materials {cad(costBefore.totalLow)} → {cad(costAfter.totalLow)}
+              {after.fix !== before.fix ? `, to fix ${before.fix} → ${after.fix}` : ""} · cost {cad(costBefore.totalLow)} → {cad(costAfter.totalLow)}
             </p>
           )}
           {proposal.dropped.length > 0 && <p className="muted small">Left out: {proposal.dropped.join(" ")}</p>}

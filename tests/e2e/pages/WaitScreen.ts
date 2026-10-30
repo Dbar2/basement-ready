@@ -12,8 +12,12 @@ export class WaitScreen {
   get stages() {
     return this.page.getByRole("list", { name: "Scan progress" });
   }
+  // The person who filmed it is told it's measured (the plan check is next); anyone else, the answer.
   get ready() {
-    return this.page.getByRole("heading", { name: "Your answer is ready" });
+    return this.page.getByRole("heading", { name: /^(Your basement is measured|Your answer is ready)$/ });
+  }
+  get planCheck() {
+    return this.page.getByRole("heading", { name: "Is this your basement?" });
   }
 
   async expectOpen() {
@@ -56,16 +60,18 @@ export class WaitScreen {
     return this.page.getByRole("tablist", { name: "Workspace" });
   }
 
-  // Ready, or already opened: with nothing left to ask it opens the answer on its own after 2.5 s.
+  // Ready, or already moved on: with nothing left to ask it opens the plan check (or, for someone only
+  // watching, the answer) on its own after 2.5 s.
   async waitForAnswer(timeout = 5 * 60_000) {
-    await expect(this.ready.or(this.workspace)).toBeVisible({ timeout });
+    await expect(this.ready.or(this.planCheck).or(this.workspace)).toBeVisible({ timeout });
   }
 
-  async seePlan() {
-    const button = this.page.getByRole("button", { name: /See my plan/ });
-    await expect(button.or(this.workspace)).toBeVisible({ timeout: 30_000 });
+  // On to step 2 of the flow, "Is this your basement?" (src/flow/flow.ts).
+  async checkPlan() {
+    const button = this.page.getByRole("button", { name: /Is this your basement\?|Skip, check my plan/ }).first();
+    await expect(button.or(this.planCheck)).toBeVisible({ timeout: 30_000 });
     if (await button.isVisible()) await button.click({ timeout: 5_000 }).catch(() => {});
-    await expect(this.workspace).toBeVisible({ timeout: 30_000 });
+    await expect(this.planCheck).toBeVisible({ timeout: 30_000 });
   }
 
   // What the finds caption and the 3D caption say right now.
