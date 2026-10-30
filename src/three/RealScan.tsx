@@ -53,7 +53,7 @@ const toLinear = Array.from({ length: 256 }, (_, i) => new THREE.Color().setRGB(
 
 // The solid surface. The floor under each room is filled in where the camera only glanced at it,
 // in the colour the scan saw on the floor; walking, there's floor under the whole scan.
-function SolidView({ solid, ceilingY, overview, floors }: { solid: Solid; ceilingY: number; overview: boolean; floors: Box[] }) {
+export function SolidView({ solid, ceilingY, overview, floors }: { solid: Solid; ceilingY: number; overview: boolean; floors: Box[] }) {
   const geometry = useMemo(() => {
     const g = new THREE.BufferGeometry();
     const pos = new Float32Array(solid.pos.length), col = new Float32Array(solid.color.length);
