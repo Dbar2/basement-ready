@@ -18,12 +18,13 @@ type Props = {
   dispatch: (a: SwipeAction) => void;
   frameSrc: (frame: number) => string;
   error?: string | null;
+  onRetry?: () => void; // deal the deck again after it failed
 };
 
 const FAR = 720; // px: off the card's side for good
 const DECIDE = 110; // px, or a quick flick
 
-export function SwipeDeck({ deck, cards, slots, state, dispatch, frameSrc, error }: Props) {
+export function SwipeDeck({ deck, cards, slots, state, dispatch, frameSrc, error, onRetry }: Props) {
   const reduced = useReducedMotion() ?? false;
   const queue = upNext(state, (id) => cards.has(id));
   const top = queue[0] ?? null;
@@ -75,7 +76,7 @@ export function SwipeDeck({ deck, cards, slots, state, dispatch, frameSrc, error
     // A tall (portrait) take keeps the whole card on screen: the deck narrows instead.
     <section className="deck" aria-label="Swipe your style" style={{ maxWidth: `min(520px, ${Math.round(54 * (top ? aspect(top) : 16 / 9))}vh)` }}>
       <div className="deck-stack">
-        {shown.length === 0 && <DeckEmpty status={deck.status} error={error ?? null} swiped={swiped} />}
+        {shown.length === 0 && <DeckEmpty status={deck.status} error={error ?? null} swiped={swiped} onRetry={onRetry} />}
         {[...shown].reverse().map((id) => {
           const depth = shown.indexOf(id);
           const slot = slots.get(id);
@@ -100,7 +101,8 @@ export function SwipeDeck({ deck, cards, slots, state, dispatch, frameSrc, error
         })}
       </div>
 
-      <div className="deck-actions">
+      {/* No buttons to press until there's a card (or a swipe to undo). */}
+      <div className="deck-actions" hidden={shown.length === 0 && !swiped}>
         <button type="button" className="deck-btn" onClick={() => decide("pass")} disabled={!topReady} aria-keyshortcuts="ArrowLeft">
           <span aria-hidden="true">←</span> Not for me
         </button>
@@ -140,7 +142,8 @@ export function SwipeDeck({ deck, cards, slots, state, dispatch, frameSrc, error
   );
 }
 
-function DeckEmpty({ status, error, swiped }: { status: Deck["status"]; error: string | null; swiped: number }) {
+function DeckEmpty({ status, error, swiped, onRetry }: { status: Deck["status"]; error: string | null; swiped: number; onRetry?: () => void }) {
+  const stuck = Boolean(error) || status === "failed";
   const [title, note] = error
     ? ["The cards didn't start.", error]
     : status === "failed"
@@ -149,9 +152,14 @@ function DeckEmpty({ status, error, swiped }: { status: Deck["status"]; error: s
         ? ["That's every card.", "Your board has what you loved."]
         : ["Your cards are on their way.", "They start as soon as your video's frames are in: your own basement, restyled."];
   return (
-    <div className="deck-empty">
+    <div className="deck-empty" role={stuck ? "alert" : undefined}>
       <p className="deck-empty-title">{title}</p>
       <p>{note}</p>
+      {stuck && onRetry && (
+        <button type="button" className="btn btn-ghost deck-retry" onClick={onRetry}>
+          Try again
+        </button>
+      )}
     </div>
   );
 }
