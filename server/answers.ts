@@ -7,7 +7,8 @@ import { db, schema } from "./db";
 import { fromWho, STORED_MONEY_QUESTIONS, cleanMoneyAnswer, waitQuestions, WHO_ID, WHO_IDS, type Who } from "./eligibility";
 import { cleanPlans, plansHousehold, plansQuestion, plansWords, PLANS_ID } from "./plans";
 import type { Property } from "./property";
-import { recheck, type Answers, type AnswerValue } from "./recheck";
+import { pricedForBasement } from "./priced";
+import type { Answers, AnswerValue } from "./recheck";
 import { packFor, type Household } from "./rules";
 import { TRIAGE } from "./triage";
 import { basementFor, parseClaims } from "./workspace";
@@ -106,7 +107,8 @@ export function mountAnswers(app: Hono, currentUser: (c: Context) => Promise<str
     // What they'd like it to be is the wish, unless the video already said one.
     const plans =
       ruleId === PLANS_ID ? { plans: value, wants: result.wants && result.wants !== plansWords(result.plans) ? result.wants : plansWords(value as string | null) } : {};
-    const updated = recheck({ ...result, household, ...plans }, answers);
+    // Priced on the design they picked, as every screen shows it (server/priced.ts).
+    const updated = await pricedForBasement(id, basement.id, { ...result, household, ...plans }, answers);
     await saveResult(id, updated);
     return c.json({ result: updated, asks: asksFor(updated.municipality, household, answers, property, updated) });
   });
@@ -123,7 +125,7 @@ export function mountAnswers(app: Hono, currentUser: (c: Context) => Promise<str
     const result = a.result as any;
     if (!result) return c.json({ saved: true });
     // Re-check with the saved answers: the money and the plan's steps follow who it's for.
-    const updated = recheck({ ...result, household }, await savedAnswers(a.basement.id));
+    const updated = await pricedForBasement(a.id, a.basement.id, { ...result, household }, await savedAnswers(a.basement.id));
     await saveResult(a.id, updated);
     return c.json({ result: updated });
   });

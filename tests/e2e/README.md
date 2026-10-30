@@ -12,7 +12,7 @@ This runs `pnpm dev`'s two servers on their own ports (API 47873, web 47173, so 
 - **3D areas:** the test server measures three at a time, as Modal did when the takes were recorded (`E2E_SCAN3D_PARALLEL=1` for a take recorded on the Mac runner).
 - **Chromium:** it runs the full Chromium build on the Mac's GPU. The headless shell draws WebGL in software, and the 3D views then block clicks for seconds.
 
-Each run writes to `tmp/e2e/<run>/`:
+Each run writes to `tmp/e2e/<run>/` while it runs. A run that passes then deletes that folder (a database and copied uploads, a gigabyte or more), keeping its report, screenshots and timing in `tmp/e2e/latest/`. A failed run keeps its folder, with traces, and only the newest two are kept. Record runs' timings also go to `tmp/e2e/recorded-timing.jsonl`, so replay reports can compare against the real services. A run folder holds:
 - `report.html`: each journey's steps with a screenshot each, the timing table, and replay hits and misses
 - `shots/`: the step screenshots
 - `downloads/`: the permit packages the journeys downloaded
@@ -31,29 +31,38 @@ Each run writes to `tmp/e2e/<run>/`:
 - **The key:** a hash of the service, route, model and request body, with image, video and audio bytes hashed.
 - **The saved file:** `<key>.json` holds the status, content type, the body (or `<key>.body.gz` beside it), the time the call took, and a short copy of the request.
 - **Never saved:** headers and keys. Auth is added only when a call really goes out.
+- **Pictures are the one loose part** (`REPLAY_LOOSE=pictures`, set by the harness):
+  - The design pictures start from the browser's own render of the 3D, so another browser or screen size sends other pixels.
+  - The staged photos and the swipe deck pick their frames by what the 3D has measured so far.
+  - So a Muse Image edit with no exact answer gets a recorded picture asked with the same prompt and size (or the same kind of prompt), and a SAM check of one picture gets a recorded one for the same concept.
+  - Each is logged as "loose" and counted in the report. Everything else (SAM on the video, Spark, the 3D, public data) must match exactly.
+  - The take's photo and card counts are kept but not held to: at least one photo, and enough cards to swipe.
+- **No real key in replay:** the start sheet refuses uploads when the server has no Meta key, so the replay server gets the placeholder `replay-only-not-a-key`. Replay never sends it, and Meta's address points nowhere.
 - **Public data:** on the test server, `tests/e2e/support/net-guard.ts` does the same for public data (`PUBLIC_CACHE`), such as city maps, the aerial photo and the city's forms.
 
 Saved answers live in two folders:
-- `tests/fixtures/replay/`: committed and small. Right now it holds the two Waterloo permit forms the sample's package fills in.
-- `media/private/replay/` (gitignored, in the main checkout): recordings of real takes, including David's own footage. Each take's `takes/<id>.json` holds what it came out as when it was recorded (verdict, rooms and sizes, finds, questions, permit sheets, photo count). Replay must match it.
+- `tests/fixtures/replay/`: committed and small. Right now it holds Meta's model list (the server asks for it at boot) and the two Waterloo permit forms the sample's package fills in.
+- `media/private/replay/` (gitignored, in the main checkout): recordings of real takes, including David's own footage. Every checkout and worktree shares these answers: they're keyed by what was asked, so branches never clash.
+- **What a take came out as** (verdict, rooms and sizes, finds, questions, permit sheets and things left, photo and card counts) is the code's, so it's kept per branch: `takes/<id>.json` for main, `takes/<branch>/<id>.json` for a branch. Replay reads its own branch's first, then main's, and must match it.
+- **When the product changes on purpose** (new wording, a new model call, a changed Spark prompt): replay shows named misses or a changed outcome. Record the take again with `E2E_TAKES=…` (only what's new costs anything) and the outcome file is rewritten.
 
-## What's recorded (Oct 30)
+## What's recorded (Oct 30, re-checked against main the same evening)
 
 | Take | How it's sent | Where its answers live | Recorded outcome |
 |---|---|---|---|
-| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 1 fix", 3 rooms, 14-page permit set, 1 photo |
-| `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (43 MB, too big to commit) | "Looks like yes", 2 rooms (6.2 × 4.17 and 2.93 × 4.17 m; true 6.4 × 4.6 and 4.6 × 3.08), 14 pages, 2 photos |
-| Sample basement | The app's own sample | Needs only the two committed city forms | — |
+| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 1 fix", 3 rooms, 16 cards in the deck, a 15-page set (A2 over two sheets) with 14 things left, 1 photo |
+| `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (too big to commit) | "Looks like yes", 2 rooms (6.2 × 4.17 and 2.93 × 4.17 m; true 6.4 × 4.6 and 4.6 × 3.08), 12 cards, 14 pages with 16 left, 2 photos |
+| Sample basement | The app's own sample (its deck cards are in the repo) | The committed Meta model list and two city forms | — |
 
-Both takes cost about $2.49 to record, together. The 3D ran on Modal.
+Recording cost about $2.49 for both takes on Oct 30, with the 3D on Modal. Two top-ups followed as main changed: $0.73 for the swipe deck and a new Spark read, then $0.86 for the one flow (the rebuilt deck, the layout pictures and the design's pictures). In all, about $4.08, each top-up approved by David. `media/private/replay` holds 149 MB.
 
 ## The journeys
 
 | File | What it covers |
 |---|---|
-| `sample.spec.ts` | The sample basement: wait screen and its questions, verdict, floor plan, Ideas, Permit (profile, then the package downloaded and opened: page count and sheet titles), Money, Build. Needs no recordings. |
-| `takes.spec.ts` | Each recorded take, from filming to the permit. It goes through the start sheet (address, who) and an upload, or posts the way the iPhone app does with its tracked camera path. Then the wait screen, every tab, the timing, and the recorded outcome. A take that isn't recorded on this machine is skipped, with the reason. |
-| `errors.spec.ts` | A video it can't read. The over-limit path is a placeholder until session A's limits merge. |
+| `sample.spec.ts` | The sample basement through the one flow: the wait screen, its questions and its deck, then is-this-your-basement, a layout with its picture, the studio, the pictures and the book. Then Permit (the book's count matches; the review copy is downloaded and opened: a cover first and a page for every listed sheet), Money, Build, The answer, and a return visit landing where they left off. Needs no recordings. |
+| `takes.spec.ts` | Each recorded take, from filming to the permit. It goes through the start sheet (address, who) and an upload, or posts the way the iPhone app does with its tracked camera path. Then the wait screen (questions, then swiping the deck: two loved, one passed, both on the board), the flow (plan check, layouts with their pictures, studio, pictures, book), every tab, the permit's readiness count, the timing, and the recorded outcome. Takes replay one at a time. A take that isn't recorded on this machine is skipped, with the reason. |
+| `errors.spec.ts` | A video it can't read. A day's scans used up: it starts its own API with `SCANS_PER_DAY=0` (the other journeys get 1000) and checks the start sheet's message and the server's 503. |
 
 Every journey fails on any console error, any page error, or any replay miss.
 
@@ -67,14 +76,14 @@ E2E_TAKES=b2-family E2E_SCAN3D_URL=<the Modal endpoint> pnpm test:e2e:record
 - **The 3D service:** with `E2E_SCAN3D_URL` set to the Modal endpoint, it uses Modal. The token is `.env`'s `SCAN3D_MODAL_TOKEN`, and three areas run at once, like production. Without it, it uses the Mac runner on port 8790 (`pnpm dev:scan3d`). Either way, `support/global-setup.ts` wakes the service first and keeps it awake. The scan only waits 3 s for the 3D service's health check, so a cold Modal container would otherwise mean a recording with no 3D.
 - **What it saves:** the answers go to `media/private/replay/`. `E2E_RECORD_TO=committed` saves them into `tests/fixtures/replay/` instead (never for a private take).
 - **Picking up where it stopped:** record mode reuses whatever is already saved, at the speed it was recorded. A recording that stopped halfway costs nothing the second time for what it already has, and races the same way a real run does.
-- **Re-recording:** delete that take's files, or the folder, and record again.
+- **Re-recording a take after the product changed:** add `E2E_LOOSE=pictures`, so pictures that differ only by timing or the browser's render reuse a recorded one of their kind instead of being paid for again. Leave it off when recording a new take, so it never borrows another take's pictures. To start a take over, delete its files and record again.
 - **Rough cost per take:** SAM is $0.20 per 1,000 frames for each of its 11 concepts, at 5 frames a second. A 2-minute take is about $1.30 of SAM, plus Muse Image at $0.01 a photo, plus a few cents of Spark. The 3D is free on the Mac runner.
 
 Add a take in `support/takes.ts`.
 
 ## Adding a journey piece
 
-Each screen has a page object in `pages/`: `Home` and `StartSheet`, `WaitScreen`, and `Workspace` with one class per tab. When a new piece lands (the swipe deck, plan confirm, the layout picker, the studio, pictures, the quote, permit readiness, booking):
+Each screen has a page object in `pages/`: `Home` and `StartSheet`, `WaitScreen`, `StyleDeck` (the swipe deck and board), `Flow` (the step bar, the plan check, layouts, studio and pictures), and `Workspace` with one class per tab. When a new piece lands (the quote's own screen, booking, whatever comes next):
 
 1. Add a page object for its screen in `pages/`, with role- and label-based locators and one method per thing a homeowner does there.
 2. Add a `journey.step("…", () => …)` where it falls in `sample.spec.ts` and `takes.spec.ts`. Each step gets a screenshot in the report.
