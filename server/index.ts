@@ -18,7 +18,8 @@ import { searchAddresses } from "./address";
 import { suggestLayout } from "./layout";
 import { fetchAerial, lookupProperty, type Property } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
-import { finishRooms, saveBasement3d, ANALYSIS_FPS, type Detection } from "./pipeline";
+import { cameraLookup, cleanCapture } from "./capture";
+import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { scanBasement } from "./basement";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { liteSurfels, lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
@@ -140,6 +141,8 @@ app.post("/api/scans", async (c) => {
   const spoken = cleanSpoken(body.spoken);
   // Which camera filmed it (the 0.5x ultra-wide or the main one), and when they held still for the wide shot.
   const lens = body.lens === "ultrawide" || body.lens === "wide" ? body.lens : null;
+  // The iPhone app's camera tracking (docs/capture-contract.md).
+  const capture = body.capture instanceof File && body.capture.size < 40 * 1024 * 1024 ? cleanCapture(await body.capture.text()) : null;
   const wideAt = Number(body.wideAt);
   const inputs = {
     ...(Number.isFinite(tape) && tape >= 1 && tape <= 4 ? { floorToJoistsM: tape } : {}),
@@ -147,12 +150,14 @@ app.post("/api/scans", async (c) => {
     ...(ideas ? { ideas } : {}),
     ...(spoken ? { spoken } : {}),
     ...(lens ? { lens } : {}),
+    ...(capture ? { capture: { device: capture.device ?? null, frames: capture.frames.length } } : {}),
     ...(body.wideAt != null && Number.isFinite(wideAt) && wideAt >= 0 && wideAt <= MAX_TAKE_S + 10 ? { wideAt } : {}),
   };
   const [scan] = await db
     .insert(schema.scans)
     .values({ basementId: basement.id, clientIp: ip, inputs: Object.keys(inputs).length ? inputs : null })
     .returning();
+  if (capture) await storage.put(keys.capture(scan.id), Buffer.from(JSON.stringify(capture)), "application/json");
 
   const ext = (video.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
   const videoKey = keys.input(scan.id, ext);
@@ -458,7 +463,8 @@ app.post("/api/scans/:id/replan", async (c) => {
     try {
       for (let n = 0; n < result.frameCount; n++) await storage.download(keys.frame(id, n), join(work, "frames", `${String(n).padStart(4, "0")}.jpg`));
       const known = (scan.inputs as { floorToJoistsM?: number } | null)?.floorToJoistsM;
-      const b = await scanBasement(work, result.frameCount, known ? { floorToJoistsM: known } : {}, async (t) => console.log(`[replan] ${id}: ${t}`));
+      const cameraFor = await cameraLookup(() => storedText(keys.capture(id)), ANALYSIS_FPS);
+      const b = await scanBasement(work, result.frameCount, known ? { floorToJoistsM: known } : {}, async (t) => console.log(`[replan] ${id}: ${t}`), cameraFor);
       if (!b) return c.json({ error: "No 3D" }, 500);
       const low = new Set(lowOverhead(b.scans, result.detections));
       const detections = (result.detections as Detection[]).filter((d) => !low.has(d));

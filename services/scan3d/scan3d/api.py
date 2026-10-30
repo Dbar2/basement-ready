@@ -2,6 +2,8 @@
 
 import hmac
 import json
+
+import numpy as np
 import os
 import secrets
 import urllib.request
@@ -14,6 +16,8 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, Response
 
 from . import MODEL_ID, MODEL_REVISION, ScanError
+from .export import read_ply
+from .floorplan import floor_plan
 from .pipeline import Scanner
 
 MAX_FRAMES_IN = 900  # 3 minutes at 5 fps, the cap in server/pipeline.ts
@@ -50,6 +54,27 @@ def _fetch(url: str) -> tuple[str, bytes]:
     return os.path.basename(urlparse(url).path) or url, data
 
 
+def _cameras(raw, n: int):
+    """Checked known cameras: a list with one {intrinsics 3x3, pose 4x4} or null per frame, or None."""
+    if raw is None:
+        return None
+    if not isinstance(raw, list) or len(raw) != n:
+        raise ScanError("cameras must be a list with one entry per frame (null where unknown)")
+    out = []
+    for c in raw:
+        if c is None:
+            out.append(None)
+            continue
+        try:
+            k, pose = np.asarray(c["intrinsics"], float), np.asarray(c["pose"], float)
+        except (KeyError, TypeError, ValueError) as e:
+            raise ScanError("each camera needs intrinsics (3x3) and pose (4x4)") from e
+        if k.shape != (3, 3) or pose.shape != (4, 4) or not (np.isfinite(k).all() and np.isfinite(pose).all()):
+            raise ScanError("each camera needs intrinsics (3x3) and pose (4x4)")
+        out.append({"intrinsics": k, "pose": pose})
+    return out
+
+
 def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: int = 64) -> FastAPI:
     if not token:
         raise ValueError("a bearer token is required (SCAN3D_TOKEN)")
@@ -80,6 +105,10 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
                 form = await request.form(max_files=MAX_FRAMES_IN + 1, max_fields=10)
                 raw = form.get("options") or "{}"
                 options = json.loads(raw if isinstance(raw, str) else await raw.read())  # text field or Blob
+                # Known cameras from the phone's tracking, one per frame part (see docs/capture-contract.md).
+                raw_cams = form.get("cameras")
+                if raw_cams is not None:
+                    options["cameras"] = json.loads(raw_cams if isinstance(raw_cams, str) else await raw_cams.read())
                 uploads = form.getlist("frames")
                 if len(uploads) > MAX_FRAMES_IN:
                     return error(413, f"at most {MAX_FRAMES_IN} frames per scan")
@@ -112,7 +141,8 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
             except (TypeError, ValueError) as e:
                 raise ScanError("maxPoints must be a number") from e
             skip_depth = bool(options.get("skipDepth"))
-            result = await run_in_threadpool(get_scanner().scan, items, max_frames, known, max_points, skip_depth)
+            cameras = _cameras(options.get("cameras"), len(items))
+            result = await run_in_threadpool(get_scanner().scan, items, max_frames, known, max_points, skip_depth, cameras)
         except (ScanError, json.JSONDecodeError) as e:
             return error(400, str(e))
 
@@ -123,5 +153,36 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
             *([("surfels", "surfels.bin", "application/octet-stream", result.surfels)] if result.surfels else []),
         ])
         return Response(body, media_type=media)
+
+    @app.post("/floorplan")
+    async def floorplan(request: Request):
+        """The whole basement's floor plan from areas already scanned with known cameras: multipart
+        `areas` (JSON list of {world: {rotation, origin}, factor}), one `points` PLY per area in the same
+        order (each in its room frame), and `cameras` (JSON list of camera centres in the world)."""
+        if not authorized(request):
+            return error(401, "missing or wrong bearer token")
+        try:
+            form = await request.form(max_files=64, max_fields=10)
+            areas = json.loads(form.get("areas") or "[]")
+            cams = np.asarray(json.loads(form.get("cameras") or "[]"), float).reshape(-1, 3)
+            plys = form.getlist("points")
+            if not areas or len(plys) != len(areas) or len(cams) < 3:
+                raise ScanError("send areas, one points PLY per area, and at least 3 cameras")
+            pts = []
+            for a, ply in zip(areas, plys):
+                v = read_ply(await ply.read())
+                room = np.stack([v["x"], v["y"], v["z"]], 1).astype(float) / float(a.get("factor") or 1.0)
+                R, o = np.asarray(a["world"]["rotation"], float), np.asarray(a["world"]["origin"], float)
+                pts.append(room @ R + o)
+            fp = await run_in_threadpool(floor_plan, np.concatenate(pts), cams)
+        except (ScanError, json.JSONDecodeError, KeyError, ValueError) as e:
+            return error(400, str(e))
+        return JSONResponse({
+            "rotation": fp.rotation,
+            "floorY": fp.floor_y,
+            "ceilingY": fp.ceiling_y,
+            "footprintM2": fp.footprint_m2,
+            "rooms": [{"box": r.box, "outline": r.outline, "areaM2": r.area_m2, "cameras": r.cameras, "sides": r.walls} for r in fp.rooms],
+        })
 
     return app
