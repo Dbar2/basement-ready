@@ -97,9 +97,9 @@ export default class HtmlReport implements Reporter {
 
     const costs = timing.filter((t) => t.kind === "cost");
     const costTable = costs.length
-      ? `<h2>What recording cost</h2><table><tr><th>Take</th><th>Frames</th><th>SAM concepts on the video</th><th>SAM picture checks</th><th>Muse images</th><th>Spark reads</th><th>Voice</th><th>3D areas</th><th>Cost</th></tr>${costs
-          .map((c) => `<tr><td>${esc(c.take)}</td><td>${c.frames}</td><td>${c.samVideoConcepts}</td><td>${c.samPictureChecks}</td><td>${c.museImages}</td><td>${c.sparkReads}</td><td>${c.voice}</td><td>${c.areas3d}</td><td><b>$${Number(c.usd).toFixed(2)}</b></td></tr>`)
-          .join("")}</table><p class="note">Only calls that really went out. SAM $0.20 per 1,000 video frames and $0.0025 a picture; Muse Image $0.01 an image; Spark by its token count; about $0.03 an area on Modal; voice not priced.</p>`
+      ? `<h2>What recording cost</h2><table><tr><th>Take</th><th>Frames</th><th>SAM concepts on the video</th><th>SAM picture checks</th><th>Muse images</th><th>Spark reads</th><th>Wonder reads</th><th>Voice</th><th>3D areas</th><th>Cost</th></tr>${costs
+          .map((c) => `<tr><td>${esc(c.take)}</td><td>${c.frames}</td><td>${c.samVideoConcepts}</td><td>${c.samPictureChecks}</td><td>${c.museImages}</td><td>${c.sparkReads}</td><td>${c.wonderReads ?? 0}</td><td>${c.voice}</td><td>${c.areas3d}</td><td><b>$${Number(c.usd).toFixed(2)}</b></td></tr>`)
+          .join("")}</table><p class="note">Only calls that really went out. SAM $0.20 per 1,000 video frames and $0.0025 a picture; Muse Image $0.01 an image; Spark and Wonder by their token counts; about $0.03 an area on Modal; voice not priced.</p>`
       : "";
     const tally = ["passed", "failed", "timedOut", "skipped", "interrupted"]
       .map((st) => [st, this.results.filter((r) => r.status === st).length] as const)
