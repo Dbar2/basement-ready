@@ -269,6 +269,8 @@ export const SCREENS: Screen[] = [
     purpose:
       "The confirmed plan's walls (magenta lines, thickness to scale), doors and windows (blue and teal ticks) and stairs or ducts (outlined boxes), drawn over a top-down render of the scan cut at about 1.2 m.",
     checks: ["Plan walls run along the scan's walls, not through the middle of the room or outside it.", "Openings sit where the scan shows gaps or windows.", "Stairs box covers the scanned stairs."],
+    captureNote:
+      "This is a QA view, not a screen homeowners see. The QA tool draws the magenta wall lines and bands, the blue and teal opening ticks, the yellow dashed boxes with raw ids (water_heater, plumbing…), the black legend box and the 1 m bar, and it puts the camera straight overhead. Never report their colours, wording, labels or placement, or that the legend covers the app's buttons. Judge only whether the plan (the QA drawing) matches the scanned geometry under it. The app's own pill labels (Door, Window, Stairs) are part of its 3D view.",
   }),
   S({
     id: "permit-pdf",
