@@ -184,23 +184,30 @@ describe("the plan's dimensions", () => {
 });
 
 describe("the plan's room names", () => {
-  it("stay whole on a plan cut into sheets, each in its sheet's part of the room", async () => {
+  it("stay whole on a plan cut into sheets, each room named once, on the sheet with most of it", async () => {
     const out = await bigPackage();
     const drawing = await pageDrawing(out.bytes);
     const bold = await (await PDFDocument.create()).embedFont(StandardFonts.HelveticaBold);
-    const names = new Set(permitModel(big, {})!.design.proposed.rooms.filter((r) => r.unit === 2 && r.kind !== "stairs" && r.kind !== "kitchen").map((r) => r.name.toUpperCase()));
+    const rooms = permitModel(big, {})!.design.proposed.rooms.filter((r) => r.kind !== "stairs");
+    // As server/permit/draw.ts drawRoomLabels names them.
+    const nameOf = (r: (typeof rooms)[number]) => (r.unit === 2 ? r.name : `${r.name}${r.unit === 1 ? " (unit 1)" : r.unit === "shared" && r.kind !== "mechanical" ? " (shared)" : ""}`).toUpperCase();
+    const names = new Set(rooms.map(nameOf));
+    const unit2 = rooms.filter((r) => r.unit === 2 && r.kind !== "kitchen").map(nameOf);
     const plans = out.sheets.filter((s) => /^A2/.test(s.number));
     expect(plans.length).toBeGreaterThan(1);
-    const seen = new Set<string>();
+    const seen = new Map<string, number>();
     for (const sh of plans) {
-      for (const l of drawing[sh.page].labels.filter((l) => names.has(l.text) && !l.turned && l.clip)) {
-        const c = l.clip!;
+      for (const l of drawing[sh.page].labels.filter((l) => names.has(l.text))) {
+        seen.set(l.text, (seen.get(l.text) ?? 0) + 1);
+        if (l.turned || !l.clip) continue;
+        const c = l.clip;
         const right = l.x + bold.widthOfTextAtSize(l.text, l.size);
         expect(l.x >= Math.min(c.x, c.x + c.w) - 1 && right <= Math.max(c.x, c.x + c.w) + 1, `${sh.number}: ${l.text} runs off the match line`).toBe(true);
-        seen.add(l.text);
       }
     }
-    expect([...names].filter((n) => !seen.has(n))).toEqual([]);
+    // Each unit 2 room named once across the sheets, and no room twice.
+    expect(unit2.filter((n) => seen.get(n) !== 1)).toEqual([]);
+    expect([...seen].filter(([, n]) => n > 1)).toEqual([]);
   }, SLOW);
 });
 

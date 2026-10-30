@@ -259,16 +259,27 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
 }
 
 // Room names, areas, sizes and ceiling heights.
-// tile: on a plan cut into sheets, this sheet's part. A room the match line crosses is labelled in the
-// middle of its part on each sheet, as far as its lines fit there, so no name runs off the cut.
-export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean; tile?: Box }) {
+// On a plan cut into sheets (`tile`, this sheet's part of `tiles`, which together cover `whole`), each
+// room is named once, on the sheet that holds most of it, in the middle of its part there, so no name
+// runs off a match line. One mostly outside the plan (a unit 1 room beside the work) isn't named on the
+// sliver of it that shows.
+const overlapOf = (a: Box, t: Box): Box => ({ minX: Math.max(a.minX, t.minX), maxX: Math.min(a.maxX, t.maxX), minZ: Math.max(a.minZ, t.minZ), maxZ: Math.min(a.maxZ, t.maxZ) });
+const boxArea = (b: Box) => Math.max(0, b.maxX - b.minX) * Math.max(0, b.maxZ - b.minZ);
+
+export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean; tile?: Box; tiles?: Box[]; whole?: Box }) {
   const rooms = m.design.proposed.rooms;
   for (const r of rooms) {
     if (r.kind === "stairs") continue;
     const full = bounds(r.polygon);
     const t = o.tile;
     const cut = Boolean(t && (full.minX < t.minX - 0.01 || full.maxX > t.maxX + 0.01 || full.minZ < t.minZ - 0.01 || full.maxZ > t.maxZ + 0.01));
-    const b = cut && t ? { minX: Math.max(full.minX, t.minX), maxX: Math.min(full.maxX, t.maxX), minZ: Math.max(full.minZ, t.minZ), maxZ: Math.min(full.maxZ, t.maxZ) } : full;
+    const b = cut && t ? overlapOf(full, t) : full;
+    if (t && o.tiles?.length) {
+      const share = (x: Box) => boxArea(overlapOf(full, x)) / Math.max(1e-9, boxArea(full));
+      if (o.whole && share(o.whole) < 0.5) continue;
+      const best = o.tiles.reduce((bi, x, i) => (share(x) > share(o.tiles![bi]) + 1e-6 ? i : bi), 0);
+      if (o.tiles[best] !== t) continue;
+    }
     if (b.maxX - b.minX < 0.3 || b.maxZ - b.minZ < 0.3) continue;
     // A kitchen that's only a counter along the wall: its fixtures say what it is.
     if (r.kind === "kitchen" && Math.min(full.maxX - full.minX, full.maxZ - full.minZ) < 1.2) continue;
