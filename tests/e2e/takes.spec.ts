@@ -166,11 +166,17 @@ for (const take of TAKES) {
     const deckNow = await api(page, `/api/scans/${scanId}/cards`);
 
     // ---- Permit: the owner once, the readiness count, then the review copy, opened ----
-    // Saving the owner's details ticks "Owner details": the count is read once the heading has caught up
-    // with the newest status the page was sent (WebKit can draw the old one for a moment after the save).
+    // Saving the owner's details ticks "Owner details": the count is read from the first status the page
+    // is sent with it ticked, once the heading shows it (WebKit can draw the old count for a moment).
     let sent: number | null = null;
     const onStatus = (res: Response) => {
-      if (new URL(res.url()).pathname.endsWith("/permit/status") && res.ok()) void res.json().then((s) => (sent = s.left), () => {});
+      if (!new URL(res.url()).pathname.endsWith("/permit/status") || !res.ok()) return;
+      void res.json().then(
+        (s: { left: number; items: { id: string; done: boolean }[] }) => {
+          if (s.items.find((i) => i.id === "owner")?.done !== false) sent = s.left;
+        },
+        () => {},
+      );
     };
     page.on("response", onStatus);
     await journey.step("permit, owner asked once", async () => {
