@@ -84,6 +84,7 @@ def main():
     p = sub.add_parser("serve")
     p.add_argument("--port", type=int, default=8790)
     p.add_argument("--device")
+    p.add_argument("--no-model", action="store_true", help="serve /floorplan only, without loading MapAnything (no GPU)")
     args = ap.parse_args()
 
     if args.cmd == "scan":
@@ -108,7 +109,7 @@ def main():
         token = os.environ.get("SCAN3D_TOKEN") or secrets.token_hex(16)
         if "SCAN3D_TOKEN" not in os.environ:
             print(f"SCAN3D_TOKEN not set; using {token} for this run", file=sys.stderr)
-        scanner = Scanner.load(args.device)
+        scanner = None if args.no_model else Scanner.load(args.device)
         app = create_app(lambda: scanner, token, max_frames_cap=LOCAL_MAX_FRAMES)
         uvicorn.run(app, host="127.0.0.1", port=args.port)
 

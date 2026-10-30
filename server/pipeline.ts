@@ -21,6 +21,8 @@ import { suggestLayout } from "./layout";
 import { buildPlan, locate, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
 import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type BasementProgress, type BasementScan, type RoomPlacement } from "./basement";
+import { readBasementPlan } from "./floorplan";
+import type { BasementPlan } from "../src/api";
 import { cameraLookup } from "./capture";
 import { doorHeights, doorScale, lowOverhead, meshFaces, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
@@ -235,6 +237,7 @@ type Stage = {
   sparkP: ReturnType<typeof readWithSpark>;
   uploads: Promise<unknown>;
   samCost: number;
+  floorPlan?: BasementPlan | null; // app takes: the whole basement's plan (server/floorplan.ts)
 };
 
 // A video: frames and sound out of it, SAM following each thing through it, and the basement's 3D
@@ -357,8 +360,16 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
     await saveBasement3d(scanId, basement3d);
     await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
   }
+  // An app take's areas share the phone's world: one plan of the whole basement, with SAM's finds in it,
+  // checked against the depth and by Spark. Without it the plan is drawn from each area's box, as before.
+  const floorPlan = basement3d?.tracked
+    ? await readBasementPlan(work, basement3d, detections, { said: transcript.transcript, log: (text) => emit("log", text), save: (png) => storage.put(keys.basement3d(scanId, "plan.png"), png, "image/png") }).catch((err) => {
+        console.error(`[plan] ${scanId}: ${err instanceof Error ? err.message : err}`);
+        return null;
+      })
+    : null;
   const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost };
+  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan };
 }
 
 // "Found 2 windows, a door and the stairs"
@@ -490,7 +501,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const inputs = (scan.inputs ?? {}) as ScanInputs;
     const ctx: AssessContext = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
     const stageInput = { scanId, videoKey: scan.videoKey, inputs, work, ctx, emit, inflight };
-    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
+    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
 
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
@@ -512,6 +523,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       has3d: rooms.some((r) => r.has3d),
       plan,
       rooms,
+      floorPlan: floorPlan ?? null,
       mainRoom: main?.index ?? null,
       ...assessment.result,
     };
