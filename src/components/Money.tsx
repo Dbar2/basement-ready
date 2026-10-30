@@ -1,6 +1,8 @@
-// The money and the road to it, on the answer page: what they qualify for (decided in code from
-// each program's written conditions), the one answer that settles the rest, "How to apply" in the
-// order it happens, and who draws and builds it. Never a recommended business: public registries only.
+// The money and the road to it, on the answer page: what they may be eligible for (decided in code from
+// each program's written conditions; the program decides), the one answer that settles the rest, "How
+// to apply" in the order it happens, and who draws and builds it. Never a recommended business: public
+// registries only. Opening an email or a form never counts as sending it: they tell us with "I sent it".
+// The example and the demo house show their emails but can't send them.
 import { useEffect, useState } from "react";
 import type { Grant, MoneyQuestion, MoneyValue, PlanStep, ScanResult } from "../api";
 import { downloadApplication, getApplications, mailto, type Application, type Profile, type WorkspaceState } from "../workspaceApi";
@@ -52,7 +54,7 @@ function Program({ g }: { g: Grant }) {
 
 type Answer = (id: string, value: MoneyValue | null) => void;
 
-export function MoneySection({ r, busy, onAnswer }: { r: ScanResult; busy: string | null; onAnswer: Answer }) {
+export function MoneySection({ r, busy, readOnly, example, onAnswer }: { r: ScanResult; busy: string | null; readOnly?: boolean; example?: boolean; onAnswer: Answer }) {
   const grants = r.grants ?? [];
   const yes = grants.filter((g) => g.qualify === "yes");
   const no = grants.filter((g) => g.qualify === "no");
@@ -69,7 +71,7 @@ export function MoneySection({ r, busy, onAnswer }: { r: ScanResult; busy: strin
       <div className="money-total" data-none={total === 0 || undefined}>
         {total > 0 ? (
           <>
-            <span className="mono">You qualify for up to</span>
+            <span className="mono">You may be eligible for up to</span>
             <strong>{money(total)}</strong>
             <span>
               {cash.length === 1 ? `From the ${cash[0].shortName}.` : `From ${cash.length} programs, listed below.`}
@@ -79,7 +81,7 @@ export function MoneySection({ r, busy, onAnswer }: { r: ScanResult; busy: strin
         ) : ifYes > 0 ? (
           <>
             <span className="mono">Up to {money(ifYes)} is one answer away</span>
-            <span>Answer below and we'll tell you exactly what you qualify for.</span>
+            <span>{readOnly ? "The owner's answers decide it." : "Answer below and we'll show what you may be eligible for."}</span>
           </>
         ) : (
           <>
@@ -97,7 +99,8 @@ export function MoneySection({ r, busy, onAnswer }: { r: ScanResult; busy: strin
         </ul>
       )}
 
-      {questions.length > 0 && (
+      {questions.length > 0 && readOnly && <p className="read-only">Only the person who filmed this can answer the money questions.</p>}
+      {questions.length > 0 && !readOnly && (
         <div className="money-ask">
           <h3>One answer away</h3>
           <ul className="ruled questions money-questions">
@@ -129,10 +132,11 @@ export function MoneySection({ r, busy, onAnswer }: { r: ScanResult; busy: strin
         </details>
       )}
 
-      {answered.length > 0 && <MoneyAnswers answered={answered} busy={busy} onAnswer={onAnswer} />}
+      {answered.length > 0 && !readOnly && <MoneyAnswers answered={answered} busy={busy} onAnswer={onAnswer} title={example ? "The example household's answers" : "What you told us"} />}
       <p className="note">
         Decided from each program's written rules, checked {r.compiledAt}. The program makes the final call when you apply.
       </p>
+      {r.disclaimer && <p className="note rules-disclaimer">{r.disclaimer}</p>}
     </section>
   );
 }
@@ -140,10 +144,10 @@ export function MoneySection({ r, busy, onAnswer }: { r: ScanResult; busy: strin
 const said = (q: MoneyQuestion) => q.options.find((o) => o.value === q.answer)?.label ?? String(q.answer);
 
 // What they told us about the money, one tap to change.
-function MoneyAnswers({ answered, busy, onAnswer }: { answered: MoneyQuestion[]; busy: string | null; onAnswer: Answer }) {
+function MoneyAnswers({ answered, busy, onAnswer, title }: { answered: MoneyQuestion[]; busy: string | null; onAnswer: Answer; title: string }) {
   return (
     <details className="money-told">
-      <summary>What you told us</summary>
+      <summary>{title}</summary>
       <ul className="ruled questions money-questions">
         {answered.map((q) => (
           <MoneyQuestionCard key={q.id} q={q} busy={busy === q.id} decides={[]} onAnswer={(v) => onAnswer(q.id, v)} label={said(q)} />
@@ -153,20 +157,27 @@ function MoneyAnswers({ answered, busy, onAnswer }: { answered: MoneyQuestion[];
   );
 }
 
-function Links({ links }: { links: { label: string; url: string }[] }) {
+// `example`: email addresses show as text, so nothing made for the example reaches a real inbox.
+function Links({ links, example }: { links: { label: string; url: string }[]; example?: boolean }) {
   if (!links.length) return null;
   return (
     <p className="task-links">
-      {links.map((l) => (
-        <a key={l.url} href={l.url} target={l.url.startsWith("mailto:") ? undefined : "_blank"} rel="noreferrer">
-          {l.label}
-        </a>
-      ))}
+      {links.map((l) =>
+        example && l.url.startsWith("mailto:") ? (
+          <span key={l.url} className="muted" title="The example can't send email">
+            {l.label} <span className="tag-mono">example: not sent</span>
+          </span>
+        ) : (
+          <a key={l.url} href={l.url} target={l.url.startsWith("mailto:") ? undefined : "_blank"} rel="noreferrer">
+            {l.label}
+          </a>
+        ),
+      )}
     </p>
   );
 }
 
-export function HowToApply({ steps }: { steps: PlanStep[] }) {
+export function HowToApply({ steps, example }: { steps: PlanStep[]; example?: boolean }) {
   // Results from before the timeline have no tasks; they show nothing rather than half a plan.
   const usable = steps.filter((s) => Array.isArray(s.tasks));
   if (!usable.length) return null;
@@ -190,7 +201,7 @@ export function HowToApply({ steps }: { steps: PlanStep[] }) {
                     <li key={t.title} className="task" data-qualify={t.program?.qualify}>
                       <p className="task-title">
                         <b>{t.title}</b>
-                        {t.program?.qualify === "ask" && <span className="tag-mono">If you qualify</span>}
+                        {t.program?.qualify === "ask" && <span className="tag-mono">If you're eligible</span>}
                       </p>
                       {t.detail && <p className="muted">{t.detail}</p>}
                       {t.bring && t.bring.length > 0 && (
@@ -203,7 +214,7 @@ export function HowToApply({ steps }: { steps: PlanStep[] }) {
                           </ul>
                         </div>
                       )}
-                      <Links links={t.links} />
+                      <Links links={t.links} example={example} />
                     </li>
                   ))}
                 </ul>
@@ -295,7 +306,7 @@ export function GetItDone({ r, scanId, onShare }: { r: ScanResult; scanId: strin
 
 // One-click applications (server/apply/applications.ts): for each program they qualify for, the
 // filled PDF, a ready email, or the online form's answers to copy, with the documents ticked off.
-export function Applications({ scanId, r, profile, state, onSent }: { scanId: string; r: ScanResult; profile: Profile | null; state: WorkspaceState; onSent: (id: string) => void }) {
+export function Applications({ scanId, r, profile, state, example, onSent }: { scanId: string; r: ScanResult; profile: Profile | null; state: WorkspaceState; example?: boolean; onSent: (id: string, sent: boolean) => void }) {
   const [apps, setApps] = useState<Application[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -320,6 +331,9 @@ export function Applications({ scanId, r, profile, state, onSent }: { scanId: st
       <ul className="ruled">
         {apps.map((a) => {
           const sent = state.apply?.[a.id]?.sentAt;
+          // The server flags the example's and the demo house's applications; the page knows too.
+          const noSend = a.example || example;
+          const sends = Boolean(a.pdf || a.email || a.link);
           return (
             <li key={a.id} className="app" data-qualify={a.qualify}>
               <div className="program-head">
@@ -328,7 +342,7 @@ export function Applications({ scanId, r, profile, state, onSent }: { scanId: st
               </div>
               <p className="mono app-when">
                 {a.when}
-                {a.qualify === "ask" ? " · if you qualify" : ""}
+                {a.qualify === "ask" ? " · if you're eligible" : ""}
                 {sent ? ` · sent ${new Date(sent).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}` : ""}
               </p>
               <ol className="app-steps">
@@ -352,10 +366,15 @@ export function Applications({ scanId, r, profile, state, onSent }: { scanId: st
                     {busy === a.id ? "Filling it in…" : "Download the filled form"}
                   </button>
                 )}
-                {a.email && a.email.to && (
-                  <a className={a.pdf ? "btn btn-ghost" : "btn btn-primary"} href={mailto(a.email.to, a.email.subject, a.email.body)} onClick={() => onSent(a.id)}>
+                {a.email && a.email.to && !noSend && (
+                  <a className={a.pdf ? "btn btn-ghost" : "btn btn-primary"} href={mailto(a.email.to, a.email.subject, a.email.body)}>
                     Write the email
                   </a>
+                )}
+                {a.email && a.email.to && noSend && (
+                  <button className={a.pdf ? "btn btn-ghost" : "btn btn-primary"} disabled title="The example can't send email">
+                    Write the email
+                  </button>
                 )}
                 {a.email && !a.email.to && (
                   <button className="btn btn-ghost" onClick={() => void copy(a.id, `${a.email!.subject}\n\n${a.email!.body}`)}>
@@ -363,11 +382,21 @@ export function Applications({ scanId, r, profile, state, onSent }: { scanId: st
                   </button>
                 )}
                 {a.link && (
-                  <a className={a.pdf || a.email ? "link-quiet" : "btn btn-primary"} href={a.link.url} target="_blank" rel="noreferrer" onClick={() => a.kind === "online_form" && onSent(a.id)}>
+                  <a className={a.pdf || a.email ? "link-quiet" : "btn btn-primary"} href={a.link.url} target="_blank" rel="noreferrer">
                     {a.link.label}
                   </a>
                 )}
+                {sends && !noSend && (
+                  <button className="link-quiet sent-it" aria-pressed={Boolean(sent)} onClick={() => onSent(a.id, !sent)}>
+                    {sent ? "Not sent after all" : "I sent it"}
+                  </button>
+                )}
               </div>
+              {a.email && a.email.to && noSend && (
+                <p className="app-example">
+                  <span className="tag-mono">Example</span> It would go to <b>{a.email.to}</b>. Nothing made for the example or the demo house is sent.
+                </p>
+              )}
               {a.form && (
                 <details className="app-form" open>
                   <summary>Your answers for the form</summary>

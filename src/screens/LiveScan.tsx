@@ -4,12 +4,19 @@
 // answer, each asked once. Who it's for and the rent were asked on the start sheet; the server keeps
 // every answer (server/eligibility.ts waitQuestions), so a refresh carries on where it left off and
 // the answer arrives already using them. Time left comes from the scan's own progress (waitTime.ts).
+// When the answer lands, the questions are checked again and anything the video settled is dropped.
+// A scan that fails says why and offers "Try again" (the video is kept); a slow one says so. Only the
+// person who filmed it answers: a shared link watches. The example says it's a recorded scan, replayed.
 import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ANALYSIS_FPS,
   answerEarly,
+  DEMO_LABEL,
+  EXAMPLE_LABEL,
+  getScan,
   localVideos,
   replaySample,
+  retryScan,
   subscribe,
   waitAsks,
   type ScanEvent,
@@ -17,8 +24,9 @@ import {
 } from "../api";
 import { Logo } from "../components/Logo";
 import "../styles/ask.css";
+import "../styles/journey.css";
 import { modelsFrom, walkFrom } from "./assembly";
-import { leftWords, secondsLeft } from "./waitTime";
+import { leftWords, secondsLeft, waitState } from "./waitTime";
 
 // three.js only loads once there's a basement to draw.
 const Assembling = lazy(() => import("../components/Assembling"));
@@ -125,8 +133,17 @@ function cssVar(name: string) {
 type Photo = { n: number; url: string; title: string };
 
 export function LiveScan({ scanId, onDone }: Props) {
+  const sample = scanId === "sample";
   const [events, setEvents] = useState<ScanEvent[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // Why it stopped, and whether running the stored video again can help.
+  const [failure, setFailure] = useState<{ text: string; retry: boolean } | null>(null);
+  // Each "Try again" starts the events over.
+  const [run, setRun] = useState(0);
+  const [retrying, setRetrying] = useState(false);
+  const [retryNote, setRetryNote] = useState<string | null>(null);
+  // Whether this browser (or the signed-in owner) filmed it: only they answer.
+  const [canEdit, setCanEdit] = useState(sample);
+  const [demo, setDemo] = useState(false);
   // When the newest event arrived here, to count on from its scan time between events.
   const heardAt = useRef(Date.now());
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -142,19 +159,34 @@ export function LiveScan({ scanId, onDone }: Props) {
 
   useEffect(() => {
     setEvents([]);
+    setFailure(null);
+    heardAt.current = Date.now();
     const push = (e: ScanEvent) => {
       heardAt.current = Date.now();
       setEvents((prev) => [...prev, e]);
-      if (e.type === "error") setError(e.text);
+      if (e.type === "error") setFailure({ text: e.text, retry: (e.data as { retry?: boolean } | undefined)?.retry ?? true });
     };
-    return scanId === "sample" ? replaySample(push) : subscribe(scanId, push);
-  }, [scanId]);
+    return sample ? replaySample(push) : subscribe(scanId, push);
+  }, [scanId, run]);
+
+  // Who's watching, and a failure from before this page opened (with whether its video is still kept).
+  useEffect(() => {
+    if (sample) return;
+    void getScan(scanId)
+      .then((s) => {
+        setCanEdit(Boolean(s.canEdit));
+        setDemo(Boolean(s.demo));
+        if (s.status === "error" && s.error) setFailure({ text: s.error, retry: Boolean(s.failure?.retry) });
+      })
+      .catch(() => {});
+  }, [scanId, run]);
 
   const detections = useMemo(
     () => events.flatMap((e) => (e.type === "find" ? e.data?.detections ?? [] : [])),
     [events],
   );
   const done = events.some((e) => e.type === "done");
+  const failed = !done && failure !== null;
   const lastStage = [...events].reverse().find((e) => e.type === "stage")?.text ?? "prepare";
   // Measuring is under way once the 3D starts and the finds are in, until its sizes arrive. The rules
   // check starts alongside it, so it only shows once the measuring is done.
@@ -189,15 +221,32 @@ export function LiveScan({ scanId, onDone }: Props) {
     return [...byN.values()].sort((a, b) => a.n - b.n);
   }, [events]);
 
-  // Time left, from the scan's own progress.
+  // Time left, from the scan's own progress. It stops when the scan does.
   const [, tick] = useState(0);
   useEffect(() => {
-    if (done) return;
+    if (done || failed) return;
     const id = window.setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
-  }, [done]);
-  const scanNow = (events.at(-1)?.at ?? 0) + (Date.now() - heardAt.current) / 1000;
-  const leftText = done ? "Done" : events.length ? leftWords(secondsLeft(events, scanNow)) : "Starting…";
+  }, [done, failed]);
+  const quiet = (Date.now() - heardAt.current) / 1000;
+  const scanNow = (events.at(-1)?.at ?? 0) + quiet;
+  const wait = done || failed || sample ? "ok" : waitState(quiet, scanNow);
+  const leftText = done ? "Done" : failed ? "Stopped" : wait !== "ok" ? "Taking longer than usual" : events.length ? leftWords(secondsLeft(events, scanNow)) : "Starting…";
+
+  const tryAgain = async () => {
+    setRetrying(true);
+    setRetryNote(null);
+    try {
+      const r = await retryScan(scanId);
+      if (r.status === "done") return onDone();
+      if (r.waiting) setRetryNote("It's still in line: it starts as soon as a worker is free. You can leave this page and come back to this link.");
+      else setRun((n) => n + 1);
+    } catch (err) {
+      setRetryNote(err instanceof Error ? err.message : "That didn't start. Try again in a moment.");
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   // The questions, one at a time, each once. The server says what's still worth asking (it already
   // knows the start sheet's answers); answers go to it now and apply when the scan finishes.
@@ -209,7 +258,12 @@ export function LiveScan({ scanId, onDone }: Props) {
     setAnswered([]);
     waitAsks(scanId).then(setAsks).catch(() => setAsks([]));
   }, [scanId]);
-  const pending = (asks ?? []).filter((a) => !answered.includes(a.id));
+  // The answer has landed: ask again, so anything the video settled is dropped before it's asked.
+  useEffect(() => {
+    if (!done || sample) return;
+    void waitAsks(scanId).then(setAsks).catch(() => {});
+  }, [done, scanId]);
+  const pending = canEdit && !failed ? (asks ?? []).filter((a) => !answered.includes(a.id)) : [];
   const ask = pending[0] ?? null;
   const pick = async (a: WaitAsk, value: WaitAsk["options"][number]["value"]) => {
     setAnswered((prev) => [...prev, a.id]);
@@ -220,7 +274,7 @@ export function LiveScan({ scanId, onDone }: Props) {
 
   // Ready and nothing left to ask: open the answer on its own after a moment.
   useEffect(() => {
-    if (!done || ask || asks === null) return;
+    if (!done || ask || (asks === null && canEdit)) return;
     const id = window.setTimeout(onDone, 2500);
     return () => clearTimeout(id);
   }, [done, ask, asks]);
@@ -306,7 +360,7 @@ export function LiveScan({ scanId, onDone }: Props) {
       <canvas ref={canvasRef} aria-hidden />
       {!done && <div className="live-sweep" aria-hidden />}
       <p className="live-caption" aria-live="polite">
-        {error ? error : found.length ? `Found ${found.slice(0, 3).join(", ")}${found.length > 3 ? ` and ${found.length - 3} more` : ""}` : (lastLog?.text ?? "Looking through your video…")}
+        {found.length ? `Found ${found.slice(0, 3).join(", ")}${found.length > 3 ? ` and ${found.length - 3} more` : ""}` : (lastLog?.text ?? "Looking through your video…")}
       </p>
     </div>
   );
@@ -315,8 +369,18 @@ export function LiveScan({ scanId, onDone }: Props) {
     <main className="live">
       <header className="live-top">
         <Logo />
-        <span className="live-left mono">{leftText}</span>
+        <span className="live-left mono" data-state={failed ? "failed" : wait}>{leftText}</span>
       </header>
+      {sample && (
+        <p className="example-label" role="note">
+          <span className="tag-mono">Example</span> {EXAMPLE_LABEL}
+        </p>
+      )}
+      {demo && (
+        <p className="example-label" role="note">
+          <span className="tag-mono">Demo house</span> {DEMO_LABEL}
+        </p>
+      )}
       <ol className="live-stages" aria-label="Scan progress">
         {STAGES.map((st, i) => (
           <li key={st.id} data-state={i < stageIndex ? "done" : i === stageIndex ? "active" : "todo"}>
@@ -345,7 +409,38 @@ export function LiveScan({ scanId, onDone }: Props) {
         </div>
 
         <aside className="live-side" aria-live="polite">
-          {done && !ask && asks !== null ? (
+          {wait !== "ok" && !failed && (
+            <div className="live-slow" role="status">
+              <p>
+                <b>{wait === "stalled" ? "This has stopped moving." : "Taking longer than usual."}</b>{" "}
+                {wait === "stalled" ? "Your video is saved, so it can run again." : "Your video is saved and we're still on it. You can leave and come back to this link."}
+              </p>
+              {wait === "stalled" && canEdit && (
+                <button className="btn btn-ghost" disabled={retrying} onClick={() => void tryAgain()}>
+                  {retrying ? "Starting…" : "Try again"}
+                </button>
+              )}
+              {retryNote && <p className="muted">{retryNote}</p>}
+            </div>
+          )}
+          {failed ? (
+            <div className="live-failed" role="alert">
+              <h2>We couldn't finish this scan</h2>
+              <p>{failure.text}</p>
+              <div className="live-failed-actions">
+                {failure.retry && canEdit && (
+                  <button className="btn btn-primary" disabled={retrying} onClick={() => void tryAgain()}>
+                    {retrying ? "Starting…" : "Try again"} <span className="arrow" aria-hidden>→</span>
+                  </button>
+                )}
+                <a className={failure.retry && canEdit ? "link-quiet" : "btn btn-primary"} href="/scans/sample">
+                  See the example
+                </a>
+                <a className="link-quiet" href="/">Film again</a>
+              </div>
+              {retryNote && <p className="muted">{retryNote}</p>}
+            </div>
+          ) : done && !ask && (asks !== null || !canEdit) ? (
             <div className="live-ready">
               <h2>Your answer is ready</h2>
               <button className="btn btn-primary" onClick={onDone}>
@@ -355,7 +450,7 @@ export function LiveScan({ scanId, onDone }: Props) {
           ) : ask ? (
             <div className="live-ask" key={ask.id}>
               <span className="mono">
-                {answered.length + 1} of {answered.length + pending.length} · while we check
+                {answered.length + 1} of {answered.length + pending.length} · while we check{sample ? " · you're answering for the example household" : ""}
               </span>
               <h2>{ask.question}</h2>
               <svg viewBox="0 0 120 80" className="live-ask-pic" aria-hidden>
@@ -390,8 +485,9 @@ export function LiveScan({ scanId, onDone }: Props) {
             </div>
           ) : (
             <div className="live-ready">
-              <h2>{asks === null ? "Getting your questions…" : "Thanks. Almost there."}</h2>
+              <h2>{!canEdit ? "Checking this basement…" : asks === null ? "Getting your questions…" : "Thanks. Almost there."}</h2>
               <p className="muted">{lastLog?.text ?? "Checking your basement against the rules."}</p>
+              {!canEdit && <p className="muted">Only the person who filmed it answers its questions. This page shows the answer when it's ready.</p>}
             </div>
           )}
 

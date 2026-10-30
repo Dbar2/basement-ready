@@ -2,6 +2,7 @@
 // permit package and the filled forms, the materials list, the one-click applications, and the
 // "Try this look" photos. The sample basement gets stateless versions: nothing it sends is saved.
 // Anything with the owner's names, phone or email needs the owner (Clerk) or this browser's claim token.
+// The sample and the demo house can't send anything: their applications come back flagged `example`.
 import { existsSync, readFileSync } from "node:fs";
 import type { Context, Hono } from "hono";
 import { applications, type ApplyInput } from "./apply/applications";
@@ -14,11 +15,24 @@ import { buildPermitPackage, formPlace, formValues, localDate } from "./permit/p
 import { basementGeometry } from "./permit/plans";
 import { scopeOfWork } from "./permit/sheets";
 import { lookupSiteGeometry, type Property, type SiteGeometry } from "./property";
+import { overSpend } from "./limits";
 import { keys, storage } from "./storage";
 import { basementFor, cleanPatch, loadWorkspace, parseClaims, profileFromOtherBasements, saveWorkspace, StateSchema, ProfileSchema, type Profile, type StoredState } from "./workspace";
 
 const UUID = /^[0-9a-f-]{36}$/;
 const SAMPLE = "public/samples/sample";
+// The sample's looks are committed with it, so it runs with no keys (scripts/sample-looks.ts makes them).
+export const sampleLookFile = (style: string, n: number) => `${SAMPLE}/looks/${style}/${n}.jpg`;
+// Each committed look as it was made, with what SAM's check found.
+function committedLook(style: string): any | null {
+  const file = `${SAMPLE}/looks/looks.json`;
+  if (!existsSync(file)) return null;
+  const look = JSON.parse(readFileSync(file, "utf8"))[style];
+  return look?.items?.every((it: { n: number }) => existsSync(sampleLookFile(style, it.n))) ? look : null;
+}
+const OVER_SPEND = "Today's limit for new photos is used up. They come back at midnight, Eastern time.";
+// A look still pending after this was cut off by a restart: it's offered again.
+const LOOK_STALE_MS = 3 * 60 * 1000;
 
 const siteCache = new Map<string, SiteGeometry | null>();
 async function siteFor(property: Property | null): Promise<SiteGeometry | null> {
@@ -58,7 +72,8 @@ async function favouriteImages(scanId: string, state: StoredState) {
   const out: { title: string; jpeg: Buffer }[] = [];
   for (const f of state.ideas?.favourites ?? []) {
     let jpeg: Buffer | null = null;
-    if (f.source === "look" && f.style) jpeg = await read(lookKey(scanId, f.style, f.n));
+    if (f.source === "look" && f.style && scanId === "sample") jpeg = existsSync(sampleLookFile(f.style, f.n)) ? readFileSync(sampleLookFile(f.style, f.n)) : await read(lookKey(scanId, f.style, f.n));
+    else if (f.source === "look" && f.style) jpeg = await read(lookKey(scanId, f.style, f.n));
     else if (scanId === "sample") jpeg = existsSync(`${SAMPLE}/concepts/${f.n}.jpg`) ? readFileSync(`${SAMPLE}/concepts/${f.n}.jpg`) : null;
     else jpeg = await read(keys.concept(scanId, f.n));
     if (jpeg) out.push({ title: f.title, jpeg });
@@ -104,6 +119,19 @@ function sampleBody(body: any): { profile: Profile | null; state: StoredState; g
 
 const lookRuns = new Set<string>();
 
+// Looks left pending by a restart (the render ran in a process that's gone) read as failed, so the
+// Ideas tab offers them again instead of waiting for ever.
+function settledLooks(scanId: string, looks: StoredState["looks"]) {
+  const out: NonNullable<StoredState["looks"]> = {};
+  for (const [style, look] of Object.entries(looks ?? {})) {
+    const stale = look.status === "pending" && !lookRuns.has(`${scanId}:${style}`) && Date.now() - Date.parse(look.at || "0") > LOOK_STALE_MS;
+    out[style] = stale ? { ...look, status: "failed" } : look;
+  }
+  return out;
+}
+
+const asExample = <T extends object>(apps: T[]) => apps.map((a) => ({ ...a, example: true }));
+
 export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<string | null>) {
   async function access(c: Context) {
     const id = c.req.param("id") ?? "";
@@ -120,6 +148,11 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     if (!a) return c.json({ error: "Not found" }, 404);
     if (!a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
     const w = await loadWorkspace(a.basement.id);
+    const looks = settledLooks(a.id, w.state.looks);
+    if (JSON.stringify(looks) !== JSON.stringify(w.state.looks ?? {})) {
+      w.state = { ...w.state, looks };
+      await saveWorkspace(a.basement.id, { state: { looks } });
+    }
     const site = await siteFor(a.basement.property as Property | null);
     return c.json({
       ...w,
@@ -209,7 +242,9 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const a = await access(c);
     if (!a?.result) return c.json({ error: "Not found" }, 404);
     if (!a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
-    return c.json({ applications: applications(await applyInput(a, await loadWorkspace(a.basement.id))) });
+    const apps = applications(await applyInput(a, await loadWorkspace(a.basement.id)));
+    // The demo house isn't a real house: nothing it makes may reach a real inbox.
+    return c.json({ applications: a.result?.demo ? asExample(apps) : apps });
   });
 
   app.get("/api/scans/:id/apply/:program", async (c) => {
@@ -233,8 +268,11 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const style = String((await c.req.json().catch(() => ({}))).style ?? "");
     if (!STYLES[style]) return c.json({ error: "Pick a look." }, 400);
     const w = await loadWorkspace(a.basement.id);
-    if (w.state.looks?.[style]?.status === "done" || lookRuns.has(`${a.id}:${style}`)) return c.json({ look: w.state.looks?.[style] ?? { style, status: "pending", items: [], at: new Date().toISOString() } });
-    if (Object.keys(w.state.looks ?? {}).length >= Object.keys(STYLES).length) return c.json({ error: "That's every look." }, 429);
+    const looks = settledLooks(a.id, w.state.looks);
+    if (looks[style]?.status === "done" || lookRuns.has(`${a.id}:${style}`)) return c.json({ look: looks[style] ?? { style, status: "pending", items: [], at: new Date().toISOString() } });
+    // A look still pending elsewhere waits; one that failed or was cut off can be tried again.
+    if (looks[style]?.status === "pending") return c.json({ look: looks[style] });
+    if (await overSpend()) return c.json({ error: OVER_SPEND }, 503);
     const frames = new Map<number, Buffer>();
     for (const it of a.result.concepts?.items ?? []) {
       const f = await read(keys.frame(a.id, it.frame));
@@ -243,7 +281,7 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const sources = sourcesFrom(a.result, frames);
     if (!sources.length) return c.json({ error: "There are no photos to restyle yet." }, 409);
     const pending = { style, status: "pending" as const, items: [], at: new Date().toISOString() };
-    await saveWorkspace(a.basement.id, { state: { looks: { ...(w.state.looks ?? {}), [style]: pending } } });
+    await saveWorkspace(a.basement.id, { state: { looks: { ...looks, [style]: pending } } });
     lookRuns.add(`${a.id}:${style}`);
     void renderLook(a.id, style, sources)
       .then(async (look) => {
@@ -259,7 +297,8 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const style = c.req.param("style");
     const n = Number.parseInt(c.req.param("file"), 10);
     if ((!UUID.test(id) && id !== "sample") || !STYLES[style] || !Number.isInteger(n) || n < 1 || n > 8) return c.json({ error: "Not found" }, 404);
-    const body = await read(lookKey(id, style, n));
+    const committed = id === "sample" && existsSync(sampleLookFile(style, n)) ? readFileSync(sampleLookFile(style, n)) : null;
+    const body = committed ?? (await read(lookKey(id, style, n)));
     if (!body) return c.json({ error: "Not found" }, 404);
     return new Response(new Uint8Array(body), { headers: { "Content-Type": body[0] === 0x89 ? "image/png" : "image/jpeg", "Cache-Control": "private, max-age=86400" } });
   });
@@ -285,7 +324,7 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     return { scanId: "sample", result, profile: b.profile, state: b.state, address: "The sample basement", municipality: "Waterloo", site: null, areaM2, bedrooms, scope };
   }
 
-  app.post("/api/sample/apply", async (c) => c.json({ applications: applications(sampleApplyInput(sampleBody(await c.req.json().catch(() => ({}))))) }));
+  app.post("/api/sample/apply", async (c) => c.json({ applications: asExample(applications(sampleApplyInput(sampleBody(await c.req.json().catch(() => ({})))))) }));
 
   app.post("/api/sample/apply/:program", async (c) => {
     if (c.req.param("program").replace(/\.pdf$/, "") !== "region_ontario_renovates_secondary_suites") return c.json({ error: "Not found" }, 404);
@@ -300,11 +339,14 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
   app.post("/api/sample/looks", async (c) => {
     const style = String((await c.req.json().catch(() => ({}))).style ?? "");
     if (!STYLES[style]) return c.json({ error: "Pick a look." }, 400);
+    const committed = committedLook(style);
+    if (committed) return c.json({ look: committed });
     const result = sampleResult();
     const items = (result.concepts?.items ?? []) as { n: number; frame: number; title: string }[];
-    const ready = (await Promise.all(items.map(async (it) => ((await storage.get(lookKey("sample", style, it.n))) ? it : null)))).filter(Boolean);
+    const ready = (await Promise.all(items.map(async (it) => (existsSync(sampleLookFile(style, it.n)) || (await storage.get(lookKey("sample", style, it.n))) ? it : null)))).filter(Boolean);
     if (ready.length === items.length && items.length) return c.json({ look: { style, status: "done", items: items.map((it) => ({ ...it, kept: true, checked: "Room shape kept" })), at: "" } });
     if (!process.env.MODEL_API_KEY && !process.env.RELAY_TOKEN) return c.json({ error: "Looks need the Muse Image key on this server." }, 503);
+    if (await overSpend()) return c.json({ error: OVER_SPEND }, 503);
     const frames = new Map<number, Buffer>();
     for (const it of items) {
       const file = `${SAMPLE}/frames/${String(it.frame).padStart(4, "0")}.jpg`;
