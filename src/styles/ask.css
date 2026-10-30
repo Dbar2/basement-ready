@@ -1,0 +1,71 @@
+/* Ask once: the start sheet's one question, and the wait screen's basement assembling, its questions
+   and its photos as they land. Colours come from brand/tokens.css. Selectors are a step more specific
+   than global.css's, since the two load in either order. */
+
+/* ---------- start sheet: who it's for, with the rent folded in ---------- */
+.who-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.who-option { display: flex; align-items: center; min-height: 52px; padding: 10px 14px; border-radius: var(--radius-1); text-align: left; line-height: 1.25; }
+@media (max-width: 720px) {
+  .sheet .who-options { grid-template-columns: 1fr; gap: 6px; }
+  .sheet .who-options .who-option { min-height: 46px; padding: 10px 14px; border-radius: var(--radius-1); font-size: 15px; }
+}
+
+/* ---------- wait screen: the basement and the video, one big and one inset ---------- */
+/* As tall as the screen allows, so the whole tile (and its caption) is in view beside the questions. */
+.live-stage > .live-main { position: relative; align-self: start; height: clamp(360px, calc(100dvh - 190px), 760px); border-radius: 6px; }
+.live-main > .live-tile { position: absolute; inset: 0; min-height: 0; width: auto; height: auto; overflow: hidden; border-radius: 6px; background: var(--color-ink); }
+.live-main > .live-tile[data-role="inset"] {
+  inset: auto 12px 12px auto;
+  z-index: 2;
+  width: min(34%, 300px);
+  aspect-ratio: 16 / 10;
+  border: 2px solid var(--color-card);
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+  animation: rise var(--dur-3) var(--ease-out) both;
+}
+.live-main > .live-tile[data-role="inset"] .live-caption,
+.live-main > .live-tile[data-role="inset"] .live-sweep { display: none; }
+.live-main > .live-tile[data-role="inset"]::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--color-card);
+  color: var(--color-ink);
+  font: 600 11px/1.4 var(--font-mono);
+}
+.live-main > .live-model { animation: rise var(--dur-3) var(--ease-out) both; }
+.live-model .assemble-canvas { position: absolute !important; inset: 0; }
+.live-model .live-model-caption,
+.live-main[data-3d="true"] > .live-video[data-role="main"] .live-caption { right: auto; max-width: calc(100% - min(34%, 300px) - 44px); }
+
+/* ---------- wait screen: the question ---------- */
+.live-ask-words { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.live-ask-words .input { padding: 12px 14px; }
+.live-ask-words .btn { padding: 12px 18px; font-size: 15px; }
+.live-ask-words .btn:disabled { opacity: 0.45; box-shadow: none; transform: none; cursor: default; }
+.live-ask-decides { margin: 0; font-size: 12px; color: var(--color-ink-muted); }
+
+/* ---------- wait screen: the photos as they land ---------- */
+.live-photos { display: grid; gap: 10px; margin-top: 16px; }
+.live-photos h3 { margin: 0; font-size: 15px; }
+.live-photos ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.live-photos li { position: relative; display: grid; gap: 4px; font-size: 13px; animation: rise var(--dur-3) var(--ease-out) both; }
+.live-photos img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 6px; background: var(--color-surface); }
+.live-photo-label { position: absolute; top: 6px; left: 6px; padding: 2px 6px; border-radius: 4px; background: var(--color-card); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; }
+
+@media (max-width: 900px) {
+  .live-stage > .live-main { height: 42dvh; min-height: 0; }
+  .live-main > .live-tile[data-role="inset"] { width: 38%; inset: auto 8px 8px auto; }
+  .live-model .live-model-caption,
+  .live-main[data-3d="true"] > .live-video[data-role="main"] .live-caption { max-width: calc(62% - 28px); font-size: 13px; padding: 8px 10px; }
+  .live-photos ul { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .live-photos li { flex: 0 0 58%; scroll-snap-align: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-main > .live-tile, .live-photos li { animation: none; transition: none; }
+}
