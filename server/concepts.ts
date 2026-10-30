@@ -30,6 +30,9 @@ type FramePick = { frame: number; title: string; space: string };
 export type FrameView = { depthM: number; tilt: number; area: number };
 
 export const MAX_PHOTOS = 4;
+// Picks from a video sit this many frames apart (5 s), so no two photos show the same view. A photo
+// take's photos are each their own view already: any of them may be picked.
+export const PICK_GAP = 25;
 const LEVEL = 0.35; // |forward.y| under this: a normal photo, not the ceiling or the floor
 const WIDE_S = 1.5; // the still wide shot: frames this close to it
 
@@ -46,9 +49,10 @@ export function pickFrames(
   views: Map<number, FrameView> | null = null,
   wideAt: number | null = null, // seconds: when they held still in a corner for a wide shot
   spaces: PhotoSpaces = photoSpaces(null, household as Household),
+  gap = PICK_GAP, // 1 for a photo take
 ): FramePick[] {
   const picks: FramePick[] = [];
-  const far = (f: number) => picks.every((p) => Math.abs(p.frame - f) >= 25);
+  const far = (f: number) => picks.every((p) => Math.abs(p.frame - f) >= gap);
   const widest = (frames: number[]) =>
     frames.filter((f) => far(f) && (views?.get(f)?.tilt ?? 1) < LEVEL).sort((a, b) => views!.get(b)!.depthM - views!.get(a)!.depthM)[0];
   for (const w of vision?.rooms ?? []) {
@@ -105,10 +109,19 @@ export function pickFrames(
             .find((f) => !busy.has(f) && far(f));
     // Else several things in view, none of them filling the frame, in the main room first.
     const wide = [...kinds.entries()]
-      .filter(([f]) => !busy.has(f) && far(f) && (still == null || Math.abs(f - still) >= 25))
+      .filter(([f]) => !busy.has(f) && far(f) && (still == null || Math.abs(f - still) >= gap))
       .sort((a, b) => Number(inMain(b[0])) - Number(inMain(a[0])) || b[1].size - a[1].size)[0];
     if (still != null) picks.push({ frame: still, ...spaces.living });
     if (wide) picks.push(still != null ? { frame: wide[0], title: "Another angle", space: spaces.living.space } : { frame: wide[0], ...spaces.living });
+    // A photo take's photos are each a view, found things in them or not, and they come room by room:
+    // the open photo furthest from the picks so far (the later one, on a tie) is most likely another room.
+    if (gap < PICK_GAP && picks.length < MAX_PHOTOS) {
+      const away = (f: number) => Math.min(...picks.map((p) => Math.abs(p.frame - f)));
+      const other = Array.from({ length: frameCount }, (_, f) => f)
+        .filter((f) => !busy.has(f) && far(f))
+        .sort((a, b) => (picks.length ? away(b) - away(a) : 0) || Number(inMain(b)) - Number(inMain(a)) || b - a)[0];
+      if (other != null) picks.push(picks.length ? { frame: other, title: "Another angle", space: spaces.living.space } : { frame: other, ...spaces.living });
+    }
   }
   return picks.slice(0, MAX_PHOTOS);
 }
@@ -281,6 +294,7 @@ export type PhotoInputs = {
   mainRoom: { startS: number; endS: number } | null;
   wideAt: number | null;
   plans: string | null;
+  photoTake?: boolean; // the take was photos, not a video
 };
 
 const anchorsIn = (detections: Detection[]) => (frame: number): Anchor[] =>
@@ -298,6 +312,7 @@ export async function renderConcepts(scanId: string, result: any, landed: PhotoW
     mainRoom: (result.rooms ?? []).find((r: { index: number }) => r.index === result.mainRoom) ?? null,
     wideAt: result.capture?.wideAt ?? null,
     plans: result.plans ?? null,
+    photoTake: Boolean(result.capture?.photos),
   };
   return renderFrom(scanId, inputs, realWork(scanId, landed));
 }
@@ -305,6 +320,6 @@ export async function renderConcepts(scanId: string, result: any, landed: PhotoW
 export async function renderFrom(scanId: string, f: PhotoInputs, work: PhotoWork) {
   const views = await frameViews(scanId, f.rooms).catch(() => null);
   const spaces = photoSpaces(f.plans, f.household);
-  const picks = pickFrames(f.detections, f.vision, f.household, f.frameCount, f.mainRoom, views, f.wideAt, spaces);
+  const picks = pickFrames(f.detections, f.vision, f.household, f.frameCount, f.mainRoom, views, f.wideAt, spaces, f.photoTake ? 1 : PICK_GAP);
   return renderPicks(picks, anchorsIn(f.detections), (space) => conceptPrompt(space, f.vision?.style ?? "", spaces.note), work);
 }
