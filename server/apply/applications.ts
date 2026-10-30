@@ -3,6 +3,7 @@
 // email to the right address with what to attach, or the online form's answers laid out to copy.
 // The documents checklist ticks off what the workspace already holds. Nothing here re-asks a
 // question: rent, who lives there and the rest come from the answers already given.
+import { DEMO_ADDRESS } from "../permit/data";
 import type { Profile, StoredState } from "../workspace";
 
 export type Doc = { label: string; have: boolean; how: string };
@@ -31,7 +32,7 @@ export type ApplyInput = {
   state: StoredState;
   address: string;
   municipality: string; // city name
-  site: { legalDescription: string | null; pin: string | null } | null;
+  site: unknown; // the lot and house shapes; no legal description, since no open parcel data has one
   areaM2: number | null;
   bedrooms: 0 | 1;
   scope: string;
@@ -63,19 +64,21 @@ export function holdingsOf(input: ApplyInput) {
   const pros = input.state.build?.pros ?? [];
   return {
     profile: Boolean(input.profile?.owners.length && input.profile.email),
-    legal: Boolean(input.profile?.legalDescription || input.site?.legalDescription),
+    legal: Boolean(input.profile?.legalDescription),
     drawings: Boolean(input.result?.plan),
     quotesWsib: pros.filter((p) => p.quoteCAD != null && p.wsib === true).length,
     quotes: pros.filter((p) => p.quoteCAD != null).length,
   };
 }
 
-export function applications(input: ApplyInput): Application[] {
+export function applications(given: ApplyInput): Application[] {
+  // The demo house has no address: its papers say so instead of printing a blank.
+  const input = given.result?.demo ? { ...given, address: DEMO_ADDRESS } : given;
   const r = input.result;
   const a = answers(r);
   const has = holdingsOf(input);
   const who = names(input.profile);
-  const legal = input.profile?.legalDescription || input.site?.legalDescription || null;
+  const legal = input.profile?.legalDescription || null;
   const pkg = `/api/scans/${input.scanId}/permit.pdf`;
   const out: Application[] = [];
   const live = (r?.grants ?? []).filter((g: any) => g.qualify !== "no" && !["cancelled", "closed"].includes(g.status));

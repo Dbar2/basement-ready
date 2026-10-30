@@ -59,13 +59,13 @@ final class MultipartTests: XCTestCase {
   func testScanBodyFieldsAndOrder() throws {
     let form = ScanUpload.body(for: try take(depth: true, wideAt: 81.24), answers: StartAnswers(address: address, who: .affordable), boundary: "Z")
     let parts = try MultipartParser.parse(try form.data(), boundary: "Z")
-    XCTAssertEqual(parts.map(\.name), ["household", "address", "addressMunicipality", "municipality", "rent", "lens", "wideAt", "capture", "depth", "video"])
+    XCTAssertEqual(parts.map(\.name), ["household", "who", "address", "addressMunicipality", "municipality", "lens", "wideAt", "capture", "depth", "video"])
     let byName = Dictionary(uniqueKeysWithValues: parts.map { ($0.name, $0) })
     XCTAssertEqual(byName["household"]?.text, "renter")
+    XCTAssertEqual(byName["who"]?.text, "rental_capped")
     XCTAssertEqual(byName["address"]?.text, "295 LESTER ST")
     XCTAssertEqual(byName["addressMunicipality"]?.text, "Waterloo")
     XCTAssertEqual(byName["municipality"]?.text, "waterloo-on")
-    XCTAssertEqual(byName["rent"]?.text, "1200")
     XCTAssertEqual(byName["lens"]?.text, "wide")
     XCTAssertEqual(byName["wideAt"]?.text, "81.2")
     XCTAssertEqual(byName["capture"]?.filename, "capture.json")
@@ -85,11 +85,11 @@ final class MultipartTests: XCTestCase {
   func testNoAddressNoDepthFamily() throws {
     let form = ScanUpload.body(for: try take(depth: false, wideAt: nil), answers: StartAnswers(address: nil, who: .family), boundary: "Z")
     let parts = try MultipartParser.parse(try form.data(), boundary: "Z")
-    XCTAssertEqual(parts.map(\.name), ["household", "address", "municipality", "rent", "lens", "capture", "video"])
+    XCTAssertEqual(parts.map(\.name), ["household", "who", "address", "municipality", "lens", "capture", "video"])
     XCTAssertEqual(parts.first { $0.name == "household" }?.text, "relative")
+    XCTAssertEqual(parts.first { $0.name == "who" }?.text, "family")
     XCTAssertEqual(parts.first { $0.name == "address" }?.text, "")
     XCTAssertEqual(parts.first { $0.name == "municipality" }?.text, "other-on")
-    XCTAssertEqual(parts.first { $0.name == "rent" }?.text, "none")
   }
 
   func testWhoForMapsToTheServersAnswers() {
@@ -97,10 +97,11 @@ final class MultipartTests: XCTestCase {
     XCTAssertEqual(WhoFor.affordable.household, "renter")
     XCTAssertEqual(WhoFor.market.household, "renter")
     XCTAssertEqual(WhoFor.unsure.household, "unsure")
-    XCTAssertEqual(WhoFor.market.rent?.formValue, "market")
-    XCTAssertNil(WhoFor.unsure.rent)
-    let unsure = StartAnswers(address: nil, who: .unsure).formFields.map(\.0)
-    XCTAssertFalse(unsure.contains("rent"))
+    // server/eligibility.ts WHO_IDS: the server saves the city's own rent answer from these.
+    XCTAssertEqual(WhoFor.allCases.map(\.server), ["family", "rental_capped", "rental_market", "unsure"])
+    let fields = StartAnswers(address: nil, who: .affordable).formFields.map(\.0)
+    XCTAssertTrue(fields.contains("who"))
+    XCTAssertFalse(fields.contains("rent"))
   }
 
   func testServerAddressParsing() {

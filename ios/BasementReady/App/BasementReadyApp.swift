@@ -73,7 +73,7 @@ struct RootView: View {
     Group {
       switch app.stage {
       case .start:
-        StartView { answers in app.film(answers) }.preferredColorScheme(.light)
+        StartView(onStart: { answers in app.film(answers) }, onOpenLast: { scan in app.stage = .result(scan) }).preferredColorScheme(.light)
       case .filming(let answers, let server):
         FilmingView(server: server, onDone: { take, note in app.filmed(take, answers: answers, note: note) }, onCancel: { app.stage = .start })
       case .review(let take, let answers, let note):

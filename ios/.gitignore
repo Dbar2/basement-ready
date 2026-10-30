@@ -6,3 +6,5 @@ build/
 DerivedData/
 xcuserdata/
 *.xcresult
+# Your own signing team (see README.md)
+Signing.local.xcconfig

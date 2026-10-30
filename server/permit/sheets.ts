@@ -2,7 +2,7 @@
 // existing and proposed floor plans, a cross-section, the escape-window detail, the general notes,
 // and the work that needs a licensed pro. Each returns the notes it printed, so tests can check them.
 import type { PDFDocument, PDFImage } from "pdf-lib";
-import type { SiteGeometry } from "../property";
+import { AERIAL_YEAR, type SiteGeometry } from "../property";
 import type { Profile, StoredState } from "../workspace";
 import type { CityPermit, Note, OntarioDiy } from "./data";
 import { area, both, FAINT, fitScale, frame, INK, TONE, mmBoth, MUTED, PAPER, type Project, ptPerMetre, Sheet, SITE_SCALES, TABLOID, TONE2, type Fonts } from "./pdf";
@@ -62,6 +62,9 @@ export function scopeOfWork(ctx: SheetCtx) {
 
 // ---- A0 Cover --------------------------------------------------------------------------------
 
+// On the cover and every sheet's title block: these are drawn from a phone video.
+export const DRAFT = "Draft, for you or a BCIN designer to check before you submit";
+
 export function coverSheet(ctx: SheetCtx): Printed {
   const { s, area: a } = newSheet(ctx, "A0", "Cover and key plan", null);
   const p = ctx.result?.property ?? null;
@@ -69,6 +72,9 @@ export function coverSheet(ctx: SheetCtx): Printed {
   s.text("Additional residential unit in the basement", a.x + 10, y, { size: 22, font: s.fonts.bold });
   y -= 22;
   s.text(`${ctx.project.address}, ${ctx.project.municipality}, Ontario`, a.x + 10, y, { size: 13, color: MUTED });
+  y -= 22;
+  s.rect(a.x + 6, y - 6, 430, 18, { fill: TONE2, stroke: false });
+  s.text(DRAFT, a.x + 12, y, { size: 9.5, font: s.fonts.bold });
   y -= 30;
   const colW = (a.w - 40) / 2;
   const rows: [string, string | null][] = [
@@ -76,7 +82,7 @@ export function coverSheet(ctx: SheetCtx): Printed {
     ["Applicant", owners(ctx.profile) ? `${owners(ctx.profile)} (owner)` : null],
     ["Contact", ctx.profile ? [ctx.profile.phone, ctx.profile.email].filter(Boolean).join(" · ") : null],
     ["Legal description", ctx.project.legal],
-    ["PIN / roll number", [ctx.project.pin, ctx.profile?.rollNumber ?? ctx.site?.rollNumber].filter(Boolean).join(" / ") || null],
+    ["PIN / roll number", [ctx.project.pin, ctx.profile?.rollNumber].filter(Boolean).join(" / ") || null],
     ["Zoning", p?.zone ? `${p.zone.code}${p.zone.label ? `, ${p.zone.label}` : ""}${p.zone.bylaw ? ` (${p.zone.bylaw})` : ""}` : null],
     ["Lot area", p?.lotAreaM2 ? `${p.lotAreaM2.toLocaleString("en-CA")} m² (public records)` : null],
     ["Existing house", p?.building ? `${p.building.storeys ?? "?"} storey${p.building.storeys === 1 ? "" : "s"}, footprint about ${p.building.footprintM2 ?? "?"} m²` : null],
@@ -125,12 +131,13 @@ export function coverSheet(ctx: SheetCtx): Printed {
     const cx = c.reduce((t, q) => t + q[0], 0) / c.length, cy = c.reduce((t, q) => t + q[1], 0) / c.length;
     s.text("BASEMENT UNIT IN THIS HOUSE", X(cx), Y(cy) - 3, { size: 6.5, font: s.fonts.bold, align: "center" });
     s.northArrow(kx + kw - 24, ky + kh - 28, 12);
-  } else s.wrap("Add the address to draw the lot and the house from public records.", kx + 14, ky + kh / 2, kw - 28, { size: 9, color: MUTED });
+  } else s.wrap("No open public data outlines this house. Sketch the lot and the house here from your survey or deed.", kx + 14, ky + kh / 2, kw - 28, { size: 9, color: MUTED });
   // Who drew it.
   const sy = ky - 30;
   s.text("WHO PREPARED THESE DRAWINGS", kx, sy, { size: 6.5, color: MUTED, font: s.fonts.bold });
-  s.wrap(ctx.permit?.signerNote ?? "Drawn by the owner of the house.", kx, sy - 12, kw, { size: 8.5 });
-  const notes = [scopeOfWork(ctx), ctx.permit?.signerNote ?? ""];
+  const who = ctx.permit?.signerNote ?? "A design brief, for a BCIN designer to check, finish and sign before it's submitted.";
+  s.wrap(who, kx, sy - 12, kw, { size: 8.5 });
+  const notes = [DRAFT, scopeOfWork(ctx), who];
   return { number: "A0", title: "Cover and key plan", notes };
 }
 
@@ -223,8 +230,10 @@ export function sitePlan(ctx: SheetCtx): Printed {
   // Legend and notes.
   const parking = features.filter((f) => f.kind === "parking").length;
   const lines = [
-    `Lot lines and the house outline from public GIS data (${site.sources.join("; ")}). Not a survey: distances are approximate.`,
-    features.length ? `Entrances, parking and walkway traced by the owner on the 2026 Region of Waterloo aerial photo.` : "Mark the entrance to the unit, the parking spaces and the walkway on the aerial photo in the workspace.",
+    site.parcel
+      ? `Lot lines and the house outline from public GIS data (${site.sources.join("; ")}). Not a survey: distances are approximate.`
+      : `House outline from public GIS data (${site.sources.join("; ")}). No open parcel data covers this lot: draw the lot lines and their distances from your survey or deed. Not a survey.`,
+    features.length ? `Entrances, parking and walkway traced by the owner on the Region of Waterloo's ${AERIAL_YEAR} aerial photo (open data).` : "Mark the entrance to the unit, the parking spaces and the walkway on the aerial photo in the workspace.",
     parking ? `${parking} parking area${parking === 1 ? "" : "s"} shown. Check the number of spaces your zone requires (see your result's zoning check).` : "Show the parking spaces required by zoning.",
     "Show any window wells and the escape window on the house wall when they're new (see A5).",
   ];
@@ -244,7 +253,7 @@ export function floorPlan(ctx: SheetCtx, mode: "existing" | "proposed"): Printed
   const title = mode === "existing" ? "Existing basement plan" : "Proposed basement plan";
   const { s, area: a } = newSheet(ctx, number, title, null);
   if (!ctx.geo) {
-    s.wrap("No measured plan yet. Film the basement to draw it.", a.x + 20, a.y + a.h - 40, a.w - 40, { size: 11 });
+    s.wrap("We couldn't measure this video, so there's no plan to draw here. Measure the basement with a tape, or ask your designer to.", a.x + 20, a.y + a.h - 40, a.w - 40, { size: 11 });
     return { number, title, notes: [] };
   }
   const label = drawPlan(s, a, ctx.geo, mode);
