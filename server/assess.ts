@@ -210,14 +210,38 @@ type VerdictFinding = {
   fix: Rule["fix"] | null;
 };
 
-// Pure: the verdict, the fix list and the rough cost, from the findings as they stand.
-// Used for the first answer and again every time the homeowner answers a question.
-export function verdictFrom(findings: VerdictFinding[]) {
+export type FixGroup = {
+  category: string;
+  title: string;
+  description: string;
+  ruleIds: string[];
+  evidence: string[];
+  why: string[];
+  costLow: number | null;
+  costHigh: number | null;
+  costSource: any;
+  sources: Rule["source"][];
+  priced?: boolean; // false: a fix the quote can't price yet (the design has no place for it)
+};
+
+// The design they picked, once there is one (server/priced.ts): its quote is the cost, a fix it needs
+// that the rules didn't name joins the list, and each fix's cost is the quote's own line for it.
+export type DesignPricing = {
+  name: string;
+  cost: { low: number; high: number };
+  fixes: FixGroup[];
+  lineCost: Record<string, { low: number; high: number }>;
+};
+
+// Pure: the verdict, the fix list and the cost, from the findings as they stand (and the design, when
+// there is one). Used for the first answer and again every time the homeowner answers a question, so
+// the headline, What has to change and every cost on screen count the same fixes.
+export function verdictFrom(findings: VerdictFinding[], design: DesignPricing | null = null) {
   // Zoning can't be fixed with a renovation: if it fails, this lot can't take a second unit.
   const blockers = findings.filter((f) => f.status === "likely_fix" && f.category === "zoning");
   // One "thing to fix" per category: the egress area and egress size rules are one new window,
   // and the fire ceiling and beam boxing are one drywall job. Group cost = the largest item, not the sum.
-  const fixGroups = [...Map.groupBy(findings.filter((f) => f.status === "likely_fix" && f.category !== "zoning"), (f) => f.category)].map(
+  const ruleGroups: FixGroup[] = [...Map.groupBy(findings.filter((f) => f.status === "likely_fix" && f.category !== "zoning"), (f) => f.category)].map(
     ([category, items]) => {
       const priced = items.filter((f) => f.fix?.costLowCAD != null && f.fix?.costHighCAD != null);
       return {
@@ -234,10 +258,18 @@ export function verdictFrom(findings: VerdictFinding[]) {
       };
     },
   );
+  // With a design, its own fixes join, and every cost is the quote's.
+  const have = new Set(ruleGroups.map((g) => g.category));
+  const fixGroups = design
+    ? [...ruleGroups, ...design.fixes.filter((f) => !have.has(f.category))].map((g) => {
+        const line = design.lineCost[g.category];
+        return { ...g, costLow: line?.low ?? null, costHigh: line?.high ?? null, costSource: line ? "quote" : null, priced: g.priced ?? true };
+      })
+    : ruleGroups;
   // Standard suite work: stated and priced, but not a "fix" against this basement.
   const standard = findings
     .filter((f) => f.status === "standard")
-    .map((f) => ({ ruleId: f.ruleId, title: f.title, text: f.why ?? "", costLow: f.fix?.costLowCAD ?? null, costHigh: f.fix?.costHighCAD ?? null }));
+    .map((f) => ({ ruleId: f.ruleId, title: f.title, text: f.why ?? "", costLow: design ? null : (f.fix?.costLowCAD ?? null), costHigh: design ? null : (f.fix?.costHighCAD ?? null) }));
   const priced = fixGroups.filter((g) => g.costLow != null);
   const pricedStandard = standard.filter((s) => s.costLow != null && s.costHigh != null);
   const fixesLow = priced.reduce((s, g) => s + g.costLow!, 0);
@@ -245,14 +277,16 @@ export function verdictFrom(findings: VerdictFinding[]) {
   const standardLow = pricedStandard.reduce((s, x) => s + x.costLow!, 0);
   const standardHigh = pricedStandard.reduce((s, x) => s + x.costHigh!, 0);
   const cost = {
-    low: fixesLow + standardLow,
-    high: fixesHigh + standardHigh,
+    low: design ? design.cost.low : fixesLow + standardLow,
+    high: design ? design.cost.high : fixesHigh + standardHigh,
     fixesLow,
     fixesHigh,
     standardLow,
     standardHigh,
     pricedFixes: priced.length,
     unpricedFixes: fixGroups.length - priced.length,
+    // Where the total comes from: the quote for their design, or the rules' rough sum before there's one.
+    design: design?.name ?? null,
   };
   const n = fixGroups.length;
   const open = findings.filter((f) => f.status === "needs_answer" || f.status === "needs_measurement" || f.status === "designer_checks").length;
