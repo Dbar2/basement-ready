@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tokenCost } from "../../server/meta";
+import { readReply, tokenCost } from "../../server/meta";
 import { cleanWatch, FALLBACK_MODEL, instructions, roomNames, WATCH_MODEL, watchedNames, watchVideo, watchWords, type Take, type Watch } from "../../server/watch";
 
 const video: Take = { source: "video", durationS: 72, sound: true };
@@ -220,5 +220,18 @@ describe("pricing", () => {
     expect(watchWords(watch([{ name: "Rec room" }, { name: "Workshop", spokenName: "Mom's room" }, { name: "Closet", entered: false }]))).toBe(
       "Muse Wonder watched the whole take: 3 rooms (Rec room, Mom's room, Closet), one seen only through a doorway",
     );
+  });
+});
+
+describe("readReply", () => {
+  const message = (text: string) => ({ type: "message", content: [{ type: "output_text", text }] });
+  it("reads the whole message when a cut-off one came first", () => {
+    const r = { output: [message('{"route":"second_unit","findings":[{"ruleId":"x"'), message('{"route":"second_unit","findings":[]}')] };
+    expect(readReply(r, JSON.parse)).toEqual({ route: "second_unit", findings: [] });
+  });
+  it("still reads one answer split across messages, and throws when nothing parses", () => {
+    expect(readReply({ output: [message('{"a":'), message("1}")] }, JSON.parse)).toEqual({ a: 1 });
+    expect(readReply({ output_text: '{"b":2}' }, JSON.parse)).toEqual({ b: 2 });
+    expect(() => readReply({ output: [message("not json")] }, JSON.parse)).toThrow();
   });
 });
