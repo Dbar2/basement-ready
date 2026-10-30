@@ -17,7 +17,7 @@ import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
 import { buildPlan, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
-import { basementViewpoints, mergeSurfels, scanBasement, type BasementScan, type RoomPlacement } from "./basement";
+import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type BasementScan, type RoomPlacement } from "./basement";
 import { cameraLookup } from "./capture";
 import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
@@ -104,18 +104,23 @@ export async function storedText(key: string): Promise<string | null> {
   return Buffer.concat(parts).toString("utf8");
 }
 
-// The basement's own 3D files: every room's surface points in one frame, and where the camera stood.
+// The basement's own 3D files: every room's surface points and solid surface in one frame, and where
+// the camera stood.
 export async function saveBasement3d(scanId: string, b: BasementScan) {
   const rooms = b.scans.map((s3, i) => ({
     scan: s3.scan,
     surfels: s3.surfels,
+    mesh: s3.mesh,
+    rect: b.rects[i],
     placement: b.placements[i],
     frameNumbers: (s3.scan.frames ?? []).map((f: { sourceIndex: number }) => s3.sentFrames[f.sourceIndex]),
   }));
   const withPoints = rooms.filter((r): r is typeof r & { surfels: ArrayBuffer } => Boolean(r.surfels));
+  const withMesh = rooms.filter((r): r is typeof r & { mesh: ArrayBuffer } => Boolean(r.mesh));
   await Promise.all([
     storage.put(keys.basement3d(scanId, "scan.json"), Buffer.from(JSON.stringify(basementViewpoints(rooms))), "application/json"),
     ...(withPoints.length ? [storage.put(keys.basement3d(scanId, "surfels.bin"), mergeSurfels(withPoints), "application/octet-stream")] : []),
+    ...(withMesh.length ? [storage.put(keys.basement3d(scanId, "mesh.bin"), mergeMesh(withMesh, b.rects), "application/octet-stream")] : []),
   ]);
 }
 
@@ -156,6 +161,7 @@ export async function finishRooms(
         storage.put(keys.scan3d(scanId, "points.ply", r.index), Buffer.from(s3.ply), "application/octet-stream"),
         storage.put(keys.scan3d(scanId, "depth.bin", r.index), Buffer.from(s3.depth), "application/octet-stream"),
         ...(s3.surfels ? [storage.put(keys.scan3d(scanId, "surfels.bin", r.index), Buffer.from(s3.surfels), "application/octet-stream")] : []),
+        ...(s3.mesh ? [storage.put(keys.scan3d(scanId, "mesh.bin", r.index), Buffer.from(s3.mesh), "application/octet-stream")] : []),
       ]);
       const sizes = [
         measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,

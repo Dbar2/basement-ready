@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse, Response
 from . import MODEL_ID, MODEL_REVISION, ScanError
 from .export import read_ply
 from .floorplan import floor_plan
+from .mesh import MAX_FACES
 from .pipeline import Scanner
 
 MAX_FRAMES_IN = 900  # 3 minutes at 5 fps, the cap in server/pipeline.ts
@@ -141,8 +142,12 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
             except (TypeError, ValueError) as e:
                 raise ScanError("maxPoints must be a number") from e
             skip_depth = bool(options.get("skipDepth"))
+            try:
+                max_faces = max(20_000, min(int(options.get("maxFaces") or MAX_FACES), MAX_FACES))
+            except (TypeError, ValueError) as e:
+                raise ScanError("maxFaces must be a number") from e
             cameras = _cameras(options.get("cameras"), len(items))
-            result = await run_in_threadpool(get_scanner().scan, items, max_frames, known, max_points, skip_depth, cameras)
+            result = await run_in_threadpool(get_scanner().scan, items, max_frames, known, max_points, skip_depth, cameras, max_faces)
         except (ScanError, json.JSONDecodeError) as e:
             return error(400, str(e))
 
@@ -151,6 +156,7 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
             ("points", "points.ply", "application/octet-stream", result.points_ply),
             ("depth", "depth.bin", "application/octet-stream", result.depth_bin),
             *([("surfels", "surfels.bin", "application/octet-stream", result.surfels)] if result.surfels else []),
+            *([("mesh", "mesh.bin", "application/octet-stream", result.mesh)] if result.mesh else []),
         ])
         return Response(body, media_type=media)
 

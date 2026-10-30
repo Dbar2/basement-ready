@@ -11,6 +11,7 @@ import numpy as np
 from . import MODEL_CODE_TAG, MODEL_ID, MODEL_REVISION, ScanError
 from .export import depth_bytes, ply_bytes, surfel_bytes
 from .frames import crop_for, load_frames, model_size, select_sharpest
+from .mesh import MAX_FACES, room_mesh
 from .room import describe, fit_room
 
 FIT_VOXEL = 0.02  # m, voxel grid for plane fitting and the exported cloud (research note: 2 cm)
@@ -29,6 +30,7 @@ class ScanResult:
     points_ply: bytes
     depth_bin: bytes
     surfels: bytes = b""
+    mesh: bytes = b""
 
 
 def _cell_keys(pts: np.ndarray, voxel: float) -> np.ndarray:
@@ -173,6 +175,7 @@ class Scanner:
         max_points: int = MAX_POINTS,
         skip_depth: bool = False,
         cameras: list[dict | None] | None = None,
+        max_faces: int = MAX_FACES,
     ) -> ScanResult:
         """`cameras`: per request frame, {intrinsics: 3x3, pose: 4x4 OpenCV camera-to-world in the phone's
         gravity-aligned world (+Y up), metres} from ARKit tracking, or None where unknown."""
@@ -282,6 +285,9 @@ class Scanner:
         depth = depth_bytes(depths) if depths else b""
         surfels = b"" if skip_depth else dense_surfels(views, fit.to_room, s)
         timings["exportS"] = time.perf_counter() - t
+        t = time.perf_counter()
+        mesh = b"" if skip_depth else room_mesh(views, fit.to_room, s, max_faces)
+        timings["meshS"] = time.perf_counter() - t
         timings["totalS"] = time.perf_counter() - t0
 
         scan = {
@@ -306,6 +312,11 @@ class Scanner:
                     "count": int(len(cloud)),
                     "properties": ["x:float32", "y:float32", "z:float32", "red:uint8", "green:uint8", "blue:uint8", "frame:uint16"],
                 },
+                "mesh": {
+                    "part": "mesh",
+                    "filename": "mesh.bin",
+                    "format": "BRM1: uint32 faces x3, int16 millimetre positions x3, uint8 colours x3 (export.mesh_bytes)",
+                },
                 "depth": {
                     "part": "depth",
                     "filename": "depth.bin",
@@ -317,4 +328,4 @@ class Scanner:
             },
             "timings": {k: round(v, 2) for k, v in timings.items()},
         }
-        return ScanResult(scan, ply, depth, surfels)
+        return ScanResult(scan, ply, depth, surfels, mesh)
