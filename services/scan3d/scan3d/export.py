@@ -46,6 +46,29 @@ def read_surfels(data: bytes) -> dict:
     return {"xyz": pos, "rgb": rgb, "size": size, "frame": frame}
 
 
+MESH_MAGIC = b"BRM1"
+
+
+def mesh_bytes(verts: np.ndarray, faces: np.ndarray, rgb: np.ndarray) -> bytes:
+    """A coloured triangle mesh after a 12-byte header ("BRM1", uint32 vertex count, uint32 face count):
+    faces uint32 x3, positions int16 x3 in millimetres (room frame), colours uint8 x3."""
+    pos = np.clip(np.round(verts * 1000), -32767, 32767).astype("<i2")
+    head = MESH_MAGIC + np.array([len(verts), len(faces)], "<u4").tobytes()
+    return head + faces.astype("<u4").tobytes() + pos.tobytes() + rgb.astype("u1").tobytes()
+
+
+def read_mesh(data: bytes) -> dict:
+    assert data[:4] == MESH_MAGIC
+    nv, nf = (int(x) for x in np.frombuffer(data, "<u4", 2, 4))
+    o = 12
+    faces = np.frombuffer(data, "<u4", nf * 3, o).reshape(nf, 3)
+    o += nf * 12
+    verts = np.frombuffer(data, "<i2", nv * 3, o).reshape(nv, 3).astype(np.float32) / 1000
+    o += nv * 6
+    rgb = np.frombuffer(data, "u1", nv * 3, o).reshape(nv, 3)
+    return {"verts": verts, "faces": faces, "rgb": rgb}
+
+
 def read_ply(data: bytes) -> np.ndarray:
     end = data.index(b"end_header\n") + len(b"end_header\n")
     dt = [("x", "<f4"), ("y", "<f4"), ("z", "<f4"), ("red", "u1"), ("green", "u1"), ("blue", "u1"), ("frame", "<u2")]

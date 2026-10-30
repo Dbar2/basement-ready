@@ -1,7 +1,7 @@
-// Your basement as it really is: every surface point MapAnything measured, in its own colour, drawn
-// as a soft disc sized to the patch of wall it covers, so surfaces close up like a photo. Walk it
-// at eye height (drag to look, tap the floor to go there), jump to the spots where you filmed, or
-// step back for an overview with the ceiling lifted off.
+// Your basement as it really is: one solid surface fused from every depth map MapAnything measured,
+// in the colours the camera saw, rising from the floor up. Scans without one show their surface points
+// as soft discs instead. Walk it at eye height (drag to look, tap the floor to go there), jump to the
+// spots where you filmed, or step back for an overview with the ceiling lifted off.
 import { Html, OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -15,6 +15,7 @@ export type ScanLabel = { text: string; kind: "window" | "exit" | "stairs" | "me
 
 export type Surfels = { count: number; pos: Int16Array; color: Uint8Array; size: Uint8Array; frame: Uint16Array };
 type Viewpoint = { position: THREE.Vector3; forward: THREE.Vector3 };
+type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
 
 // "BRS1", uint32 count, positions int16 x3 (mm), colours uint8 x3, footprint uint8 (mm), frame uint16
 // (services/scan3d/scan3d/export.py surfel_bytes).
@@ -31,6 +32,97 @@ export function parseSurfels(buf: ArrayBuffer): Surfels {
   o += n;
   const frame = new Uint16Array(buf.slice(o, o + n * 2));
   return { count: n, pos, color, size, frame };
+}
+
+export type Solid = { faces: Uint32Array; pos: Int16Array; color: Uint8Array };
+
+// "BRM1", uint32 vertex count, uint32 face count, faces uint32 x3, positions int16 x3 (mm), colours
+// uint8 x3 (services/scan3d/scan3d/export.py mesh_bytes).
+export function parseMesh(buf: ArrayBuffer): Solid {
+  if (String.fromCharCode(...new Uint8Array(buf, 0, 4)) !== "BRM1") throw new Error("not a mesh file");
+  const head = new DataView(buf);
+  const nv = head.getUint32(4, true), nf = head.getUint32(8, true);
+  const faces = new Uint32Array(buf, 12, nf * 3);
+  const pos = new Int16Array(buf, 12 + nf * 12, nv * 3);
+  const color = new Uint8Array(buf, 12 + nf * 12 + nv * 6, nv * 3);
+  return { faces, pos, color };
+}
+
+const toLinear = Array.from({ length: 256 }, (_, i) => new THREE.Color().setRGB(i / 255, 0, 0, THREE.SRGBColorSpace).r);
+
+// The solid surface. The floor under each room is filled in where the camera only glanced at it,
+// in the colour the scan saw on the floor; walking, there's floor under the whole scan.
+function SolidView({ solid, ceilingY, overview, floors }: { solid: Solid; ceilingY: number; overview: boolean; floors: Box[] }) {
+  const geometry = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(solid.pos.length), col = new Float32Array(solid.color.length);
+    for (let i = 0; i < pos.length; i++) {
+      pos[i] = solid.pos[i] / 1000;
+      col[i] = toLinear[solid.color[i]];
+    }
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    g.setIndex(new THREE.BufferAttribute(solid.faces, 1));
+    g.computeVertexNormals();
+    return g;
+  }, [solid]);
+  const floorColor = useMemo(() => {
+    const ch: number[][] = [[], [], []];
+    for (let v = 0; v < solid.pos.length / 3; v += 3) {
+      if (Math.abs(solid.pos[v * 3 + 1]) > 80) continue;
+      for (let k = 0; k < 3; k++) ch[k].push(solid.color[v * 3 + k]);
+    }
+    const mid = (a: number[]) => (a.length ? a.sort((m, n) => m - n)[a.length >> 1] : 150);
+    return new THREE.Color().setRGB(mid(ch[0]) / 255, mid(ch[1]) / 255, mid(ch[2]) / 255, THREE.SRGBColorSpace);
+  }, [solid]);
+  const ground = useMemo((): Box => {
+    const xs: number[] = [], zs: number[] = [];
+    for (let v = 0; v < solid.pos.length / 3; v += 17) {
+      xs.push(solid.pos[v * 3] / 1000);
+      zs.push(solid.pos[v * 3 + 2] / 1000);
+    }
+    const pct = (a: number[], q: number) => a.sort((m, n) => m - n)[Math.floor(q * (a.length - 1))];
+    return { minX: pct(xs, 0.02), maxX: pct(xs, 0.98), minZ: pct(zs, 0.02), maxZ: pct(zs, 0.98) };
+  }, [solid]);
+  // Everything above the plane's height is cut away: it rises as the scan reveals, and drops to just
+  // under the ceiling when looking down from above.
+  const cut = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), -0.2), []);
+  const material = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, clippingPlanes: [cut], toneMapped: false }), [cut]);
+  const floorMaterial = useMemo(() => new THREE.MeshLambertMaterial({ color: floorColor, clippingPlanes: [cut], toneMapped: false }), [floorColor, cut]);
+  const { gl } = useThree();
+  const started = useRef(-1);
+  const lid = useRef(99);
+  useEffect(() => {
+    gl.localClippingEnabled = true;
+  }, [gl]);
+  useFrame(({ clock, camera }) => {
+    if (started.current < 0) started.current = clock.elapsedTime;
+    const t = Math.min(1, (clock.elapsedTime - started.current) / REVEAL_S);
+    const rising = -0.2 + (ceilingY + 0.6) * (1 - (1 - t) ** 3);
+    lid.current += ((overview && camera.position.y > ceilingY ? ceilingY - 0.1 : 99) - lid.current) * 0.1;
+    cut.constant = t < 1 ? Math.min(rising, lid.current) : lid.current;
+  });
+  useEffect(
+    () => () => {
+      geometry.dispose();
+      material.dispose();
+      floorMaterial.dispose();
+    },
+    [geometry, material, floorMaterial],
+  );
+  return (
+    <>
+      {/* Lambert divides light by π: these keep the photo's own brightness, with a little shape on top. */}
+      <ambientLight intensity={2.6} />
+      <directionalLight position={[2, 6, 3]} intensity={1.2} />
+      <mesh geometry={geometry} material={material} frustumCulled={false} />
+      {(overview ? floors : [...floors, ground]).map((b, i) => (
+        <mesh key={i} position={[(b.minX + b.maxX) / 2, i < floors.length ? -0.015 : -0.03, (b.minZ + b.maxZ) / 2]} rotation-x={-Math.PI / 2} material={floorMaterial}>
+          <planeGeometry args={[b.maxX - b.minX, b.maxZ - b.minZ]} />
+        </mesh>
+      ))}
+    </>
+  );
 }
 
 function makeMaterial(frames: number) {
@@ -221,9 +313,22 @@ function viewpoints(scan: any): Viewpoint[] {
 // `ideas`: the suggested layout's furniture and walls, placed in the scan, behind an "Ideas" toggle.
 // `labels`: what SAM found, tagged where it sits.
 // `liteUrl`: a phone-sized file; without one, phones ask the server for `?lite=1`.
-export function RealScan(props: { surfelsUrl: string; liteUrl?: string; scanUrl: string; ceilingHeightM: number | null; fallback?: ReactNode; ideas?: ReactNode; labels?: ScanLabel[] }) {
+// `meshUrl`: the solid surface; the points are only fetched when there isn't one.
+// `floors`: each room's floor box, filled in under the solid surface.
+export function RealScan(props: {
+  surfelsUrl: string;
+  liteUrl?: string;
+  meshUrl?: string;
+  floors?: Box[];
+  scanUrl: string;
+  ceilingHeightM: number | null;
+  fallback?: ReactNode;
+  ideas?: ReactNode;
+  labels?: ScanLabel[];
+}) {
   const phone = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   const [surfels, setSurfels] = useState<Surfels | null>(null);
+  const [solid, setSolid] = useState<Solid | null>(null);
   const [scan, setScan] = useState<any>(null);
   const [failed, setFailed] = useState(false);
   const [mode, setMode] = useState<"walk" | "overview">("walk");
@@ -234,34 +339,31 @@ export function RealScan(props: { surfelsUrl: string; liteUrl?: string; scanUrl:
   useEffect(() => {
     let gone = false;
     const url = !phone ? props.surfelsUrl : (props.liteUrl ?? `${props.surfelsUrl}${props.surfelsUrl.includes("?") ? "&" : "?"}lite=1`);
+    const get = (u: string) => fetch(u).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))));
+    const points = () => get(url).then((buf) => !gone && setSurfels(parseSurfels(buf)));
     Promise.all([
-      fetch(url).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status))))),
-      fetch(props.scanUrl).then((r) => (r.ok ? r.json() : null)),
-    ])
-      .then(([buf, json]) => {
-        if (gone) return;
-        setSurfels(parseSurfels(buf));
-        setScan(json);
-      })
-      .catch(() => !gone && setFailed(true));
+      props.meshUrl ? get(props.meshUrl).then((buf) => !gone && setSolid(parseMesh(buf)), points) : points(),
+      fetch(props.scanUrl).then((r) => (r.ok ? r.json() : null)).then((json) => !gone && setScan(json)),
+    ]).catch(() => !gone && setFailed(true));
     return () => {
       gone = true;
     };
-  }, [props.surfelsUrl, props.liteUrl, props.scanUrl, phone]);
+  }, [props.surfelsUrl, props.liteUrl, props.meshUrl, props.scanUrl, phone]);
 
   const spots = useMemo(() => viewpoints(scan), [scan]);
   // The overview frames where most of the basement is, not its stray far points.
   const { center, span } = useMemo(() => {
-    if (!surfels) return { center: new THREE.Vector3(), span: 8 };
+    const pos = solid?.pos ?? surfels?.pos;
+    if (!pos) return { center: new THREE.Vector3(), span: 8 };
     const xs: number[] = [], zs: number[] = [];
-    for (let i = 0; i < surfels.count; i += 53) {
-      xs.push(surfels.pos[i * 3] / 1000);
-      zs.push(surfels.pos[i * 3 + 2] / 1000);
+    for (let i = 0; i < pos.length / 3; i += 53) {
+      xs.push(pos[i * 3] / 1000);
+      zs.push(pos[i * 3 + 2] / 1000);
     }
     const pct = (a: number[], q: number) => a.sort((m, n) => m - n)[Math.floor(q * (a.length - 1))];
     const [x0, x1, z0, z1] = [pct(xs, 0.03), pct(xs, 0.97), pct(zs, 0.03), pct(zs, 0.97)];
     return { center: new THREE.Vector3((x0 + x1) / 2, 0.8, (z0 + z1) / 2), span: Math.max(4, x1 - x0, z1 - z0) };
-  }, [surfels]);
+  }, [solid, surfels]);
 
   // Start walking from the first place they filmed.
   useEffect(() => {
@@ -270,7 +372,7 @@ export function RealScan(props: { surfelsUrl: string; liteUrl?: string; scanUrl:
   const arrived = useCallback(() => setJump(null), []);
 
   if (failed) return <>{props.fallback ?? <p className="viewer-empty mono">The 3D scan isn't available for this one.</p>}</>;
-  if (!surfels) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
+  if (!solid && !surfels) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
 
   const go = (i: number) => {
     const n = (i + spots.length) % spots.length;
@@ -284,7 +386,7 @@ export function RealScan(props: { surfelsUrl: string; liteUrl?: string; scanUrl:
     <>
       <Canvas className="viewer-canvas" camera={{ fov: 70, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
         <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim() || "#0F2A1E"]} />
-        <Cloud surfels={surfels} ceilingY={ceiling} overview={mode === "overview"} />
+        {solid ? <SolidView solid={solid} ceilingY={ceiling} overview={mode === "overview"} floors={props.floors ?? []} /> : surfels && <Cloud surfels={surfels} ceilingY={ceiling} overview={mode === "overview"} />}
         {ideas && <Suspense fallback={null}>{props.ideas}</Suspense>}
         {props.labels?.map((l, i) => (
           <Html key={i} position={l.at} center zIndexRange={[10, 0]}>

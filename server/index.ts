@@ -433,10 +433,10 @@ app.get("/api/scans/:id/3d/:file", async (c) => {
   // `?room=all`: the whole basement put together (server/basement.ts).
   const all = c.req.query("room") === "all";
   const room = all ? 0 : Number(c.req.query("room") ?? 0);
-  if (!UUID.test(id) || !["scan.json", "points.ply", "surfels.bin"].includes(file) || !Number.isInteger(room) || room < 0 || room >= MAX_ROOMS || (all && file === "points.ply")) {
+  if (!UUID.test(id) || !["scan.json", "points.ply", "surfels.bin", "mesh.bin"].includes(file) || !Number.isInteger(room) || room < 0 || room >= MAX_ROOMS || (all && file === "points.ply")) {
     return c.json({ error: "Not found" }, 404);
   }
-  const key = all ? keys.basement3d(id, file as "scan.json" | "surfels.bin") : keys.scan3d(id, file as Scan3dFile, room);
+  const key = all ? keys.basement3d(id, file as "scan.json" | "surfels.bin" | "mesh.bin") : keys.scan3d(id, file as Scan3dFile, room);
   if (file === "surfels.bin" && c.req.query("lite")) {
     const body = await storage.get(key);
     if (!body) return c.json({ error: "Not found" }, 404);

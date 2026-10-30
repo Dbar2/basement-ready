@@ -8,3 +8,7 @@ python-multipart
 numpy
 pillow
 opencv-python-headless==4.10.0.84
+# The solid surface (mesh.py): marching cubes, connected pieces, and thinning for the web.
+scipy
+scikit-image
+fast-simplification

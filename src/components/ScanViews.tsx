@@ -3,7 +3,7 @@
 import { Suspense, useRef, useState } from "react";
 import type { Layout, Plan, RoomPlacement, RoomResult } from "../api";
 import { basementRooms, placeLayout, scanLabels } from "./basementPlan";
-import { BasementFloorPlan, downloadSvg, FloorPlan, type Units } from "./FloorPlan";
+import { BasementFloorPlan, downloadSvg, FloorPlan, roughArea, type Units } from "./FloorPlan";
 import { lazy3d, View3DBoundary } from "./View3D";
 
 // three.js is heavy; load the 3D view only when someone opens it.
@@ -45,8 +45,9 @@ function BasementViews(props: {
             <Suspense fallback={<p className="viewer-empty mono">Loading your basement in 3D…</p>}>
               <RealScan
                 {...(scanId === "sample"
-                  ? { surfelsUrl: "/samples/sample/3d/surfels.bin", liteUrl: "/samples/sample/3d/surfels-lite.bin", scanUrl: "/samples/sample/3d/scan.json" }
-                  : { surfelsUrl: `/api/scans/${scanId}/3d/surfels.bin?room=all`, scanUrl: `/api/scans/${scanId}/3d/scan.json?room=all` })}
+                  ? { surfelsUrl: "/samples/sample/3d/surfels.bin", liteUrl: "/samples/sample/3d/surfels-lite.bin", meshUrl: "/samples/sample/3d/mesh.bin", scanUrl: "/samples/sample/3d/scan.json" }
+                  : { surfelsUrl: `/api/scans/${scanId}/3d/surfels.bin?room=all`, meshUrl: `/api/scans/${scanId}/3d/mesh.bin?room=all`, scanUrl: `/api/scans/${scanId}/3d/scan.json?room=all` })}
+                floors={rooms.filter((r) => !roughArea(r.plan)).map((r) => r.plan.box)}
                 ceilingHeightM={ceilings.length ? Math.max(...ceilings) : null}
                 labels={scanLabels(rooms.map((r) => r.plan))}
                 ideas={
@@ -114,7 +115,7 @@ function RoomViews(props: { scanId: string; plan: Plan | null; has3d: boolean; r
   const fileUrl = (file: string, index: number) => `/api/scans/${scanId}/3d/${file}${index > 0 ? `?room=${index}` : ""}`;
   // The photo-like scan where there is one; older scans show their points.
   const viewer = (index: number, p: Plan | null) => (
-    <RealScan surfelsUrl={fileUrl("surfels.bin", index)} scanUrl={fileUrl("scan.json", index)} ceilingHeightM={p?.ceilingHeightM ?? null} fallback={
+    <RealScan surfelsUrl={fileUrl("surfels.bin", index)} meshUrl={fileUrl("mesh.bin", index)} floors={p && !roughArea(p) ? [p.box] : []} scanUrl={fileUrl("scan.json", index)} ceilingHeightM={p?.ceilingHeightM ?? null} fallback={
         <>
           <ScanViewer3D plyUrl={fileUrl("points.ply", index)} plan={p} />
           <p className="viewer-hint mono">Drag to orbit · pinch or scroll to zoom</p>

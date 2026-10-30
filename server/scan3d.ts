@@ -11,6 +11,9 @@ const TOKEN = process.env.SCAN3D_TOKEN;
 const MAX_FRAMES = Number(process.env.SCAN3D_MAX_FRAMES ?? 48);
 // Send at most this many frames; the service keeps the sharpest in each slice.
 const SEND_FRAMES = 120;
+// The whole basement's solid surface stays around 600k triangles, so a phone draws it smoothly.
+const MESH_FACES = 600_000;
+export const meshFaces = (areas: number) => Math.round(Math.min(300_000, Math.max(100_000, MESH_FACES / Math.max(1, areas))));
 
 export const scan3dEnabled = Boolean(URL_ && TOKEN);
 
@@ -19,6 +22,7 @@ export type Scan3d = {
   ply: ArrayBuffer;
   depth: ArrayBuffer;
   surfels?: ArrayBuffer; // dense surface points for the photo-like view (services/scan3d export.py)
+  mesh?: ArrayBuffer; // the solid surface, BRM1 (services/scan3d export.py mesh_bytes)
   sentFrames: number[]; // our frame index for each request position (scan.frames[i].sourceIndex → this)
 };
 
@@ -34,12 +38,12 @@ export async function scan3dReady(timeoutMs = 3000) {
 
 // One room's frames, [from, to) in our frame numbers.
 // `cameraFor`: the phone's known camera for one of our frames (server/capture.ts), when the app filmed it.
+// `maxFaces`: triangles in the solid surface; 0 for none.
 export async function runScan3d(
   work: string,
   range: { from: number; to: number },
   known: { floorToJoistsM?: number },
-  maxFrames = MAX_FRAMES,
-  cameraFor?: (n: number) => KnownCamera | null,
+  { maxFrames = MAX_FRAMES, cameraFor, maxFaces }: { maxFrames?: number; cameraFor?: (n: number) => KnownCamera | null; maxFaces?: number } = {},
 ): Promise<Scan3d> {
   const step = Math.max(1, Math.ceil((range.to - range.from) / SEND_FRAMES));
   const sentFrames: number[] = [];
@@ -49,7 +53,7 @@ export async function runScan3d(
     form.append("frames", new Blob([readFileSync(join(work, "frames", name))], { type: "image/jpeg" }), name);
     sentFrames.push(n);
   }
-  form.append("options", JSON.stringify({ maxFrames, ...(known.floorToJoistsM ? { known } : {}) }));
+  form.append("options", JSON.stringify({ maxFrames, ...(maxFaces != null ? { maxFaces } : {}), ...(known.floorToJoistsM ? { known } : {}) }));
   const cameras = cameraFor ? sentFrames.map(cameraFor) : [];
   if (cameras.some(Boolean)) form.append("cameras", JSON.stringify(cameras));
   const res = await fetch(`${URL_}/scan`, {
@@ -62,11 +66,13 @@ export async function runScan3d(
   const parts = await res.formData();
   const scan = JSON.parse(await (parts.get("scan") as File).text());
   const surfels = parts.get("surfels") as File | null;
+  const mesh = parts.get("mesh") as File | null;
   return {
     scan,
     ply: await (parts.get("points") as File).arrayBuffer(),
     depth: await (parts.get("depth") as File).arrayBuffer(),
     surfels: surfels ? await surfels.arrayBuffer() : undefined,
+    mesh: mesh ? await mesh.arrayBuffer() : undefined,
     sentFrames,
   };
 }

@@ -5,10 +5,12 @@
 import { place, placedRect, quarterTurns, sameRooms, settle, splitWalk, square, turn, type Rect, type V2 } from "./assemble";
 import { MIN_ROOM_FRAMES } from "./rooms";
 import type { KnownCamera } from "./capture";
-import { runFloorPlan, runScan3d, type FloorPlanResult, type FloorPlanRoom, type Scan3d } from "./scan3d";
+import { meshFaces, runFloorPlan, runScan3d, type FloorPlanResult, type FloorPlanRoom, type Scan3d } from "./scan3d";
 
 // The rough pass only has to say where things are: fewer frames, faster.
 const WHOLE_FRAMES = Number(process.env.SCAN3D_WHOLE_FRAMES ?? 40);
+// Areas measured at once: the Mac's GPU takes one job at a time, Modal runs several side by side.
+const AREAS_AT_ONCE = Math.max(1, Number(process.env.SCAN3D_PARALLEL ?? 1));
 
 // Room frame -> basement frame: turn by quarter turns about the vertical, then shift on the floor.
 export type RoomPlacement = { turn: 0 | 1 | 2 | 3; x: number; z: number };
@@ -19,6 +21,21 @@ export type BasementScan = {
   placements: RoomPlacement[];
   rects: Rect[]; // each area's box in the basement frame
 };
+
+// Every area measured, up to AREAS_AT_ONCE at a time, in filming order.
+async function measureAreas(spans: { from: number; to: number }[], log: (text: string) => Promise<void>, measure: (span: { from: number; to: number }) => Promise<Scan3d>) {
+  const scans: Scan3d[] = new Array(spans.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < spans.length) {
+      const i = next++;
+      await log(spans.length > 1 ? `Measuring area ${i + 1} of ${spans.length}` : "Measuring your basement");
+      scans[i] = await measure(spans[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(AREAS_AT_ONCE, spans.length) }, worker));
+  return scans;
+}
 
 // Camera position, forward direction and our frame number for every frame a scan kept, on its floor plane.
 function cameras(s3: Scan3d) {
@@ -45,7 +62,7 @@ export async function scanBasement(
     if (tracked) return tracked;
   }
   await log("Mapping your whole basement");
-  const whole = await runScan3d(work, { from: 0, to: frameCount }, known, WHOLE_FRAMES);
+  const whole = await runScan3d(work, { from: 0, to: frameCount }, known, { maxFrames: WHOLE_FRAMES, maxFaces: 0 });
   const w = cameras(whole);
 
   // Areas from where the camera went; a stretch too short to measure joins the one before it.
@@ -54,11 +71,7 @@ export async function scanBasement(
   if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
   const spans = edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount }));
 
-  const scans: Scan3d[] = [];
-  for (const [i, span] of spans.entries()) {
-    await log(spans.length > 1 ? `Measuring area ${i + 1} of ${spans.length}` : "Measuring your basement");
-    scans.push(await runScan3d(work, span, known));
-  }
+  const scans = await measureAreas(spans, log, (span) => runScan3d(work, span, known, { maxFaces: meshFaces(spans.length) }));
 
   const placed = scans.map((s3) => {
     const c = cameras(s3);
@@ -109,11 +122,7 @@ async function scanTracked(
   if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
   const spans = edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount }));
 
-  const scans: Scan3d[] = [];
-  for (const [i, span] of spans.entries()) {
-    await log(spans.length > 1 ? `Measuring area ${i + 1} of ${spans.length}` : "Measuring your basement");
-    scans.push(await runScan3d(work, span, known, undefined, cameraFor));
-  }
+  const scans = await measureAreas(spans, log, (span) => runScan3d(work, span, known, { cameraFor, maxFaces: meshFaces(spans.length) }));
   if (scans.some((s3) => s3.scan.world?.frame !== "arkit")) return null;
 
   // One floor plan from all of it: rooms from walls and doorways, not a box per stretch of video.
@@ -250,6 +259,72 @@ export function mergeSurfels(rooms: { surfels: ArrayBuffer; placement: RoomPlace
   head.write("BRS1", 0, "ascii");
   head.writeUInt32LE(total, 4);
   return Buffer.concat([head, Buffer.from(pos.buffer), Buffer.from(col), Buffer.from(size), Buffer.from(frame.buffer)]);
+}
+
+// How far past its own box an area's surface still counts as its own: its walls, and a bit beyond.
+const OWN_MARGIN_M = 0.3;
+
+// Every room's solid surface (BRM1, services/scan3d export.py mesh_bytes) in the basement frame, in one
+// file. An area also sees into its neighbours through doorways; where its surface lies inside another
+// area's box (past its own), that area's view of it wins, so nothing is drawn twice.
+export function mergeMesh(rooms: { mesh: ArrayBuffer; placement: RoomPlacement; rect: Rect }[], rects: Rect[]): Buffer {
+  const inside = (r: Rect, x: number, z: number, m: number) => x >= r.x0 - m && x <= r.x1 + m && z >= r.z0 - m && z <= r.z1 + m;
+  const parts: { faces: Uint32Array; pos: Int16Array; col: Uint8Array }[] = [];
+  for (const r of rooms) {
+    const head = new DataView(r.mesh);
+    const nv = head.getUint32(4, true), nf = head.getUint32(8, true);
+    const F = new Uint32Array(r.mesh, 12, nf * 3), P = new Int16Array(r.mesh, 12 + nf * 12, nv * 3), C = new Uint8Array(r.mesh, 12 + nf * 12 + nv * 6, nv * 3);
+    const { c, s } = basis(r.placement);
+    const dx = r.placement.x * 1000, dz = r.placement.z * 1000;
+    const pos = new Int16Array(nv * 3);
+    for (let i = 0; i < nv; i++) {
+      const x = P[i * 3], z = P[i * 3 + 2];
+      pos[i * 3] = Math.max(-32767, Math.min(32767, Math.round(c * x - s * z + dx)));
+      pos[i * 3 + 1] = P[i * 3 + 1];
+      pos[i * 3 + 2] = Math.max(-32767, Math.min(32767, Math.round(s * x + c * z + dz)));
+    }
+    const others = rects.filter((o) => o !== r.rect);
+    const keep: number[] = [];
+    for (let f = 0; f < nf; f++) {
+      let x = 0, z = 0;
+      for (let k = 0; k < 3; k++) {
+        x += pos[F[f * 3 + k] * 3] / 3000;
+        z += pos[F[f * 3 + k] * 3 + 2] / 3000;
+      }
+      if (inside(r.rect, x, z, OWN_MARGIN_M) || !others.some((o) => inside(o, x, z, 0))) keep.push(f);
+    }
+    // Only the vertices the kept faces use.
+    const remap = new Int32Array(nv).fill(-1);
+    let used = 0;
+    const faces = new Uint32Array(keep.length * 3);
+    keep.forEach((f, j) => {
+      for (let k = 0; k < 3; k++) {
+        const v = F[f * 3 + k];
+        if (remap[v] < 0) remap[v] = used++;
+        faces[j * 3 + k] = remap[v];
+      }
+    });
+    const kp = new Int16Array(used * 3), kc = new Uint8Array(used * 3);
+    for (let v = 0; v < nv; v++) {
+      if (remap[v] < 0) continue;
+      kp.set(pos.subarray(v * 3, v * 3 + 3), remap[v] * 3);
+      kc.set(C.subarray(v * 3, v * 3 + 3), remap[v] * 3);
+    }
+    parts.push({ faces, pos: kp, col: kc });
+  }
+  const nv = parts.reduce((n, p) => n + p.pos.length / 3, 0), nf = parts.reduce((n, p) => n + p.faces.length / 3, 0);
+  const faces = new Uint32Array(nf * 3);
+  let fo = 0, vo = 0;
+  for (const p of parts) {
+    for (let i = 0; i < p.faces.length; i++) faces[fo + i] = p.faces[i] + vo;
+    fo += p.faces.length;
+    vo += p.pos.length / 3;
+  }
+  const head = Buffer.alloc(12);
+  head.write("BRM1", 0, "ascii");
+  head.writeUInt32LE(nv, 4);
+  head.writeUInt32LE(nf, 8);
+  return Buffer.concat([head, Buffer.from(faces.buffer), ...parts.map((p) => Buffer.from(p.pos.buffer, p.pos.byteOffset, p.pos.byteLength)), ...parts.map((p) => Buffer.from(p.col))]);
 }
 
 // Where the camera stood for every kept frame, in the basement frame, for "jump to where you filmed".
