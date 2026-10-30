@@ -74,8 +74,9 @@ class FakeScanner:
     def __init__(self):
         self.calls = []
 
-    def scan(self, items, max_frames, known, max_points=300_000, skip_depth=False):
+    def scan(self, items, max_frames, known, max_points=300_000, skip_depth=False, cameras=None):
         self.calls.append((items, max_frames, known))
+        self.cameras = cameras
         return ScanResult({"version": 1, "frames": len(items)}, b"ply\x00\x01", b"\x00" * 8)
 
 
@@ -112,4 +113,12 @@ def test_http_contract():
     assert fake.calls[-1][1] == 5
     bad = client.post("/scan", files=frames, data={"options": "{not json"}, headers=auth)
     assert bad.status_code == 400 and "error" in bad.json()
+
+    # Known cameras from the phone's tracking: one per frame, null where unknown (docs/capture-contract.md).
+    cam = {"intrinsics": [[1000, 0, 640], [0, 1000, 480], [0, 0, 1]], "pose": [[1, 0, 0, 0], [0, -1, 0, 1.5], [0, 0, -1, 0], [0, 0, 0, 1]]}
+    ok = client.post("/scan", files=frames, data={**opts, "cameras": json.dumps([cam, None, cam])}, headers=auth)
+    assert ok.status_code == 200
+    assert fake.cameras[1] is None and fake.cameras[0]["pose"].shape == (4, 4)
+    wrong = client.post("/scan", files=frames, data={**opts, "cameras": json.dumps([cam])}, headers=auth)
+    assert wrong.status_code == 400 and "one entry per frame" in wrong.json()["error"]
     assert client.post("/scan", json={"frameUrls": ["file:///etc/passwd"]}, headers=auth).status_code == 400

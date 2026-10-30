@@ -93,6 +93,8 @@ export const keys = {
   scanPrefix: (scanId: string) => `scans/${scanId}`,
   input: (scanId: string, ext: string) => `scans/${scanId}/input.${ext}`,
   analysis: (scanId: string) => `scans/${scanId}/analysis.mp4`,
+  // The iPhone app's camera tracking for the take (docs/capture-contract.md).
+  capture: (scanId: string) => `scans/${scanId}/capture.json`,
   frame: (scanId: string, n: number) => `scans/${scanId}/frames/${String(n).padStart(4, "0")}.jpg`,
   concept: (scanId: string, n: number) => `scans/${scanId}/concepts/${n}.jpg`,
   // The first room keeps the original path, so scans from before rooms still open.

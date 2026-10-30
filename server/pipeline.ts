@@ -18,6 +18,7 @@ import { suggestLayout } from "./layout";
 import { buildPlan, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
 import { basementViewpoints, mergeSurfels, scanBasement, type BasementScan, type RoomPlacement } from "./basement";
+import { cameraLookup } from "./capture";
 import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
 
@@ -94,6 +95,15 @@ async function uploadFrames(scanId: string, work: string, frameCount: number) {
 const plural = (n: number, word: string) => `${n} ${word.toLowerCase()}${n === 1 || /s$/i.test(word) ? "" : "s"}`;
 
 // Each room's 3D files saved, its measurements and plan worked out from the SAM finds.
+// A stored file's text, or null when it isn't there.
+export async function storedText(key: string): Promise<string | null> {
+  const body = await storage.get(key);
+  if (!body) return null;
+  const parts: Buffer[] = [];
+  for await (const chunk of body) parts.push(chunk as Buffer);
+  return Buffer.concat(parts).toString("utf8");
+}
+
 // The basement's own 3D files: every room's surface points in one frame, and where the camera stood.
 export async function saveBasement3d(scanId: string, b: BasementScan) {
   const rooms = b.scans.map((s3, i) => ({
@@ -202,7 +212,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
     // One connected basement: a rough whole-walk pass places the areas, each measured on its own.
     const basementP: Promise<BasementScan | null> = (await scan3dReady())
-      ? scanBasement(work, frameCount, known, (text) => emit("log", text)).catch(async (err) => {
+      ? scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS)).catch(async (err) => {
           console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
           await emit("log", "3D scan unavailable this time; checking from the video instead");
           return null;
