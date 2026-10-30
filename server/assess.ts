@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { dataUrl, outputText, responses, tokenCost } from "./meta";
+import { dataUrl, readReply, responses, tokenCost } from "./meta";
 import type { Detection } from "./pipeline";
 import type { Measurements } from "./scan3d";
 import type { Property } from "./property";
@@ -113,7 +113,8 @@ async function askSpark(ctx: AssessContext, place: Coverage, rules: Rule[], dete
         ...(/wonder/.test(model) ? { reasoning: { effort: "medium" } } : {}),
       });
       costUsd += tokenCost(model, r.usage)?.usd ?? 0;
-      return { model: parseJson(outputText(r)), costUsd };
+      // A reply cut off partway and then sent again whole is read from the whole one.
+      return { model: readReply(r, parseJson), costUsd };
     } catch (err) {
       lastErr = err;
     }
