@@ -311,7 +311,7 @@ function viewpoints(scan: any): Viewpoint[] {
     });
 }
 
-// `ideas`: the suggested layout's furniture and walls, placed in the scan, behind an "Ideas" toggle.
+// `ideas`: their design (src/studio/DesignScene.tsx, from the model), placed in the scan, behind a toggle.
 // `labels`: what SAM found, tagged where it sits.
 // `liteUrl`: a phone-sized file; without one, phones ask the server for `?lite=1`.
 // `meshUrl`: the solid surface; the points are only fetched when there isn't one.
@@ -430,7 +430,7 @@ export function RealScan(props: {
             As it is
           </button>
           <button aria-pressed={ideas} onClick={() => setIdeas(true)}>
-            With the ideas
+            With your design
           </button>
         </div>
       )}

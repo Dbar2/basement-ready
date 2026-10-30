@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { designInView, frameIntrinsics, pickAngles, pickDesignAngles, placePose, poseAt, viewsFromArea, type View } from "../../server/views/angles";
-import { bestAngles, designAngles } from "../../server/views/load";
+import { bestAngles, designAngles, designFor } from "../../server/views/load";
 import type { Furniture } from "../../server/model/types";
 
 // A camera at (x, h, z) looking along yaw (0 = +z), tipped by pitch (up positive) and roll, as an
@@ -147,7 +147,11 @@ describe("the example", () => {
     expect(a.length).toBeGreaterThan(0);
     expect(a.map((x) => x.id)).toEqual(b.map((x) => x.id));
     expect(a.every((x) => x.intrinsics.width === 1280 && x.intrinsics.height === 720)).toBe(true);
-    const own = await designAngles("sample", 4);
+    // Judged against the model's chosen design, as the pictures step draws it.
+    const design = await designFor("sample");
+    expect(design?.proposed.furniture.length).toBeGreaterThan(0);
+    const own = await designAngles("sample", 4, design!.proposed.furniture);
+    expect(own.length).toBeGreaterThan(0);
     expect(own.every((x) => x.shows.length > 0)).toBe(true);
   });
 });
