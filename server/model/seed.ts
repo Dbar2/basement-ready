@@ -31,6 +31,7 @@ type ScanResultLike = {
   floorPlan?: BasementPlan | null;
   mainRoom?: number | null;
   measurements?: { ceilingHeightM: number | null; clearances: { detectionId: string; label: string; clearanceM: number }[] } | null;
+  detections?: { id: string; framesSeen?: number }[];
 };
 
 const SIDES: Side[] = ["minZ", "maxX", "maxZ", "minX"];
@@ -117,6 +118,16 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
     const small = polygonArea(poly) < 10;
     const kind: RoomKind = small && fixtures.some((f) => inside(f) && (f.kind === "furnace" || f.kind === "water_heater")) ? "mechanical" : small && fixtures.some((f) => inside(f) && f.kind === "stairs") ? "stairs" : "other";
     rooms.push({ id, polygon: poly, kind, name: area.name, unit: 1, ceilingM: area.plan.ceilingHeightM });
+  }
+
+  // One staircase. Each area places what it saw itself, and on a video take the areas sit only roughly
+  // where they belong, so the stairs filmed going down and seen again later land as two: keep the one
+  // SAM followed through the most frames.
+  const stairs = fixtures.filter((f) => f.kind === "stairs");
+  if (stairs.length > 1) {
+    const seen = (f: Fixture) => result.detections?.find((d) => d.id === f.detectionId)?.framesSeen ?? 0;
+    const keep = stairs.reduce((a, b) => (seen(b) > seen(a) ? b : a));
+    fixtures.splice(0, fixtures.length, ...fixtures.filter((f) => f.kind !== "stairs" || f === keep));
   }
 
   // Their tape on the escape window goes on the biggest window: that's the one the bedroom gets.
