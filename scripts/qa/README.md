@@ -1,6 +1,11 @@
-# Vision QA reviewer (development only)
+# Vision QA reviewer (a development tool)
 
-Screenshots every screen of the journey and asks Claude Opus whether anything is wrong, unpolished or off-brand. It's a tool for us, not part of the app: nothing in `src/` or `server/` imports it (a test checks), and the app itself still calls only Meta models.
+Screenshots every screen of the journey and asks Claude Opus whether anything is wrong, unpolished or off-brand. It's for us while we build, never part of the app:
+- It lives only in `scripts/qa` (tests in `tests/qa`).
+- Nothing in `src/` or `server/` imports it, and a test checks that.
+- The app's build and Docker image leave it out (`tsconfig.qa.json`, `.dockerignore`).
+- The Anthropic SDK is a dev dependency, and the key is read only here, from `.env`.
+- The app itself still calls only Meta models.
 
 ## Run it
 
