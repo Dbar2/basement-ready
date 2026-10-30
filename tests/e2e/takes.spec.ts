@@ -1,7 +1,7 @@
 // A real take, film to permit: the start sheet (or the iPhone app's post), the wait screen with its
 // questions and the basement assembling, then every workspace tab. Recorded once against the real
 // services; replayed, it must come out exactly as it did then.
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { basename, join } from "node:path";
 import { Flow } from "./pages/Flow";
 import { Home } from "./pages/Home";
@@ -20,13 +20,27 @@ for (const take of TAKES) {
     const why = unavailable(take);
     test.skip(why !== null, why ?? "");
     test.slow(); // a whole scan, then five tabs, and maybe a wait for another take to finish
-    await oneAtATime("takes", () => run(page, journey, info));
+    let scanId: string | null = null;
+    try {
+      await oneAtATime("takes", () => run(page, journey, info, (id) => (scanId = id)));
+    } finally {
+      // Its upload, frames and 3D are a few hundred megabytes in this run's storage: gone once it's checked.
+      // Never throws: the server may still be writing its pictures, and the test's own result matters more.
+      if (scanId) {
+        try {
+          rmSync(join(runDir, "storage", "scans", scanId), { recursive: true, force: true, maxRetries: 3 });
+        } catch {}
+      }
+    }
   });
 
-  async function run(page: Page, journey: Journey, info: TestInfo) {
+  async function run(page: Page, journey: Journey, info: TestInfo, made: (scanId: string) => void) {
     // Without the file in this tab (the app path), the wait screen asks for the server's copy of the video
     // every 2 s until it's saved (src/screens/LiveScan.tsx): those 404s are expected.
     journey.allowConsole(/status of 404 .*@ .*\/api\/scans\/[0-9a-f-]+\/video$/);
+    // Known, WebKit only: leaving the wait screen revokes the uploaded video's blob URL while WebKit's video
+    // element is still reading it (src/screens/LiveScan.tsx). The page has moved on; nothing is lost.
+    if (info.project.name.startsWith("webkit")) journey.allowConsole(/WebKitBlobResource error 1\.\) @ blob:/);
     const home = new Home(page);
     const wait = new WaitScreen(page);
     const flow = new Flow(page);
@@ -66,21 +80,23 @@ for (const take of TAKES) {
       await page.evaluate((claim) => localStorage.setItem("br-claims", JSON.stringify([claim])), { basementId: posted.basementId, claimToken: posted.claimToken });
       await journey.step("posted like the app, wait screen", () => page.goto(`/scans/${scanId}`));
     }
+    made(scanId);
     const uploadS = (Date.now() - started) / 1000;
 
     // ---- The wait screen: stages, its questions, the basement assembling, the answer ----
     await journey.step("wait screen", () => wait.expectOpen());
     const asked = (await journey.step("questions while it checks", () => wait.answerAll(take.answers, mode === "record" ? 15 * 60_000 : 5 * 60_000)))!;
     // Their own basement restyled while it measures: two loved, one passed, and the board shows the two.
-    await journey.step("swipe your style", async () => {
+    const swiped = (await journey.step("swipe your style", async () => {
       await deck.expectOpen();
-      await deck.swipeAll(["love", "pass", "love"]);
-    });
+      return deck.swipeAll(["love", "pass", "love"]);
+    }))!;
     // The server's word first, so a slow scan and a stuck screen fail differently.
     await expect
       .poll(async () => (await api(page, `/api/scans/${scanId}`)).status, { timeout: mode === "record" ? 15 * 60_000 : 5 * 60_000, intervals: [2_000] })
       .toBe("done");
-    await journey.step("answer ready", () => wait.waitForAnswer(60_000));
+    // On the wait screen it says it's measured; if the swipes were done on step 1, it's already past that.
+    if (!swiped.wentBack) await journey.step("answer ready", () => wait.waitForAnswer(60_000));
     const toAnswerS = (Date.now() - started) / 1000;
     const events = await scanEvents(page.request, scanId);
     expect(events.filter((e) => e.type === "stage").map((e) => e.text)).toEqual(["prepare", "find", "assess"]);
@@ -94,7 +110,9 @@ for (const take of TAKES) {
     const scan = await api(page, `/api/scans/${scanId}`);
     const r = scan.result;
     await journey.step("is this your basement?", async () => {
-      await wait.checkPlan();
+      // Swiped on step 1 of the step bar (the wait screen had moved on): on to step 2 from there.
+      if (swiped.wentBack) await flow.steps.getByRole("link", { name: /^Step 2: Is this your basement\?/ }).click();
+      else await wait.checkPlan();
       await flow.plan().expectOpen();
     });
     if (r.capture?.photos) await journey.step("one tape number", () => flow.plan().tapeIfAsked("7.3"));
@@ -179,6 +197,14 @@ for (const take of TAKES) {
       saveOutcome(take, outcome);
       // What recording it cost: the calls that really went out (saved answers reused are free).
       journey.timing({ kind: "cost", take: take.id, frames, ...costOf(realCalls(started), frames, Boolean(process.env.E2E_SCAN3D_URL?.includes(".modal.run"))) });
-    } else expect(outcome, "the same as when it was recorded").toEqual(recordedOutcome(take));
+    } else {
+      // Everything the models decided, exactly as recorded. The pictures' counts are kept but not held
+      // to: which frames get staged depends on what the 3D has measured by then (server/replay.ts looseKeys).
+      const { photos, cards, ...decided } = outcome;
+      const { photos: _p, cards: _c, ...recorded } = recordedOutcome(take)!;
+      expect(decided, "the same as when it was recorded").toEqual(recorded);
+      expect(photos, "photos of what it could look like").toBeGreaterThan(0);
+      expect(cards, "cards dealt (three were swiped)").toBeGreaterThanOrEqual(3);
+    }
   }
 }

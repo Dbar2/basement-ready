@@ -77,6 +77,10 @@ export function apiEnv(): Record<string, string> {
       // An answer saved by an earlier attempt arrives as slowly as it did then: a recording picked up
       // where it stopped races the same way a real one does (the 3D against the photos, say).
       REPLAY_PACE: process.env.E2E_PACE ?? "1",
+      // E2E_LOOSE=pictures when re-recording a take that's already recorded: a picture that differs only by
+      // timing or the browser's render then reuses a recorded one of its kind instead of being paid for.
+      // Off by default, so a new take never borrows another take's pictures.
+      REPLAY_LOOSE: process.env.E2E_LOOSE ?? "",
       // The Mac runner by default (free). For Modal, E2E_SCAN3D_URL is its endpoint and the token is the
       // env file's SCAN3D_MODAL_TOKEN, read here only to hand to the test server.
       ...(modal
@@ -93,6 +97,9 @@ export function apiEnv(): Record<string, string> {
     // (the 3D or the photos, say) then goes the way it went when recorded, and the wait screen moves as
     // it would. E2E_PACE=0 answers at once, to time only our own work.
     REPLAY_PACE: process.env.E2E_PACE ?? "0.25",
+    // Pictures may be answered by a recorded picture of the same kind (server/replay.ts looseKeys):
+    // they depend on the browser's render and on timing. Everything else stays exact.
+    REPLAY_LOOSE: process.env.E2E_LOOSE ?? "pictures",
     // Areas measured side by side, as on Modal when the takes were recorded (1 for Mac-runner recordings).
     SCAN3D_PARALLEL: process.env.E2E_SCAN3D_PARALLEL ?? "3",
     // Never used to reach anything: replay answers before a request is made.

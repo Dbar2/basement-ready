@@ -1,8 +1,8 @@
 // Writes tmp/e2e/<run>/report.html: each journey's steps with a screenshot each, where the time went in
 // every scan (record mode times the real services, replay mode times our own work), what was replayed,
-// and anything that was missing.
+// and anything that was missing. Then tidies tmp/e2e (see below).
 import type { FullResult, Reporter, TestCase, TestResult } from "@playwright/test/reporter";
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { files, mode, ROOT, runDir, runId } from "./run";
 import { MILESTONE_LABELS } from "./timing";
@@ -11,15 +11,20 @@ const lines = (path: string) => (existsSync(path) ? readFileSync(path, "utf8").s
 const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 const secs = (n: number | null | undefined) => (n == null ? "–" : `${n.toFixed(1)} s`);
 
-// Each take's newest real-service timing, from the record runs (their folders end in -record).
+// Run folders hold a whole database and copied uploads (a gigabyte or more for a take), so a run that
+// passes deletes its folder once it's done, keeping a copy of its report, screenshots and timing in
+// tmp/e2e/latest. Failed runs stay for their traces: the newest two.
+const E2E = join(ROOT, "tmp/e2e");
+const LATEST = join(E2E, "latest");
+const KEEP_FAILED = 2;
+// Record runs' scan timings (the real services), kept here when their folder goes.
+const RECORDED = join(E2E, "recorded-timing.jsonl");
+
+// Each take's newest real-service timing.
 function lastRecordedScans() {
-  const root = join(ROOT, "tmp/e2e");
-  if (!existsSync(root)) return [];
   const byTake = new Map<string, any>();
-  for (const dir of readdirSync(root).filter((d) => d.endsWith("-record")).sort().reverse()) {
-    // Rows whose calls all came from saved answers aren't real-service times.
-    for (const t of lines(join(root, dir, "timing.jsonl"))) if (t.kind === "scan" && t.realCalls !== 0 && !byTake.has(t.take)) byTake.set(t.take, { ...t, run: "record", runId: dir });
-  }
+  // Rows whose calls all came from saved answers aren't real-service times.
+  for (const t of lines(RECORDED).reverse()) if (t.kind === "scan" && t.realCalls !== 0 && !byTake.has(t.take)) byTake.set(t.take, { ...t, run: "record" });
   return [...byTake.values()];
 }
 
@@ -108,7 +113,7 @@ figcaption{font-size:11px} .note{color:#666;font-size:12px} .miss{color:#a11}
 </style>
 <h1>End-to-end run ${esc(runId)}</h1>
 <p>Mode <b>${esc(mode)}</b> · ${tally} · ${(result.duration / 1000).toFixed(0)} s</p>
-<p>Saved answers: ${count("hit")} replayed, ${count("recorded")} recorded from the real services, <span class="${misses.length ? "miss" : ""}">${misses.length} missing</span>.</p>
+<p>Saved answers: ${count("hit")} replayed exactly, ${count("loose")} pictures answered by a recorded picture of the same kind, ${count("recorded")} recorded from the real services, <span class="${misses.length ? "miss" : ""}">${misses.length} missing</span>.</p>
 ${misses.length ? `<h2 class="miss">Missing saved answers</h2><table><tr><th>Service</th><th>Route</th><th>Model</th><th>About</th><th>Key</th></tr>${misses.map((m) => `<tr><td>${esc(m.service)}</td><td>${esc(m.route)}</td><td>${esc(m.model)}</td><td>${esc(m.about)}</td><td>${esc(m.key)}</td></tr>`).join("")}</table>` : ""}
 <h2>Timing, upload to answer</h2>
 ${timingTable}
@@ -118,6 +123,26 @@ ${costTable}
 ${tests}
 <p class="note">Folder: ${esc(relative(ROOT, runDir))}</p>`;
     writeFileSync(files.report, html);
-    console.log(`\nE2E report: ${relative(process.cwd(), files.report)}`);
+    if (mode === "record") for (const t of timing.filter((t) => t.kind === "scan")) appendFileSync(RECORDED, JSON.stringify({ ...t, runId }) + "\n");
+    this.passed = result.status === "passed";
+    if (this.passed) {
+      // The small part, kept: the report and what it links to.
+      rmSync(LATEST, { recursive: true, force: true });
+      mkdirSync(LATEST, { recursive: true });
+      for (const f of ["report.html", "steps.jsonl", "timing.jsonl", "replay-log.jsonl", "shots"]) {
+        if (existsSync(join(runDir, f))) cpSync(join(runDir, f), join(LATEST, f), { recursive: true });
+      }
+      console.log(`\nE2E report: ${relative(process.cwd(), join(LATEST, "report.html"))} (this run's folder is removed now that it passed)`);
+    } else console.log(`\nE2E report: ${relative(process.cwd(), files.report)} (kept with its traces; only the newest ${KEEP_FAILED} failed runs are kept)`);
   }
+
+  // After the servers have stopped: a passing run's folder goes, and failed runs past the newest two.
+  async onExit() {
+    if (this.passed) rmSync(runDir, { recursive: true, force: true });
+    if (!existsSync(E2E)) return;
+    const runs = readdirSync(E2E).filter((d) => /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-(replay|record)$/.test(d)).sort().reverse();
+    for (const old of runs.slice(KEEP_FAILED)) rmSync(join(E2E, old), { recursive: true, force: true });
+  }
+
+  private passed = false;
 }
