@@ -105,6 +105,26 @@ describe("the photo of an angle", () => {
     expect((await makePicture(input, skipped)).kind).toBe("photo");
   });
 
+  it("turns down a photo that grew a window or stairs the frame doesn't have, then falls back to the render", async () => {
+    // Muse Image made a box on a cluttered wall into a second window.
+    const w = work({ found: { "basement window": [{ x: 0.41, y: 0.1, w: 0.2, h: 0.1 }, { x: 0.75, y: 0.15, w: 0.15, h: 0.1 }], bed: [bed.box], sofa: [sofa.box] } });
+    const m = await makePicture(input, w);
+    expect(w.edits()).toBe(2);
+    expect(m.kind).toBe("render");
+    expect(m.checked).toMatch(/a window or stairs appeared that aren't there/);
+    // Stairs where the frame has none.
+    const stairs = work({ found: { "basement window": [input.anchors[0].box], staircase: [{ x: 0.1, y: 0.2, w: 0.2, h: 0.5 }], bed: [bed.box], sofa: [sofa.box] } });
+    expect((await makePicture(input, stairs)).kind).toBe("render");
+    // A frame with no window: any window in the photo was added.
+    const none = work({ found: { "basement window": [input.anchors[0].box], bed: [bed.box] } });
+    expect((await makePicture({ ...input, anchors: [], items: [bed] }, none)).kind).toBe("render");
+    // Nothing added: kept, and it says it looked.
+    const clean = work({ found: { bed: [bed.box] } });
+    const kept = await makePicture({ ...input, anchors: [], items: [bed] }, clean);
+    expect(kept.kind).toBe("photo");
+    expect(kept.checked).toMatch(/no windows or stairs added/);
+  });
+
   it("shows the render without spending when the day's budget is used up", async () => {
     const w = work({ canSpend: async () => false });
     const m = await makePicture(input, w);

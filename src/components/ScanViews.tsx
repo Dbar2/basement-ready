@@ -1,7 +1,9 @@
 // "Your basement, scanned": the 3D scan and the measured floor plan, one tap apart. A scan that put
-// its rooms together shows one basement; older scans show a tab per room.
+// its rooms together shows one basement, with their chosen design drawn in it from the model (the same
+// pieces as the studio and the pictures); older scans show a tab per room.
 import { Suspense, useRef, useState } from "react";
-import type { Layout, Plan, RoomPlacement, RoomResult } from "../api";
+import type { Layout, Plan, RoomResult } from "../api";
+import type { Design, Existing } from "../../server/model/types";
 import { basementRooms, placeLayout, scanLabels } from "./basementPlan";
 import { BasementFloorPlan, downloadSvg, FloorPlan, roughArea, type Units } from "./FloorPlan";
 import { lazy3d, View3DBoundary } from "./View3D";
@@ -9,7 +11,7 @@ import { lazy3d, View3DBoundary } from "./View3D";
 // three.js is heavy; load the 3D view only when someone opens it.
 const ScanViewer3D = lazy3d(() => import("../three/ScanViewer3D").then((m) => m.ScanViewer3D));
 const RealScan = lazy3d(() => import("../three/RealScan").then((m) => m.RealScan));
-const StagedFurniture = lazy3d(() => import("../three/StagedBasement").then((m) => m.StagedFurniture));
+const DesignScene = lazy3d(() => import("../studio/DesignScene").then((m) => m.DesignScene));
 
 const size = (p: Plan | null) => (p ? `${p.widthM.toFixed(1)} × ${p.depthM.toFixed(1)} m` : "No 3D");
 
@@ -18,9 +20,10 @@ function BasementViews(props: {
   scanId: string;
   rooms: NonNullable<ReturnType<typeof basementRooms>>;
   layout: Layout | null; // in the basement frame, for the plan
-  staging: { plan: Plan; layout: Layout; placement: RoomPlacement } | null; // the main room's own frame, for the 3D
+  design: { existing: Existing; design: Design } | null; // the model's chosen design, in the basement frame, for the 3D
+  photos: boolean;
 }) {
-  const { scanId, rooms, layout, staging } = props;
+  const { scanId, rooms, layout, design } = props;
   const [view, setView] = useState<"3d" | "plan">("3d");
   const [units, setUnits] = useState<Units>("m");
   const planRef = useRef<HTMLDivElement>(null);
@@ -51,10 +54,10 @@ function BasementViews(props: {
                 ceilingHeightM={ceilings.length ? Math.max(...ceilings) : null}
                 labels={scanLabels(rooms.map((r) => r.plan))}
                 ideas={
-                  staging && (
-                    // Room frame -> basement frame: x' = c·x − s·z is a turn of −θ about +Y in three.js.
-                    <group rotation-y={(-staging.placement.turn * Math.PI) / 2} position={[staging.placement.x, 0, staging.placement.z]}>
-                      <StagedFurniture plan={staging.plan} layout={staging.layout} />
+                  design && (
+                    // The model is drawn at their tape's scale; the scan at its own.
+                    <group scale={1 / (design.existing.scale.factor ?? 1)}>
+                      <DesignScene existing={design.existing} design={design.design} rated={false} />
                     </group>
                   )
                 }
@@ -81,26 +84,25 @@ function BasementViews(props: {
           >
             Download plan (SVG)
           </button>
-          {rough && <span className="muted">Sizes are from your video. A designer confirms them with a tape before drawing.</span>}
+          {rough && <span className="muted">Sizes are from your {props.photos ? "photos" : "video"}. A designer confirms them with a tape before drawing.</span>}
         </div>
       )}
     </section>
   );
 }
 
-export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null; layout?: Layout | null }) {
+export function ScanViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null; layout?: Layout | null; design?: { existing: Existing; design: Design } | null; photos?: boolean }) {
   const basement = basementRooms(props.rooms);
   if (basement) {
     // The layout was worked out in the main room; it moves with that room.
     const main = basement.find((b) => b.room.index === props.mainRoom)?.room;
     const layout = props.layout && main?.placement ? placeLayout(props.layout, main.placement) : null;
-    const staging = props.layout && main?.plan && main.placement ? { plan: main.plan, layout: props.layout, placement: main.placement } : null;
-    return <BasementViews scanId={props.scanId} rooms={basement} layout={layout} staging={staging} />;
+    return <BasementViews scanId={props.scanId} rooms={basement} layout={layout} design={props.design ?? null} photos={Boolean(props.photos)} />;
   }
   return <RoomViews {...props} />;
 }
 
-function RoomViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null; layout?: Layout | null }) {
+function RoomViews(props: { scanId: string; plan: Plan | null; has3d: boolean; rooms?: RoomResult[]; mainRoom?: number | null; layout?: Layout | null; photos?: boolean }) {
   const layout = props.layout ?? null;
   const { scanId } = props;
   const scanned = (props.rooms ?? []).filter((r) => r.has3d || r.plan);
@@ -207,7 +209,7 @@ function RoomViews(props: { scanId: string; plan: Plan | null; has3d: boolean; r
             Download plan (SVG)
           </button>
           {!plan.trusted && (
-            <span className="muted">Rough: some walls came out twice. Film this room slowly along its walls, and add one tape number for an exact plan.</span>
+            <span className="muted">{props.photos ? "Rough: some walls came out twice. Add a few photos of this room along its walls, and one tape number for an exact plan." : "Rough: some walls came out twice. Film this room slowly along its walls, and add one tape number for an exact plan."}</span>
           )}
         </div>
       )}

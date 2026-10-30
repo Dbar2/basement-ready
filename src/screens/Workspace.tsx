@@ -1,18 +1,21 @@
-// /scans/:id once the scan is done: the homeowner's workspace. Five tabs: Your plan (the decision,
-// the plan, the 3D), Ideas (how it could look), Permit (drawings and forms to submit), Money (what
-// they qualify for, applied for in a click or two), Build (who builds it, or doing it yourself).
+// /scans/:id?tab=…, the last step of the flow (src/flow/flow.ts): the homeowner's workspace. Five tabs:
+// the book (the design, its pictures, the quote, the timeline, as a PDF too), the answer (the decision,
+// what has to change, the scan), Permit (the set to submit and its readiness count), Money (what they
+// qualify for, applied for in a click or two), Build (who builds it, or doing it yourself).
 // The owner profile is asked once, the first time a tab needs it, and reused everywhere after.
-// A shared link reads it all and changes nothing; the example and the demo house say what they are.
-import { useCallback, useEffect, useState } from "react";
+// A shared link reads the answer and changes nothing; the example and the demo house say what they are.
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { answerQuestion, DEMO_LABEL, EXAMPLE_LABEL, getScan, sampleEarlyAnswers, type AnyAnswer, type ScanResult } from "../api";
 import { AccountNav } from "../auth";
 import { Applications, HowToApply, MoneySection } from "../components/Money";
 import { Logo } from "../components/Logo";
+import { FlowFoot, FlowHead } from "../flow/FlowNav";
 import { SiteFooter } from "../marketing/parts";
+import { loadModel } from "../studio/api";
+import type { Design, Existing } from "../../server/model/types";
 import { getWorkspace, saveWorkspace, type Profile, type Workspace as WorkspaceData, type WorkspaceState } from "../workspaceApi";
 import { PlanTab, STATUS, type Changes } from "./Result";
 import { BuildTab } from "./WorkspaceBuild";
-import { IdeasTab } from "./WorkspaceIdeas";
 import { PermitTab } from "./WorkspacePermit";
 import { ProfileCard } from "./WorkspaceProfile";
 import "../styles/workspace.css";
@@ -20,30 +23,36 @@ import "../styles/journey.css";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 
-export type Tab = "plan" | "ideas" | "permit" | "money" | "build";
+export type Tab = "book" | "decision" | "permit" | "money" | "build";
 const TABS: { id: Tab; label: string }[] = [
-  { id: "plan", label: "Your plan" },
-  { id: "ideas", label: "Ideas" },
+  { id: "book", label: "Your book" },
+  { id: "decision", label: "The answer" },
   { id: "permit", label: "Permit" },
   { id: "money", label: "Money" },
   { id: "build", label: "Build" },
 ];
 
+// The book carries the quote's price catalog: it loads with its tab.
+const BookView = lazy(() => import("../book/BookPage").then((m) => ({ default: m.BookView })));
+
 // The photos usually land within a couple of minutes of the answer; past this the page stops asking.
 const PHOTO_CHECKS = 45;
 const PHOTO_EVERY_MS = 4000;
 
-// The bar's main button follows the verdict: the permit when it's likely, the fixes when it needs work,
-// other ideas for the space when a second unit isn't likely.
-const NEXT: Record<ScanResult["verdict"], { label: string; tab?: Tab; anchor?: string }> = {
-  yes: { label: "Permit package", tab: "permit" },
-  fix: { label: "What has to change", anchor: "changes" },
-  no: { label: "Other ideas for the space", tab: "ideas" },
+// The way on from each tab: through the permit, the money and the build.
+const NEXT: Partial<Record<Tab, { label: string; tab: Tab }>> = {
+  book: { label: "Your permit set", tab: "permit" },
+  decision: { label: "Your permit set", tab: "permit" },
+  permit: { label: "Money you qualify for", tab: "money" },
+  money: { label: "Who builds it", tab: "build" },
 };
 
-const tabFromUrl = (): Tab => {
+// Older links name the tabs they had: the plan tab is the answer, the ideas tab is the book.
+const tabFromUrl = (): Tab | null => {
   const t = new URLSearchParams(window.location.search).get("tab");
-  return TABS.some((x) => x.id === t) ? (t as Tab) : "plan";
+  if (t === "plan") return "decision";
+  if (t === "ideas") return "book";
+  return TABS.some((x) => x.id === t) ? (t as Tab) : null;
 };
 
 // What every tab gets: the result, the workspace, and a way to save part of it.
@@ -65,7 +74,9 @@ async function share() {
 export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: () => void }) {
   const [r, setR] = useState<ScanResult | null>(null);
   const [ws, setWs] = useState<WorkspaceData | null>(null);
-  const [tab, setTab] = useState<Tab>(tabFromUrl);
+  const [tab, setTab] = useState<Tab>(() => tabFromUrl() ?? "book");
+  // The chosen design, drawn in the scan on the answer's 3D (owner only: it's their workspace's).
+  const [design, setDesign] = useState<{ existing: Existing; design: Design } | null>(null);
   const [busyRule, setBusyRule] = useState<string | null>(null);
   const [changes, setChanges] = useState<Changes>(null);
   const [answerError, setAnswerError] = useState<string | null>(null);
@@ -80,6 +91,15 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
     void getScan(scanId).then(async (s) => {
       const shared = scanId !== "sample" && !s.canEdit;
       setReadOnly(shared);
+      // A shared link has no book to open: it reads the answer.
+      if (shared && tab === "book") setTab("decision");
+      if (!shared)
+        void loadModel(scanId)
+          .then(({ model }) => {
+            const d = model.designs.find((x) => x.chosen) ?? model.designs[0];
+            if (d) setDesign({ existing: model.existing, design: d });
+          })
+          .catch(() => {});
       // A shared link never asks for the owner's workspace: it isn't theirs to open.
       if (shared) setWs({ profile: null, state: {}, prefill: { legalDescription: null, pin: null, rollNumber: null, fromOtherBasement: null }, site: null, locked: "This is a shared link: the permit, money and build tabs open on the device that filmed it, or when its owner signs in." });
       else
@@ -123,12 +143,12 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
     return () => clearInterval(id);
   }, [scanId, r?.concepts?.status]);
 
+  // The tab is always in the address: /scans/:id on its own goes back to where they left off.
   const go = useCallback((next: Tab) => {
     setTab(next);
     const url = new URL(window.location.href);
-    if (next === "plan") url.searchParams.delete("tab");
-    else url.searchParams.set("tab", next);
-    window.history.replaceState(null, "", url);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(window.history.state, "", url);
     window.scrollTo({ top: 0 });
   }, []);
 
@@ -181,23 +201,28 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
   const needsProfile = (tab === "permit" || tab === "money" || tab === "build") && ws && !ws.profile && !ws.locked;
   // Nothing made for the example or the demo house may reach a real inbox.
   const example = scanId === "sample" || Boolean(r.demo);
-  const next = NEXT[r.verdict] ?? NEXT.yes;
-  const goNext = () => {
-    if (next.tab) return go(next.tab);
-    document.getElementById(next.anchor ?? "")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  const next = NEXT[tab];
 
   return (
     <main className="result workspace" data-verdict={r.verdict}>
-      <header className="nav">
-        <Logo />
-        <span className="nav-right">
-          <button className="link-quiet" onClick={() => void share()}>Share</button>
-          <button className="link-quiet" onClick={onRestart}>New scan</button>
-          <AccountNav />
-        </span>
-      </header>
+      {readOnly ? (
+        <header className="nav">
+          <Logo />
+          <span className="nav-right">
+            <button className="link-quiet" onClick={onRestart}>Scan a basement</button>
+            <AccountNav />
+          </span>
+        </header>
+      ) : (
+        <FlowHead scanId={scanId} step="book" />
+      )}
       <div className="ws-head">
+        {!readOnly && (
+          <p className="ws-tools">
+            <button className="link-quiet" onClick={() => void share()}>Share</button>
+            <button className="link-quiet" onClick={onRestart}>New scan</button>
+          </p>
+        )}
         <p className="ws-address mono">{p ? `${p.address}, ${p.municipality}` : scanId === "sample" ? "The example basement" : r.demo ? "Demo house, Waterloo" : (r.city ?? "Your basement")}</p>
         {scanId === "sample" && (
           <p className="example-label" role="note">
@@ -210,7 +235,7 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
           </p>
         )}
         <nav className="ws-tabs" role="tablist" aria-label="Workspace">
-          {TABS.map((t) => (
+          {TABS.filter((t) => !readOnly || t.id !== "book").map((t) => (
             <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => go(t.id)}>
               {t.label}
             </button>
@@ -218,18 +243,18 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
         </nav>
       </div>
       {saveError && <p className="error ws-save-error" role="alert">{saveError}</p>}
-      {photosLate && tab === "plan" && <p className="note ws-locked">The photos are taking longer than usual. Refresh in a few minutes to see them.</p>}
-      {ws?.locked && tab !== "plan" && tab !== "ideas" && <p className="ws-locked">{ws.locked}</p>}
+      {photosLate && tab === "decision" && <p className="note ws-locked">The photos are taking longer than usual. Refresh in a few minutes to see them.</p>}
+      {ws?.locked && tab !== "decision" && tab !== "book" && <p className="ws-locked">{ws.locked}</p>}
       {needsProfile && props && <ProfileCard {...props} />}
 
-      {tab === "plan" && (
-        <div>
-          <PlanTab r={r} scanId={scanId} busyRule={busyRule} changes={changes} answerError={answerError} readOnly={readOnly} onAnswer={(id, v) => void answer(id, v)} />
-        </div>
+      {tab === "book" && !readOnly && (
+        <Suspense fallback={<div className="book" aria-busy="true" />}>
+          <BookView scanId={scanId} />
+        </Suspense>
       )}
-      {props && tab === "ideas" && (
+      {tab === "decision" && (
         <div>
-          <IdeasTab {...props} />
+          <PlanTab r={r} scanId={scanId} design={design} busyRule={busyRule} changes={changes} answerError={answerError} readOnly={readOnly} onAnswer={(id, v) => void answer(id, v)} />
         </div>
       )}
       {props && tab === "permit" && (
@@ -256,19 +281,18 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
           <BuildTab {...props} />
         </div>
       )}
-      {!ws && tab !== "plan" && <p className="viewer-empty mono ws-wait">Opening your workspace…</p>}
+      {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty mono ws-wait">Opening your workspace…</p>}
 
       <SiteFooter />
-      <div className="result-bar">
-        {tab === "plan" ? (
-          <button className="btn btn-primary" onClick={goNext}>{next.label}</button>
-        ) : (
-          <button className="btn btn-primary" onClick={() => go("plan")}>Back to your plan</button>
-        )}
-        <button className="btn btn-ghost" onClick={() => void share()}>
-          Share
-        </button>
-      </div>
+      {readOnly ? (
+        <div className="result-bar">
+          <button className="btn btn-primary" onClick={() => void share()}>
+            Share
+          </button>
+        </div>
+      ) : (
+        <FlowFoot scanId={scanId} step="book" next={next ? { label: next.label, onClick: () => go(next.tab) } : null} />
+      )}
     </main>
   );
 }

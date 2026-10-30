@@ -1,13 +1,13 @@
-// Client for the swipe deck and the layout picker (server/ideas/routes.ts). The example ("sample")
-// reads its deck from public/samples/sample/cards and keeps its pick in this tab.
+// Client for the swipe deck and the board (server/ideas/routes.ts). The example ("sample") reads its
+// deck from public/samples/sample/cards and keeps its board in this browser.
 import type { BoardMood, Card, Deck, Slot } from "../../server/ideas/deck";
-import type { LayoutOption } from "../../server/ideas/layouts";
 import type { Design, Finishes } from "../../server/model/types";
 import type { Plan } from "../api";
+import { getWorkspace, saveWorkspace } from "../workspaceApi";
 
 // The board's read: the model's Mood plus the furniture colours it sets.
 export type Mood = BoardMood;
-export type { Card, Deck, LayoutOption, Slot };
+export type { Card, Deck, Slot };
 
 const isSample = (scanId: string) => scanId === "sample";
 
@@ -47,39 +47,21 @@ export async function readDeck(scanId: string): Promise<Deck> {
   return res.ok ? res.json() : emptyDeck;
 }
 
-export async function getLayouts(scanId: string): Promise<{ plan: Plan | null; options: LayoutOption[] }> {
-  const res = await fetch(`/api/scans/${scanId}/layouts`, { cache: "no-store" });
-  return res.ok ? res.json() : { plan: null, options: [] };
-}
+export const SAMPLE_MOOD = "br-sample-mood";
 
-// A layout's real corner with their board's finishes. Takes a few seconds the first time.
-export async function cornerPicture(scanId: string, option: string, finishes: Partial<Finishes>): Promise<{ url: string; checked: string } | { error: string }> {
-  const res = await fetch(`/api/scans/${scanId}/corner`, { method: "POST", headers: await headers(true), body: JSON.stringify({ option, finishes }) });
-  const body = await res.json().catch(() => ({}));
-  return res.ok ? body : { error: body.error ?? "No picture this time." };
-}
-
-// What their board reads, saved as they swipe (the example keeps it in this tab).
+// What their board reads, saved as they swipe, into the model (the example's lives in this browser).
 export async function saveMood(scanId: string, mood: Mood): Promise<void> {
-  if (isSample(scanId)) return;
-  await fetch(`/api/scans/${scanId}/mood`, { method: "POST", headers: await headers(true), body: JSON.stringify(mood) }).catch(() => {});
-}
-
-const SAMPLE_PICK = "br-sample-design";
-
-// The layout they picked, saved as a design in the model with the board it came from.
-export async function chooseLayout(scanId: string, option: string, mood: Mood): Promise<{ design: Pick<Design, "id" | "name"> } | { error: string }> {
   if (isSample(scanId)) {
+    const { state } = await getWorkspace(scanId);
+    if (state.model) await saveWorkspace(scanId, { state: { model: { ...state.model, mood } } });
     try {
-      sessionStorage.setItem(SAMPLE_PICK, JSON.stringify({ option, mood }));
+      localStorage.setItem(SAMPLE_MOOD, JSON.stringify(mood));
     } catch {
-      // Private mode: the pick lasts as long as the page.
+      // Private mode: the board lasts as long as the page.
     }
-    return { design: { id: option, name: option } };
+    return;
   }
-  const res = await fetch(`/api/scans/${scanId}/design`, { method: "POST", headers: await headers(true), body: JSON.stringify({ option, mood }) });
-  const body = await res.json().catch(() => ({}));
-  return res.ok ? body : { error: body.error ?? "That didn't save. Try again." };
+  await fetch(`/api/scans/${scanId}/mood`, { method: "POST", headers: await headers(true), body: JSON.stringify(mood) }).catch(() => {});
 }
 
 export const frameSrc = (scanId: string, frame: number) =>

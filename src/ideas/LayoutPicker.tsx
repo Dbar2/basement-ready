@@ -1,188 +1,111 @@
-// "Pick a layout": three or four floor plans for their basement, each with a picture of one real
-// corner as it would look in it, finished the way their board reads, how many of its checks pass, and
-// its price once the quote can give one. On a phone they swipe between them; on a computer they sit
-// side by side. The one they pick is saved as their design.
-import { useEffect, useMemo, useState } from "react";
-import type { Layout, Plan } from "../api";
-import { LayoutShapes } from "../components/FloorPlan";
-import { STYLES, type StyleId } from "../../server/ideas/styles";
-import { chooseLayout, cornerPicture, frameSrc, getLayouts, type Card, type LayoutOption, type Mood } from "./api";
-import { Picture } from "./Picture";
+// "Pick a layout": the model's designs for their basement (server/model/seed.ts: one bedroom on the
+// window, the studio, the bedroom on another wall, two bedrooms where they fit), each permit-ready from
+// the start. Every card has the plan, a picture of the design itself from the real angle that shows it
+// best (src/views/covers.tsx), how many of its checks it meets, and what it costs hired out
+// (server/quote). On a phone they swipe between them; on a computer they sit side by side.
+import { useMemo } from "react";
+import { checkDesign, tally } from "../../server/model/checks";
+import { bounds, centroid, polygonArea } from "../../server/model/geometry";
+import type { Design, Model } from "../../server/model/types";
+import { quote } from "../../server/quote/quote";
+import { useDesignCovers } from "../views/covers";
 import "./ideas.css";
-
-type Corner = { url: string | null; note: string | null };
-
-// The example has no server to make pictures: a card from its deck that shows the same corner as the
-// same room, in their style when there is one. Never a living room captioned as the bedroom.
-function cardFor(cards: Card[], o: LayoutOption, mood: Mood): Card | null {
-  const c = o.corner;
-  if (!c) return null;
-  const same = cards.filter((k) => k.frame === c.frame && k.tags.use === c.use);
-  return same.find((k) => k.tags.style === mood.style) ?? same[0] ?? null;
-}
 
 const cad = (n: number) => `$${Math.round(n / 1000)}k`;
 
-// `renderFor`: a picture of the layout's design itself, rendered from the 3D (server/views, the design
-// pictures). When it gives one, the card shows that; until then, the real corner restyled.
-type Props = {
-  scanId: string;
-  mood: Mood;
-  cards: Card[];
-  onPicked?: (option: LayoutOption) => void;
-  renderFor?: (option: LayoutOption, mood: Mood) => Promise<string | null>;
-};
-
-export function LayoutPicker({ scanId, mood, cards, onPicked, renderFor }: Props) {
-  const [data, setData] = useState<{ plan: Plan | null; options: LayoutOption[] } | null>(null);
-  const [corners, setCorners] = useState<Record<string, Corner>>({});
-  const [picked, setPicked] = useState<string | null>(null);
-  const [saving, setSaving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const finishes = useMemo(() => JSON.stringify(mood.finishes), [mood.finishes]);
-
-  useEffect(() => {
-    let live = true;
-    getLayouts(scanId).then((d) => live && setData(d));
-    return () => {
-      live = false;
-    };
-  }, [scanId]);
-
-  // Each corner, finished the way the board reads now. A new board gets new pictures. The design's own
-  // render first, when there is one; else the real corner restyled (the example: a card of its deck).
-  useEffect(() => {
-    if (!data) return;
-    let live = true;
-    const show = (o: LayoutOption, corner: Corner) => live && setCorners((c) => ({ ...c, [o.id]: corner }));
-    const restyled = async (o: LayoutOption): Promise<Corner> => {
-      if (scanId === "sample") {
-        const k = cardFor(cards, o, mood);
-        return k ? { url: k.url, note: null } : { url: frameSrc(scanId, o.corner!.frame), note: `This corner today: the ${o.corner!.zone.toLowerCase()} goes here` };
-      }
-      const r = await cornerPicture(scanId, o.id, mood.finishes);
-      return "error" in r ? { url: null, note: r.error } : { url: r.url, note: null };
-    };
-    for (const o of data.options.filter((x) => x.corner)) {
-      show(o, { url: null, note: null });
-      void (async () => {
-        const url = renderFor ? await renderFor(o, mood).catch(() => null) : null;
-        show(o, url ? { url, note: null } : await restyled(o));
-      })();
-    }
-    return () => {
-      live = false;
-    };
-    // The board's finishes, not every swipe, decide the pictures.
-  }, [data, scanId, finishes, cards.length]);
-
-  const pick = async (o: LayoutOption) => {
-    setSaving(o.id);
-    setError(null);
-    const r = await chooseLayout(scanId, o.id, mood);
-    setSaving(null);
-    if ("error" in r) return setError(r.error);
-    setPicked(o.id);
-    onPicked?.(o);
-  };
-
-  if (!data) return <section className="layouts" aria-busy="true" aria-label="Pick a layout" />;
-  if (!data.plan || !data.options.length) {
-    return (
-      <section className="layouts">
-        <h2>Pick a layout</h2>
-        <p className="layouts-lede">The layouts need your floor plan first.</p>
-      </section>
-    );
-  }
-  const plan = data.plan;
-  const label = mood.style ? STYLES[mood.style as StyleId].label : null;
-  const style = label ? label.charAt(0).toLowerCase() + label.slice(1) : null;
+export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: string; model: Model; municipality?: string; onPick: (id: string) => void }) {
+  const { covers, renderer } = useDesignCovers(scanId, model.designs);
+  const facts = useMemo(
+    () =>
+      new Map(
+        model.designs.map((d) => {
+          const count = tally(checkDesign(d, model.existing));
+          const q = quote(model, d, { municipality });
+          const suite = d.proposed.rooms.filter((r) => r.unit === 2);
+          const beds = suite.filter((r) => r.kind === "bedroom").length;
+          const area = suite.reduce((s, r) => s + polygonArea(r.polygon), 0);
+          return [d.id, { count, low: q.totalLow, high: q.totalHigh, beds, area }];
+        }),
+      ),
+    [model, municipality],
+  );
 
   return (
     <section className="layouts" aria-labelledby="layouts-title">
-      <h2 id="layouts-title">Pick a layout</h2>
-      <p className="layouts-lede">
-        {data.options.length} ways to lay out your basement, each with one real corner as it would look{style ? `, finished ${style}` : ""}.
-        {!mood.style && " Love a few cards first to finish them your way."}
-      </p>
+      <h2 id="layouts-title" className="visually-hidden">The layouts</h2>
       <ul className="layout-row">
-        {data.options.map((o) => {
-          const corner = corners[o.id];
-          const chosen = picked === o.id;
+        {model.designs.map((d) => {
+          const f = facts.get(d.id)!;
+          const cover = covers[d.id];
           return (
-            <li key={o.id} className="layout-card" data-chosen={chosen || undefined}>
-              <PlanThumb plan={plan} layout={o.layout as Layout} name={o.name} />
-              {o.corner && (
+            <li key={d.id} className="layout-card" data-chosen={d.chosen || undefined}>
+              <button type="button" className="layout-hit" aria-pressed={d.chosen} onClick={() => onPick(d.id)} aria-label={`Pick ${d.name}`}>
                 <figure className="layout-corner">
-                  <Picture from={frameSrc(scanId, o.corner.frame)} src={corner?.url} aspect={o.corner.aspect} alt={`${o.corner.zone} in this layout, virtually staged`} />
-                  <figcaption className="mono">{corner?.note ?? (corner?.url ? `${o.corner.zone} · virtually staged` : `${o.corner.zone} · restyling…`)}</figcaption>
+                  <span className="layout-pic" data-ready={Boolean(cover) || undefined}>
+                    {cover ? <img src={cover.url} alt={`${d.name}, virtually staged in your basement`} draggable={false} /> : cover === null ? <DesignThumb design={d} /> : null}
+                  </span>
+                  <figcaption className="mono">
+                    {cover ? (cover.making ? "Virtually staged · making it look real…" : `Virtually staged · ${cover.kind === "photo" ? cover.checked : "3D render"}`) : cover === null ? "The plan" : "Drawing it in your basement…"}
+                  </figcaption>
                 </figure>
-              )}
-              <h3>{o.name}</h3>
-              <p className="layout-facts mono">
-                <span data-ok={o.checks.passed === o.checks.total || undefined}>
-                  {o.checks.passed} of {o.checks.total} checks pass
-                </span>
-                <span>{o.price ? `${cad(o.price.lowCAD)}–${cad(o.price.highCAD)}` : "Priced with your quote"}</span>
-              </p>
-              <ul className="layout-checks">
-                {o.layout.checks.map((c) => (
-                  <li key={c.label} data-ok={c.ok === true ? "yes" : c.ok === false ? "no" : "ask"}>
-                    {c.label}
-                  </li>
-                ))}
-              </ul>
-              <button type="button" className={chosen ? "btn btn-primary" : "btn btn-ghost"} onClick={() => pick(o)} disabled={saving !== null} aria-pressed={chosen}>
-                {chosen ? "Picked ✓" : saving === o.id ? "Saving…" : "Pick this layout"}
+                {cover !== null && <DesignThumb design={d} />}
+                <h3>{d.name}</h3>
+                <p className="layout-facts mono">
+                  <span>{f.beds ? `${f.beds} bedroom${f.beds > 1 ? "s" : ""}` : "Studio"} · {Math.round(f.area)} m²</span>
+                  <span data-ok={f.count.fix === 0 || undefined}>
+                    Meets {f.count.ok} checks{f.count.fix ? ` · ${f.count.fix} to fix` : ""}
+                  </span>
+                  <span>{cad(f.low)}–{cad(f.high)} hired out</span>
+                </p>
+                <span className={d.chosen ? "btn btn-primary layout-pick" : "btn btn-ghost layout-pick"}>{d.chosen ? "Picked ✓" : "Pick this layout"}</span>
               </button>
             </li>
           );
         })}
       </ul>
-      {error && <p className="layouts-error">{error}</p>}
-      {picked && (
-        <p className="layouts-done" aria-live="polite">
-          Saved: {data.options.find((o) => o.id === picked)?.name}. Next, your basement designed in 3D.
-        </p>
-      )}
+      {renderer}
     </section>
   );
 }
 
-// The layout drawn small: the room, its new walls and rooms, the stairs and the window.
-function PlanThumb({ plan, layout, name }: { plan: Plan; layout: Layout; name: string }) {
-  const b = plan.box;
-  const W = 420;
-  const pad = 14;
-  const s = (W - 2 * pad) / Math.max(plan.widthM, plan.depthM);
-  const H = Math.round(plan.depthM * s + 2 * pad);
-  const X = (x: number) => pad + (W - 2 * pad - plan.widthM * s) / 2 + (x - b.minX) * s;
-  const Z = (z: number) => pad + (z - b.minZ) * s;
-  const win = layout.window;
-  const winLine = (() => {
-    if (!win) return null;
-    const along = win.side === "minZ" || win.side === "maxZ";
-    const a = (along ? b.minX : b.minZ) + win.atM;
-    const h = win.widthM / 2;
-    if (along) {
-      const z = win.side === "minZ" ? b.minZ : b.maxZ;
-      return { x1: X(a - h), y1: Z(z), x2: X(a + h), y2: Z(z) };
-    }
-    const x = win.side === "minX" ? b.minX : b.maxX;
-    return { x1: X(x), y1: Z(a - h), x2: X(x), y2: Z(a + h) };
-  })();
+// The design drawn small: its rooms with their names, the walls (new ones, and the fire separation in
+// red), and the windows.
+export function DesignThumb({ design }: { design: Design }) {
+  const P = design.proposed;
+  const pts = [...P.walls.flatMap((w) => [w.a, w.b]), ...P.rooms.flatMap((r) => r.polygon)];
+  if (!pts.length) return null;
+  const b = bounds(pts);
+  const pad = 0.3;
+  const w = b.maxX - b.minX + 2 * pad, h = b.maxZ - b.minZ + 2 * pad;
+  const walls = new Map(P.walls.map((x) => [x.id, x]));
   return (
-    <svg className="plan layout-thumb" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Floor plan: ${name}`}>
-      <rect x={0} y={0} width={W} height={H} className="plan-paper" />
-      <LayoutShapes layout={layout} units="m" X={X} Z={Z} s={s} />
-      {plan.stairs.map((st) => (
-        <g key={st.detectionId} className="plan-stairs">
-          <rect x={X(st.x0)} y={Z(st.z0)} width={(st.x1 - st.x0) * s} height={(st.z1 - st.z0) * s} />
-        </g>
+    <svg className="layout-thumb" viewBox={`${b.minX - pad} ${b.minZ - pad} ${w} ${h}`} role="img" aria-label={`Plan of ${design.name}`}>
+      {P.rooms.map((r) => (
+        <polygon key={r.id} points={r.polygon.map((p) => p.join(",")).join(" ")} className="thumb-room" data-kind={r.kind} data-unit={r.unit} />
       ))}
-      <rect x={X(b.minX)} y={Z(b.minZ)} width={plan.widthM * s} height={plan.depthM * s} className="layout-thumb-wall" />
-      {winLine && <line {...winLine} className="layout-thumb-window" />}
+      {P.walls.map((x) => (
+        <line key={x.id} x1={x.a[0]} y1={x.a[1]} x2={x.b[0]} y2={x.b[1]} className="thumb-wall" data-kind={x.kind} data-rated={x.rating ? "" : undefined} />
+      ))}
+      {P.openings
+        .filter((o) => o.kind === "window")
+        .map((o) => {
+          const x = walls.get(o.wallId);
+          if (!x) return null;
+          const L = Math.hypot(x.b[0] - x.a[0], x.b[1] - x.a[1]) || 1;
+          const u = [(x.b[0] - x.a[0]) / L, (x.b[1] - x.a[1]) / L];
+          const t0 = o.offsetM - o.widthM / 2, t1 = o.offsetM + o.widthM / 2;
+          return <line key={o.id} x1={x.a[0] + u[0] * t0} y1={x.a[1] + u[1] * t0} x2={x.a[0] + u[0] * t1} y2={x.a[1] + u[1] * t1} className="thumb-window" />;
+        })}
+      {P.rooms
+        .filter((r) => r.unit === 2 && polygonArea(r.polygon) > 3)
+        .map((r) => {
+          const c = centroid(r.polygon);
+          return (
+            <text key={r.id} x={c[0]} y={c[1]} className="thumb-name" fontSize={Math.max(0.28, Math.min(w, h) / 22)}>
+              {r.name}
+            </text>
+          );
+        })}
     </svg>
   );
 }
