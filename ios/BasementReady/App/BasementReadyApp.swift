@@ -87,5 +87,6 @@ struct RootView: View {
     .onChange(of: uploader.state) { _, state in
       if case .done(let scan) = state { app.stage = .result(scan) }
     }
+    .introFlow() // the launch animation, and the filming guide on the first launch
   }
 }
