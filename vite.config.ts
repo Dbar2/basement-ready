@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     port: 5173,
     ...(cert ? { host: true, https: { key: readFileSync(`${cert}-key.pem`), cert: readFileSync(`${cert}.pem`) } } : {}),
+    // API_PORT lets a second checkout run its own pair beside the first.
     proxy: { "/api": `http://localhost:${process.env.API_PORT ?? 8787}` },
   },
 });

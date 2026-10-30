@@ -12,23 +12,18 @@ import type { Detection } from "../pipeline";
 import { parseSam } from "../sam";
 import { storage } from "../storage";
 import type { Look } from "../workspace";
+import { STYLES as ALL } from "./styles";
 
-// The styles on offer. Plain words a homeowner picks from; the prompt carries the detail.
-export const STYLES: Record<string, { label: string; feel: string }> = {
-  bright: { label: "Bright and calm", feel: "bright Scandinavian: white oak, soft white walls, linen, plants" },
-  warm: { label: "Warm wood", feel: "warm walnut and oak, cream walls, brass lamps, wool textiles" },
-  green: { label: "Deep green", feel: "deep green accent wall, oak floor, black metal details, cosy" },
-  cottage: { label: "Cottage", feel: "relaxed cottage: painted wood, soft blue and white, woven baskets" },
-  modern: { label: "Clean modern", feel: "minimal modern: matte white, light grey, black fixtures, slim lines" },
-};
+// The styles on offer, shared with the swipe deck (server/ideas/styles.ts), looked up by name.
+export const STYLES: Record<string, (typeof ALL)[keyof typeof ALL]> = ALL;
 
 const run = promisify(execFile);
 
-type Box = { x: number; y: number; w: number; h: number };
+export type Box = { x: number; y: number; w: number; h: number };
 
 // Muse Image answers in its own format and size (WebP, up to 1600 px): back to a JPEG at the
 // frame's own size, as server/concepts.ts does, so boxes line up and PDFs can embed it.
-async function toJpeg(img: Buffer, w: number, h: number) {
+export async function toJpeg(img: Buffer, w: number, h: number) {
   const dir = mkdtempSync(join(tmpdir(), "look-"));
   try {
     writeFileSync(join(dir, "in.bin"), img);
@@ -42,7 +37,7 @@ type Source = { n: number; frame: number; title: string; space: string; jpeg: Bu
 
 export const lookKey = (scanId: string, style: string, n: number) => `looks/${scanId}/${style}/${n}.jpg`;
 
-async function boxes(jpeg: Buffer, concept: string): Promise<Box[]> {
+export async function boxes(jpeg: Buffer, concept: string): Promise<Box[]> {
   const raw = await samImage(concept, `data:image/jpeg;base64,${jpeg.toString("base64")}`).catch(() => "");
   return parseSam(raw)
     .map((t) => t.frames[0]?.box)

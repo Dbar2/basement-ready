@@ -30,6 +30,7 @@ import { cleanMoneyAnswer, evaluateMoney, fromWho, STORED_MONEY_QUESTIONS, waitQ
 import { cleanPlans, plansHousehold, plansQuestion, plansWords, PLANS_ID } from "./plans";
 import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
+import { mountIdeas } from "./ideas/routes";
 import { keys, storage, type Scan3dFile } from "./storage";
 import { mountWorkspace } from "./workspaceRoutes";
 import { mountModel } from "./model/routes";
@@ -535,6 +536,9 @@ mountModel(app, currentUser);
 
 // Pictures of a design from the scan's best real angles, all agreeing (server/views/routes.ts).
 mountViews(app);
+
+// Swipe your style, then pick a layout (server/ideas/routes.ts).
+mountIdeas(app, currentUser);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {

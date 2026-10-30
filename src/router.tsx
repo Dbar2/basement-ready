@@ -4,6 +4,7 @@ import { Logo } from "./components/Logo";
 import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
 import { applyRouteMeta, marketingRoutes, type MarketingRoute } from "./marketing/routes";
 import { PATHS } from "./marketing/site";
+import { IdeasPage } from "./ideas/IdeasPage";
 import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
 import { ScanPage } from "./screens/ScanPage";
@@ -26,6 +27,8 @@ const planRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$
 const studioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/studio", component: Studio });
 // Pictures of the design from the scan's best real angles, all agreeing (src/views/DesignPictures.tsx).
 const picturesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/pictures", component: PicturesPage });
+// Swipe your style, then pick a layout: on its own page until the wait screen deals the deck.
+const ideasRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/ideas", component: IdeasPage });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -66,7 +69,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, picturesRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, picturesRoute, ideasRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
