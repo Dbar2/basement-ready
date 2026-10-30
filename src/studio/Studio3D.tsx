@@ -1,4 +1,5 @@
-// The studio's 3D: the design inside the real scan (src/studio/DesignScene.tsx draws it), with labels
+// The studio's 3D: the design inside the basement as built (src/three/AsBuilt.tsx), or the raw scan
+// when they ask for it (src/studio/DesignScene.tsx draws either), with labels
 // drawn over the canvas (src/three/Tags.tsx), what's picked, a marker for a failing check and the grab
 // handles. Walk it at eye height without passing through walls, or look from above and drag walls and
 // doors. The canvas is mounted once: an edit changes what's in it, never remounts it.
@@ -8,6 +9,7 @@ import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { along, bounds, dot, polygonArea, project, solidPieces, sub, wallNormal } from "../../server/model/geometry";
 import type { Design, Existing, Pt, Wall } from "../../server/model/types";
+import { useAtlas } from "../three/AsBuilt";
 import { parseMesh, type Solid } from "../three/RealScan";
 import { Tag, TagRoot, TagTracker } from "../three/Tags";
 import type { Picked } from "./PlanSvg";
@@ -22,9 +24,11 @@ export function meshUrls(scanId: string) {
   return scanId === "sample" ? ["/samples/sample/3d/mesh.bin"] : [`/api/scans/${scanId}/3d/mesh.bin?room=all`, `/api/scans/${scanId}/3d/mesh.bin`];
 }
 
-function useSolid(scanId: string) {
+// The raw scan's solid surface, once `scanId` is given (it's big: only when they ask for it).
+function useSolid(scanId: string | null) {
   const [solid, setSolid] = useState<Solid | null | "none">(null);
   useEffect(() => {
+    if (!scanId) return;
     let gone = false;
     (async () => {
       for (const url of meshUrls(scanId)) {
@@ -52,6 +56,7 @@ export function Studio3D(props: {
   existing: Existing;
   design: Design;
   view: View;
+  layer?: "built" | "scan"; // the basement as built (default), or the raw scan
   finish: Finish;
   selected: Picked;
   marker: Pt | null;
@@ -62,17 +67,20 @@ export function Studio3D(props: {
   onOpening: (id: string, offsetM: number, done: boolean) => void;
 }) {
   const { existing, design, view } = props;
-  const solid = useSolid(props.scanId);
+  const wantScan = props.layer === "scan";
+  const solid = useSolid(wantScan ? props.scanId : null);
+  const { atlas } = useAtlas(props.scanId, existing);
   const phone = useMemo(() => typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches, []);
   const area = useMemo(() => suiteArea(existing, design), [existing, design]);
   const handles = useRef<THREE.Group>(null);
-  if (solid === null) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
+  // The as-built model stays up while the scan downloads, and when there's no scan to show.
+  const scan = wantScan && solid && solid !== "none" ? solid : null;
   return (
     <TagRoot>
       <Canvas className="viewer-canvas" camera={{ fov: 62, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
         <TagTracker />
         <color attach="background" args={[css("--color-ink", "#0F2A1E")]} />
-        <DesignScene existing={existing} design={design} finish={props.finish} scan={solid === "none" ? null : solid} overview={view === "overview"} shell={solid === "none"} />
+        <DesignScene existing={existing} design={design} finish={props.finish} built={scan ? null : { atlas }} scan={scan} overview={view === "overview"} />
         <Overlay design={design} h={wallHeight(existing)} selected={props.selected} marker={props.marker} view={view} handles={handles} canDragWall={props.canDragWall} />
         {view === "walk" ? (
           <Walker design={design} existing={existing} start={area ? mainRect(area.polygon) : null} reduced={props.reduced} />

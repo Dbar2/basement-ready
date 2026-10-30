@@ -81,6 +81,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
   const existing = model.existing;
   const frame = useMemo(() => frameOf(existing, 0.6), [existing]);
   const [view, setView] = useState<View>("overview");
+  const [layer, setLayer] = useState<"built" | "scan">("built");
   const [pane, setPane] = useState<"3d" | "plan">("3d");
   const [units, setUnits] = useState<Units>("m");
   const [picked, setPicked] = useState<Picked>(null);
@@ -165,6 +166,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
                   existing={existing}
                   design={design}
                   view={view}
+                  layer={layer}
                   finish={finish}
                   selected={picked}
                   marker={marker}
@@ -180,6 +182,10 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
               <div className="segmented small" role="group" aria-label="How to look">
                 <button aria-pressed={view === "overview"} onClick={() => setView("overview")}>From above</button>
                 <button aria-pressed={view === "walk"} onClick={() => setView("walk")}>Walk</button>
+              </div>
+              <div className="segmented small" role="group" aria-label="3D model">
+                <button aria-pressed={layer === "built"} onClick={() => setLayer("built")}>As built</button>
+                <button aria-pressed={layer === "scan"} onClick={() => setLayer("scan")}>Scan</button>
               </div>
             </div>
             <p className="viewer-hint mono">{view === "walk" ? "Drag to look · tap the floor to walk" : "Drag a wall or a green knob · drag elsewhere to turn"}</p>

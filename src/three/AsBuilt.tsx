@@ -212,7 +212,17 @@ export function AsBuiltScene({
   lights?: boolean;
   onLoaded?: (size: number) => void; // each time a sharper atlas is on
 }) {
-  const model = useMemo(() => asBuiltOf(existing, design, atlas, newWalls), [existing, design, atlas, newWalls]);
+  // Rebuilt only when the design changes the house itself (a wall gone, an opening cut, or its new
+  // walls when it draws them): not on every drag of a new wall or a sofa.
+  const latest = useRef(design);
+  latest.current = design;
+  const designKey = useMemo(() => {
+    if (!design) return "";
+    const own = new Set(existing.walls.map((w) => w.id));
+    const p = design.proposed;
+    return JSON.stringify([p.walls.filter((w) => own.has(w.id)).map((w) => w.id), p.openings.filter((o) => own.has(o.wallId)), newWalls ? p.walls.filter((w) => w.kind === "new") : null]);
+  }, [design, existing, newWalls]);
+  const model = useMemo(() => asBuiltOf(existing, latest.current, atlas, newWalls), [existing, designKey, atlas, newWalls]); // eslint-disable-line react-hooks/exhaustive-deps
   const { gl } = useThree();
   const texture = useAtlasTexture(atlas, (size) => {
     // Which atlas is on, for tests and screenshots: <canvas data-atlas="2048">.

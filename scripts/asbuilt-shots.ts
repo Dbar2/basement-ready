@@ -43,14 +43,19 @@ for (const name of ["chromium", "webkit"] as const) {
       if (s.wait) await page.waitForTimeout(s.wait);
       else await page.waitForSelector(s.ready ?? "body[data-ready]", { timeout: 150_000, state: "attached" }).catch(() => errors.push("never ready"));
       for (const step of s.steps ?? [{ name: "", click: s.click, after: s.after }]) {
-        for (const c of step.click ?? []) {
-          await page.locator(c).first().click({ timeout: 20_000 });
-          await page.waitForTimeout(800);
-        }
-        if (step.after) await page.waitForTimeout(step.after);
         const file = join(out, `${s.name}${step.name ? `-${step.name}` : ""}-${name}-${width}.png`);
-        await (s.selector ? page.locator(s.selector).first() : page).screenshot({ path: file });
-        console.log(`${file} ${((Date.now() - t0) / 1000).toFixed(1)} s${errors.length ? `  errors: ${errors.join(" | ")}` : ""}`);
+        try {
+          for (const c of step.click ?? []) {
+            await page.locator(c).first().click({ timeout: 20_000 });
+            await page.waitForTimeout(800);
+          }
+          if (step.after) await page.waitForTimeout(step.after);
+          await (s.selector ? page.locator(s.selector).first() : page).screenshot({ path: file });
+          console.log(`${file} ${((Date.now() - t0) / 1000).toFixed(1)} s${errors.length ? `  errors: ${errors.join(" | ")}` : ""}`);
+        } catch (err) {
+          // One shot failing doesn't stop the rest.
+          console.log(`${file} FAILED: ${(err instanceof Error ? err.message : String(err)).split("\n")[0]}${errors.length ? `  errors: ${errors.join(" | ")}` : ""}`);
+        }
       }
       await ctx.close();
     }
