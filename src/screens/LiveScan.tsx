@@ -1,22 +1,27 @@
-// While we check it (brand/explorations/M2-while-we-check.png): your own video plays with SAM's finds
-// locked on, a progress bar says how long is left, and the only questions a homeowner can answer are
-// asked here, so the answer arrives already using them. After the basement questions come the money
-// questions that still change a program (server/eligibility.ts), one at a time.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+// While we check it (brand/explorations/M2-while-we-check.png): the basement putting itself together
+// from the 3D service (the camera's walk first, then each area), your own video with SAM's finds locked
+// on, the photos of what it could look like as each one lands, and the questions only a homeowner can
+// answer, each asked once. Who it's for and the rent were asked on the start sheet; the server keeps
+// every answer (server/eligibility.ts waitQuestions), so a refresh carries on where it left off and
+// the answer arrives already using them. Time left comes from the scan's own progress (waitTime.ts).
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ANALYSIS_FPS,
   answerEarly,
   localVideos,
-  openMoneyQuestions,
   replaySample,
-  setHousehold,
   subscribe,
-  type AnyAnswer,
-  type Household,
-  type MoneyQuestion,
+  waitAsks,
   type ScanEvent,
+  type WaitAsk,
 } from "../api";
 import { Logo } from "../components/Logo";
+import "../styles/ask.css";
+import { modelsFrom, walkFrom } from "./assembly";
+import { leftWords, secondsLeft } from "./waitTime";
+
+// three.js only loads once there's a basement to draw.
+const Assembling = lazy(() => import("../components/Assembling"));
 
 type Props = {
   scanId: string; // "sample" replays the recorded sample scan
@@ -30,47 +35,13 @@ const STAGES = [
   { id: "assess", label: "Checking the rules" },
 ];
 
-// Asked while the scan runs. Same wording as the rules triage (server/triage.ts).
-type Picture = "door" | "pipes" | "people" | "house" | "houses" | "bill" | "rent" | "tools";
-type Ask = { id: string; question: string; hint: string; options: { label: string; value: AnyAnswer }[]; picture: Picture };
-const ASKS: Ask[] = [
-  {
-    id: "household",
-    question: "Who will live down there?",
-    hint: "It decides which grants fit.",
-    options: [
-      { label: "A parent or relative", value: "relative" },
-      { label: "A renter", value: "renter" },
-      { label: "Not sure yet", value: "unsure" },
-    ],
-    picture: "people",
-  },
-  {
-    id: "exit_from_suite",
-    question: "Is there a door from the basement straight outside?",
-    hint: "A side door or walk-out to the yard. Not the stairs up to the main floor.",
-    options: [
-      { label: "Yes", value: true },
-      { label: "No", value: false },
-      { label: "Not sure", value: "unsure" },
-    ],
-    picture: "door",
-  },
-  {
-    id: "plumbing_fixtures_and_shutoff",
-    question: "Is there a bathroom down there, or capped pipes for one?",
-    hint: "Capped pipes in the floor are a rough-in. They make a bathroom much cheaper.",
-    options: [
-      { label: "Yes", value: true },
-      { label: "No", value: false },
-      { label: "Not sure", value: "unsure" },
-    ],
-    picture: "pipes",
-  },
-];
-
-// The money questions come from the server, worded there; each gets a drawing here.
-const MONEY_PICTURES: Record<string, Picture> = {
+type Picture = "door" | "pipes" | "people" | "house" | "houses" | "bill" | "rent" | "tools" | "room";
+// The questions are worded on the server; each gets a drawing here.
+const PICTURE: Record<string, Picture> = {
+  who: "people",
+  plans: "room",
+  exit_from_suite: "door",
+  plumbing_fixtures_and_shutoff: "pipes",
   rent: "rent",
   lives_there: "house",
   other_home: "houses",
@@ -79,10 +50,16 @@ const MONEY_PICTURES: Record<string, Picture> = {
   work_started: "tools",
 };
 
-const moneyAsk = (q: MoneyQuestion): Ask => ({ id: q.id, question: q.question, hint: q.hint, options: q.options, picture: MONEY_PICTURES[q.id] ?? "house" });
-
 // Simple line drawings, so the question reads at a glance.
 const PICTURES: Record<Picture, ReactNode> = {
+  room: (
+    <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M10 70h100M14 70V16h92v54" />
+      <path d="M24 70V54h30v16M24 54v-6h30v6" />
+      <path d="M70 70V44h26v26M70 54h26" />
+      <path d="M78 16v10m-6 0h12" />
+    </g>
+  ),
   door: (
     <g fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round">
       <path d="M8 70h104M30 70V18h34v52M64 18l20 8v52l-20-8" />
@@ -145,9 +122,13 @@ function cssVar(name: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+type Photo = { n: number; url: string; title: string };
+
 export function LiveScan({ scanId, onDone }: Props) {
   const [events, setEvents] = useState<ScanEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // When the newest event arrived here, to count on from its scan time between events.
+  const heardAt = useRef(Date.now());
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // Play the file from this tab if we have it; after a refresh, play the server's copy.
@@ -162,6 +143,7 @@ export function LiveScan({ scanId, onDone }: Props) {
   useEffect(() => {
     setEvents([]);
     const push = (e: ScanEvent) => {
+      heardAt.current = Date.now();
       setEvents((prev) => [...prev, e]);
       if (e.type === "error") setError(e.text);
     };
@@ -185,60 +167,63 @@ export function LiveScan({ scanId, onDone }: Props) {
   const found = finds.filter((f) => (f.data?.detections?.length ?? 0) > 0).map((f) => f.data?.label?.toLowerCase()).filter(Boolean) as string[];
   const lastLog = events.filter((e) => e.type === "log").slice(-1)[0];
 
-  // A rough time left: about 2 minutes for a full take, counted from when the scan started; once the
-  // 3D is measuring area by area, about a minute for each area still to go.
-  const [now, setNow] = useState(() => Date.now());
-  const startedAt = useRef(Date.now());
+  // The basement assembling: the walk, then each area as its 3D is ready.
+  const path = useMemo(() => walkFrom(events), [events]);
+  const models = useMemo(() => modelsFrom(events), [events]);
+  const has3d = Boolean(path) || models.length > 0;
+  const [front, setFront] = useState<"3d" | "video">("3d");
+  const areaCount = events.map((e) => (e.type === "log" ? /Measuring area \d+ of (\d+)/.exec(e.text) : null)).filter(Boolean).at(-1)?.[1];
+  const areasIn = models.filter((m) => m.area !== "all").length;
+  const modelCaption = models.some((m) => m.area === "all")
+    ? "Your whole basement in 3D"
+    : areasIn
+      ? areaCount && Number(areaCount) > 1
+        ? `${areasIn} of ${areaCount} areas in 3D`
+        : "Your basement in 3D"
+      : "Your walk through the basement";
+
+  // The photos, as each one lands.
+  const photos = useMemo(() => {
+    const byN = new Map<number, Photo>();
+    for (const e of events) if (e.type === "photo" && e.data?.url && e.data.n) byN.set(e.data.n, { n: e.data.n, url: e.data.url, title: e.data.title ?? e.text });
+    return [...byN.values()].sort((a, b) => a.n - b.n);
+  }, [events]);
+
+  // Time left, from the scan's own progress.
+  const [, tick] = useState(0);
   useEffect(() => {
     if (done) return;
-    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
     return () => clearInterval(id);
   }, [done]);
-  const areaStep = events
-    .filter((e) => e.type === "log")
-    .map((e) => /Measuring area (\d+) of (\d+)/.exec(e.text))
-    .filter((m): m is RegExpExecArray => m !== null)
-    .slice(-1)[0];
-  const areasLeft = areaStep ? Number(areaStep[2]) - Number(areaStep[1]) + 1 : 0;
-  const leftSec = Math.max(15, 150 - (now - startedAt.current) / 1000);
-  const leftText = done
-    ? "Done"
-    : areasLeft > 1
-      ? `About ${areasLeft} min left`
-      : areasLeft === 1 || leftSec <= 40
-        ? "Almost there"
-        : leftSec > 75
-          ? "About 2 min left"
-          : "About 1 min left";
+  const scanNow = (events.at(-1)?.at ?? 0) + (Date.now() - heardAt.current) / 1000;
+  const leftText = done ? "Done" : events.length ? leftWords(secondsLeft(events, scanNow)) : "Starting…";
 
-  // The questions, one at a time. Answers go to the server now and apply when the scan finishes.
-  const [answered, setAnswered] = useState<Record<string, string>>({});
-  // Money questions that still change a program, fetched again after each answer.
-  const [money, setMoney] = useState<Ask[]>([]);
-  const refreshMoney = () =>
-    openMoneyQuestions(scanId)
-      .then((qs) => setMoney(qs.filter((q) => q.id !== "household" && q.answer === null).map(moneyAsk)))
-      .catch(() => {});
+  // The questions, one at a time, each once. The server says what's still worth asking (it already
+  // knows the start sheet's answers); answers go to it now and apply when the scan finishes.
+  const [asks, setAsks] = useState<WaitAsk[] | null>(null);
+  const [answered, setAnswered] = useState<string[]>([]);
+  const [words, setWords] = useState("");
   useEffect(() => {
-    void refreshMoney();
+    setAsks(null);
+    setAnswered([]);
+    waitAsks(scanId).then(setAsks).catch(() => setAsks([]));
   }, [scanId]);
-  const asks = [...ASKS, ...money.filter((m) => !ASKS.some((a) => a.id === m.id))];
-  const pending = asks.filter((a) => !(a.id in answered));
+  const pending = (asks ?? []).filter((a) => !answered.includes(a.id));
   const ask = pending[0] ?? null;
-  const pick = async (a: Ask, o: Ask["options"][number]) => {
-    setAnswered((prev) => ({ ...prev, [a.id]: o.label }));
-    if (a.id === "household") await setHousehold(scanId, o.value as Household);
-    else await answerEarly(scanId, a.id, o.value);
-    // Who it's for, and each money answer, change which money questions are left.
-    if (a.id === "household" || a.id in MONEY_PICTURES) await refreshMoney();
+  const pick = async (a: WaitAsk, value: WaitAsk["options"][number]["value"]) => {
+    setAnswered((prev) => [...prev, a.id]);
+    setWords("");
+    const next = await answerEarly(scanId, a.id, value).catch(() => null);
+    setAsks(next ?? (await waitAsks(scanId).catch(() => asks ?? [])));
   };
 
   // Ready and nothing left to ask: open the answer on its own after a moment.
   useEffect(() => {
-    if (!done || ask) return;
+    if (!done || ask || asks === null) return;
     const id = window.setTimeout(onDone, 2500);
     return () => clearTimeout(id);
-  }, [done, ask]);
+  }, [done, ask, asks]);
 
   // Draw SAM's boxes for whatever frame the video is on.
   useEffect(() => {
@@ -298,6 +283,34 @@ export function LiveScan({ scanId, onDone }: Props) {
     return () => cancelAnimationFrame(raf);
   }, [detections]);
 
+  const video = (
+    <div
+      key="video"
+      className="live-video live-tile"
+      data-role={has3d && front === "3d" ? "inset" : "main"}
+      {...(has3d && front === "3d" ? { role: "button", tabIndex: 0, "aria-label": "Show your video", "data-label": "Your video", onClick: () => setFront("video"), onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && setFront("video") } : {})}
+    >
+      <video
+        ref={videoRef}
+        src={src}
+        autoPlay
+        muted
+        loop
+        playsInline
+        // The server's copy appears a few seconds into the scan; keep trying until it does.
+        onError={(e) => {
+          const v = e.currentTarget;
+          if (!local && scanId !== "sample") setTimeout(() => v.load(), 2000);
+        }}
+      />
+      <canvas ref={canvasRef} aria-hidden />
+      {!done && <div className="live-sweep" aria-hidden />}
+      <p className="live-caption" aria-live="polite">
+        {error ? error : found.length ? `Found ${found.slice(0, 3).join(", ")}${found.length > 3 ? ` and ${found.length - 3} more` : ""}` : (lastLog?.text ?? "Looking through your video…")}
+      </p>
+    </div>
+  );
+
   return (
     <main className="live">
       <header className="live-top">
@@ -314,29 +327,25 @@ export function LiveScan({ scanId, onDone }: Props) {
       </ol>
 
       <section className="live-stage">
-        <div className="live-video">
-          <video
-            ref={videoRef}
-            src={src}
-            autoPlay
-            muted
-            loop
-            playsInline
-            // The server's copy appears a few seconds into the scan; keep trying until it does.
-            onError={(e) => {
-              const v = e.currentTarget;
-              if (!local && scanId !== "sample") setTimeout(() => v.load(), 2000);
-            }}
-          />
-          <canvas ref={canvasRef} aria-hidden />
-          {!done && <div className="live-sweep" aria-hidden />}
-          <p className="live-caption" aria-live="polite">
-            {error ? error : found.length ? `Found ${found.slice(0, 3).join(", ")}${found.length > 3 ? ` and ${found.length - 3} more` : ""}` : (lastLog?.text ?? "Looking through your video…")}
-          </p>
+        <div className="live-main" data-3d={has3d}>
+          {has3d && (
+            <div
+              key="model"
+              className="live-model live-tile"
+              data-role={front === "3d" ? "main" : "inset"}
+              {...(front === "video" ? { role: "button", tabIndex: 0, "aria-label": "Show your basement in 3D", "data-label": "Your basement", onClick: () => setFront("3d"), onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && setFront("3d") } : {})}
+            >
+              <Suspense fallback={null}>
+                <Assembling path={path} models={models} />
+              </Suspense>
+              <p className="live-caption live-model-caption" aria-live="polite">{modelCaption}</p>
+            </div>
+          )}
+          {video}
         </div>
 
         <aside className="live-side" aria-live="polite">
-          {done && !ask ? (
+          {done && !ask && asks !== null ? (
             <div className="live-ready">
               <h2>Your answer is ready</h2>
               <button className="btn btn-primary" onClick={onDone}>
@@ -346,20 +355,33 @@ export function LiveScan({ scanId, onDone }: Props) {
           ) : ask ? (
             <div className="live-ask" key={ask.id}>
               <span className="mono">
-                {asks.length - pending.length + 1} of {asks.length} · while we check
+                {answered.length + 1} of {answered.length + pending.length} · while we check
               </span>
               <h2>{ask.question}</h2>
               <svg viewBox="0 0 120 80" className="live-ask-pic" aria-hidden>
-                {PICTURES[ask.picture]}
+                {PICTURES[PICTURE[ask.id] ?? "house"]}
               </svg>
               <p className="muted">{ask.hint}</p>
               <div className="live-ask-options">
                 {ask.options.map((o) => (
-                  <button key={o.label} className="btn btn-ghost" onClick={() => void pick(ask, o)}>
+                  <button key={o.label} className="btn btn-ghost" onClick={() => void pick(ask, o.value)}>
                     {o.label}
                   </button>
                 ))}
               </div>
+              {ask.words && (
+                <form
+                  className="live-ask-words"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (words.trim().length >= 2) void pick(ask, words.trim());
+                  }}
+                >
+                  <input className="input" value={words} maxLength={160} onChange={(e) => setWords(e.target.value)} placeholder="Or say it your way" aria-label="What you'd like it to be, in your own words" />
+                  <button className="btn btn-primary" disabled={words.trim().length < 2}>Save</button>
+                </form>
+              )}
+              {ask.decides && ask.decides.length > 0 && <p className="live-ask-decides mono">Decides: {ask.decides.join(" · ")}</p>}
               {done && (
                 <button className="link-quiet" onClick={onDone}>
                   Skip and see my plan
@@ -368,9 +390,24 @@ export function LiveScan({ scanId, onDone }: Props) {
             </div>
           ) : (
             <div className="live-ready">
-              <h2>Thanks. Almost there.</h2>
+              <h2>{asks === null ? "Getting your questions…" : "Thanks. Almost there."}</h2>
               <p className="muted">{lastLog?.text ?? "Checking your basement against the rules."}</p>
             </div>
+          )}
+
+          {photos.length > 0 && (
+            <section className="live-photos" aria-label="What it could look like">
+              <h3>What it could look like</h3>
+              <ul>
+                {photos.map((p) => (
+                  <li key={p.n}>
+                    <img src={p.url} alt={`${p.title}, virtually staged from your own video`} />
+                    <span className="live-photo-label mono">Virtually staged</span>
+                    <b>{p.title}</b>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
         </aside>
       </section>
