@@ -71,7 +71,7 @@ export function MoneySection({ r, busy, readOnly, example, onAnswer }: { r: Scan
       <div className="money-total" data-none={total === 0 || undefined}>
         {total > 0 ? (
           <>
-            <span className="mono">You may be eligible for up to</span>
+            <span className="aside">You may be eligible for up to</span>
             <strong>{money(total)}</strong>
             <span>
               {cash.length === 1 ? `From the ${cash[0].shortName}.` : `From ${cash.length} programs, listed below.`}
@@ -80,12 +80,12 @@ export function MoneySection({ r, busy, readOnly, example, onAnswer }: { r: Scan
           </>
         ) : ifYes > 0 ? (
           <>
-            <span className="mono">Up to {money(ifYes)} is one answer away</span>
+            <span className="aside">Up to <span className="mono">{money(ifYes)}</span> is one answer away</span>
             <span>{readOnly ? "The owner's answers decide it." : "Answer below and we'll show what you may be eligible for."}</span>
           </>
         ) : (
           <>
-            <span className="mono">No grants for this plan</span>
+            <span className="aside">No grants for this plan</span>
             <span>{yes.length ? "But the savings and financing below still apply." : "The reasons are below."}</span>
           </>
         )}
@@ -190,9 +190,9 @@ export function HowToApply({ steps, example }: { steps: PlanStep[]; example?: bo
           <li key={s.id} data-step={s.id}>
             <span className="timeline-num">{i + 1}</span>
             <div>
-              <p className="timeline-when mono">{s.when}</p>
+              <p className="timeline-when">{s.when}</p>
               <h3>{s.title}</h3>
-              <p className="timeline-meta mono">{[s.who, s.time, range(s.costLow, s.costHigh)].filter(Boolean).join(" · ")}</p>
+              <p className="timeline-meta aside">{[s.who, s.time, range(s.costLow, s.costHigh)].filter(Boolean).join(" · ")}</p>
               {s.costNote && <p className="timeline-cost">{s.costNote}</p>}
               <p className="muted">{s.detail}</p>
               {s.tasks.length > 0 && (
@@ -206,7 +206,7 @@ export function HowToApply({ steps, example }: { steps: PlanStep[]; example?: bo
                       {t.detail && <p className="muted">{t.detail}</p>}
                       {t.bring && t.bring.length > 0 && (
                         <div className="task-bring">
-                          <span className="mono">Bring</span>
+                          <span className="aside">Bring</span>
                           <ul>
                             {t.bring.map((b) => (
                               <li key={b}>{b}</li>
@@ -245,7 +245,7 @@ export function GetItDone({ r, scanId, onShare }: { r: ScanResult; scanId: strin
       <div className="paths">
         {selfDraw && (
           <article className="path">
-            <p className="mono path-tag">Free</p>
+            <p className="path-tag">Free</p>
             <h3>Draw the plans yourself</h3>
             <p>{selfDraw.detail}</p>
             {selfDraw.note && <p className="muted">{selfDraw.note}</p>}
@@ -268,7 +268,7 @@ export function GetItDone({ r, scanId, onShare }: { r: ScanResult; scanId: strin
           )}
         </article>
         <article className="path">
-          <p className="mono path-tag">Your plan</p>
+          <p className="path-tag">Your plan</p>
           <h3>Send your plan to a designer</h3>
           <p>One page with the floor plan, the fixes, the money and these steps, ready to email or print.</p>
           <div className="path-actions">
@@ -340,7 +340,7 @@ export function Applications({ scanId, r, profile, state, example, onSent }: { s
                 <h3>{a.shortName}</h3>
                 <span className="program-worth mono">{a.worth}</span>
               </div>
-              <p className="mono app-when">
+              <p className="aside app-when">
                 {a.when}
                 {a.qualify === "ask" ? " · if you're eligible" : ""}
                 {sent ? ` · sent ${new Date(sent).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}` : ""}
@@ -402,7 +402,7 @@ export function Applications({ scanId, r, profile, state, example, onSent }: { s
                   <summary>Your answers for the form</summary>
                   {a.form.sections.map((sec) => (
                     <div key={sec.title}>
-                      <p className="mono app-section">{sec.title}</p>
+                      <p className="app-section">{sec.title}</p>
                       <dl>
                         {sec.fields.map((f) => (
                           <div key={f.label}>
@@ -410,7 +410,7 @@ export function Applications({ scanId, r, profile, state, example, onSent }: { s
                             <dd>
                               {f.value ? (
                                 <button className="app-copy" onClick={() => void copy(f.label, f.value!)} title="Copy">
-                                  {f.value} <span className="mono">{copied === f.label ? "copied" : "copy"}</span>
+                                  {f.value} <span className="mono">{copied === f.label ? "Copied" : "Copy"}</span>
                                 </button>
                               ) : (
                                 <span className="muted">Fill in yourself</span>

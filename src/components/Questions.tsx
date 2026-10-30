@@ -123,7 +123,7 @@ export function MoneyQuestionCard({
             </button>
           ))}
         </div>
-        {at.length > 0 && <p className="q-decides mono">Decides: {at.join(" · ")}</p>}
+        {at.length > 0 && <p className="q-decides">Decides: {at.join(" · ")}</p>}
       </div>
     </li>
   );

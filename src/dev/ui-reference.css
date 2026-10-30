@@ -1,0 +1,43 @@
+/* The reference page's own layout (src/dev/UiReference.tsx). Everything it shows uses the app's classes. */
+.ref { width: 100%; max-width: 1240px; margin: 0 auto; padding-bottom: var(--space-6); display: grid; gap: var(--space-5); }
+.ref > .flow-title { padding-inline: var(--gutter); }
+.ref-sec { display: grid; gap: var(--space-3); margin: 0 var(--gutter); padding-top: 14px; border-top: var(--line-ink); }
+.ref-sec h2 { font-size: var(--text-h2); }
+.ref-two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); }
+.ref-two > div, .ref-two > figure { display: grid; gap: var(--space-3); align-content: start; min-width: 0; }
+
+.ref-swatches { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); border-top: var(--line); }
+.ref-swatch { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 2px 12px; padding: 10px 0; border-bottom: var(--line); }
+.ref-swatch i { grid-row: span 3; width: 36px; height: 36px; border: var(--line); border-radius: var(--radius-1); }
+.ref-swatch b { font-size: var(--text-small); }
+.ref-swatch .mono { font-size: var(--text-tiny); color: var(--color-ink-muted); }
+
+.ref-type { display: grid; gap: var(--space-3); max-width: 62ch; }
+.ref-type p { margin: 0; }
+.ref-display { font-family: var(--font-display); font-weight: 900; font-size: var(--text-display); letter-spacing: -0.045em; line-height: 0.92; }
+.ref-h2 { font-family: var(--font-display); font-weight: 800; font-size: var(--text-h2); letter-spacing: -0.03em; line-height: 1.05; }
+.ref-h3 { font-family: var(--font-display); font-weight: 800; font-size: var(--text-h3); letter-spacing: -0.02em; }
+
+.ref-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; }
+.ref-list > li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 16px; align-items: baseline; padding: 12px 0; }
+.ref-list b { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+.ref-list .mono { color: var(--color-ink-muted); }
+
+.ref-plan { display: block; }
+.ref-dim { display: block; width: 100%; max-width: 420px; height: auto; overflow: visible; }
+.ref-dim line { stroke: var(--color-ink); stroke-width: 1; }
+.ref-dim rect { fill: var(--color-bg); }
+.ref-dim text { font-family: var(--font-mono); font-size: 13px; fill: var(--color-ink); text-anchor: middle; }
+.ref-3d { height: 320px; }
+
+.ref-photo { margin: 0; }
+.ref-photo img { display: block; width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-1); background: var(--color-surface); }
+.ref-photo figcaption { display: grid; gap: 2px; font-size: var(--text-small); }
+
+.ref-states { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: var(--space-4); align-items: start; }
+.ref-states .note-inline { margin: 0; }
+.ref-loading { display: grid; gap: 8px; }
+.ref-loading .skeleton { height: 120px; }
+.ref-error { display: grid; gap: 12px; justify-items: start; padding: 14px; border: 1px solid var(--color-stop); border-radius: var(--radius-1); }
+.ref-error p { margin: 0; }
+.ref-error b { color: var(--color-stop); }
