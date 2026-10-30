@@ -1,6 +1,6 @@
 // Play the take back, then use it or film again.
 import { useEffect, useRef, useState, type CSSProperties } from "react";
-import { MIN_SEC } from "./checklist";
+import { MAX_SEC, MIN_SEC } from "./checklist";
 import { NEEDS, type Need } from "./script";
 import type { Spoken } from "./voice";
 import { CornerTicks, Dimension, Icon } from "./drawing";
@@ -22,7 +22,7 @@ export type Take = {
 type Props = { take: Take; busy: boolean; onUse: () => void; onRetake: () => void; onClose: () => void };
 
 const NOTES = {
-  max: "We stopped at 3 minutes, the most we can check.",
+  max: `We stopped at ${MAX_SEC / 60} minutes, the most we can check.`,
   interrupted: "Filming stopped when the camera was interrupted. What you got is long enough to use.",
   short: `This video is under ${MIN_SEC} seconds, so we may miss things. A longer walk-through helps.`,
 };

@@ -1,6 +1,6 @@
 # The guide's voice with Chatterbox (Resemble AI, MIT licence): natural, expressive speech, made on
-# this Mac once. The lines come from src/capture/script.ts. Clips go to public/voice/<line>.mp3.
-# Usage (from the repo root): pnpm voice [only,these,lines]
+# this Mac once. The clips come from src/capture/script.ts CLIPS. They go to public/voice/<clip>.mp3.
+# Usage (from the repo root): pnpm voice [only,these,clips]
 import json
 import os
 import subprocess
@@ -15,7 +15,7 @@ only = sys.argv[3].split(",") if len(sys.argv) > 3 and sys.argv[3] else None
 # A reference recording sets the voice; without one, Chatterbox's own default voice.
 reference = os.environ.get("VOICE_REFERENCE")
 
-device = "mps" if torch.backends.mps.is_available() else "cpu"
+device = os.environ.get("VOICE_DEVICE") or ("mps" if torch.backends.mps.is_available() else "cpu")
 model = ChatterboxTTS.from_pretrained(device=device)
 lines = json.load(open(lines_file))
 os.makedirs(out_dir, exist_ok=True)

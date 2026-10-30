@@ -250,6 +250,10 @@
   background: var(--color-ink);
 }
 .cap-frame { position: relative; width: 100%; height: 100%; }
+/* the camera: the whole frame before filming; while filming, the top part, with the map below it */
+.cap-view { position: relative; width: 100%; height: 100%; min-height: 0; overflow: hidden; }
+.cap--live[data-phase="recording"] .cap-frame { display: grid; grid-template-rows: minmax(0, 1fr) min(52%, 480px); }
+.cap--live[data-phase="recording"] .cap-view { height: auto; }
 .cap-video { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: cover; background: var(--color-ink); }
 .cap-video[data-mirrored="true"] { transform: scaleX(-1); }
 .cap-frame > .cap-dim { display: none; }
@@ -371,7 +375,7 @@
   }
 }
 
-/* the basement in 3D so far, opened from the coverage panel */
+/* the basement in 3D so far, opened from the map */
 /* the full view covers everything else on the picture, and takes drags to orbit */
 .cap-frame:has(.cap-3d-full) :is(.guide-top, .guide-bottom, .guide-turn) { display: none; }
 .cap-3d-full { position: fixed; inset: 0; z-index: 20; pointer-events: auto; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: color-mix(in srgb, var(--color-ink) 92%, var(--color-mint) 8%); /* a scan reads best on dark */ }
@@ -380,7 +384,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .cap-flash, .guide-voice p, .guide-task, .guide-turn { animation-duration: 1ms !important; }
-  .cov-cell { transition: none !important; }
   .guide-bars i { animation: none !important; }
 }
 
@@ -445,45 +448,47 @@
 @keyframes guide-nudge-up { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
 @keyframes guide-nudge-down { 0%, 100% { translate: 0 0; } 50% { translate: 0 8px; } }
 
-/* bottom: one panel with the task, the painted basement and the 3D so far */
+/* bottom, before filming: the start card */
 .guide-bottom { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; gap: 10px; padding: 0 10px max(10px, env(safe-area-inset-bottom)); }
 
-.cov-panel { display: grid; gap: 10px; padding: 14px 14px 12px; border-radius: 12px; background: color-mix(in srgb, var(--color-ink) 93%, transparent); color: var(--color-card); }
-.cov-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
-.cov-task { display: grid; gap: 8px; min-width: 0; }
-.cov-panel .guide-task { font-size: 22px; }
-.cov-count { display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 12px; color: color-mix(in srgb, var(--color-card) 72%, transparent); }
-.cov-skip { min-height: 32px; margin: -6px 0; padding: 0 4px; border: 0; background: none; color: var(--color-card); font-family: var(--font-body); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
-.cov-3d { position: relative; display: block; width: 104px; height: 68px; padding: 0; overflow: hidden; border: 1px solid color-mix(in srgb, var(--color-mint) 40%, transparent); border-radius: 8px; background: color-mix(in srgb, var(--color-ink) 88%, var(--color-mint)); animation: guide-in var(--dur-2) var(--ease-out) both; }
-.cov-3d canvas { position: absolute; inset: 0; }
-.cov-3d span { position: absolute; left: 6px; bottom: 4px; padding: 1px 5px; border-radius: 3px; background: var(--color-mint); color: var(--color-mint-ink); font-family: var(--font-mono); font-size: 10px; font-weight: 600; }
-.cov-figure { display: grid; gap: 6px; margin: 0; }
-.cov-strip { display: block; width: 100%; height: auto; overflow: visible; }
-.cov-cell { fill: var(--color-mint); fill-opacity: calc(var(--f) * 0.92); stroke: color-mix(in srgb, var(--color-card) 20%, transparent); stroke-width: 0.6; transition: fill-opacity var(--dur-2) var(--ease-out); }
-.cov-cell[data-target] { stroke: var(--color-mint); stroke-width: 1.6; stroke-dasharray: 3 2; }
-.cov-frame path { fill: none; stroke: var(--color-card); stroke-width: 2.2; stroke-linecap: square; }
-.cov-legend { display: flex; justify-content: space-between; gap: 8px; font-family: var(--font-mono); font-size: 11px; color: color-mix(in srgb, var(--color-card) 75%, transparent); }
-.cov-none { font-size: 14px; color: color-mix(in srgb, var(--color-card) 80%, transparent); }
+/* bottom, while filming: the task and the big map of the basement so far */
+.map-panel { position: relative; z-index: 6; display: flex; flex-direction: column; gap: 10px; min-height: 0; margin-top: -16px; padding: 14px 12px max(12px, env(safe-area-inset-bottom)); border-radius: 16px 16px 0 0; background: var(--color-ink); color: var(--color-card); }
+.map-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
+.map-panel .guide-task { font-size: 21px; }
+.map-count { display: flex; align-items: center; gap: 12px; padding-top: 4px; font-family: var(--font-mono); font-size: 12px; color: color-mix(in srgb, var(--color-card) 72%, transparent); white-space: nowrap; }
+.map-skip { min-height: 32px; margin: -6px 0; padding: 0 4px; border: 0; background: none; color: var(--color-card); font-family: var(--font-body); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.map-view { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; container-type: size; border-radius: 12px; background: color-mix(in srgb, var(--color-ink) 90%, var(--color-mint)); }
+.map-art, .map-canvas { position: absolute !important; inset: 0; }
+.map-status { position: absolute; left: 12px; right: 60px; bottom: 10px; display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; font-weight: 500; line-height: 1.3; color: var(--color-card); pointer-events: none; }
+.map-dash { flex: none; width: 22px; height: 4px; overflow: visible; }
+.map-dash path { stroke: var(--color-card); stroke-width: 2.6; stroke-dasharray: 4 3; }
+.map-open { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--color-ink) 70%, transparent); color: var(--color-card); }
+.map-open svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.map-compass { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 10px; padding: 12px; }
+.map-compass svg { width: min(170px, 62cqh); height: auto; overflow: visible; }
+.map-compass p { font-weight: 700; font-size: 15px; text-align: center; }
+.map-ring { fill: none; stroke: color-mix(in srgb, var(--color-card) 35%, transparent); stroke-width: 1.5; stroke-dasharray: 3 4; }
+.map-north { fill: color-mix(in srgb, var(--color-card) 65%, transparent); font-family: var(--font-mono); font-size: 11px; text-anchor: middle; }
+.map-cone { fill: var(--color-mint); fill-opacity: 0.55; }
+.map-you { fill: var(--color-mint); stroke: var(--color-ink); stroke-width: 4; }
 .guide-lens { padding: 1px 6px; border-radius: var(--radius-pill); background: var(--color-mint); color: var(--color-mint-ink); font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
 
 .guide-card { justify-self: stretch; display: grid; gap: 12px; padding: 16px 18px 14px; border-radius: 12px; background: var(--color-card); color: var(--color-ink); box-shadow: var(--shadow-card); }
 .guide-task { font-family: var(--font-display); font-weight: 800; font-size: 24px; letter-spacing: -0.025em; line-height: 1.08; animation: guide-in var(--dur-2) var(--ease-out) both; }
-.guide-ideas { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.guide-ideas button { min-height: 44px; padding: 8px 10px; border: 1px solid var(--color-ink); border-radius: var(--cap-r); background: var(--color-card); color: var(--color-ink); font-weight: 700; font-size: 14px; line-height: 1.15; }
-.guide-ideas button:active { background: var(--color-mint); }
-.guide-listening { grid-column: 1 / -1; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
 .guide-link { justify-self: start; padding: 2px 0; border: 0; background: none; color: var(--color-ink-muted); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 .guide-nudge { font-size: 14px; font-weight: 600; }
-.cov-panel .guide-ideas button { border-color: color-mix(in srgb, var(--color-card) 60%, transparent); background: transparent; color: var(--color-card); }
-.cov-panel .guide-ideas button:active { background: var(--color-mint); color: var(--color-mint-ink); }
-.cov-panel .guide-listening { color: color-mix(in srgb, var(--color-card) 72%, transparent); }
 .guide-card--start { gap: 10px; }
 .guide-tips { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
 .guide-start { min-height: 56px; font-size: 18px; }
 
 @media (min-width: 900px) {
   .guide-bottom { justify-items: center; }
-  .guide-card, .cov-panel { justify-self: center; width: min(520px, 100%); }
+  .guide-card { justify-self: center; width: min(520px, 100%); }
+  /* on a big screen the map sits beside the whole camera picture, whichever way it's held */
+  .cap--live[data-phase="recording"] .cap-frame { width: min(calc(100cqw - var(--pad)), 1200px); height: calc(100cqh - var(--pad)); aspect-ratio: auto; grid-template-rows: none; grid-template-columns: minmax(0, 1fr) minmax(340px, 40%); }
+  .cap--live[data-phase="recording"] .cap-video { object-fit: contain; }
+  .cap--live[data-phase="recording"] .cap-frame > .cap-dim { display: none; }
+  .map-panel { margin-top: 0; border-radius: 0; }
   .guide-top { justify-items: center; }
   .guide-bar, .guide-voice { width: min(560px, 100%); }
 }
