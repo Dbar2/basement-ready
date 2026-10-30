@@ -51,13 +51,15 @@ final class OverlayRenderer: NSObject, MTKViewDelegate {
   private var ceilingBorn: [Cell: Float] = [:]
   private var lastCamera: SIMD3<Float>?
 
-  // Compiled once, the first time a take starts.
-  @MainActor private static var library: MTLLibrary?
+  // Compiled once. The app warms it up in the background at launch (warmUp), so the first take
+  // doesn't pause for it.
+  nonisolated(unsafe) private static let library: MTLLibrary? = MTLCreateSystemDefaultDevice().flatMap { try? $0.makeLibrary(source: OverlayShaders.source, options: nil) }
+
+  static func warmUp() {
+    Task.detached(priority: .utility) { _ = library }
+  }
 
   @MainActor init?(feed: OverlayFeed, perf: CapturePerf?) {
-    if Self.library == nil, let device = MTLCreateSystemDefaultDevice() {
-      Self.library = try? device.makeLibrary(source: OverlayShaders.source, options: nil)
-    }
     guard let device = MTLCreateSystemDefaultDevice(), let queue = device.makeCommandQueue(), let library = Self.library,
           let points = device.makeBuffer(length: MemoryLayout<CloudPoint>.stride * PointCloud.capacity, options: .storageModeShared) else { return nil }
     self.feed = feed
