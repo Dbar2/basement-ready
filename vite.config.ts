@@ -10,6 +10,7 @@ export default defineConfig({
   server: {
     port: 5173,
     ...(cert ? { host: true, https: { key: readFileSync(`${cert}-key.pem`), cert: readFileSync(`${cert}.pem`) } } : {}),
-    proxy: { "/api": "http://localhost:8787" },
+    // API_PORT: the end-to-end tests run their own API beside `pnpm dev` (tests/e2e/support/run.ts).
+    proxy: { "/api": `http://localhost:${process.env.API_PORT ?? 8787}` },
   },
 });
