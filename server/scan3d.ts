@@ -26,14 +26,30 @@ export type Scan3d = {
   sentFrames: number[]; // our frame index for each request position (scan.frames[i].sourceIndex → this)
 };
 
-export async function scan3dReady(timeoutMs = 3000) {
-  if (!scan3dEnabled) return false;
-  try {
-    const res = await fetch(`${URL_}/health`, { headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(timeoutMs) });
-    return res.ok;
-  } catch {
-    return false;
+// How long a scan waits for the 3D service to answer. Modal scales the GPU to zero after a minute idle
+// (services/scan3d/app.py), and the next request waits while a container starts: 28 s and 105 s
+// measured (Oct 30). The Mac runner is either up or it isn't.
+export const readyWaitMs = (url = URL_) => (/modal\.run/.test(url ?? "") ? 3 * 60_000 : 3000);
+
+// Whether the 3D service answers /health within `waitMs`. Asking also wakes Modal. A refused connection
+// or a 5xx (a container still starting) is asked again; a 4xx (wrong token or address) won't get better.
+export async function scan3dReady({ url = URL_, token = TOKEN, waitMs = readyWaitMs(url), retryMs = 2000, get = fetch } = {}) {
+  if (!url || !token) return false;
+  const until = Date.now() + waitMs;
+  let why = "no answer";
+  for (let left = waitMs; left > 0; left = until - Date.now()) {
+    try {
+      const res = await get(`${url}/health`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(left) });
+      if (res.ok) return true;
+      why = `status ${res.status}`;
+      if (res.status < 500) break;
+    } catch (err) {
+      why = err instanceof Error && err.name !== "TimeoutError" ? err.message : "no answer";
+    }
+    await new Promise((r) => setTimeout(r, Math.max(0, Math.min(retryMs, until - Date.now()))));
   }
+  console.error(`[scan3d] not ready within ${Math.round(waitMs / 1000)} s: ${why}`);
+  return false;
 }
 
 // One room's frames, [from, to) in our frame numbers.
