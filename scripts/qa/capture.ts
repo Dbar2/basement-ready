@@ -53,7 +53,7 @@ const MAX_SCREENS: Record<Viewport, number> = { phone: 7, desktop: 8 };
 const SCAN_VIEW = "section.scan-views";
 const STAGED_VIEW = "section.staged";
 
-const LOADING = /(Opening|Loading|Getting|Making|Drawing|Preparing)[^\n]{0,48}…/;
+const LOADING = /(Opening|Loading|Getting|Making|Drawing|Preparing|Counting|Checking|Pricing|Building|Working)[^\n]{0,48}…/;
 
 export async function capture(opts: { baseURL: string; runDir: string; shots: Shot[]; claims?: unknown[]; log: (s: string) => void }): Promise<CaptureResult> {
   const result: CaptureResult = { shots: [], auto: [], log: [] };
@@ -170,7 +170,11 @@ class LaneRun {
     const p = this.page;
     await p.waitForLoadState("networkidle", { timeout: 8000 }).catch(() => {});
     await p.evaluate(() => document.fonts.ready.then(() => null)).catch(() => {});
-    if (waitForLoading) await p.waitForFunction((re) => !new RegExp(re).test(document.body.innerText), LOADING.source, { timeout: 25_000 }).catch(() => {});
+    if (waitForLoading) {
+      await p.waitForFunction((re) => !new RegExp(re).test(document.body.innerText), LOADING.source, { timeout: 25_000 }).catch(() => {});
+      // Placeholders that say nothing: aria-busy blocks and skeletons.
+      await p.waitForFunction(() => ![...document.querySelectorAll("[aria-busy=true], [class*=skeleton]")].some((e) => (e as HTMLElement).offsetParent !== null), null, { timeout: 25_000 }).catch(() => {});
+    }
     await p.waitForTimeout(700);
   }
 
@@ -285,7 +289,8 @@ class LaneRun {
       const tabs = p.getByRole("tablist", { name: "Workspace" });
       // The wait screen with its first question up, or after a few seconds of finding things.
       await p.locator(".live-ask, .live-ready, [role=tablist]").first().waitFor({ timeout: 20_000 }).catch(() => {});
-      if (wait && !(await tabs.isVisible())) {
+      // A finished take opens on its last flow step, never the wait screen: only the example replays it.
+      if (wait && scan === "sample" && !(await tabs.isVisible())) {
         await p.waitForTimeout(2500);
         await this.pageShot(wait, { full: false, waitForLoading: false });
       }
@@ -322,6 +327,10 @@ class LaneRun {
       }
       return false;
     };
+    // Every lane fills in the owner first, so the tabs show the same state in each browser and size (a
+    // take keeps its owner on the server: otherwise only the first lane would shoot it without one).
+    await open(["Permit"]).catch(() => false);
+    await p.waitForTimeout(800);
     for (const def of SCREENS.filter((d) => d.tab)) {
       const shot = this.one(def.id, scan);
       const extra = ({
