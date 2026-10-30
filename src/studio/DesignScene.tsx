@@ -4,14 +4,16 @@
 // studio does (src/studio/Studio3D.tsx), and the pictures render it in an offscreen canvas from the
 // real cameras' poses over the real frames.
 //
-// Furniture comes from the model (design.proposed.furniture) once it's placed there; until then the
-// stager (src/three/StagedBasement.tsx StagedFurniture) furnishes the rooms itself.
+// Furniture comes from the model (design.proposed.furniture), drawn by the same pieces as the pictures
+// (src/views/DesignScene.tsx FurnitureMesh), so the 3D and the pictures agree. A design saved before
+// furniture joined the model has none: the stager (src/three/StagedBasement.tsx) furnishes its rooms.
 import { Suspense, useMemo, type ReactNode } from "react";
 import { bounds, midpoint, wallLength } from "../../server/model/geometry";
 import { layoutOf } from "../../server/model/legacy";
-import type { Design, Existing, Furniture, Wall } from "../../server/model/types";
+import type { Design, Existing, Wall } from "../../server/model/types";
 import { SolidView, type Solid } from "../three/RealScan";
 import { StagedFurniture } from "../three/StagedBasement";
+import { DesignFurniture } from "../views/DesignScene";
 
 export type Finish = "light" | "warm" | "deep";
 
@@ -61,7 +63,11 @@ export function DesignScene({
           <StagedFurniture plan={staging.plan} layout={staging.layout} finishKey={finish} />
         </Suspense>
       )}
-      {placed && <ModelFurniture items={design.proposed.furniture} />}
+      {placed && (
+        <Suspense fallback={null}>
+          <DesignFurniture design={design} />
+        </Suspense>
+      )}
       {rated &&
         design.proposed.walls
           .filter((w) => w.rating)
@@ -96,40 +102,6 @@ function Shell({ existing, h }: { existing: Existing; h: number }) {
         <WallBox key={w.id} w={w} y={h / 2} height={h} thick={Math.max(0.1, w.thicknessM)}>
           <meshLambertMaterial color="#D9DDD6" />
         </WallBox>
-      ))}
-    </>
-  );
-}
-
-// How tall each piece stands, for drawing its footprint as a block until it has a real model.
-const HEIGHT: Record<Furniture["kind"], number> = {
-  bed: 0.55,
-  sofa: 0.8,
-  armchair: 0.8,
-  desk: 0.75,
-  dining: 0.75,
-  dresser: 0.9,
-  tv: 0.6,
-  rug: 0.012,
-  shelf: 1.8,
-  kitchen: 0.9,
-  fridge: 1.8,
-  vanity: 0.85,
-  toilet: 0.75,
-  shower: 2.0,
-  washer_dryer: 0.9,
-  other: 0.8,
-};
-
-// The model's furniture: one block per piece, in its colour, where the model puts it.
-function ModelFurniture({ items }: { items: Furniture[] }) {
-  return (
-    <>
-      {items.map((f) => (
-        <mesh key={f.id} position={[f.at[0], HEIGHT[f.kind] / 2, f.at[1]]} rotation-y={(f.rotDeg * Math.PI) / 180} userData={{ kind: "furniture", id: f.id }} castShadow receiveShadow>
-          <boxGeometry args={[f.sizeM[0], HEIGHT[f.kind], f.sizeM[1]]} />
-          <meshStandardMaterial color={f.colour?.startsWith("#") ? f.colour : "#D8D4CB"} roughness={0.85} />
-        </mesh>
       ))}
     </>
   );

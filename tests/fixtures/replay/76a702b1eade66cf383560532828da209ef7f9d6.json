@@ -1,0 +1,15 @@
+{
+ "key": "76a702b1eade66cf383560532828da209ef7f9d6",
+ "service": "public",
+ "method": "GET",
+ "route": "https://media-002-ca.cdn.govstack.com/waterloo-013-ca/media/t4uazxbv/owner-declaration-form.pdf",
+ "model": null,
+ "about": null,
+ "status": 200,
+ "contentType": "application/pdf",
+ "bodyFile": "76a702b1eade66cf383560532828da209ef7f9d6.body.gz",
+ "bytes": 59530,
+ "ms": 57,
+ "recordedAt": "2026-10-30T15:44:15.500Z",
+ "request": null
+}
