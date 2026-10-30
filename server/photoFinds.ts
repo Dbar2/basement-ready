@@ -13,18 +13,26 @@ const FPS = 5; // server/pipeline.ts ANALYSIS_FPS: a photo's "seconds" is its fr
 const PER_PHOTO = 4; // at most this many of one thing in one photo
 const MIN_AREA = 0.001; // of the picture: smaller is a speck, not a find
 
+// SAM's "support beam" also outlines every joist and post. A beam is one long, level member across the
+// ceiling: at least this much of the photo wide and this many times wider than tall (in pixels). A photo
+// keeps its widest one, a little less sure than the live bar, since its shape vouches for it. Tuned on
+// practice photos and checked on real takes (scripts/practice).
+export const BEAM = { minWidth: 0.4, minAspect: 2, min: 0.6 };
+
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const slug = (label: string) => label.toLowerCase().replace(/\s+/g, "-");
 
 // One photo's sure finds of one thing, biggest first.
-export function photoFinds(frame: number, c: Concept, raw: string, min = minConfidence(c.concept)): Detection[] {
+export function photoFinds(frame: number, c: Concept, raw: string, min = c.kind === "beam" ? BEAM.min : minConfidence(c.concept)): Detection[] {
+  const beam = c.kind === "beam";
   return parseSam(raw)
     .map((t) => t.frames[0]?.box)
     .filter((b): b is NonNullable<typeof b> => Boolean(b) && b.w > 0 && b.h > 0 && (b.c ?? 1) >= min)
+    .filter((b) => !beam || ((b.x2 - b.x1) / b.w >= BEAM.minWidth && b.x2 - b.x1 >= BEAM.minAspect * (b.y2 - b.y1)))
     .map((b) => ({ x: b.x1 / b.w, y: b.y1 / b.h, w: (b.x2 - b.x1) / b.w, h: (b.y2 - b.y1) / b.h, c: b.c ?? null }))
     .filter((b) => b.w * b.h >= MIN_AREA)
-    .sort((a, b) => b.w * b.h - a.w * a.h)
-    .slice(0, PER_PHOTO)
+    .sort((a, b) => (beam ? b.w - a.w : b.w * b.h - a.w * a.h))
+    .slice(0, beam ? 1 : PER_PHOTO)
     .map((b, i): Detection => {
       const box = { x: r3(b.x), y: r3(b.y), w: r3(b.w), h: r3(b.h) };
       return {

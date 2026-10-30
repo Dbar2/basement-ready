@@ -172,10 +172,28 @@ describe("SAM on each photo", () => {
     expect(found[0]).toMatchObject({ kind: "window", label: "Window", frame: 3, seconds: 0.6, framesSeen: 1, confidence: 0.7 });
     expect(found[0].track).toEqual([[3, 0.625, 0.521, 0.234, 0.417]]);
     expect(found.map((d) => d.id)).toEqual(["window-window-p3-1", "window-window-p3-2"]);
-    // A beam has to be surer, as in the live finds.
-    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.65]))).toHaveLength(0);
-    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.75]))).toHaveLength(1);
     expect(photoFinds(0, WINDOW, "")).toEqual([]);
+  });
+
+  it("keeps one long, level beam a photo: not the joists or posts SAM also calls beams", () => {
+    // A beam across the ceiling, sure enough for its shape.
+    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.65]))).toHaveLength(1);
+    expect(photoFinds(0, BEAM, sam([0, 0, 1280, 100, 0.55]))).toHaveLength(0);
+    // A post (taller than wide) and a short piece of joist are left out, however sure.
+    expect(photoFinds(0, BEAM, sam([600, 100, 660, 900, 0.95]))).toHaveLength(0);
+    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9]))).toHaveLength(0);
+    // Wide but not level: a block of ceiling, not a member.
+    expect(photoFinds(0, BEAM, sam([0, 0, 700, 400, 0.9]))).toHaveLength(0);
+    // Of several long ones, the widest.
+    const one = photoFinds(0, BEAM, sam([100, 50, 700, 120, 0.8], [0, 200, 1200, 320, 0.7], [200, 400, 800, 450, 0.9]));
+    expect(one).toHaveLength(1);
+    expect(one[0].box).toMatchObject({ x: 0, w: 0.938 });
+  });
+
+  it("counts a duct from 0.55 sure", () => {
+    const DUCT = CONCEPTS.find((c) => c.label === "Duct")!;
+    expect(photoFinds(0, DUCT, sam([0, 0, 900, 200, 0.57]))).toHaveLength(1);
+    expect(photoFinds(0, DUCT, sam([0, 0, 900, 200, 0.52]))).toHaveLength(0);
   });
 
   it("reads every photo for every thing, and hears each photo's finds as it lands, in order", async () => {
