@@ -17,11 +17,28 @@ import { quote, type Quote } from "../../server/quote/quote";
 import { apply, keep, pick, TARGETS } from "../../scripts/refresh-prices";
 
 const sample = JSON.parse(readFileSync("public/samples/sample/result.json", "utf8"));
+// The model every page works from (server/model/current.ts): seeded from the sample's scan.
 const model = modelFor(sample, {})!;
-const design = chosenDesign(model)!;
+// Furniture is priced on its own (the last test); the build is quoted without it.
+const design: Design = { ...chosenDesign(model)!, proposed: { ...chosenDesign(model)!.proposed, furniture: [] } };
 const lines = (q: Quote) => q.byTrade.flatMap((t) => t.lines);
 const line = (q: Quote, id: string) => lines(q).find((l) => l.id === id)!;
+const lineLike = (q: Quote, prefix: string) => lines(q).filter((l) => l.id.startsWith(prefix));
 const clone = <T>(x: T): T => JSON.parse(JSON.stringify(x));
+const len = (w: Wall) => Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+// A new wall of the bathroom's (the sound insulation goes in those).
+const onEdge = (w: Wall, poly: [number, number][]) => {
+  const m: [number, number] = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2];
+  return poly.some((p, i) => {
+    const q = poly[(i + 1) % poly.length];
+    const d = Math.abs((q[0] - p[0]) * (p[1] - m[1]) - (p[0] - m[0]) * (q[1] - p[1])) / Math.hypot(q[0] - p[0], q[1] - p[1]);
+    return d < 0.05 && m[0] >= Math.min(p[0], q[0]) - 0.05 && m[0] <= Math.max(p[0], q[0]) + 0.05 && m[1] >= Math.min(p[1], q[1]) - 0.05 && m[1] <= Math.max(p[1], q[1]) + 0.05;
+  });
+};
+const bathWall = (d: Design) => {
+  const bath = d.proposed.rooms.find((r) => r.unit === 2 && r.kind === "bathroom")!;
+  return d.proposed.walls.find((w) => w.kind === "new" && onEdge(w, bath.polygon))!;
+};
 
 describe("the sample's model", () => {
   it("has a design with the suite, the stair enclosure and the alarms", () => {
@@ -88,34 +105,37 @@ describe("quote", () => {
 
   it("a longer wall changes framing, insulation and drywall, and not the kitchen or the permit fee", () => {
     const d = clone(design);
-    const w = d.proposed.walls.find((x) => x.id === "w_new_0")! as Wall;
-    w.b = [w.b[0] + 1, w.b[1]]; // one metre longer
+    const w = bathWall(d);
+    const L = len(w);
+    w.b = [w.b[0] + (w.b[0] - w.a[0]) / L, w.b[1] + (w.b[1] - w.a[1]) / L]; // one metre longer
     const after = quote(model, d);
     expect(line(after, "framing").qty).toBeGreaterThan(line(q, "framing").qty);
     expect(line(after, "framing").high).toBeGreaterThan(line(q, "framing").high);
     expect(line(after, "drywall_board").qty).toBeGreaterThan(line(q, "drywall_board").qty);
     expect(line(after, "paint_walls").qty).toBeGreaterThan(line(q, "paint_walls").qty);
     expect(line(after, "insul_sound").qty).toBeGreaterThan(line(q, "insul_sound").qty); // a bathroom wall
-    expect(line(after, "kitchen_r_kitchen_3")).toEqual(line(q, "kitchen_r_kitchen_3"));
+    expect(lineLike(after, "kitchen_")).toEqual(lineLike(q, "kitchen_"));
     expect(line(after, "permit_building")).toEqual(line(q, "permit_building"));
     expect(after.totalHigh).toBeGreaterThan(q.totalHigh);
   });
 
   it("an extra door adds a door and its trim, and nothing to the plumbing", () => {
     const d = clone(design);
-    d.proposed.openings.push({ id: "o_extra", wallId: "w_new_1", kind: "door", offsetM: 0.6, widthM: 0.76, heightM: 2.03, status: "new", swing: "left" });
+    const w = d.proposed.walls.find((x) => x.kind === "new" && !x.rating && len(x) > 2 && !d.proposed.openings.some((o) => o.wallId === x.id))!;
+    d.proposed.openings.push({ id: "o_extra", wallId: w.id, kind: "door", offsetM: len(w) / 2, widthM: 0.76, heightM: 2.03, status: "new", swing: "left" });
     const after = quote(model, d);
     expect(line(after, "doors").qty).toBe(line(q, "doors").qty + 1);
     expect(line(after, "doors").labour!.low).toBeGreaterThan(line(q, "doors").labour!.low);
     expect(line(after, "trim").qty).toBeGreaterThan(line(q, "trim").qty);
     expect(line(after, "drywall_board").qty).toBeLessThan(line(q, "drywall_board").qty); // the hole
-    expect(line(after, "rough_r_bathroom_2")).toEqual(line(q, "rough_r_bathroom_2"));
+    expect(lineLike(after, "rough_")).toEqual(lineLike(q, "rough_"));
   });
 
   it("a new escape window brings the cut, the well and the engineer", () => {
     expect(lines(q).some((l) => l.id.startsWith("egress_"))).toBe(false);
     const d = clone(design);
-    d.proposed.openings.push({ id: "o_new_window", wallId: "w_maxZ", kind: "window", offsetM: 2, widthM: 0.9, heightM: 1, sillM: 0.9, status: "new" });
+    const wall = d.proposed.walls.filter((x) => x.kind === "foundation").sort((a, b) => len(b) - len(a))[0];
+    d.proposed.openings.push({ id: "o_new_window", wallId: wall.id, kind: "window", offsetM: len(wall) / 2, widthM: 0.9, heightM: 1, sillM: 0.9, status: "new" });
     const after = quote(model, d);
     const egress = line(after, "egress_o_new_window");
     expect(egress.trade).toBe("doors_windows");

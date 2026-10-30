@@ -89,6 +89,8 @@ export const StateSchema = z.object({
   permit: PermitSchema.optional(),
   // The one model of the basement and its designs (server/model/types.ts), saved by the studio.
   model: ModelSchema.optional(),
+  // The step of the flow they were last on (src/flow/flow.ts), so coming back lands there.
+  flow: z.object({ step: z.enum(["style", "plan", "layouts", "studio", "pictures", "book"]), at: optText(30) }).optional(),
 });
 export type WorkspaceState = z.infer<typeof StateSchema>;
 

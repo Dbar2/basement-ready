@@ -3,6 +3,7 @@
 // 3D studio prices every edit without a round trip.
 import type { Design, Model } from "../../server/model/types";
 import { quote, type Quote } from "../../server/quote/quote";
+import { getWorkspace } from "../workspaceApi";
 
 export { quote, type Quote };
 
@@ -37,14 +38,24 @@ async function headers(): Promise<Record<string, string>> {
   return h;
 }
 
+// The sample's workspace lives in this browser: its book is asked for with it, so it shows the design
+// picked here.
+async function fetchBook(scanId: string, pdf: boolean) {
+  if (scanId === "sample") {
+    const { state, profile } = await getWorkspace("sample");
+    return fetch(`/api/sample/book${pdf ? ".pdf" : ""}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state, profile }) });
+  }
+  return fetch(`/api/scans/${scanId}/book${pdf ? ".pdf" : ""}`, { headers: await headers() });
+}
+
 export async function getBook(scanId: string): Promise<BookData> {
-  const res = await fetch(`/api/scans/${scanId}/book`, { headers: await headers() });
+  const res = await fetchBook(scanId, false);
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "We couldn't open the book.");
   return res.json();
 }
 
 export async function downloadBook(scanId: string, name = "basement-book.pdf") {
-  const res = await fetch(`/api/scans/${scanId}/book.pdf`, { headers: await headers() });
+  const res = await fetchBook(scanId, true);
   if (!res.ok) throw new Error((await res.json().catch(() => null))?.error ?? "The book didn't download. Try again.");
   const url = URL.createObjectURL(await res.blob());
   const a = Object.assign(document.createElement("a"), { href: url, download: name });
