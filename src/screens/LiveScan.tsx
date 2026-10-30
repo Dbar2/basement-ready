@@ -161,12 +161,16 @@ export function LiveScan({ scanId, onDone }: Props) {
   const [sentTake, setSentTake] = useState<PhotoTake | null>(() => localPhotoTakes.get(scanId) ?? null);
   // Play the file from this tab if we have it; after a refresh, play the server's copy.
   const local = localVideos.get(scanId);
-  const src = useMemo(
-    () => (scanId === "sample" ? "/samples/sample-basement.mp4" : local ? URL.createObjectURL(local) : `/api/scans/${scanId}/video`),
-    [scanId, local],
-  );
-
-  useEffect(() => () => { if (local) URL.revokeObjectURL(src); }, [src, local]);
+  // Made and revoked in one effect, so dev's double mount gets a fresh URL, not a revoked one.
+  const [blob, setBlob] = useState<{ file: File; url: string } | null>(null);
+  useEffect(() => {
+    if (!local) return;
+    const url = URL.createObjectURL(local);
+    setBlob({ file: local, url });
+    return () => URL.revokeObjectURL(url);
+  }, [local]);
+  const src =
+    scanId === "sample" ? "/samples/sample-basement.mp4" : local ? (blob?.file === local ? blob.url : undefined) : `/api/scans/${scanId}/video`;
 
   useEffect(() => {
     setEvents([]);

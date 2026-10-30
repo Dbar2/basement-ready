@@ -1,0 +1,15 @@
+{
+ "key": "8a1b63875e3372b67b7489a70c7bb518953785e6",
+ "service": "public",
+ "method": "GET",
+ "route": "https://media-002-ca.cdn.govstack.com/waterloo-013-ca/media/ntiptfny/permit-application-to-construct-or-demolish.pdf",
+ "model": null,
+ "about": null,
+ "status": 200,
+ "contentType": "application/pdf",
+ "bodyFile": "8a1b63875e3372b67b7489a70c7bb518953785e6.body.gz",
+ "bytes": 393226,
+ "ms": 288,
+ "recordedAt": "2026-10-30T15:44:15.186Z",
+ "request": null
+}
