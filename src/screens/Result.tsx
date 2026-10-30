@@ -1,7 +1,8 @@
 // "Your plan", the workspace's first tab (brand/explorations/M3-decision-plan.png): a decision first,
 // then what it could look like and what has to change, and only then the detail behind it. Nothing
 // here asks a homeowner what a designer knows. The money, the permit and the build have their own tabs.
-import { ANALYSIS_FPS, aerialUrl, frameUrl, type AnyAnswer, type Detection, type ScanResult } from "../api";
+// A shared link reads it; only the person who filmed it answers.
+import { ANALYSIS_FPS, aerialUrl, DEMO_LABEL, EXAMPLE_HOUSEHOLD, frameUrl, type AnyAnswer, type Detection, type ScanResult } from "../api";
 import { Answered, Questions } from "../components/Questions";
 import { SaveCta } from "../auth";
 import { ScanViews } from "../components/ScanViews";
@@ -37,8 +38,13 @@ function Proof({ scanId, d }: { scanId: string; d: Detection }) {
 
 export type Changes = { before: string; after: string; lines: string[] } | null;
 
-export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string | null; changes: Changes; answerError: string | null; onAnswer: (ruleId: string, value: AnyAnswer | null) => void }) {
-  const { r, scanId, busyRule, changes, answerError } = props;
+// Their answer to "What would you like it to be?" on the wait screen (server/plans.ts).
+const PLANS_SAID: Record<string, string> = { family_suite: "A suite for family", rental: "A rental suite", rec_room: "A rec room", unsure: "Not sure yet" };
+
+export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string | null; changes: Changes; answerError: string | null; readOnly?: boolean; onAnswer: (ruleId: string, value: AnyAnswer | null) => void }) {
+  const { r, scanId, busyRule, changes, answerError, readOnly } = props;
+  const sample = scanId === "sample";
+  const plansSaid = r.plans ? (PLANS_SAID[r.plans] ?? r.plans) : null;
   const answer = props.onAnswer;
   const byId = new Map(r.detections.map((d) => [d.id, d]));
   const questions = r.findings.filter((f) => f.status === "needs_answer" && !f.answer);
@@ -59,6 +65,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
           {r.verdict === "no" ? "Not likely" : "Likely"} · {r.city ?? "Waterloo"} rules checked {checkedOn(r.compiledAt)}
           {p && ` · ${p.address}`}
         </p>
+        {r.demo && <p className="note-inline">{DEMO_LABEL}</p>}
         {r.coverage === "provincial" && <p className="note-inline">We haven't researched your city's own rules yet, so this uses Ontario's building code. Confirm zoning with your city.</p>}
         {changes && (
           <div className="changed" role="status" key={changes.after + changes.lines.join()}>
@@ -75,7 +82,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
           </div>
           {upTo > 0 && (
             <div>
-              <dt>You qualify for</dt>
+              <dt>You may be eligible for</dt>
               <dd className="mono">up to {money(upTo)}</dd>
             </div>
           )}
@@ -87,23 +94,39 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
             </div>
           )}
         </dl>
-        {scanId !== "sample" && <SaveCta />}
+        {!sample && !readOnly && <SaveCta />}
       </section>
 
       {(questions.length > 0 || answered.length > 0) && (
         <section className="block" id="questions">
-          <h2>{questions.length === 1 ? "One thing only you know" : questions.length ? `${questions.length} things only you know` : "What you told us"}</h2>
-          {questions.length > 0 && <p className="lede">The answer re-checks as soon as you tap. Not sure is fine: your designer will check.</p>}
-          {answerError && <p className="error" role="alert">{answerError}</p>}
-          <Questions findings={questions} busyRule={busyRule} onAnswer={(id, v) => answer(id, v)} />
-          <Answered findings={answered} busyRule={busyRule} onClear={(id) => answer(id, null)} />
+          <h2>
+            {readOnly
+              ? "Questions for the owner"
+              : questions.length === 1
+                ? "One thing only you know"
+                : questions.length
+                  ? `${questions.length} things only you know`
+                  : sample
+                    ? EXAMPLE_HOUSEHOLD
+                    : "What you told us"}
+          </h2>
+          {readOnly ? (
+            <p className="read-only">Only the person who filmed this can answer these. This link shows their plan as it stands.</p>
+          ) : (
+            <>
+              {questions.length > 0 && <p className="lede">The answer re-checks as soon as you tap. Not sure is fine: your designer will check.{sample && " You're answering for the example household."}</p>}
+              {answerError && <p className="error" role="alert">{answerError}</p>}
+              <Questions findings={questions} busyRule={busyRule} onAnswer={(id, v) => answer(id, v)} />
+              <Answered findings={answered} busyRule={busyRule} onClear={(id) => answer(id, null)} />
+            </>
+          )}
         </section>
       )}
 
       <StagedViews scanId={scanId} plan={r.plan ?? null} layout={r.layout ?? null} concepts={r.concepts ?? null} />
 
       {r.fixGroups.length > 0 && (
-        <section className="block">
+        <section className="block" id="changes">
           <h2>What has to change</h2>
           <ol className="ruled">
             {r.fixGroups.map((g, i) => (
@@ -147,7 +170,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
       {designer.length > 0 && (
         <section className="block">
           <h2>Your designer confirms</h2>
-          <p className="lede">Sizes and details a video can't settle. A designer checks them when drawing the plans, so you don't need a tape measure.</p>
+          <p className="lede">Sizes and details a video can't settle. A designer checks them when drawing the plans; drawing them yourself, the Permit tab asks for five tape numbers.</p>
           <ul className="ruled">
             {designer.map((f) => (
               <li key={f.ruleId}>
@@ -193,7 +216,12 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
       {rooms.length > 1 && <p className="note">{rooms.length} rooms scanned, each on its own.</p>}
 
       <section className="block">
-        <h2>What you want</h2>
+        <h2>{sample ? "What the example household wants" : "What you want"}</h2>
+        {plansSaid && (
+          <p className="wish-said">
+            <span className="mono">What would you like it to be?</span> <b>{plansSaid}</b>
+          </p>
+        )}
         {r.vision && (r.vision.rooms.length > 0 || r.vision.style || r.vision.mustHaves.length > 0) ? (
           <>
             <p className="lede">From what you said and tapped while filming. Your layouts are planned around this.</p>
@@ -224,7 +252,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
             )}
           </>
         ) : (
-          <p className="lede">We didn't hear plans this time. Next time the guide asks in each room: just say it, or tap an idea.</p>
+          !plansSaid && <p className="lede">We didn't hear plans in the video.</p>
         )}
       </section>
 
@@ -243,6 +271,9 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
       )}
 
       {r.heldBack > 0 && <p className="note">We held back {r.heldBack} claim{r.heldBack === 1 ? "" : "s"} the video couldn't prove.</p>}
+      <p className="note rules-disclaimer">
+        {r.disclaimer ?? "Screening aid only. Not legal, building-code, tax or financial advice, and not a permit decision. Costs are estimates, not quotes. Confirm with your city's building department."}
+      </p>
     </div>
   );
 }

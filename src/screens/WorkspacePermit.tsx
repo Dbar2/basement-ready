@@ -1,5 +1,5 @@
 // The Permit tab: we make the permit package here, the way a permit service would. Who draws and
-// signs it in this city, three measurements only a tape can give, the entrance and parking traced on
+// signs it in this city, five measurements only a tape can give, the entrance and parking traced on
 // the aerial photo, then one PDF to download (drawings, the city's forms filled in, how to submit)
 // and the city's portal with what to upload where.
 import { useEffect, useRef, useState } from "react";
