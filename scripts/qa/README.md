@@ -1,6 +1,6 @@
 # Vision QA reviewer (a development tool)
 
-Screenshots every screen of the journey and asks Claude Opus whether anything is wrong, unpolished or off-brand. It's for us while we build, never part of the app:
+Screenshots every screen of the journey and asks Claude (Fable 5.1 for the full reviews, Opus 5.5 for quick re-checks) whether anything is wrong, unpolished or off-brand. It's for us while we build, never part of the app:
 - It lives only in `scripts/qa` (tests in `tests/qa`).
 - Nothing in `src/` or `server/` imports it, and a test checks that.
 - The app's build and Docker image leave it out (`tsconfig.qa.json`, `.dockerignore`).
@@ -11,9 +11,10 @@ Screenshots every screen of the journey and asks Claude Opus whether anything is
 
 ```bash
 pnpm qa                       # capture, free checks, Opus review, report
+pnpm qa --model fable --budget 25   # the full review with Claude Fable 5.1 (about 2.5× Opus)
 pnpm qa --only studio,3d      # just some screens (ids, groups: journey 3d docs marketing, or prefix-*)
 pnpm qa:capture               # capture and free checks only, no model calls
-pnpm qa:review                # review the latest capture again (new prompt, more budget)
+pnpm qa:review                # quick re-check with Opus of the latest capture (new prompt, more budget)
 pnpm qa --budget 1 --browsers chromium --viewports desktop
 pnpm qa --dry-run             # build and price every review request, send nothing
 pnpm qa --take b2-family      # add a recorded take (replays its Meta and 3D answers for free)
