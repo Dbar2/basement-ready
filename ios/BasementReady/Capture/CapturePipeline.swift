@@ -34,6 +34,8 @@ final class CapturePipeline: @unchecked Sendable {
   private var videoPending = 0
   private var mapBusy = false
   private(set) var videoDroppedBusy = 0
+  private(set) var mapRuns = 0
+  var mapDelay: Double = 0 // tests: a map as slow as an unoptimised build on a phone
 
   // The caller's queue only.
   private var startTimestamp: Double?
@@ -81,19 +83,20 @@ final class CapturePipeline: @unchecked Sendable {
     lock.unlock()
     if isStopped { return nil }
     if startTimestamp == nil {
-      do {
-        let v = try VideoWriter(url: folder.appending(path: "video.mp4"), width: CVPixelBufferGetWidth(image), height: CVPixelBufferGetHeight(image), rotationCW: g.rotationCW)
-        lock.lock()
-        video = v
-        log = CaptureLog(device: DeviceModel.identifier, imageResolution: (Int(g.resolution.x), Int(g.resolution.y)), arkitStartTime: timestamp, rotationCW: g.rotationCW)
-        lock.unlock()
-      } catch {
-        lock.lock()
-        stopped = true
-        lock.unlock()
-        send(.failed(error.localizedDescription))
-        return nil
+      // The video file opens on its own queue (it takes ~100 ms); this frame's picture follows it there.
+      let url = folder.appending(path: "video.mp4"), w = CVPixelBufferGetWidth(image), h = CVPixelBufferGetHeight(image)
+      videoQueue.async { [self] in
+        do {
+          let v = try VideoWriter(url: url, width: w, height: h, rotationCW: g.rotationCW)
+          lock.withLock { video = v }
+        } catch {
+          lock.withLock { stopped = true }
+          send(.failed(error.localizedDescription))
+        }
       }
+      lock.lock()
+      log = CaptureLog(device: DeviceModel.identifier, imageResolution: (Int(g.resolution.x), Int(g.resolution.y)), arkitStartTime: timestamp, rotationCW: g.rotationCW)
+      lock.unlock()
       startTimestamp = timestamp
     }
     let t = timestamp - startTimestamp!
@@ -116,7 +119,7 @@ final class CapturePipeline: @unchecked Sendable {
         lock.unlock()
         if room {
           videoQueue.async { [self] in
-            video?.append(buffer, at: t)
+            lock.withLock { video }?.append(buffer, at: t)
             lock.lock()
             videoPending -= 1
             lock.unlock()
@@ -179,6 +182,7 @@ final class CapturePipeline: @unchecked Sendable {
     let lidar = self.lidar
     mapQueue.async { [self] in
       let began = ProcessInfo.processInfo.systemUptime
+      if mapDelay > 0 { Thread.sleep(forTimeInterval: mapDelay) }
       for id in removed { map.remove(planeID: id) }
       for p in planes.values { map.upsert(p) }
       map.observe(cam, points: sample)
@@ -187,6 +191,7 @@ final class CapturePipeline: @unchecked Sendable {
       feed.map.set(snap)
       lock.lock()
       mapBusy = false
+      mapRuns += 1
       let isStopped = stopped
       lock.unlock()
       if !isStopped { send(.update(CaptureUpdate(elapsed: t, tracking: tracking, map: snap, still: still, depth: lidar))) }
