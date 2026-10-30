@@ -26,13 +26,14 @@ export class WaitScreen {
     const asked: { question: string; answer: string }[] = [];
     const deadline = Date.now() + until;
     const card = this.page.locator(".live-ask");
-    while (Date.now() < deadline) {
-      // Either a question is up, or it's done asking (ready, or still checking with nothing to ask).
-      await expect(card.or(this.ready).or(this.page.getByRole("heading", { name: /Thanks\. Almost there\./ }))).toBeVisible({ timeout: 60_000 });
-      if (!(await card.isVisible())) break;
+    // The questions come from the server once the screen opens.
+    await expect(this.page.getByRole("heading", { name: "Getting your questions…" })).toBeHidden({ timeout: 60_000 });
+    while (Date.now() < deadline && (await card.isVisible())) {
       const question = (await card.getByRole("heading").textContent())?.trim() ?? "";
       const wanted = Object.entries(answers).find(([q]) => question.toLowerCase().includes(q.toLowerCase()))?.[1];
       const option = wanted ? card.getByRole("button", { name: wanted, exact: true }) : card.locator(".live-ask-options button").first();
+      // The server answers with what's still worth asking (a real scan's /answers, the sample's /money).
+      const next = this.page.waitForResponse((r) => r.request().method() === "POST" && /\/api\/(scans\/[^/]+\/answers|money)$/.test(new URL(r.url()).pathname));
       let answer: string;
       if (wanted && !(await option.count())) {
         // Not an option: say it in their own words.
@@ -44,7 +45,9 @@ export class WaitScreen {
         await option.click();
       }
       asked.push({ question, answer });
+      await next;
       await expect(card.getByRole("heading", { name: question, exact: true })).toBeHidden({ timeout: 15_000 });
+      await this.page.waitForTimeout(250); // the next question, if any, renders from that reply
     }
     return asked;
   }

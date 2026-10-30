@@ -8,6 +8,9 @@ pnpm test:e2e
 
 This runs `pnpm dev`'s two servers on their own ports (API 47873, web 47173, so a running `pnpm dev` is left alone), with a fresh database and storage under `tmp/e2e/<run>/`. Every call to Meta's models, the 3D service and public data is **replayed** from saved answers. A replay run makes no network calls, costs nothing, and comes out the same every time.
 
+- **Pacing:** each saved answer arrives after a quarter of the time it took when recorded. Whichever finished first then (the 3D or the photos) finishes first again, and the wait screen moves as it would. `E2E_PACE=0 pnpm test:e2e` answers at once, which times only our own work (ffmpeg, storage, the database, the browser).
+- **Chromium:** it runs the full Chromium build on the Mac's GPU. The headless shell draws WebGL in software, and the 3D views then block clicks for seconds.
+
 Each run writes to `tmp/e2e/<run>/`:
 - `report.html`: each journey's steps with a screenshot each, the timing table, and replay hits and misses
 - `shots/`: the step screenshots
@@ -46,12 +49,14 @@ Every journey fails on any console error, any page error, or any replay miss.
 ## Recording a take (spends Meta credits; ask David first)
 
 ```bash
-E2E_TAKES=b2-family pnpm test:e2e:record
+E2E_TAKES=b2-family E2E_SCAN3D_URL=<the Modal endpoint> pnpm test:e2e:record
 ```
 
-- **What it does:** it runs the named takes once, in desktop Chromium, against the real Meta API (the key comes from the main checkout's `.env`, read only by the test server) and the 3D service. The 3D service defaults to the Mac runner on port 8790 (`pnpm dev:scan3d`); `E2E_SCAN3D_URL` and `E2E_SCAN3D_TOKEN` point it at Modal instead.
+- **What it does:** it runs the named takes once, in desktop Chromium, against the real Meta API (the key comes from the main checkout's `.env`, read only by the test server) and the 3D service.
+- **The 3D service:** with `E2E_SCAN3D_URL` set to the Modal endpoint, it uses Modal. The token is `.env`'s `SCAN3D_MODAL_TOKEN`, and three areas run at once, like production. Without it, it uses the Mac runner on port 8790 (`pnpm dev:scan3d`). Either way, `support/global-setup.ts` wakes the service first and keeps it awake. The scan only waits 3 s for the 3D service's health check, so a cold Modal container would otherwise mean a recording with no 3D.
 - **What it saves:** the answers go to `media/private/replay/`. `E2E_RECORD_TO=committed` saves them into `tests/fixtures/replay/` instead (never for a private take).
-- **Re-recording:** delete that take's files, or the folder, and record again. Record mode reuses whatever is already saved.
+- **Picking up where it stopped:** record mode reuses whatever is already saved, at the speed it was recorded. A recording that stopped halfway costs nothing the second time for what it already has, and races the same way a real run does.
+- **Re-recording:** delete that take's files, or the folder, and record again.
 - **Rough cost per take:** SAM is $0.20 per 1,000 frames for each of its 11 concepts, at 5 frames a second. A 2-minute take is about $1.30 of SAM, plus Muse Image at $0.01 a photo, plus a few cents of Spark. The 3D is free on the Mac runner.
 
 Add a take in `support/takes.ts`.

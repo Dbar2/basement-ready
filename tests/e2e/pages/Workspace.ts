@@ -105,7 +105,18 @@ export class PermitTab {
   async downloadPackage(saveAs: string) {
     const download = this.page.waitForEvent("download", { timeout: 120_000 });
     await this.page.getByRole("button", { name: "Download permit package" }).click();
-    const file = await download;
+    // A refusal shows as an alert; fail on it rather than wait out the download.
+    let downloaded = false;
+    void download.then(() => (downloaded = true), () => {});
+    const refused = this.page.getByRole("alert").filter({ hasText: /./ }).first();
+    const refusal = refused.waitFor({ timeout: 120_000 }).then(
+      async (): Promise<never> => {
+        if (downloaded) return new Promise<never>(() => {});
+        throw new Error(`The package didn't download: ${await refused.textContent()}`);
+      },
+      () => new Promise<never>(() => {}),
+    );
+    const file = await Promise.race([download, refusal]);
     await file.saveAs(saveAs);
     expect(file.suggestedFilename()).toMatch(/\.pdf$/);
     return { file: saveAs, name: file.suggestedFilename(), ...(await readPdf(new Uint8Array(readFileSync(saveAs)))) };

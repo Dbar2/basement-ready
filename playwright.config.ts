@@ -30,6 +30,7 @@ export default defineConfig({
   workers: mode === "record" ? 1 : 2,
   retries: 0,
   reporter: [["list"], ["./tests/e2e/support/reporter.ts"]],
+  globalSetup: "./tests/e2e/support/global-setup.ts",
   use: {
     baseURL,
     trace: "retain-on-failure",

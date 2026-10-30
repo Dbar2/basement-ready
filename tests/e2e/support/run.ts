@@ -1,7 +1,7 @@
 // One test run: its mode, its folder under tmp/e2e, its ports and the server's environment.
 // Shared by playwright.config.ts, the fixtures and the reporter (they run in different processes, so
 // everything here comes from the environment, which the config fixes before any worker starts).
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 export type Mode = "replay" | "record";
@@ -39,6 +39,13 @@ export const files = {
 // The keys stay in the main checkout's .env; only record mode reads them, and only in the server.
 const envFile = process.env.E2E_ENV_FILE ?? [join(ROOT, ".env"), join(ROOT, "../../../.env")].find((p) => existsSync(p));
 
+const modal = process.env.E2E_SCAN3D_URL?.includes(".modal.run") ? process.env.E2E_SCAN3D_URL : null;
+function fromEnvFile(name: string) {
+  if (!envFile) return null;
+  const line = readFileSync(envFile, "utf8").split("\n").find((l) => l.startsWith(`${name}=`));
+  return line ? line.slice(name.length + 1).trim().replace(/^["']|["']$/g, "") : null;
+}
+
 export function apiCommand() {
   const preload = `--import ${JSON.stringify(join(ROOT, "tests/e2e/support/net-guard.ts"))}`;
   const env = mode === "record" && envFile ? `--env-file=${JSON.stringify(envFile)} ` : "";
@@ -67,9 +74,14 @@ export function apiEnv(): Record<string, string> {
       META_CACHE: "record",
       SCAN3D_CACHE: "record",
       PUBLIC_CACHE: "record",
-      // The Mac runner by default (free); E2E_SCAN3D_URL for Modal. The token comes from the env file.
-      SCAN3D_URL: process.env.E2E_SCAN3D_URL ?? "http://127.0.0.1:8790",
-      SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? "dev",
+      // An answer saved by an earlier attempt arrives as slowly as it did then: a recording picked up
+      // where it stopped races the same way a real one does (the 3D against the photos, say).
+      REPLAY_PACE: process.env.E2E_PACE ?? "1",
+      // The Mac runner by default (free). For Modal, E2E_SCAN3D_URL is its endpoint and the token is the
+      // env file's SCAN3D_MODAL_TOKEN, read here only to hand to the test server.
+      ...(modal
+        ? { SCAN3D_URL: modal, SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? fromEnvFile("SCAN3D_MODAL_TOKEN") ?? "", SCAN3D_PARALLEL: "3" }
+        : { SCAN3D_URL: process.env.E2E_SCAN3D_URL ?? "http://127.0.0.1:8790", SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? "dev" }),
     };
   }
   return {
@@ -77,6 +89,10 @@ export function apiEnv(): Record<string, string> {
     META_CACHE: "replay",
     SCAN3D_CACHE: "replay",
     PUBLIC_CACHE: "replay",
+    // Each saved answer arrives after a quarter of the time it took when recorded. Which finishes first
+    // (the 3D or the photos, say) then goes the way it went when recorded, and the wait screen moves as
+    // it would. E2E_PACE=0 answers at once, to time only our own work.
+    REPLAY_PACE: process.env.E2E_PACE ?? "0.25",
     // Never used to reach anything: replay answers before a request is made.
     SCAN3D_URL: "http://scan3d.replay.invalid",
     SCAN3D_TOKEN: "replay",
