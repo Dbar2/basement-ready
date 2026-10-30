@@ -13,18 +13,12 @@ struct ResultView: View {
       HStack {
         Text("Basement Ready").font(Brand.body(17, .heavy)).foregroundStyle(Brand.ink)
         Spacer()
-        Button(action: onNewScan) {
-          Label("New scan", systemImage: "plus")
-            .font(Brand.body(15, .semibold))
-            .foregroundStyle(Brand.ink)
-            .padding(.horizontal, 14)
-            .frame(minHeight: 40)
-            .background(Brand.mint, in: Capsule())
-        }
+        // The web page carries its own primary; this is a way back.
+        Button("New scan", action: onNewScan).buttonStyle(TextLink())
       }
       .padding(.horizontal, 16)
       .padding(.bottom, 6)
-      Divider().overlay(Brand.border)
+      Rectangle().fill(Brand.ink).frame(height: 1)
       if let url = scan.resultURL {
         WebPage(url: url, claim: scan).ignoresSafeArea(edges: .bottom)
       }
