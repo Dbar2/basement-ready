@@ -17,22 +17,21 @@ struct StartView: View {
   var body: some View {
     ScrollViewReader { scroll in
       ScrollView {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .leading, spacing: Space.s4) {
           HStack(alignment: .top) {
             Text("Could your basement be a home?")
-              .font(Brand.display(40))
-              .kerning(-1.2)
-              .lineSpacing(-4)
+              .display(34)
               .foregroundStyle(Brand.ink)
               .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 12)
+            Spacer(minLength: Space.s3)
             Button { showSettings = true } label: {
-              Image(systemName: "gearshape").font(.system(size: 20, weight: .semibold)).foregroundStyle(Brand.inkMuted).frame(width: 44, height: 44)
+              Image(systemName: "gearshape").font(.system(size: 20, weight: .regular)).foregroundStyle(Brand.ink).frame(width: 44, height: 44)
             }
             .accessibilityLabel("Settings")
           }
+          Rectangle().fill(Brand.ink).frame(height: 1)
 
-          VStack(alignment: .leading, spacing: 10) {
+          VStack(alignment: .leading, spacing: Space.s2) {
             Text("Your address").font(Brand.body(17, .semibold)).foregroundStyle(Brand.ink)
             addressField
             if typing && picked == nil {
@@ -40,7 +39,7 @@ struct StartView: View {
             }
           }
 
-          VStack(alignment: .leading, spacing: 10) {
+          VStack(alignment: .leading, spacing: Space.s2) {
             Text("Who's it for?").font(Brand.body(17, .semibold)).foregroundStyle(Brand.ink)
             ForEach(WhoFor.allCases) { option in
               Button {
@@ -48,16 +47,13 @@ struct StartView: View {
                 missingWho = false
               } label: {
                 HStack {
-                  Text(option.label).font(Brand.body(17, who == option ? .semibold : .regular))
+                  Text(option.label)
                   Spacer()
                   if who == option { Image(systemName: "checkmark").font(.system(size: 15, weight: .bold)) }
                 }
-                .foregroundStyle(Brand.ink)
-                .padding(.horizontal, 18)
-                .frame(minHeight: 54)
-                .background(who == option ? Brand.mint : Brand.card, in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(who == option ? Color.clear : Brand.border))
+                .padding(.horizontal, Space.s3)
               }
+              .buttonStyle(ChoiceButton(picked: who == option))
               .accessibilityAddTraits(who == option ? .isSelected : [])
             }
             if missingWho {
@@ -66,7 +62,7 @@ struct StartView: View {
           }
           .id("who")
 
-          VStack(spacing: 12) {
+          VStack(spacing: Space.s2) {
             Button {
               guard let who else {
                 missingWho = true
@@ -81,30 +77,22 @@ struct StartView: View {
               .foregroundStyle(Brand.inkMuted)
               .multilineTextAlignment(.center)
               .frame(maxWidth: .infinity)
-            Button { IntroFlow.shared.openGuide() } label: {
-              Label("How to film", systemImage: "questionmark.circle")
-                .font(Brand.body(16, .semibold))
-                .foregroundStyle(Brand.accentText)
-                .frame(maxWidth: .infinity, minHeight: 44)
-                .contentShape(Rectangle())
-            }
-            .accessibilityHint("Four short tips before you start")
-            if let last, last.resultURL != nil {
-              Button { onOpenLast(last) } label: {
-                Text("Your last scan")
-                  .font(Brand.body(17, .semibold))
-                  .foregroundStyle(Brand.ink)
-                  .frame(maxWidth: .infinity, minHeight: 54)
-                  .background(Brand.card, in: RoundedRectangle(cornerRadius: 14))
-                  .overlay(RoundedRectangle(cornerRadius: 14).stroke(Brand.border))
+            HStack(spacing: Space.s4) {
+              Button("How to film") { IntroFlow.shared.openGuide() }
+                .buttonStyle(TextLink())
+                .accessibilityHint("Four short tips before you start")
+              if let last, last.resultURL != nil {
+                Button("Your last scan") { onOpenLast(last) }
+                  .buttonStyle(TextLink())
+                  .accessibilityHint("Opens the answer for the last basement you sent")
               }
-              .accessibilityHint("Opens the answer for the last basement you sent")
             }
+            .frame(maxWidth: .infinity)
           }
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 32)
+        .padding(.horizontal, Space.s3)
+        .padding(.top, Space.s3)
+        .padding(.bottom, Space.s5)
       }
       .scrollDismissesKeyboard(.interactively)
     }
@@ -135,10 +123,10 @@ struct StartView: View {
           .accessibilityLabel("Clear address")
       }
     }
-    .padding(.horizontal, 16)
-    .frame(minHeight: 54)
-    .background(Brand.card, in: RoundedRectangle(cornerRadius: 14))
-    .overlay(RoundedRectangle(cornerRadius: 14).stroke(picked != nil ? Brand.mintLine : Brand.border, lineWidth: picked != nil ? 2 : 1))
+    .padding(.horizontal, Space.s3)
+    .frame(minHeight: 52)
+    .background(Brand.card, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+    .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous).stroke(picked != nil ? Brand.ink : Brand.border, lineWidth: picked != nil ? 1.5 : 1))
   }
 
   @ViewBuilder private var suggestions: some View {
@@ -162,11 +150,11 @@ struct StartView: View {
             .frame(minHeight: 48)
             .contentShape(Rectangle())
           }
-          if hit != search.results.last { Divider().overlay(Brand.border) }
+          if hit != search.results.last { Rectangle().fill(Brand.border).frame(height: 1) }
         }
       }
-      .background(Brand.card, in: RoundedRectangle(cornerRadius: 14))
-      .overlay(RoundedRectangle(cornerRadius: 14).stroke(Brand.border))
+      .background(Brand.card, in: RoundedRectangle(cornerRadius: Radius.small, style: .continuous))
+      .overlay(RoundedRectangle(cornerRadius: Radius.small, style: .continuous).stroke(Brand.ink, lineWidth: 1))
     } else if text.count >= 2 {
       Text("No match in Waterloo Region yet. Keep typing, or skip it.").font(Brand.body(15)).foregroundStyle(Brand.inkMuted)
     }

@@ -122,7 +122,6 @@ struct FilmingView: View {
         .lineLimit(2)
         .minimumScaleFactor(0.85)
         .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
-        .animation(.easeOut(duration: 0.2), value: model.line)
         .accessibilityAddTraits(.updatesFrequently)
         .accessibilityIdentifier("filming.line")
       if let s = model.map?.stats {
