@@ -367,6 +367,7 @@ a { color: inherit; }
 .addr-list li[aria-selected="true"] { background: var(--color-mint); }
 .prop { display: grid; grid-template-columns: 112px minmax(0, 1fr); gap: 14px; align-items: start; animation: rise var(--dur-2) var(--ease-out) both; }
 .prop-aerial { width: 112px; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: var(--color-surface); }
+.prop[data-photo="false"] { grid-template-columns: minmax(0, 1fr); }
 .prop-body { display: grid; gap: 6px; }
 .prop-head { margin: 0; font-weight: 700; line-height: 1.3; }
 .prop-facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-family: var(--font-mono); font-size: 12.5px; }

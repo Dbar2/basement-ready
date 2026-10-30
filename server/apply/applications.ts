@@ -31,7 +31,7 @@ export type ApplyInput = {
   state: StoredState;
   address: string;
   municipality: string; // city name
-  site: { legalDescription: string | null; pin: string | null } | null;
+  site: unknown; // the lot and house shapes; no legal description, since no open parcel data has one
   areaM2: number | null;
   bedrooms: 0 | 1;
   scope: string;
@@ -63,7 +63,7 @@ export function holdingsOf(input: ApplyInput) {
   const pros = input.state.build?.pros ?? [];
   return {
     profile: Boolean(input.profile?.owners.length && input.profile.email),
-    legal: Boolean(input.profile?.legalDescription || input.site?.legalDescription),
+    legal: Boolean(input.profile?.legalDescription),
     drawings: Boolean(input.result?.plan),
     quotesWsib: pros.filter((p) => p.quoteCAD != null && p.wsib === true).length,
     quotes: pros.filter((p) => p.quoteCAD != null).length,
@@ -75,7 +75,7 @@ export function applications(input: ApplyInput): Application[] {
   const a = answers(r);
   const has = holdingsOf(input);
   const who = names(input.profile);
-  const legal = input.profile?.legalDescription || input.site?.legalDescription || null;
+  const legal = input.profile?.legalDescription || null;
   const pkg = `/api/scans/${input.scanId}/permit.pdf`;
   const out: Application[] = [];
   const live = (r?.grants ?? []).filter((g: any) => g.qualify !== "no" && !["cancelled", "closed"].includes(g.status));

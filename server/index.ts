@@ -14,9 +14,9 @@ import { db, migrateDb, schema, usingPglite } from "./db";
 import { enqueue, startWorker } from "./jobs";
 import { listModels } from "./meta";
 import { buildPlan } from "./plan";
-import { searchAddresses } from "./address";
+import { resolveAddress, searchOntario } from "./address";
 import { suggestLayout } from "./layout";
-import { fetchAerial, lookupProperty, type Property } from "./property";
+import { AERIAL_YEAR, fetchAerial, lookupProperty, type Property } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { cameraLookup, cleanCapture } from "./capture";
 import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
@@ -25,7 +25,7 @@ import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, M
 import { liteSurfels, lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
-import { MUNICIPALITIES, packFor, type Household } from "./rules";
+import { cleanMunicipality, MUNICIPALITIES, packFor, type Household } from "./rules";
 import { cleanMoneyAnswer, evaluateMoney, fromWho, STORED_MONEY_QUESTIONS, waitQuestions, WHO_ID, WHO_IDS, type MoneyAnswers, type Who } from "./eligibility";
 import { cleanPlans, plansHousehold, plansQuestion, plansWords, PLANS_ID } from "./plans";
 import { TRIAGE } from "./triage";
@@ -79,25 +79,21 @@ app.get("/api/municipalities", (c) => c.json(MUNICIPALITIES));
 
 // ---- The house: address type-ahead, then what public data already says about it ----
 
-app.get("/api/address", (c) => c.json({ results: searchAddresses(String(c.req.query("q") ?? "").slice(0, 80)) }));
-
-// Only addresses from our own list: the client sends the text it picked, we find the point again.
-function resolveAddress(address: unknown, municipality: unknown) {
-  const text = String(address ?? "").slice(0, 120);
-  return searchAddresses(text, 10).find((a) => a.address.toLowerCase() === text.toLowerCase() && (!municipality || a.municipality === municipality)) ?? null;
-}
+// Waterloo Region's own list first, then the rest of Ontario (NRCan); outside Ontario, a clear answer.
+app.get("/api/address", async (c) => c.json(await searchOntario(String(c.req.query("q") ?? "").slice(0, 120))));
 
 app.get("/api/property", async (c) => {
-  const a = resolveAddress(c.req.query("address"), c.req.query("municipality"));
-  if (!a) return c.json({ error: "We couldn't find that address in Waterloo Region." }, 404);
+  const a = await resolveAddress(c.req.query("address"), c.req.query("municipality"));
+  if (!a) return c.json({ error: "We couldn't find that address in Ontario." }, 404);
   return c.json({ property: await lookupProperty(a) });
 });
 
-// The house from above (Region of Waterloo, 2026). Cached, since the photo doesn't change.
+// The house from above (Region of Waterloo, 2024, open data). Cached, since the photo doesn't change.
+// Only inside Waterloo Region: nowhere else has an open photo we can use.
 app.get("/api/aerial", async (c) => {
-  const a = resolveAddress(c.req.query("address"), c.req.query("municipality"));
-  if (!a) return c.body(null, 404);
-  const key = `aerial/${a.municipality}/${a.address.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.jpg`;
+  const a = await resolveAddress(c.req.query("address"), c.req.query("municipality"));
+  if (!a || a.source !== "region") return c.body(null, 404);
+  const key = `aerial/${AERIAL_YEAR}/${a.municipality}/${a.address.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.jpg`;
   if (!(await storage.get(key))) {
     try {
       await storage.put(key, await fetchAerial(a.lon, a.lat), "image/jpeg");
@@ -126,9 +122,9 @@ app.post("/api/scans", async (c) => {
   if (video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 3 minutes." }, 413);
   const household = (["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : "unsure") as Household;
   // A picked address sets the city and brings its public facts; otherwise the chosen city's rules.
-  const picked = resolveAddress(body.address, body.addressMunicipality);
+  const picked = await resolveAddress(body.address, body.addressMunicipality);
   const property = picked ? await lookupProperty(picked).catch(() => null) : null;
-  const municipality = picked ? (picked.city ?? "ontario") : String(body.municipality ?? "waterloo-on");
+  const municipality = picked ? (picked.city ?? "ontario") : cleanMunicipality(body.municipality ?? "waterloo-on");
   // Who it's for, one tap on the start sheet with the rent folded in: saved now, never asked again.
   const who = WHO_IDS.includes(body.who as Who) ? (body.who as Who) : null;
   const start = who ? fromWho(who, packFor(municipality).pack) : null;

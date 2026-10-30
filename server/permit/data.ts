@@ -84,9 +84,9 @@ export function ontarioDiy(): OntarioDiy {
   return ontario;
 }
 
-// The city's permit facts; anywhere without a researched pack gets Waterloo's shape marked as a guess.
-export function cityPermit(municipality: string): { city: string; permit: CityPermit | null } {
-  const { pack, city, coverage } = packFor(municipality);
-  const permit = (pack as any).permitPackage as CityPermit | undefined;
-  return { city, permit: coverage === "full" ? (permit ?? null) : null };
+// The permit facts for this municipality: its own pack's, or Ontario's (the provincial application,
+// the Code's inspection stages, a design brief for a designer to sign) anywhere without one.
+export function cityPermit(municipality: string): { city: string; authority: string; permit: CityPermit | null } {
+  const { pack, city, authority } = packFor(municipality);
+  return { city, authority, permit: ((pack as any).permitPackage as CityPermit | undefined) ?? null };
 }
