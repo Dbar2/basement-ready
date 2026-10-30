@@ -1,5 +1,5 @@
-// Guided basement capture: brief, camera, one take of the whole basement with a voice guide and a
-// "paint the room" view of what's filmed, review, hand back a File.
+// Guided basement capture: brief, camera, one take of the whole basement with a voice guide that
+// reacts to what the camera sees and a big live map of what's filmed, review, hand back a File.
 import { Suspense, useEffect, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
 import "./capture.css";
 import { MAX_SEC, MIN_SEC, TIPS } from "./checklist";
@@ -25,19 +25,23 @@ import { FIND_TICKS, sessionId, useCoaching, useLive3d, useLiveFinds } from "./l
 import { lazy3d, View3DBoundary } from "../components/View3D";
 const Live3DFull = lazy3d(() => import("./Live3D").then((m) => m.Live3DFull));
 import { FindFlash } from "./LiveLayer";
-import { CoveragePanel, useCoverage } from "./Coverage";
-import { describeGap, nextGap, Steady, type Gap, type Group } from "./paint";
+import { useCoverage } from "./Coverage";
+import { MapPanel } from "./MapPanel";
+import { compassOffset, lowCeiling, nextSide, sidesFilmed } from "./map";
+import { describeGap, nextGap, Steady, wrap, type Gap, type Group } from "./paint";
+import { cheerDue, findLine, OncePerSpace, sideLine, timeLine } from "./reactions";
 import { TurnHint, VoiceBubble } from "./Guide";
 import { RoomDetector, type Look } from "./rooms";
-import { currentTask, IDEAS, NEEDS, SKIPPABLE, type LineId, type Need } from "./script";
+import { currentTask, NEEDS, SKIPPABLE, type LineId, type Need, type TaskId } from "./script";
 import { keepAudio, prepareAudioSession } from "./audio";
-import { TalkMeter, useVoice, type Spoken } from "./voice";
+import { useVoice, type Spoken } from "./voice";
 import { DeniedPage, IntroPage, ProblemPage } from "./Pages";
 import { Review, type Take } from "./Review";
 
 // rooms: where the picture changed enough to be another part of the basement. Never shown; the server
-// only uses them to label areas of the one plan. ideas: what they tapped when asked what the space
-// should be. spoken: when the guide was talking, so the server can cut its voice out of the transcript.
+// only uses them to label areas of the one plan. ideas: always empty now; nothing is asked while
+// filming (what the space should be is asked while it processes). spoken: when the guide was talking,
+// so the server can cut its voice out of the transcript.
 // lens: "ultrawide" when the 0.5x lens filmed it. wideAt: seconds into the take of the wide shot from a
 // corner, for the staged photos. Uploads have no rooms, lens or wide shot.
 export type CaptureMeta = {
@@ -65,9 +69,9 @@ type Phase =
 
 type StopReason = "user" | "max" | "interrupted" | "discard" | "failed";
 
-// 10 Mbps H.264 is close to what the phone's own camera records (about 10 Mbps HEVC): fewer blocky,
-// smeared frames for SAM and the 3D. A 3-minute take is about 225 MB; the server takes up to 400 MB.
-const VIDEO_BITRATE = 10_000_000;
+// 9 Mbps H.264 is close to what the phone's own camera records (about 10 Mbps HEVC): few blocky,
+// smeared frames for SAM and the 3D. A 5-minute take is about 340 MB; the server takes up to 400 MB.
+const VIDEO_BITRATE = 9_000_000;
 const ORDER = NEEDS.map((c) => c.id);
 // Painted enough to call it done. The walls matter most for the 3D; the floor only near the walls.
 const DONE_AT: Record<Group, number> = { walls: 0.7, ceiling: 0.45, floor: 0.35 };
@@ -78,14 +82,20 @@ const GROWING = 0.02;
 const STALL_MS = 4000;
 // A door SAM saw this recently counts toward spotting another part of the basement.
 const DOOR_FRESH_SEC = 2.5;
+// The guide talks about the map only while its newest rebuild is this fresh, and not in the first
+// seconds, when there's nothing behind anyone yet.
+const MAP_FRESH_MS = 25_000;
+const MAP_TALK_AFTER_SEC = 20;
+// A new space only counts once the walk is properly under way (the stairs give way to the basement).
+const NEW_SPACE_AFTER_SEC = 15;
+const TIME_ORDER: LineId[] = ["time_half", "time_minute", "time_end"];
 
+// The furnace, panel and windows are praised by what SAM found (reactions.ts), not here.
 const PRAISE: Partial<Record<Need, LineId>> = {
   stairs: "stairs_done",
   walls: "walls_done",
   ceiling: "ceiling_done",
   floor: "floor_done",
-  furnace: "furnace_found",
-  plans: "plans_heard",
   wide: "wide_done",
 };
 const DIRECTION: Record<string, LineId> = { left: "turn_left", right: "turn_right", around: "turn_around", up: "tilt_up", down: "tilt_down" };
@@ -106,7 +116,6 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
   const [announce, setAnnounce] = useState("");
   // One id per take: live finds and the assembling 3D share it on the server.
   const [session, setSession] = useState(() => sessionId());
-  const [ideas, setIdeas] = useState<CaptureMeta["ideas"]>([]);
   const [show3d, setShow3d] = useState(false);
 
   const rootRef = useRef<HTMLElement>(null);
@@ -120,7 +129,6 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
   const milestonesRef = useRef({ min: false, end: false });
   const phaseRef = useRef(phase);
   const checkedRef = useRef(checked);
-  const ideasRef = useRef(ideas);
   const lensRef = useRef(lens);
   // Silent marks where the picture changed into another part of the basement.
   const detectorRef = useRef(new RoomDetector());
@@ -128,9 +136,11 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
   const doorRef = useRef({ sec: -Infinity, width: 0 });
   const wideAtRef = useRef<number | null>(null);
   const mountedRef = useRef(true);
+  // What the guide has already said about the video: once per space, the clock, the map.
+  const spaceRef = useRef(new OncePerSpace());
+  const reactRef = useRef({ lastCheer: -Infinity, grewAt: 0, painted: 0, time: -1, mapReady: false, sides: 0 });
   phaseRef.current = phase;
   checkedRef.current = checked;
-  ideasRef.current = ideas;
   lensRef.current = lens;
 
   const recording = phase.name === "recording";
@@ -229,14 +239,14 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     marksRef.current = [];
     doorRef.current = { sec: -Infinity, width: 0 };
     wideAtRef.current = null;
-    talkRef.current.reset();
+    spaceRef.current.newSpace();
+    reactRef.current = { lastCheer: -Infinity, grewAt: 0, painted: 0, time: -1, mapReady: false, sides: 0 };
     stillRef.current = null;
     hintRef.current.reset();
     sinceRef.current = {};
     setElapsed(0);
     setChecked([]);
     setSkipped([]);
-    setIdeas([]);
     setShow3d(false);
     setNudge(false);
     setConfirmDiscard(false);
@@ -283,7 +293,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
       durationSec,
       checklist: ORDER.filter((id) => checkedRef.current.includes(id)),
       rooms: [0, ...marksRef.current].filter((t) => t < durationSec),
-      ideas: ideasRef.current,
+      ideas: [],
       spoken: voice.spoken(),
       lens: lensRef.current,
       wideAt: wideAt != null && wideAt < durationSec ? wideAt : null,
@@ -291,7 +301,7 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
       note,
     };
     setPhase({ name: "review", take });
-    setAnnounce(reason === "max" ? "Stopped at 3 minutes." : "Stopped. Check your take.");
+    setAnnounce(reason === "max" ? `Stopped at ${MAX_SEC / 60} minutes.` : "Stopped. Check your take.");
   }
 
   // Clock, plus the two moments worth saying out loud.
@@ -309,6 +319,13 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
       if (t >= MAX_SEC - 15 && !m.end) {
         m.end = true;
         setAnnounce("15 seconds left.");
+      }
+      // The clock out loud, paced to the take: halfway, a minute left, thirty seconds left.
+      const said = timeLine(t, MAX_SEC, taskRef.current === "finish");
+      const rank = said ? TIME_ORDER.indexOf(said) : -1;
+      if (said && rank > reactRef.current.time) {
+        reactRef.current.time = rank;
+        sayRef.current(said);
       }
       if (t >= MAX_SEC) stopRecording("max");
     }, 200);
@@ -359,8 +376,6 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
 
   useWakeLock(recording);
   const level = useMicLevel(phase.name === "ready" || recording ? stream : null);
-  const levelRef = useRef(0);
-  levelRef.current = level;
   const sideways = useMediaQuery("(orientation: landscape) and (pointer: coarse) and (max-height: 520px)");
   const portrait = dims ? dims.h >= dims.w : true;
 
@@ -369,17 +384,23 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
   const check = (id: Need) => setChecked((prev) => (prev.includes(id) ? prev : ORDER.filter((x) => x === id || prev.includes(x))));
 
   const voice = useVoice(recording, startedAtRef.current);
+  const sayRef = useRef(voice.say);
+  sayRef.current = voice.say;
   const live3d = useLive3d(recording, session);
+  const previewRef = useRef(live3d.preview);
+  previewRef.current = live3d.preview;
   const coaching = useCoaching(recording, liveRef, onLook, startedAtRef.current);
   const coverage = useCoverage(recording, lens, portrait, coaching.stateRef);
 
   // The colour signature changed a lot: another part of the basement. Mark it for the plan's labels,
-  // and let the old paint fade, without a word.
+  // let the old paint fade, and tell them to take the new space slowly.
   function onLook(sec: number, look: Look) {
     const door = sec - doorRef.current.sec <= DOOR_FRESH_SEC ? doorRef.current.width : 0;
     if (!detectorRef.current.push({ sec, look, doorWidth: door })) return;
     marksRef.current.push(round1(sec));
     coverage.fade();
+    spaceRef.current.newSpace();
+    if (sec >= NEW_SPACE_AFTER_SEC) sayRef.current("new_space");
   }
 
   const liveFinds = useLiveFinds({
@@ -404,6 +425,8 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     compass: coverage.compass,
   });
   if (recording && task.id !== "finish") sinceRef.current[task.id] ??= elapsed;
+  const taskRef = useRef<TaskId>(task.id);
+  taskRef.current = task.id;
 
   // Painted enough: done. Without a compass, holding the phone up (or down) for a moment counts instead.
   useEffect(() => {
@@ -462,6 +485,8 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     gap = gapRef.current;
   }
   const hintKey = gap ? `${gap.turn ?? ""}|${gap.tilt ?? ""}` : null;
+  const gridHintRef = useRef(false);
+  gridHintRef.current = gap != null;
   useEffect(() => {
     if (!recording || !gap) return;
     const line = DIRECTION[gap.turn ?? gap.tilt ?? ""];
@@ -473,36 +498,84 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     if (recording) voice.say(task.line, { again: true });
   }, [recording, task.id]);
   // Light and speed only matter while there's still something to film.
+  const issueRef = useRef(coaching.issue);
+  issueRef.current = coaching.issue;
   useEffect(() => {
     if (coaching.issue && task.id !== "finish") voice.say(coaching.issue.id === "dark" ? "too_dark" : "slow_down");
   }, [coaching.issue?.id]);
 
-  // A find ticks what it shows, so nobody has to tap anything while holding a phone.
+  // A find ticks what it shows, so nobody has to tap anything while holding a phone, and the guide
+  // says something about it: the furnace, the water heater beside it, plumbing where a bathroom goes.
   useEffect(() => {
-    const latest = liveFinds.finds[liveFinds.finds.length - 1];
+    const finds = liveFinds.finds;
+    const latest = finds[finds.length - 1];
     if (!latest) return;
     const step = FIND_TICKS[latest.key];
     if (step && !checkedRef.current.includes(step)) check(step);
-    if (latest.key === "window") voice.say("window_found");
+    const line = findLine(
+      latest.key,
+      finds.slice(0, -1).map((f) => f.key),
+    );
+    if (line && (line !== "low_ceiling" || spaceRef.current.take("low_ceiling"))) voice.say(line);
     setAnnounce(`Found the ${latest.label.toLowerCase()}.`);
   }, [liveFinds.finds.length]);
 
-  // ---------- plans: a tap, or about 1.5 s of talking ----------
+  // ---------- the map: what it shows, said out loud ----------
 
-  function pickIdea(idea: string) {
-    setIdeas((prev) => [...prev, { room: marksRef.current.length, idea, sec: round1(elapsed) }]);
-    check("plans");
-  }
-  const talkRef = useRef(new TalkMeter());
-  const listening = recording && task.id === "plans";
+  // A new rebuild: the map's first appearance, all four sides filmed, a low ceiling.
   useEffect(() => {
-    if (!listening) return;
-    talkRef.current.reset();
+    const p = live3d.preview;
+    const map = p?.map;
+    if (!recording || !p || !map?.box) return;
+    const r = reactRef.current;
+    // Asked again on later rebuilds until it's actually said: a task line can push it out.
+    if (!r.mapReady) voice.say("map_ready");
+    const sides = sidesFilmed(map);
+    if (sides > r.sides) r.grewAt = performance.now();
+    r.sides = sides;
+    if (sides === 4 && spaceRef.current.take("walls_all")) voice.say("walls_all");
+    if (lowCeiling(p.ceilingHeightM, map) && spaceRef.current.take("low_ceiling")) voice.say("low_ceiling");
+  }, [live3d.preview?.version]);
+
+  useEffect(() => {
+    if (voice.caption?.id === "map_ready") reactRef.current.mapReady = true;
+  }, [voice.caption?.id]);
+
+  // Painting more of the basement counts as progress too, for the odd word of encouragement.
+  useEffect(() => {
+    const painted = coverage.walls + coverage.ceiling + coverage.floor;
+    if (painted >= reactRef.current.painted + 0.03) {
+      reactRef.current.painted = painted;
+      reactRef.current.grewAt = performance.now();
+    }
+  }, [coverage.version]);
+
+  // Every moment or so: point at a side of the map that's still open (outside the steps whose
+  // arrows already point at what's missed), or say a word of encouragement after a quiet stretch.
+  useEffect(() => {
+    if (!recording) return;
     const id = window.setInterval(() => {
-      if (talkRef.current.push(levelRef.current >= 3, performance.now(), voice.guide())) check("plans");
-    }, 100);
+      const now = performance.now();
+      const r = reactRef.current;
+      const p = previewRef.current;
+      const quietStep = taskRef.current === "stairs" || taskRef.current === "wide";
+      if (p?.map?.box && now - p.at < MAP_FRESH_MS && !gridHintRef.current && !quietStep && sinceStart() >= MAP_TALK_AFTER_SEC) {
+        const compass = coverage.headingRef.current;
+        const offset = compassOffset(p.map.path);
+        // Only with the compass lined up to the map: a stale camera direction could say "behind you"
+        // about what's in front.
+        if (offset != null && compass != null) {
+          const line = sideLine(nextSide(p.map, wrap(compass - offset)));
+          if (line) sayRef.current(line);
+        }
+      }
+      if (cheerDue(now, { lastSpoke: voice.lastSpoke(), lastCheer: r.lastCheer, grewAt: r.grewAt, trouble: issueRef.current != null })) {
+        r.lastCheer = now;
+        sayRef.current("encourage");
+      }
+    }, 1500);
     return () => clearInterval(id);
-  }, [listening]);
+  }, [recording]);
 
   // ---------- the wide shot: still for 2 seconds ----------
 
@@ -616,112 +689,101 @@ export function Capture({ onComplete, onCancel }: CaptureProps) {
     <section ref={rootRef} className="cap cap--live" data-phase={phase.name} aria-label="Film your basement">
       <div className="cap-stage" inert={confirmDiscard}>
         <div className="cap-frame" style={dims ? ({ "--ar": String(dims.w / dims.h) } as CSSProperties) : undefined}>
-          <video
-            ref={liveRef}
-            className="cap-video"
-            data-mirrored={mirrored}
-            autoPlay
-            muted
-            playsInline
-            aria-label="Camera preview"
-            onLoadedMetadata={(e) => setDims({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
-            onResize={(e) => setDims({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
-          />
-          {recording && <FindFlash flash={liveFinds.flash} videoRef={liveRef} heading={coverage.view?.heading ?? null} />}
-
-          <div className="guide-top">
-            <div className="guide-bar">
-              <button
-                className="guide-icon-btn"
-                aria-label={recording ? "Stop and throw away this take" : "Close the camera"}
-                onClick={() => (recording ? setConfirmDiscard(true) : close())}
-              >
-                <Icon.close />
-              </button>
-              {recording ? (
-                <span className="guide-rec">
-                  <i aria-hidden /> {formatTime(elapsed)}
-                  {left <= 15 && <b> · {Math.ceil(left)} s left</b>}
-                </span>
-              ) : (
-                <span className="guide-rec guide-rec--ready">
-                  {hasAudio ? "Camera and mic ready" : "Camera ready · no mic"}
-                  {lens === "ultrawide" && <span className="guide-lens">0.5×</span>}
-                  {hasAudio && micBars}
-                </span>
-              )}
-              {recording && (
-                <button className="guide-done" data-waiting={!pastMin} aria-disabled={!pastMin} onClick={stop}>
-                  {pastMin ? "Done" : `Done in ${Math.ceil(MIN_SEC - elapsed)} s`}
-                </button>
-              )}
-            </div>
-            <VoiceBubble
-              text={recording ? (voice.caption?.text ?? null) : "Hi! I'll guide you with my voice. Stand at the top of the stairs, tap Start, and film them on your way down."}
-              speaking={voice.speaking}
-              muted={voice.muted}
-              onMute={() => voice.setMuted((m) => !m)}
+          {/* The camera: the whole screen before filming, the top half while filming. */}
+          <div className="cap-view">
+            <video
+              ref={liveRef}
+              className="cap-video"
+              data-mirrored={mirrored}
+              autoPlay
+              muted
+              playsInline
+              aria-label="Camera preview"
+              onLoadedMetadata={(e) => setDims({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
+              onResize={(e) => setDims({ w: e.currentTarget.videoWidth, h: e.currentTarget.videoHeight })}
             />
-          </div>
+            {recording && <FindFlash flash={liveFinds.flash} videoRef={liveRef} heading={coverage.view?.heading ?? null} />}
 
-          {recording && gap && <TurnHint turn={gap.turn} tilt={gap.tilt} what={describeGap(gap)} />}
-          {paused && (
-            <p className="cap-plate cap-plate--center" role="status">
-              Camera paused. It'll be back in a moment{recording ? ", and the take keeps going" : ""}.
-            </p>
-          )}
-
-          <div className="guide-bottom">
-            {recording ? (
-              <CoveragePanel
-                title={task.title}
-                count={`${checked.length} of ${NEEDS.length}`}
-                coverage={coverage}
-                lens={lens}
-                portrait={portrait}
-                gap={gap}
-                preview={live3d.preview}
-                onOpen3d={() => setShow3d(true)}
-                action={
-                  skippable ? (
-                    <button className="cov-skip" onClick={() => setSkipped((prev) => [...prev, task.id as Need])}>
-                      Skip
-                    </button>
-                  ) : undefined
-                }
-              >
-                {task.id === "plans" && (
-                  <div className="guide-ideas">
-                    {IDEAS.map((idea) => (
-                      <button key={idea} onClick={() => pickIdea(idea)}>
-                        {idea}
-                      </button>
-                    ))}
-                    {hasAudio && (
-                      <span className="guide-listening">
-                        {micBars}
-                        Listening…
-                      </span>
-                    )}
-                  </div>
+            <div className="guide-top">
+              <div className="guide-bar">
+                <button
+                  className="guide-icon-btn"
+                  aria-label={recording ? "Stop and throw away this take" : "Close the camera"}
+                  onClick={() => (recording ? setConfirmDiscard(true) : close())}
+                >
+                  <Icon.close />
+                </button>
+                {recording ? (
+                  <span className="guide-rec">
+                    <i aria-hidden /> {formatTime(elapsed)}
+                    {left <= 15 && <b> · {Math.ceil(left)} s left</b>}
+                  </span>
+                ) : (
+                  <span className="guide-rec guide-rec--ready">
+                    {hasAudio ? "Camera and mic ready" : "Camera ready · no mic"}
+                    {lens === "ultrawide" && <span className="guide-lens">0.5×</span>}
+                    {hasAudio && micBars}
+                  </span>
                 )}
-                {nudge && !pastMin && <p className="guide-nudge">We need at least 30 seconds to see the space.</p>}
-              </CoveragePanel>
-            ) : (
-              <div className="guide-card guide-card--start">
-                <h2 className="guide-task" data-focus tabIndex={-1}>
-                  Start at the top of the stairs
-                </h2>
-                <p className="guide-tips">{TIPS.map((t) => t.label).join(" · ")}</p>
-                <button className="cap-btn cap-btn--primary guide-start" onClick={() => void startRecording()} disabled={!stream || busy || paused}>
-                  <Icon.rec /> {busy ? "Starting…" : "Start"}
-                </button>
-                <button className="guide-link" onClick={pickFile}>
-                  Upload a video instead
-                </button>
+                {recording && (
+                  <button className="guide-done" data-waiting={!pastMin} aria-disabled={!pastMin} onClick={stop}>
+                    {pastMin ? "Done" : `Done in ${Math.ceil(MIN_SEC - elapsed)} s`}
+                  </button>
+                )}
+              </div>
+              <VoiceBubble
+                text={recording ? (voice.caption?.text ?? null) : "Hi! I'll guide you with my voice. Stand at the top of the stairs, tap Start, and film them on your way down."}
+                speaking={voice.speaking}
+                muted={voice.muted}
+                onMute={() => voice.setMuted((m) => !m)}
+              />
+            </div>
+
+            {recording && gap && <TurnHint turn={gap.turn} tilt={gap.tilt} what={describeGap(gap)} />}
+            {paused && (
+              <p className="cap-plate cap-plate--center" role="status">
+                Camera paused. It'll be back in a moment{recording ? ", and the take keeps going" : ""}.
+              </p>
+            )}
+
+            {!recording && (
+              <div className="guide-bottom">
+                <div className="guide-card guide-card--start">
+                  <h2 className="guide-task" data-focus tabIndex={-1}>
+                    Start at the top of the stairs
+                  </h2>
+                  <p className="guide-tips">{TIPS.map((t) => t.label).join(" · ")}</p>
+                  <button className="cap-btn cap-btn--primary guide-start" onClick={() => void startRecording()} disabled={!stream || busy || paused}>
+                    <Icon.rec /> {busy ? "Starting…" : "Start"}
+                  </button>
+                  <button className="guide-link" onClick={pickFile}>
+                    Upload a video instead
+                  </button>
+                </div>
               </div>
             )}
           </div>
+
+          {recording && (
+            <MapPanel
+              title={task.title}
+              count={`${checked.length} of ${NEEDS.length}`}
+              preview={live3d.preview}
+              available={live3d.available}
+              compass={coverage.compass ? (coverage.view?.heading ?? null) : null}
+              ceilingPainted={coverage.ceiling}
+              onOpen3d={() => setShow3d(true)}
+              action={
+                skippable ? (
+                  <button className="map-skip" onClick={() => setSkipped((prev) => [...prev, task.id as Need])}>
+                    Skip
+                  </button>
+                ) : undefined
+              }
+            >
+              {nudge && !pastMin && <p className="guide-nudge">We need at least 30 seconds to see the space.</p>}
+            </MapPanel>
+          )}
 
           {show3d && live3d.preview && (
             <View3DBoundary quiet>

@@ -291,10 +291,13 @@ app.post("/api/live/detect", async (c) => {
     return c.json({ error: "Send a small JPEG frame, a session id and 1–3 concepts." }, 400);
   }
   const refused = admit(clientIp(c), session, keys.length);
-  if (refused) return c.json({ error: refused, finds: [] }, 429);
   const started = Date.now();
   const jpeg = Buffer.from(await frame.arrayBuffer());
-  addLiveFrame(session, jpeg); // the same frames build the 3D preview
+  // The same frames build the 3D preview; the compass heading turns its map with the phone. A frame
+  // costs no SAM call, so the map keeps building after this take's live finds run out.
+  const heading = body.heading == null ? NaN : Number(body.heading);
+  if (refused !== "slow down") addLiveFrame(session, jpeg, Number.isFinite(heading) ? heading : null);
+  if (refused) return c.json({ error: refused, finds: [] }, 429);
   const finds = await detectLive(`data:image/jpeg;base64,${jpeg.toString("base64")}`, keys);
   return c.json({ finds, ms: Date.now() - started });
 });
