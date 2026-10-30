@@ -21,6 +21,9 @@ export const NAV = [
   { path: PATHS.about, label: "About" },
 ];
 
+// The open data behind address and property look-ups (data/rules/SOURCES.md, "Data licences").
+export const DATA_CREDIT = "Open data: Region of Waterloo, City of Cambridge. Addresses outside Waterloo Region: Natural Resources Canada.";
+
 export const SITE = {
   name: "Basement Ready",
   builder: "David Barry",

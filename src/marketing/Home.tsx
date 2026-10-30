@@ -96,6 +96,7 @@ const CITED: SourceId[] = [
   "kitchenerPermits",
   "mmahPlan",
   "ontarioSecondUnit",
+  "ontarioApplication",
 ];
 
 function usePrefersStill() {
@@ -335,8 +336,9 @@ export function Home({ onCheck }: { onCheck: () => void }) {
                 A legal suite can give a parent a place of their own, or help pay the mortgage<Ref id="ontarioSecondUnit" />.
               </p>
               <p>
-                Basement Ready covers all of Ontario, with Waterloo Region in depth: Waterloo, Kitchener and Cambridge get their own rules, fees
-                and local money. Everywhere else gets Ontario's rules, and a list of what to confirm with your city.
+                Basement Ready covers all of Ontario, with Waterloo Region in depth: Waterloo, Kitchener and Cambridge get their own zoning
+                rules, fees, grants, forms and permit steps. Everywhere else in Ontario gets the province's rules under your municipality's
+                name, and a permit package on Ontario's own application form<Ref id="ontarioApplication" />.
               </p>
             </div>
           </section>

@@ -29,6 +29,8 @@ const PROCESSORS = [
   { name: "Railway", role: "Hosts our app and database.", data: "Your project and account details" },
   { name: "Clerk", role: "Handles accounts and sign-in.", data: "Name, email, sign-in details" },
   { name: "Resend", role: "Sends our emails, including briefs you choose to send.", data: "Email address, message content" },
+  { name: "Natural Resources Canada", role: "Finds addresses outside Waterloo Region as you type, with its public Geolocator.", data: "What you type in the address box" },
+  { name: "Region of Waterloo and City of Cambridge", role: "Their public map services give the building footprint, the aerial photo (Region of Waterloo, 2024) and, in Cambridge, the zone.", data: "Your address's location" },
 ];
 
 const KEPT = [
