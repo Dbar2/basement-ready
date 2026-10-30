@@ -8,11 +8,26 @@ Film the basement with ARKit world tracking: the camera's real position for ever
   - Bright dashes where nobody has looked yet; hatching where the ceiling isn't filmed.
   - The camera picture as an inset, and one line of guidance.
   - The guide's voice clips (`public/voice`), up to 5 minutes, and live finds from SAM every 2.5 s.
-- **After:** a look at the take, then a background upload, then `/scans/<id>` in a web view.
+- **After:** a look at the take, then a background upload, then `/scans/<id>` in a web view. A take the server turns away (today's limit, no connection) stays on the phone to send again.
+- **Your last scan:** the start screen opens the last answer this phone sent.
 
 ## Build
 
 You need Xcode and XcodeGen (`brew install xcodegen`). The Xcode project is made from `project.yml` and isn't committed.
+
+### Your signing team
+
+The simulator build needs no team. To put it on a phone, sign it with your own Apple team (a free Apple ID works):
+
+1. In Xcode, open **Settings → Accounts**, add your Apple ID, and note the **Team ID** (10 characters).
+2. In `ios/`, copy the example and put your Team ID in it. The file isn't committed.
+
+   ```bash
+   cd ios && cp Signing.local.xcconfig.example Signing.local.xcconfig
+   ```
+
+3. If the bundle ID is taken on your team, change `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml` to your own, such as `com.yourname.basementready`.
+4. Run `make generate` again.
 
 ```bash
 cd ios && make generate
@@ -39,7 +54,7 @@ cd ios && make build-device
    ```
 
    Or open `BasementReady.xcodeproj`, pick the iPhone at the top and press Run.
-4. The first time, iOS may say the developer isn't trusted. Go to **Settings → General → VPN & Device Management**, tap **Apple Development: David Barry**, then **Trust**.
+4. The first time, iOS may say the developer isn't trusted. Go to **Settings → General → VPN & Device Management**, tap your developer name, then **Trust**.
 5. Open Basement Ready. Allow the camera, and allow the local network if you're using the Mac's server.
 
 It's signed with the free development certificate, so it runs on your own registered phones only. Others need TestFlight, which needs the Apple Developer Program ($99 a year).

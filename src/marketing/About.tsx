@@ -8,7 +8,7 @@ const CITED: SourceId[] = ["planningAct", "waterlooZoning", "budget2025"];
 const PRINCIPLES = [
   { what: "Say what we know, and what we don't", detail: "Anything the scan can't prove becomes a question or a “confirm on site,” never a guess." },
   { what: "Every rule links to its source", detail: "With the section and the date we checked it." },
-  { what: "Free for homeowners", detail: "Pros pay for qualified leads. Nobody pays to be ranked higher." },
+  { what: "Free for homeowners", detail: "When the pro side opens, pros will pay for qualified leads. Nobody pays to be ranked higher." },
   { what: "Your video stays yours", detail: "Nothing goes to a pro unless you choose them and press send." },
   { what: "Open source", detail: "The code is public, so anyone can see how the answer is reached." },
 ];
@@ -40,10 +40,10 @@ export function About() {
             </p>
             <p>
               So Basement Ready starts with what you already have: a phone and your basement. It tells you what's
-              possible, what it takes, roughly what it costs, and who can help, and it's honest about what it can't
-              see.
+              possible, what it takes, roughly what it costs, what money you may be eligible for, and who can help,
+              and it's honest about what it can't see. Better to know that before you pay for drawings or a
+              contractor.
             </p>
-            {SITE.firsthandLine && <p className="mk-firsthand">{SITE.firsthandLine}</p>}
           </div>
         </Section>
 
