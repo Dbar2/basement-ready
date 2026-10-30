@@ -1,6 +1,6 @@
 # Basement Ready UI: Drawing Set
 
-Locked Oct 30, 2026. David picked it over "Open Room" and "Grade Line" (boards in the private notes, `brand-ui/`). It sits on top of the Fresh Air brand (`brand/brand.md`): same colours, type and logo. Every value here is a token in `brand/tokens.css`. The living reference is `/dev/ui` on a dev server (`src/dev/UiReference.tsx`); it isn't in the production build's routes.
+Locked Oct 30, 2026. David picked it over "Open Room" and "Grade Line" (boards in the private notes, `brand-ui/`). It sits on top of the Fresh Air brand (`brand/brand.md`): same colours, type and logo. Every value here is a token in `brand/tokens.css`. The living reference is `/dev/ui` on a dev server (`src/dev/UiReference.tsx`); the production build drops it.
 
 **The idea:** every screen is one sheet of an architect's drawing set. The plan, the 3D and the photos are drawn on the sheet; hairlines divide it; a sheet index runs across the top and a title strip along the bottom. It looks like the permit set we hand over at the end, made friendly.
 

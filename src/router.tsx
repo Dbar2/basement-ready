@@ -65,8 +65,10 @@ function ProJoin() {
 }
 const proJoinRoute = createRoute({ getParentRoute: () => rootRoute, path: PATHS.proSignUp, component: ProJoin });
 
-// The living reference of the UI system (brand/ui.md), on a dev server only; it isn't in the production build's routes.
-const devUiRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dev/ui", component: lazyRouteComponent(() => import("./dev/UiReference"), "UiReference") });
+// The living reference of the UI system (brand/ui.md), on a dev server only: the production build drops it.
+const devRoutes = import.meta.env.DEV
+  ? [createRoute({ getParentRoute: () => rootRoute, path: "/dev/ui", component: lazyRouteComponent(() => import("./dev/UiReference"), "UiReference") })]
+  : [];
 
 function NotFound() {
   return (
@@ -79,7 +81,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, styleRoute, planRoute, layoutsRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes, ...(import.meta.env.DEV ? [devUiRoute] : [])]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, styleRoute, planRoute, layoutsRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes, ...devRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
