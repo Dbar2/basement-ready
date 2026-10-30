@@ -1,9 +1,10 @@
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { findings, objects, REVEAL_SECONDS, room } from "../data/sampleBasement";
 import { buildSampleCloud, FIND_KINDS, findColors, makeScanMaterial } from "./scanCloud";
+import { Tag, TagRoot, TagTracker } from "./Tags";
 
 type Props = {
   // "reveal" plays the timed scan; "ambient" shows the finished cloud turning slowly.
@@ -50,13 +51,13 @@ function Cloud({ mode, onTime }: Props) {
           if (!o) return null;
           const shown = t >= f.at;
           return (
-            <Html key={f.id} position={[o.center[0], o.center[1] + o.size[1] / 2 + 0.15, o.center[2]]} center zIndexRange={[10, 0]}>
+            <Tag key={f.id} position={[o.center[0], o.center[1] + o.size[1] / 2 + 0.15, o.center[2]]}>
               <div className={`find-tag ${shown ? "is-shown" : ""}`} data-kind={f.kind}>
                 <span className="find-dot" />
                 <span className="find-label">{f.label}</span>
                 <span className="find-measure">{f.measure}</span>
               </div>
-            </Html>
+            </Tag>
           );
         })}
     </group>
@@ -86,24 +87,27 @@ function CameraRig({ mode }: { mode: Props["mode"] }) {
 export function ScanStage({ mode, onTime }: Props) {
   const [done, setDone] = useState(mode === "ambient");
   return (
-    <Canvas
-      className="scan-canvas"
-      camera={{ fov: 42, near: 0.05, far: 100, position: [4, 1.5, 4] }}
-      dpr={[1, 2]}
-      gl={{ antialias: true, alpha: true }}
-    >
-      <Cloud
-        mode={mode}
-        onTime={(t) => {
-          onTime?.(t);
-          if (t > REVEAL_SECONDS + 0.5 && !done) setDone(true);
-        }}
-      />
-      {done && mode === "reveal" ? (
-        <OrbitControls enablePan={false} minDistance={4} maxDistance={16} maxPolarAngle={Math.PI / 2.1} target={[0, 0.7, 0]} />
-      ) : (
-        <CameraRig mode={mode} />
-      )}
-    </Canvas>
+    <TagRoot>
+      <Canvas
+        className="scan-canvas"
+        camera={{ fov: 42, near: 0.05, far: 100, position: [4, 1.5, 4] }}
+        dpr={[1, 2]}
+        gl={{ antialias: true, alpha: true }}
+      >
+        <TagTracker />
+        <Cloud
+          mode={mode}
+          onTime={(t) => {
+            onTime?.(t);
+            if (t > REVEAL_SECONDS + 0.5 && !done) setDone(true);
+          }}
+        />
+        {done && mode === "reveal" ? (
+          <OrbitControls enablePan={false} minDistance={4} maxDistance={16} maxPolarAngle={Math.PI / 2.1} target={[0, 0.7, 0]} />
+        ) : (
+          <CameraRig mode={mode} />
+        )}
+      </Canvas>
+    </TagRoot>
   );
 }

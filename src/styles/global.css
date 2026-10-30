@@ -239,6 +239,9 @@ a { color: inherit; }
 .scan-spots button:hover { background: var(--color-surface); }
 .scan-spots span { padding: 0 4px; color: var(--color-ink-muted); }
 .viewer-hint { position: absolute; left: 12px; bottom: 10px; margin: 0; padding: 3px 8px; border-radius: 4px; background: var(--color-card); color: var(--color-ink-muted); font-size: 12px; }
+/* Labels pinned to the 3D (src/three/Tags.tsx): a layer over the canvas, each label moved every frame. */
+.tag-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.tag-pin { position: absolute; left: 0; top: 0; visibility: hidden; will-change: transform; }
 .viewer-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 4px; background: var(--color-card); color: var(--color-ink); font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow-card); }
 .viewer-tag i { width: 8px; height: 8px; border-radius: 50%; background: var(--find-color); }
 .scan-views-tools { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 12px; font-size: 14px; }

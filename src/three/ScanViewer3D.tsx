@@ -1,11 +1,12 @@
 // Your basement as the 3D scan saw it: up to 300k coloured points that assemble in the order you
 // filmed them, then orbit freely. A dollhouse cutaway hides the ceiling when you look from above.
-import { Html, OrbitControls } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import type { Plan } from "../api";
+import { Tag, TagRoot, TagTracker } from "./Tags";
 
 const REVEAL_S = 3.2;
 
@@ -79,19 +80,19 @@ function Labels({ plan }: { plan: Plan }) {
       {plan.openings.map((o) => {
         const [x, z] = along(o.side, o.atM);
         return (
-          <Html key={o.detectionId} position={[x, o.kind === "window" ? ceiling - 0.35 : 1.0, z]} center zIndexRange={[10, 0]}>
+          <Tag key={o.detectionId} position={[x, o.kind === "window" ? ceiling - 0.35 : 1.0, z]}>
             <span className="viewer-tag" data-kind={o.kind === "window" ? "window" : "exit"}>
               <i /> {o.kind === "window" ? "Window" : "Door"}
             </span>
-          </Html>
+          </Tag>
         );
       })}
       {plan.fixtures.map((f) => (
-        <Html key={f.detectionId} position={[f.x, 1.4, f.z]} center zIndexRange={[10, 0]}>
+        <Tag key={f.detectionId} position={[f.x, 1.4, f.z]}>
           <span className="viewer-tag" data-kind="mechanical">
             <i /> {f.kind === "panel" ? "Panel" : "Furnace"}
           </span>
-        </Html>
+        </Tag>
       ))}
     </>
   );
@@ -144,12 +145,15 @@ export function ScanViewer3D({ plyUrl, plan }: { plyUrl: string; plan: Plan | nu
   if (!geometry) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
 
   return (
-    <Canvas className="viewer-canvas" camera={{ fov: 45, near: 0.05, far: 200 }} dpr={[1, 2]} gl={{ antialias: true }}>
-      <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim() || "#E6EBE4"]} />
-      <Rig plan={plan} />
-      <Cloud geometry={geometry} plan={plan} />
-      {plan && <Labels plan={plan} />}
-      <OrbitControls enablePan target={[0, 0.8, 0]} minDistance={1} maxDistance={30} maxPolarAngle={Math.PI * 0.95} />
-    </Canvas>
+    <TagRoot>
+      <Canvas className="viewer-canvas" camera={{ fov: 45, near: 0.05, far: 200 }} dpr={[1, 2]} gl={{ antialias: true }}>
+        <TagTracker />
+        <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-surface").trim() || "#E6EBE4"]} />
+        <Rig plan={plan} />
+        <Cloud geometry={geometry} plan={plan} />
+        {plan && <Labels plan={plan} />}
+        <OrbitControls enablePan target={[0, 0.8, 0]} minDistance={1} maxDistance={30} maxPolarAngle={Math.PI * 0.95} />
+      </Canvas>
+    </TagRoot>
   );
 }
