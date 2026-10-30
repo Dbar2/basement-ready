@@ -41,6 +41,7 @@ import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger,
 import { startSweeps } from "./sweep";
 import { DEMO_MUNICIPALITY, isDemo, labelled } from "./demo";
 import { mountViews } from "./views/routes";
+import { mountAsBuilt } from "./asBuilt";
 import { mountBook } from "./book/routes";
 import { readPhotos, savePhotos, type PhotoTake } from "./photoInput";
 
@@ -564,6 +565,8 @@ mountModel(app, currentUser);
 
 // Pictures of a design from the scan's best real angles, all agreeing (server/views/routes.ts).
 mountViews(app);
+// The as-built 3D: the plan, painted with the video (server/asBuilt.ts).
+mountAsBuilt(app);
 
 // Swipe your style, then pick a layout (server/ideas/routes.ts).
 mountIdeas(app, currentUser);

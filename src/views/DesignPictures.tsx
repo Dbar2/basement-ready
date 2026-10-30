@@ -348,7 +348,7 @@ export function DesignPictures({
       {editable && !selected && <p className="views-hint mono">Tap anything in a picture to change it.</p>}
 
       <Suspense fallback={null}>
-        <AngleRenderer design={design} solid={solid} ceilingM={data.ceilingM ?? 2.3} size={size} onReady={onReady} />
+        <AngleRenderer design={design} solid={solid} ceilingM={data.ceilingM ?? 2.3} size={size} onReady={onReady} scanId={scanId} />
       </Suspense>
     </section>
   );
