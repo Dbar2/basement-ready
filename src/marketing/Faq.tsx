@@ -112,7 +112,8 @@ const QUESTIONS: { q: string; a: React.ReactNode }[] = [
     q: "What happens to my video?",
     a: (
       <p>
-        We use it to scan your basement. The raw video is deleted after 30 days unless you save your project. Nothing
+        We use it to scan your basement. The raw video is deleted after 30 days; the frames, 3D scan and answer stay so
+        your plan still opens, until you delete them. Nothing
         goes to a designer or builder unless you choose them and press send. Please don't film people, mail or anything
         with your address on it. <a href={PATHS.privacy}>Read the privacy policy</a>.
       </p>
