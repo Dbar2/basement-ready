@@ -14,7 +14,7 @@ vi.hoisted(() => {
 });
 
 import { pickFrames } from "../../server/concepts";
-import { findInPhotos, isLevel, mergePhotoFinds, photoFinds } from "../../server/photoFinds";
+import { findInPhotos, mergePhotoFinds, photoFinds } from "../../server/photoFinds";
 import { exifOrientation, MAX_PHOTOS, MIN_PHOTOS, readPhotos, roomOrder, savePhotos, sniffPhoto, uprightFilter, uprightPhoto, type PhotoKind } from "../../server/photoInput";
 import { CONCEPTS, findWords, measurePhotoRooms, type Detection } from "../../server/pipeline";
 import type { Scan3d } from "../../server/scan3d";
@@ -183,17 +183,12 @@ describe("SAM on each photo", () => {
     const one = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.95], [600, 100, 660, 900, 0.95], [100, 50, 700, 120, 0.8], [0, 200, 1200, 320, 0.67]));
     expect(one).toHaveLength(1);
     expect(one[0].box).toMatchObject({ x: 0, w: 0.938 });
-    // With no long one, the widest sure box stands in, so the open joists still show; four joists are one find.
-    const joists = photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9], [500, 40, 640, 70, 0.75], [700, 30, 900, 60, 0.8], [900, 20, 1000, 50, 0.72]));
-    expect(joists).toHaveLength(1);
-    expect(joists[0].box.x).toBe(0.078);
-    // Unsure joists don't.
-    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.68]))).toHaveLength(0);
-    // A post or a stair stringer (taller than wide in the picture) is never the beam, however sure.
+    // Short pieces of joist, posts and stair stringers are never the beam, however sure.
+    expect(photoFinds(0, BEAM, sam([100, 50, 400, 80, 0.9], [500, 40, 640, 70, 0.95], [700, 30, 900, 60, 0.8]))).toHaveLength(0);
     expect(photoFinds(0, BEAM, sam([600, 0, 680, 960, 0.95]))).toHaveLength(0);
     expect(photoFinds(0, BEAM, sam([100, 200, 500, 900, 0.9]))).toHaveLength(0);
-    expect(isLevel({ x1: 0, y1: 0, x2: 300, y2: 300, w: 720, h: 1280 })).toBe(true);
-    expect(isLevel({ x1: 580, y1: 0, x2: 627, y2: 1279, w: 720, h: 1280 })).toBe(false);
+    // Wide but not level: a block of ceiling, not a member.
+    expect(photoFinds(0, BEAM, sam([0, 0, 900, 600, 0.9]))).toHaveLength(0);
   });
 
   it("counts a duct from 0.55 sure", () => {
