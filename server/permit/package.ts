@@ -1,19 +1,24 @@
-// "Download permit package": one PDF with the drawings (A0–A7), the city's forms filled from the
-// owner profile, a page on how and where to submit, and the look they picked. The share version
-// (for builders and designers) leaves out the forms and the owner's contact details.
+// The permit set, in three copies. The review copy is the owner's: a Draft watermark on every sheet
+// and the list of what's left on the cover. The submit copy is what goes to the City: no watermark,
+// nothing left to fill, no app name, and it's only made once nothing is left. The share copy is the
+// drawings alone, for a designer or builder: no forms, no contact details.
 import { PDFDocument, rgb } from "pdf-lib";
 import { permitFee } from "../steps";
 import { packFor } from "../rules";
 import type { SiteGeometry } from "../property";
 import type { Profile, StoredState } from "../workspace";
-import { cityPermit, DEMO_ADDRESS, ontarioDiy, type CityForm } from "./data";
+import { cityPermit, DEMO_ADDRESS, type CityForm } from "./data";
+import { designerNeed, type DesignerNeed, quartsFilters } from "./designer";
 import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm, permitRows, summarySheet, type FormValues } from "./forms";
-import { embedFonts, INK, LETTER, MUTED, newDoc, type Project, Sheet } from "./pdf";
-import { basementGeometry } from "./plans";
-import { coverSheet, crossSection, egressDetail, floorPlan, generalNotes, needsPro, type Printed, scopeOfWork, type SheetCtx, sitePlan } from "./sheets";
+import { permitModel, type PermitModel, unitArea, unitRooms } from "./model";
+import { embedFonts, INK, LETTER, MUTED, newDoc, type Project, Sheet, type Signer } from "./pdf";
+import { fingerprint, readiness, type Readiness } from "./readiness";
+import { basementPlan, ceilingPlan, coverSheet, details, elevations, finishSheets, mainFloor, notesSheet, type Printed, scopeOfWork, type SheetCtx, SHEETS, sitePlan } from "./sheets";
 
 // Today in Ontario, as the forms want it: YYYY-MM-DD.
 export const localDate = () => new Date().toLocaleDateString("en-CA", { timeZone: "America/Toronto" });
+
+export type Copy = "review" | "submit" | "share";
 
 export type PackageInput = {
   result: any;
@@ -24,32 +29,76 @@ export type PackageInput = {
   site: SiteGeometry | null;
   aerialJpeg: Buffer | null;
   favourites: { title: string; jpeg: Buffer }[];
-  share: boolean; // drawings only, no forms or contact details
+  copy?: Copy;
+  share?: boolean; // the same as copy "share"
   today?: string;
   fetchPdf?: (url: string) => Promise<Uint8Array | null>; // tests pass their own
 };
 
 export type FormOutcome = { id: string; title: string; status: "filled" | "summary" | "unavailable"; set: string[] };
-export type PackageOut = { bytes: Uint8Array; sheets: Printed[]; forms: FormOutcome[]; pages: number; signer: "owner" | "brief" };
+export type PackageOut = { bytes: Uint8Array; sheets: Printed[]; forms: FormOutcome[]; pages: number; signer: "owner" | "brief"; readiness: Readiness; copy: Copy };
 
-const SHEETS = [
-  { number: "A0", title: "Cover and key plan" },
-  { number: "A1", title: "Site plan" },
-  { number: "A2", title: "Existing basement plan" },
-  { number: "A3", title: "Proposed basement plan" },
-  { number: "A4", title: "Cross-section" },
-  { number: "A5", title: "Bedroom escape window" },
-  { number: "A6", title: "General notes" },
-  { number: "A7", title: "Work that needs a pro" },
-];
+// The submit copy asked for while things are still left.
+export class NotReady extends Error {
+  constructor(public left: number) {
+    super(`${left} thing${left === 1 ? "" : "s"} left before you can submit.`);
+  }
+}
 
-// Who the application goes to, and whether the owner signs the drawings as their designer: only
-// where that city's own pages accept owner-drawn plans (its pack says signer "owner"), and only
-// when the owner hasn't handed them to a designer.
-export function formPlace(municipality: string, state: StoredState) {
+// Who draws and signs: the owner under the Code's exemption only where the city accepts owner-drawn
+// plans (its pack says signer "owner"), nothing needs a designer, and the owner hasn't picked one.
+export function formPlace(municipality: string, state: StoredState, need?: DesignerNeed) {
   const { authority, permit } = cityPermit(municipality);
-  const signer: "owner" | "brief" = state.permit?.signer === "designer" ? "brief" : (permit?.signer ?? "brief");
-  return { authority, signer, ownerDraws: signer === "owner" };
+  const ownerDraws = state.permit?.signer !== "designer" && permit?.signer === "owner" && !need?.needed;
+  return { authority, signer: (ownerDraws ? "owner" : "brief") as "owner" | "brief", ownerDraws };
+}
+
+// Everything the Permit tab shows and the PDF prints about where the set stands.
+export function permitStatus(input: Pick<PackageInput, "result" | "municipality" | "state" | "profile">) {
+  const { result, state, profile } = input;
+  const model = permitModel(result, state);
+  const { city, permit } = cityPermit(input.municipality);
+  const need = designerNeed({ municipality: input.municipality, citySigner: permit?.signer ?? "brief", unitsNow: Math.max(1, result?.property?.unitsRegistered ?? 1), structural: Boolean(model?.windows.some((w) => w.change !== "keep")) });
+  if (permit?.signer !== "owner" && need.reasons.length === 1 && need.reasons[0].startsWith("This city")) need.reasons[0] = `We haven't confirmed that ${city === "Ontario" ? "your city" : city} accepts drawings by the homeowner, so a BCIN designer signs them.`;
+  const place = formPlace(input.municipality, state, need);
+  const d = state.permit?.designer ?? {};
+  const signer: Signer = place.ownerDraws ? { kind: "owner" } : { kind: "designer", name: d.name ?? null, bcin: d.bcin ?? null, firm: d.firm ?? null, firmBcin: d.firmBcin ?? null };
+  const { reviewed: _r, submittedAt: _s, permitNumber: _n, ...permitInputs } = state.permit ?? {};
+  // What the drawings show: a sheet looked over goes back on the list when this changes.
+  const reviewKey = fingerprint({ existing: model?.existing, proposed: model?.design.proposed, windows: model?.windows, tape: state.tape, permit: permitInputs, site: state.site, signer });
+  const overhead = Boolean(model?.design.proposed.fixtures.some((f) => f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead"));
+  const ready = readiness({
+    mainWalls: model?.mainWalls ?? [],
+    windows: model?.windows ?? [],
+    heights: { ceilingMm: state.tape?.ceilingMm ?? null, beamMm: state.tape?.beamMm ?? null, overhead },
+    profile,
+    upstairs: state.permit?.upstairs ?? null,
+    lotLines: state.permit?.lotLines ?? [],
+    sheets: SHEETS,
+    reviewed: state.permit?.reviewed ?? [],
+    reviewKey,
+    designer: { needed: need.needed, chosen: !place.ownerDraws, reasons: need.reasons, name: d.name ?? null, bcin: d.bcin ?? null },
+    checks: designChecks(model, result),
+  });
+  return { model, city, permit, need, place, signer, reviewKey, readiness: ready, quarts: quartsFilters(need, city), sheets: SHEETS };
+}
+
+// What the design itself still gets wrong: the layout's failed checks, an escape window on an
+// outside wall, and the heights once they're taped. The studio's own checks (server/model/checks.ts)
+// join these when its model is the one drawn.
+export function designChecks(model: PermitModel | null, result: any) {
+  if (!model) return [];
+  const out: { id: string; label: string; detail: string; ok: boolean | null }[] = [];
+  if (model.from === "scan")
+    for (const [i, c] of ((result?.layout?.checks ?? []) as { label: string; ok: boolean | null; detail: string }[]).entries()) {
+      if (/escape window/i.test(c.label)) continue;
+      out.push({ id: `layout${i + 1}`, label: `Design: ${c.label.charAt(0).toLowerCase()}${c.label.slice(1)}`, detail: `${c.detail} Change it in your design.`, ok: c.ok });
+    }
+  const bedroom = unitRooms(model).some((r) => r.kind === "bedroom");
+  if (bedroom) out.push({ id: "escape", label: "Design: the bedroom has an escape window in an outside wall", detail: "There's no outside wall beside the bedroom for one. Move the bedroom in your design.", ok: model.windows.some((w) => w.escape) });
+  if (model.ceilingM != null && !model.estimated) out.push({ id: "ceiling", label: "Design: ceiling at least 1.95 m", detail: `Taped at ${model.ceilingM.toFixed(2)} m. Lower the floor or raise the ceiling.`, ok: model.ceilingM >= 1.95 });
+  if (model.beamM != null && !model.estimated) out.push({ id: "beam", label: "Design: at least 1.85 m under beams and ducts", detail: `${model.beamM.toFixed(2)} m under the lowest. Move the duct or lower the floor.`, ok: model.beamM >= 1.85 });
+  return out;
 }
 
 export function formValues(
@@ -93,27 +142,29 @@ export function formsNeeded(forms: CityForm[], o: { ownerDraws: boolean; ownerBu
   return forms.filter((f) => f.required === "always" || (f.required === "owner_designer" && o.ownerDraws) || (f.required === "designer" && !o.ownerDraws) || (f.required === "owner_builder" && o.ownerBuilds) || f.required === "if_asked");
 }
 
+// A studio's sleeping area isn't a bedroom on the forms.
+export const bedroomsOf = (m: PermitModel | null) => (!m ? 1 : m.design.layout === "studio" ? 0 : unitRooms(m).filter((r) => r.kind === "bedroom").length);
+
 export async function buildPermitPackage(input: PackageInput): Promise<PackageOut> {
+  const copy: Copy = input.copy ?? (input.share ? "share" : "review");
   const today = input.today ?? localDate();
-  const { city, authority, permit } = cityPermit(input.municipality);
-  const place = formPlace(input.municipality, input.state);
-  const diy = ontarioDiy();
+  const status = permitStatus(input);
+  if (copy === "submit" && status.readiness.left > 0) throw new NotReady(status.readiness.left);
+  const { authority, permit } = cityPermit(input.municipality);
   const demo = Boolean(input.result?.demo);
-  const doc = await newDoc(`Permit package: ${demo ? DEMO_ADDRESS : input.address}`);
+  const address = demo ? DEMO_ADDRESS : input.address || input.result?.property?.address || "";
+  const doc = await newDoc(`Permit drawings: ${address}`, copy !== "submit");
   const fonts = await embedFonts(doc);
-  const geo = basementGeometry(input.result, input.state);
-  const profile = input.share ? null : input.profile;
-  const ownerNames = input.profile?.owners.map((o) => `${o.first} ${o.last}`.trim()).join(" and ") || null;
-  const signer = place.signer;
+  const model = status.model;
   const project: Project = {
-    address: demo ? DEMO_ADDRESS : input.address || input.result?.property?.address || "Address to add",
-    municipality: input.result?.property?.municipality ?? city,
-    legal: input.profile?.legalDescription || null,
-    pin: input.profile?.pin || null,
-    owner: input.share ? null : ownerNames,
-    signer,
+    address,
+    municipality: input.result?.property?.municipality ?? status.city,
+    copy: copy === "submit" ? "submit" : "review",
+    left: status.readiness.left,
+    estimated: Boolean(model?.estimated),
+    signer: status.signer,
     date: today,
-    estimated: Boolean(geo?.estimated),
+    revision: { no: "0", date: today, text: copy === "submit" ? "Issued for permit" : "Draft for review" },
     sheets: SHEETS,
   };
   const ctx: SheetCtx = {
@@ -121,23 +172,24 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
     fonts,
     project,
     result: input.result,
-    geo,
+    model,
     site: input.site,
     state: input.state,
-    profile,
-    permit: permit ? { ...permit, signerNote: signer === "brief" && permit.signer !== "brief" ? "A designer finishes and signs these drawings." : permit.signerNote } : null,
-    diy,
-    city,
-    aerial: null,
+    profile: copy === "share" ? null : input.profile,
+    permit,
+    municipality: input.municipality,
+    readiness: status.readiness,
+    storeys: Math.max(1, input.result?.property?.building?.storeys ?? 1),
   };
-  const sheets: Printed[] = [coverSheet(ctx), sitePlan(ctx), floorPlan(ctx, "existing"), floorPlan(ctx, "proposed"), crossSection(ctx), egressDetail(ctx), generalNotes(ctx), needsPro(ctx, false)];
+  const sheets: Printed[] = [coverSheet(ctx), sitePlan(ctx), ...basementPlan(ctx), mainFloor(ctx), ceilingPlan(ctx), elevations(ctx), details(ctx), notesSheet(ctx)];
+  finishSheets(ctx, sheets);
 
-  // The forms.
+  // The forms, filled from the profile: Schedule 1 says "Homeowner" when the owner draws.
   const outcomes: FormOutcome[] = [];
-  const areaM2 = (geo?.layout?.zones ?? []).filter((z) => z.kind !== "stairs" && z.kind !== "mechanical").reduce((s, z) => s + z.areaM2, 0) || geo?.main?.plan.areaM2 || null;
-  const values = formValues(input, project.municipality, scopeOfWork(ctx), areaM2, geo?.layout?.kind === "studio" ? 0 : 1, today, place);
-  if (!input.share && permit) {
-    const needed = formsNeeded(permit.forms, { ownerDraws: signer === "owner", ownerBuilds: input.state.build?.path !== "hire" });
+  const areaM2 = model ? Math.round(unitArea(model) * 10) / 10 || null : null;
+  const values = formValues(input, project.municipality, scopeOfWork(ctx), areaM2, bedroomsOf(model), today, status.place);
+  if (copy !== "share" && permit) {
+    const needed = formsNeeded(permit.forms, { ownerDraws: status.place.ownerDraws, ownerBuilds: input.state.build?.path !== "hire" });
     for (const form of needed) {
       const map = FIELD_MAPS[form.id];
       const bytes = form.fill === "acroform" && map && form.url ? await (input.fetchPdf ?? fetchOfficialPdf)(form.url) : null;
@@ -152,15 +204,20 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
           // A form that won't load falls back to the summary below.
         }
       }
-      await summarySheet(doc, form, permitRows(values), form.url ? `We couldn't fill this form's PDF here. Copy these answers into it, or into the online form.` : "This form is filled in online or at the counter. Copy these answers into it.");
+      // A form we couldn't fill gets a page of answers to copy: the owner's help, not the City's, so
+      // the submit copy leaves it out.
+      if (copy !== "submit") await summarySheet(doc, form, permitRows(values), form.url ? "Copy these answers into the form's PDF, or into the online form." : "This form is filled in online or at the counter. Copy these answers into it.");
       outcomes.push({ id: form.id, title: form.title, status: form.url ? "unavailable" : "summary", set: [] });
     }
   }
 
-  await submitPage(doc, input, permit, authority);
-  if (input.favourites.length) await lookPage(doc, input.favourites, input.state);
+  // The owner's pages: how to submit, and the look they picked. Not part of what the City gets.
+  if (copy === "review") {
+    await submitPage(doc, input, permit, authority);
+    if (input.favourites.length) await lookPage(doc, input.favourites, input.state);
+  }
   const bytes = await doc.save();
-  return { bytes, sheets, forms: outcomes, pages: doc.getPageCount(), signer };
+  return { bytes, sheets, forms: outcomes, pages: doc.getPageCount(), signer: status.place.signer, readiness: status.readiness, copy };
 }
 
 async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnType<typeof cityPermit>["permit"], authority: string) {
@@ -171,7 +228,7 @@ async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnT
   s.text("HOW TO SUBMIT", 48, y, { size: 8, color: MUTED, font: fonts.bold });
   y -= 24;
   y = s.wrap(authority === "your municipality" ? "Apply to your municipality's building department" : `Apply to the ${authority}`, 48, y, s.width - 96, { size: 18, font: fonts.bold, leading: 21 }) - 6;
-  y = s.wrap(`The drawings are a draft: check every size with a tape, or have a BCIN designer check them, before you submit.`, 48, y, s.width - 96, { size: 10 }) - 8;
+  y = s.wrap("This is your review copy. When the Permit tab says nothing is left, download the submit copy: that's the one you upload.", 48, y, s.width - 96, { size: 10 }) - 8;
   if (!permit) {
     s.wrap("Ask the building department which forms and drawings it needs.", 48, y, s.width - 96, { size: 10 });
     return;
@@ -232,4 +289,11 @@ async function lookPage(doc: PDFDocument, favourites: PackageInput["favourites"]
       // Not an image pdf-lib reads: leave it out.
     }
   }
+}
+
+// The values the forms route fills: the same as the package's.
+export function formInputs(input: Pick<PackageInput, "result" | "municipality" | "state" | "profile">) {
+  const status = permitStatus(input);
+  const areaM2 = status.model ? Math.round(unitArea(status.model) * 10) / 10 || null : null;
+  return { status, areaM2, bedrooms: bedroomsOf(status.model), scope: scopeOfWork({ model: status.model, result: input.result }) };
 }

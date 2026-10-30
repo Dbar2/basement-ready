@@ -1,159 +1,195 @@
-// The drawing sheets of the permit package, one function each: cover with key plan, site plan,
-// existing and proposed floor plans, a cross-section, the escape-window detail, the general notes,
-// and the work that needs a licensed pro. Each returns the notes it printed, so tests can check them.
-import type { PDFDocument, PDFImage } from "pdf-lib";
+// The drawing sheets of the permit set, one function each, all at 11 x 17: the cover (with what's
+// left to do on the review copy), the site plan, unit 2's basement plan, unit 1's main floor, the
+// basement ceiling plan, the elevations of walls with new or bigger windows, the details, and the
+// notes an examiner looks for. Each returns the notes it printed, so tests can check them.
+import type { PDFDocument } from "pdf-lib";
+import type { Pt } from "../model/types";
 import { AERIAL_YEAR, type SiteGeometry } from "../property";
 import type { Profile, StoredState } from "../workspace";
-import type { CityPermit, Note, OntarioDiy } from "./data";
-import { area, both, FAINT, fitScale, frame, INK, TONE, mmBoth, MUTED, PAPER, type Project, ptPerMetre, Sheet, SITE_SCALES, TABLOID, TONE2, type Fonts } from "./pdf";
-import { drawPlan, type Geometry } from "./plans";
+import type { CityPermit } from "./data";
+import { drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type Scale, type View } from "./draw";
+import { bounds, type Box, centroid, dir, escapeOk, type PermitModel, type PWall, unitArea, unitOutline, unitRooms, wallLen } from "./model";
+import { citeText, notesFor } from "./notes";
+import { area, both, DETAIL_SCALES, dimText, FAINT, fitScale, frame, ftIn, INK, largestFit, mmBoth, MUTED, OWNER_EXEMPTION, PAPER, PLAN_SCALES, type Project, ptPerMetre, Sheet, sizeText, SITE_SCALES, SMALL_SCALES, TABLOID, TONE, TONE2, TONE3, watermark, type Fonts } from "./pdf";
+import type { Geometry } from "./plans";
+import type { Readiness } from "./readiness";
 
 export type SheetCtx = {
   doc: PDFDocument;
   fonts: Fonts;
   project: Project;
   result: any;
-  geo: Geometry | null;
+  model: PermitModel | null;
   site: SiteGeometry | null;
   state: StoredState;
   profile: Profile | null;
   permit: CityPermit | null;
-  diy: OntarioDiy;
-  city: string;
-  aerial: PDFImage | null;
+  municipality: string;
+  readiness: Readiness;
+  storeys: number;
 };
 
-export type Printed = { number: string; title: string; notes: string[] };
+export type Printed = { number: string; title: string; notes: string[]; scale: Scale | null; page: number };
 
-const SQFT = 10.7639;
-const owners = (p: Profile | null) => (p?.owners.length ? p.owners.map((o) => `${o.first} ${o.last}`.trim()).join(", ") : null);
+export const SHEETS = [
+  { number: "A0", title: "Cover, key plan and project data" },
+  { number: "A1", title: "Site plan" },
+  { number: "A2", title: "Basement plan: unit 2" },
+  { number: "A3", title: "Main floor: unit 1 (schematic)" },
+  { number: "A4", title: "Basement ceiling plan" },
+  { number: "A5", title: "Elevations: windows" },
+  { number: "A6", title: "Details and assemblies" },
+  { number: "A7", title: "Notes" },
+];
+
+const review = (ctx: SheetCtx) => ctx.project.copy === "review";
 
 function newSheet(ctx: SheetCtx, number: string, title: string, scale: string | null) {
   const s = new Sheet(ctx.doc.addPage(TABLOID), ctx.fonts);
-  const area0 = frame(s, ctx.project, { number, title, scale });
-  return { s, area: area0 };
+  const a = frame(s, ctx.project, { number, title, scale });
+  return { s, a, page: ctx.doc.getPageCount() - 1 };
 }
 
 // After drawing, the scale is known; write it into the title block.
 function stampScale(s: Sheet, label: string) {
   const x0 = s.width - 22 - 214;
-  s.rect(x0 + 8, 22 + 96 - 38, 196, 11, { fill: PAPER, stroke: false });
-  s.text(`Scale: ${label}`, x0 + 12, 22 + 96 - 32, { size: 7.5, color: MUTED });
+  s.rect(x0 + 8, 22 + 74 - 44, 196, 11, { fill: PAPER, stroke: false });
+  s.text(`Scale ${label} on 11 x 17`, x0 + 10, 22 + 74 - 40, { size: 7, color: MUTED });
 }
 
-function suiteArea(ctx: SheetCtx) {
-  const zones = ctx.geo?.layout?.zones.filter((z) => z.kind !== "stairs" && z.kind !== "mechanical") ?? [];
-  const fromZones = zones.reduce((sum, z) => sum + z.areaM2, 0);
-  return fromZones > 0 ? fromZones : (ctx.geo?.main?.plan.areaM2 ?? ctx.result?.plan?.areaM2 ?? null);
+function heading(s: Sheet, x: number, y: number, text: string, scale?: string | null) {
+  s.text(text.toUpperCase(), x, y, { size: 8.5, font: s.fonts.bold });
+  const w = s.textWidth(text.toUpperCase(), 8.5, s.fonts.bold);
+  s.line(x, y - 3, x + w, y - 3, { width: 0.6 });
+  if (scale) s.text(scale, x + w + 8, y, { size: 7, color: MUTED });
 }
 
-export function scopeOfWork(ctx: SheetCtx) {
-  const kind = ctx.geo?.layout?.kind === "studio" ? "a studio (bachelor) unit" : "a one-bedroom unit";
+export function scopeOfWork(o: { model?: PermitModel | null; geo?: Geometry | null; result: any }) {
+  const m = o.model ?? null;
+  const studio = m ? m.design.layout === "studio" || !unitRooms(m).some((r) => r.kind === "bedroom") : o.geo?.layout?.kind === "studio";
   const parts = [
-    `Create a second dwelling unit (additional residential unit), ${kind}, in the basement of the existing house`,
+    `Create a second dwelling unit (additional residential unit), ${studio ? "a studio (bachelor) unit" : "a one-bedroom unit"}, in the basement of the existing house`,
     "new partition walls, a bathroom and a kitchen",
-    "a fire separation between the two homes",
-    "hard-wired, interconnected smoke and CO alarms in both homes",
+    "a fire separation between the two units",
+    "hard-wired, interconnected smoke and CO alarms in both units",
   ];
-  if (ctx.geo?.egress && !ctx.geo.egress.existing) parts.push("a new escape window in the bedroom (structural design by an engineer, see A7)");
-  else if (ctx.geo?.egress) parts.push("the bedroom window made an escape window (A5)");
+  const win = m?.windows.find((w) => w.escape);
+  if (win?.change === "new" || (!m && o.geo?.egress && !o.geo.egress.existing)) parts.push("a new escape window in the bedroom (opening designed by an engineer)");
+  else if (win?.change === "enlarge") parts.push("the bedroom window enlarged to an escape window (opening designed by an engineer)");
   return `${parts.join("; ")}. No change to the building's footprint or height.`;
 }
 
 // ---- A0 Cover --------------------------------------------------------------------------------
 
-// On the cover and every sheet's title block: these are drawn from a phone video.
-export const DRAFT = "Draft, for you or a BCIN designer to check before you submit";
-
 export function coverSheet(ctx: SheetCtx): Printed {
-  const { s, area: a } = newSheet(ctx, "A0", "Cover and key plan", null);
+  const { s, a, page } = newSheet(ctx, "A0", SHEETS[0].title, null);
+  const m = ctx.model;
   const p = ctx.result?.property ?? null;
   let y = a.y + a.h - 30;
   s.text("Additional residential unit in the basement", a.x + 10, y, { size: 22, font: s.fonts.bold });
   y -= 22;
   s.text(`${ctx.project.address}, ${ctx.project.municipality}, Ontario`, a.x + 10, y, { size: 13, color: MUTED });
-  y -= 22;
-  s.rect(a.x + 6, y - 6, 430, 18, { fill: TONE2, stroke: false });
-  s.text(DRAFT, a.x + 12, y, { size: 9.5, font: s.fonts.bold });
   y -= 30;
   const colW = (a.w - 40) / 2;
-  const rows: [string, string | null][] = [
-    ["Owner(s)", owners(ctx.profile)],
-    ["Applicant", owners(ctx.profile) ? `${owners(ctx.profile)} (owner)` : null],
-    ["Contact", ctx.profile ? [ctx.profile.phone, ctx.profile.email].filter(Boolean).join(" · ") : null],
-    ["Legal description", ctx.project.legal],
-    ["PIN / roll number", [ctx.project.pin, ctx.profile?.rollNumber].filter(Boolean).join(" / ") || null],
-    ["Zoning", p?.zone ? `${p.zone.code}${p.zone.label ? `, ${p.zone.label}` : ""}${p.zone.bylaw ? ` (${p.zone.bylaw})` : ""}` : null],
-    ["Lot area", p?.lotAreaM2 ? `${p.lotAreaM2.toLocaleString("en-CA")} m² (public records)` : null],
-    ["Existing house", p?.building ? `${p.building.storeys ?? "?"} storey${p.building.storeys === 1 ? "" : "s"}, footprint about ${p.building.footprintM2 ?? "?"} m²` : null],
-  ];
+  const rows: [string, string][] = [];
+  if (p?.zone) rows.push(["Zoning", `${p.zone.code}${p.zone.label ? `, ${p.zone.label}` : ""}${p.zone.bylaw ? ` (${p.zone.bylaw})` : ""}`]);
+  const units = (p?.unitsRegistered ?? 1) + 1;
+  rows.push(["Units after the work", `${units}: the house (unit 1) and the basement unit (unit 2)`]);
+  if (m) {
+    rows.push(["Unit 2 floor area", area(unitArea(m))]);
+    const beds = m.design.layout === "studio" ? 0 : unitRooms(m).filter((r) => r.kind === "bedroom").length;
+    rows.push(["Unit 2 bedrooms", beds ? String(beds) : "Studio (no separate bedroom)"]);
+    if (m.ceilingM) rows.push(["Finished ceiling in unit 2", `${both(m.ceilingM)} (1.95 m required)`]);
+    if (m.beamM) rows.push(["Clear under beams and ducts", `${both(m.beamM)} (1.85 m required)`]);
+  }
+  if (p?.building?.storeys) rows.push(["Existing house", `${p.building.storeys} storey${p.building.storeys === 1 ? "" : "s"} over the basement`]);
+  rows.push(["Building Code", "O. Reg. 163/24 (2024 Building Code), Part 9, with Part 11 alternatives for an existing house"]);
+  rows.push(["Major occupancy", "Group C, residential: a house with an additional unit"]);
+  rows.push(["Prepared by", ctx.project.signer.kind === "owner" ? `The homeowner, exempt under ${OWNER_EXEMPTION}` : `${ctx.project.signer.name ?? "Designer"}, BCIN ${ctx.project.signer.bcin ?? ""}`.trim()]);
   let ry = y;
   for (const [label, value] of rows) {
     s.text(label.toUpperCase(), a.x + 10, ry, { size: 6.5, color: MUTED, font: s.fonts.bold });
-    ry = s.wrap(value ?? "To fill in", a.x + 120, ry, colW - 120, { size: 9, color: value ? INK : MUTED }) - 5;
+    ry = s.wrap(value, a.x + 140, ry, colW - 140, { size: 9 }) - 5;
   }
-  // Scope and areas.
   ry -= 8;
   s.text("SCOPE OF WORK", a.x + 10, ry, { size: 6.5, color: MUTED, font: s.fonts.bold });
-  ry = s.wrap(scopeOfWork(ctx), a.x + 120, ry, colW - 120, { size: 9 }) - 8;
-  const suite = suiteArea(ctx);
-  const facts: [string, string][] = [
-    ["Units after the work", "2 (the house and the basement unit)"],
-    ["New unit's floor area", suite ? `${area(suite)}, estimated` : "To measure"],
-    ["Finished ceiling in the unit", ctx.geo?.ceilingM ? `about ${both(ctx.geo.ceilingM)}${ctx.state.tape?.ceilingMm ? " (taped)" : " (from the scan)"}` : "To measure (1.95 m minimum)"],
-    ["Building Code", "O. Reg. 163/24 (2024 Building Code), Part 9 and Part 11 for the existing house"],
-  ];
-  for (const [label, value] of facts) {
-    s.text(label.toUpperCase(), a.x + 10, ry, { size: 6.5, color: MUTED, font: s.fonts.bold });
-    ry = s.wrap(value, a.x + 120, ry, colW - 120, { size: 9 }) - 5;
-  }
-  ry -= 10;
+  ry = s.wrap(scopeOfWork(ctx), a.x + 140, ry, colW - 140, { size: 9 }) - 12;
   s.text("DRAWINGS", a.x + 10, ry, { size: 6.5, color: MUTED, font: s.fonts.bold });
   for (const it of ctx.project.sheets) {
-    s.text(`${it.number}`, a.x + 120, ry, { size: 9, font: s.fonts.bold });
-    s.text(it.title, a.x + 145, ry, { size: 9 });
+    s.text(it.number, a.x + 140, ry, { size: 9, font: s.fonts.bold });
+    s.text(it.title, a.x + 165, ry, { size: 9 });
     ry -= 13;
   }
-  // Key plan: the lot and the house, the unit's floor marked.
-  const kx = a.x + colW + 40, kw = colW - 10, kh = 300, ky = y - kh + 10;
-  s.text("KEY PLAN", kx, y + 4, { size: 6.5, color: MUTED, font: s.fonts.bold });
-  s.rect(kx, ky, kw, kh, { color: FAINT, width: 0.5 });
-  if (ctx.site?.parcel || ctx.site?.footprint) {
-    const pts = [...(ctx.site.parcel ?? []), ...(ctx.site.footprint ?? [])];
-    const minX = Math.min(...pts.map((q) => q[0])), maxX = Math.max(...pts.map((q) => q[0]));
-    const minY = Math.min(...pts.map((q) => q[1])), maxY = Math.max(...pts.map((q) => q[1]));
-    const k = Math.min((kw - 40) / (maxX - minX || 1), (kh - 40) / (maxY - minY || 1));
-    const X = (x: number) => kx + 20 + (x - minX) * k + ((kw - 40) - (maxX - minX) * k) / 2;
-    const Y = (yy: number) => ky + 20 + (yy - minY) * k + ((kh - 40) - (maxY - minY) * k) / 2;
-    if (ctx.site.parcel) s.poly(ctx.site.parcel.map(([x, yy]) => [X(x), Y(yy)]), { width: 0.8, dash: [6, 3] });
-    if (ctx.site.footprint) s.poly(ctx.site.footprint.map(([x, yy]) => [X(x), Y(yy)]), { fill: TONE, width: 1.2 });
-    const c = ctx.site.footprint ?? ctx.site.parcel!;
-    const cx = c.reduce((t, q) => t + q[0], 0) / c.length, cy = c.reduce((t, q) => t + q[1], 0) / c.length;
-    s.text("BASEMENT UNIT IN THIS HOUSE", X(cx), Y(cy) - 3, { size: 6.5, font: s.fonts.bold, align: "center" });
-    s.northArrow(kx + kw - 24, ky + kh - 28, 12);
-  } else s.wrap("No open public data outlines this house. Sketch the lot and the house here from your survey or deed.", kx + 14, ky + kh / 2, kw - 28, { size: 9, color: MUTED });
-  // Who drew it.
-  const sy = ky - 30;
-  s.text("WHO PREPARED THESE DRAWINGS", kx, sy, { size: 6.5, color: MUTED, font: s.fonts.bold });
-  const who = ctx.permit?.signerNote ?? "A design brief, for a BCIN designer to check, finish and sign before it's submitted.";
-  s.wrap(who, kx, sy - 12, kw, { size: 8.5 });
-  const notes = [DRAFT, scopeOfWork(ctx), who];
-  return { number: "A0", title: "Cover and key plan", notes };
+
+  // Right column: the review copy's list, or the key plan.
+  const kx = a.x + colW + 40, kw = colW - 10;
+  let ky = y + 4;
+  if (review(ctx)) {
+    const r = ctx.readiness;
+    const todo = r.items.filter((i) => !i.done);
+    s.rect(kx, ky - 22, kw, 26, { fill: TONE2, stroke: false });
+    s.text(r.left ? `${r.left} THING${r.left === 1 ? "" : "S"} LEFT BEFORE YOU CAN SUBMIT` : "NOTHING LEFT: DOWNLOAD THE SUBMIT COPY", kx + 8, ky - 13, { size: 10, font: s.fonts.bold });
+    ky -= 38;
+    for (const it of todo.slice(0, 26)) {
+      s.rect(kx + 2, ky - 2, 7, 7, { width: 0.6 });
+      ky = s.wrap(it.label, kx + 16, ky, kw - 20, { size: 8.5, leading: 10 }) - 3;
+    }
+    if (todo.length > 26) s.text(`and ${todo.length - 26} more on the Permit tab`, kx + 16, ky, { size: 8, color: MUTED });
+    ky -= 14;
+  }
+  const kh = Math.min(260, ky - a.y - 30);
+  if (kh > 120) {
+    s.text("KEY PLAN", kx, ky, { size: 6.5, color: MUTED, font: s.fonts.bold });
+    keyPlan(s, ctx, { x: kx, y: ky - kh - 6, w: kw, h: kh });
+  }
+  return { number: "A0", title: SHEETS[0].title, notes: [scopeOfWork(ctx)], scale: null, page };
+}
+
+function keyPlan(s: Sheet, ctx: SheetCtx, b: Area) {
+  s.rect(b.x, b.y, b.w, b.h, { color: FAINT, width: 0.5 });
+  const site = ctx.site;
+  const rings = [...(site?.parcel ? [site.parcel] : []), ...(site?.footprint ? [site.footprint] : [])];
+  if (!rings.length) {
+    s.wrap("The house, with unit 2 in its basement. Lot and house outlines: see the site plan, A1.", b.x + 14, b.y + b.h / 2, b.w - 28, { size: 9, color: MUTED });
+    return;
+  }
+  const pts = rings.flat();
+  const minX = Math.min(...pts.map((q) => q[0])), maxX = Math.max(...pts.map((q) => q[0]));
+  const minY = Math.min(...pts.map((q) => q[1])), maxY = Math.max(...pts.map((q) => q[1]));
+  const k = Math.min((b.w - 40) / (maxX - minX || 1), (b.h - 40) / (maxY - minY || 1));
+  const X = (x: number) => b.x + 20 + (x - minX) * k + (b.w - 40 - (maxX - minX) * k) / 2;
+  const Y = (y: number) => b.y + 20 + (y - minY) * k + (b.h - 40 - (maxY - minY) * k) / 2;
+  if (site!.parcel) s.poly(site!.parcel.map(([x, y]) => [X(x), Y(y)]), { width: 0.8, dash: [6, 3] });
+  if (site!.footprint) {
+    s.poly(site!.footprint.map(([x, y]) => [X(x), Y(y)]), { fill: TONE, width: 1.2 });
+    const c = centroid(site!.footprint as Pt[]);
+    s.text("UNIT 2 IN THE BASEMENT", X(c[0]), Y(c[1]) - 3, { size: 6.5, font: s.fonts.bold, align: "center" });
+  }
+  s.northArrow(b.x + b.w - 24, b.y + b.h - 28, 12);
 }
 
 // ---- A1 Site plan ----------------------------------------------------------------------------
 
-const KIND = { entrance: "Entrance", parking: "Parking", walkway: "Walkway" } as const;
-
 export function sitePlan(ctx: SheetCtx): Printed {
-  const { s, area: a } = newSheet(ctx, "A1", "Site plan", null);
+  const { s, a, page } = newSheet(ctx, "A1", SHEETS[1].title, null);
   const notes: string[] = [];
   const site = ctx.site;
   const features = ctx.state.site?.features ?? [];
+  const lot = (ctx.state.permit?.lotLines ?? []).filter((l) => l.mm != null);
+  const legendH = 110;
+  const listLot = () => lot.map((l) => {
+    const w = ctx.model?.windows.find((x) => x.id === l.id);
+    return `Wall with window ${w?.tag ?? ""}: ${both((l.mm as number) / 1000)} to the lot line.`;
+  });
   if (!site || (!site.parcel && !site.footprint)) {
-    s.wrap("The lot's outline isn't in the public data we can use for this address. Draw the lot lines, the house, the driveway with its parking spaces, the walkway to the unit's entrance, and the window wells, with distances to the lot lines.", a.x + 20, a.y + a.h - 40, a.w - 40, { size: 11 });
-    notes.push("Site plan to draw by hand");
-    return { number: "A1", title: "Site plan", notes };
+    const lines = [
+      "The lot lines, the house, the driveway with its parking, the walkway to the unit's entrance and the window wells are shown on the plan of survey submitted with this application, marked up with the unit's entrance.",
+      ...listLot(),
+    ];
+    let y = a.y + a.h - 40;
+    for (const t of lines) y = s.wrap(t, a.x + 20, y, a.w - 40, { size: 11 }) - 8;
+    notes.push(...lines);
+    return { number: "A1", title: SHEETS[1].title, notes, scale: null, page };
   }
   // Traced points live on the aerial photo (0..1); turn them into metres around the address point.
   const toM = ([u, v]: [number, number]): [number, number] => [(u - 0.5) * 2 * site.aerial.halfWidthM, (0.5 - v) * 2 * site.aerial.halfHeightM];
@@ -161,52 +197,26 @@ export function sitePlan(ctx: SheetCtx): Printed {
   const pts = [...(site.parcel ?? []), ...(site.footprint ?? []), ...site.others.flat(), ...traced.flatMap((f) => f.pts)];
   const minX = Math.min(...pts.map((q) => q[0])), maxX = Math.max(...pts.map((q) => q[0]));
   const minY = Math.min(...pts.map((q) => q[1])), maxY = Math.max(...pts.map((q) => q[1]));
-  const legendH = 110;
   const scale = fitScale(SITE_SCALES, maxX - minX, maxY - minY, a.w - 140, a.h - legendH - 90);
   const k = ptPerMetre(scale.ratio);
   const ox = a.x + 70 + (a.w - 140 - (maxX - minX) * k) / 2, oy = a.y + legendH + 40 + (a.h - legendH - 90 - (maxY - minY) * k) / 2;
   const X = (x: number) => ox + (x - minX) * k, Y = (y: number) => oy + (y - minY) * k;
-
   if (site.parcel) {
     s.poly(site.parcel.map(([x, y]) => [X(x), Y(y)]), { width: 1.2, dash: [10, 3, 2, 3] });
-    // Each lot line's length.
     const r = site.parcel;
     for (let i = 0; i < r.length; i++) {
       const p0 = r[i], p1 = r[(i + 1) % r.length];
       const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-      if (len < 5) continue;
-      s.dim(X(p0[0]), Y(p0[1]), X(p1[0]), Y(p1[1]), both(len), -14, 6.5);
+      if (len >= 5) s.dim(X(p0[0]), Y(p0[1]), X(p1[0]), Y(p1[1]), both(len), -14, 6.5);
     }
   }
   for (const o of site.others) s.poly(o.map(([x, y]) => [X(x), Y(y)]), { width: 0.8, fill: PAPER });
   if (site.footprint) {
     s.poly(site.footprint.map(([x, y]) => [X(x), Y(y)]), { width: 1.6, fill: TONE });
-    const f = site.footprint;
-    const cx = f.reduce((t, q) => t + q[0], 0) / f.length, cy = f.reduce((t, q) => t + q[1], 0) / f.length;
+    const c = centroid(site.footprint as Pt[]);
     const storeys = ctx.result?.property?.building?.storeys;
-    s.text("EXISTING HOUSE", X(cx), Y(cy) + 6, { size: 8, font: s.fonts.bold, align: "center" });
-    s.text(`${storeys ? `${storeys} storey${storeys === 1 ? "" : "s"}, ` : ""}new unit in the basement`, X(cx), Y(cy) - 4, { size: 6.5, align: "center" });
-    // Distance from the house to each long lot line.
-    if (site.parcel) {
-      const r = site.parcel;
-      const edges = r.map((p0, i) => ({ p0, p1: r[(i + 1) % r.length], len: Math.hypot(r[(i + 1) % r.length][0] - p0[0], r[(i + 1) % r.length][1] - p0[1]) })).filter((e) => e.len > 6);
-      for (const e of edges) {
-        const ex = e.p1[0] - e.p0[0], ey = e.p1[1] - e.p0[1];
-        // The nearest point of the house measured square to this lot line (not past its ends).
-        let best = { d: Infinity, at: f[0], foot: e.p0 as [number, number] };
-        for (const q of f) {
-          const t = ((q[0] - e.p0[0]) * ex + (q[1] - e.p0[1]) * ey) / (e.len * e.len);
-          if (t <= 0.02 || t >= 0.98) continue;
-          const foot: [number, number] = [e.p0[0] + t * ex, e.p0[1] + t * ey];
-          const d = Math.hypot(q[0] - foot[0], q[1] - foot[1]);
-          if (d < best.d) best = { d, at: q, foot };
-        }
-        if (best.d > 0.5 && best.d < 60) {
-          s.line(X(best.at[0]), Y(best.at[1]), X(best.foot[0]), Y(best.foot[1]), { width: 0.5, color: MUTED, dash: [2, 2] });
-          s.text(both(best.d), (X(best.at[0]) + X(best.foot[0])) / 2 + 3, (Y(best.at[1]) + Y(best.foot[1])) / 2 + 2, { size: 6, color: MUTED });
-        }
-      }
-    }
+    s.text("EXISTING HOUSE", X(c[0]), Y(c[1]) + 6, { size: 8, font: s.fonts.bold, align: "center" });
+    s.text(`${storeys ? `${storeys} storey${storeys === 1 ? "" : "s"}, ` : ""}unit 2 in the basement`, X(c[0]), Y(c[1]) - 4, { size: 6.5, align: "center" });
   }
   for (const f of traced) {
     const P = f.pts.map(([x, y]) => [X(x), Y(y)] as [number, number]);
@@ -221,21 +231,19 @@ export function sitePlan(ctx: SheetCtx): Printed {
     } else {
       const [x, y] = P[0];
       s.poly([[x, y + 7], [x - 6, y - 5], [x + 6, y - 5]], { fill: INK, width: 0.4 });
-      s.text(f.label || "ENTRANCE TO UNIT", x + 9, y - 3, { size: 6.5, font: s.fonts.bold });
+      s.text(f.label || "ENTRANCE TO UNIT 2", x + 9, y - 3, { size: 6.5, font: s.fonts.bold });
     }
   }
   s.northArrow(a.x + a.w - 40, a.y + a.h - 40);
   s.scaleBar(a.x + 20, a.y + a.h - 30, k, scale.label);
   stampScale(s, scale.label);
-  // Legend and notes.
-  const parking = features.filter((f) => f.kind === "parking").length;
   const lines = [
     site.parcel
-      ? `Lot lines and the house outline from public GIS data (${site.sources.join("; ")}). Not a survey: distances are approximate.`
-      : `House outline from public GIS data (${site.sources.join("; ")}). No open parcel data covers this lot: draw the lot lines and their distances from your survey or deed. Not a survey.`,
-    features.length ? `Entrances, parking and walkway traced by the owner on the Region of Waterloo's ${AERIAL_YEAR} aerial photo (open data).` : "Mark the entrance to the unit, the parking spaces and the walkway on the aerial photo in the workspace.",
-    parking ? `${parking} parking area${parking === 1 ? "" : "s"} shown. Check the number of spaces your zone requires (see your result's zoning check).` : "Show the parking spaces required by zoning.",
-    "Show any window wells and the escape window on the house wall when they're new (see A5).",
+      ? `Lot lines and the house outline from public GIS data (${site.sources.join("; ")}); not a survey.`
+      : `House outline from public GIS data (${site.sources.join("; ")}). Lot lines and setbacks: see the plan of survey submitted with this application.`,
+    features.length ? `Unit 2's entrance, parking and walkway as traced on the Region of Waterloo's ${AERIAL_YEAR} aerial photo (open data).` : "Unit 2's entrance, parking and walkway: as marked on the plan of survey.",
+    ...listLot(),
+    "Window wells at escape windows: 550 mm clear in front of the window (A6).",
   ];
   let ny = a.y + legendH - 12;
   s.line(a.x, a.y + legendH, a.x + a.w, a.y + legendH, { width: 0.5, color: FAINT });
@@ -243,192 +251,576 @@ export function sitePlan(ctx: SheetCtx): Printed {
     ny = s.wrap(`${i + 1}. ${t}`, a.x + 4, ny, a.w - 8, { size: 7, leading: 9 });
   });
   notes.push(...lines);
-  return { number: "A1", title: "Site plan", notes };
+  return { number: "A1", title: SHEETS[1].title, notes, scale, page };
 }
 
-// ---- A2/A3 Floor plans -----------------------------------------------------------------------
+// ---- Plan layout ---------------------------------------------------------------------------
 
-export function floorPlan(ctx: SheetCtx, mode: "existing" | "proposed"): Printed {
-  const number = mode === "existing" ? "A2" : "A3";
-  const title = mode === "existing" ? "Existing basement plan" : "Proposed basement plan";
-  const { s, area: a } = newSheet(ctx, number, title, null);
-  if (!ctx.geo) {
-    s.wrap("We couldn't measure this video, so there's no plan to draw here. Measure the basement with a tape, or ask your designer to.", a.x + 20, a.y + a.h - 40, a.w - 40, { size: 11 });
-    return { number, title, notes: [] };
+const LEGEND_W = 196;
+
+// The largest scale of 1:50 or larger the plan fits at with the legend beside it. If it doesn't fit
+// even at 1:50, it's cut into tiles at match lines, each on its own sheet, never drawn smaller.
+export function planLayout(a: Area, box: Box): { scale: Scale; tiles: Box[]; area: Area } {
+  const side: Area = { x: a.x + LEGEND_W + 8, y: a.y, w: a.w - LEGEND_W - 8, h: a.h };
+  const availW = side.w - 2 * PAD, availH = side.h - 2 * PAD;
+  const w = box.maxX - box.minX, h = box.maxZ - box.minZ;
+  const fit = largestFit(PLAN_SCALES, w, h, availW, availH);
+  if (fit) return { scale: fit, tiles: [box], area: side };
+  const scale = PLAN_SCALES[PLAN_SCALES.length - 1];
+  const k = ptPerMetre(scale.ratio);
+  const lap = 0.3;
+  let nx = Math.max(1, Math.ceil((w * k) / availW)), nz = Math.max(1, Math.ceil((h * k) / availH));
+  while ((w / nx + 2 * lap) * k > availW) nx++;
+  while ((h / nz + 2 * lap) * k > availH) nz++;
+  const tiles: Box[] = [];
+  for (let j = 0; j < nz; j++)
+    for (let i = 0; i < nx; i++)
+      tiles.push({
+        minX: Math.max(box.minX, box.minX + (i * w) / nx - lap),
+        maxX: Math.min(box.maxX, box.minX + ((i + 1) * w) / nx + lap),
+        minZ: Math.max(box.minZ, box.minZ + (j * h) / nz - lap),
+        maxZ: Math.min(box.maxZ, box.minZ + ((j + 1) * h) / nz + lap),
+      });
+  return { scale, tiles, area: side };
+}
+
+const planBox = (m: PermitModel) => {
+  const pts = [...m.design.proposed.rooms.flatMap((r) => r.polygon), ...m.design.proposed.walls.flatMap((w) => [w.a, w.b])];
+  return bounds(pts);
+};
+
+// What a plan shows: the whole basement when it fits at 1:50 or larger, otherwise unit 2 and what's
+// around it (the stair, the rooms beside it), with the rest of the basement cut off at a break line.
+export function planFrame(a: Area, m: PermitModel) {
+  const whole = planBox(m);
+  const all = planLayout(a, whole);
+  if (all.tiles.length === 1) return { ...all, whole, cropped: false };
+  const u = bounds(unitOutline(m).flat());
+  const crop: Box = { minX: Math.max(whole.minX, u.minX - 1), maxX: Math.min(whole.maxX, u.maxX + 1), minZ: Math.max(whole.minZ, u.minZ - 1), maxZ: Math.min(whole.maxZ, u.maxZ + 1) };
+  return { ...planLayout(a, crop), whole: crop, cropped: true };
+}
+
+// Match lines where a tile meets the next.
+function matchLines(s: Sheet, v: View, tile: Box, whole: Box, tiles: Box[], number: (i: number) => string) {
+  const lap = 0.3;
+  const edges: { at: number; vertical: boolean; other: number }[] = [];
+  const near = (p: number, q: number) => Math.abs(p - q) < 0.01;
+  tiles.forEach((o, j) => {
+    if (o === tile) return;
+    const overlapX = o.minX < tile.maxX && o.maxX > tile.minX, overlapZ = o.minZ < tile.maxZ && o.maxZ > tile.minZ;
+    if (overlapZ && near(o.minX, tile.maxX - 2 * lap)) edges.push({ at: tile.maxX - lap, vertical: true, other: j });
+    if (overlapZ && near(o.maxX, tile.minX + 2 * lap)) edges.push({ at: tile.minX + lap, vertical: true, other: j });
+    if (overlapX && near(o.minZ, tile.maxZ - 2 * lap)) edges.push({ at: tile.maxZ - lap, vertical: false, other: j });
+    if (overlapX && near(o.maxZ, tile.minZ + 2 * lap)) edges.push({ at: tile.minZ + lap, vertical: false, other: j });
+  });
+  for (const e of edges) {
+    const [x0, y0] = e.vertical ? v.P([e.at, Math.max(whole.minZ, tile.minZ)]) : v.P([Math.max(whole.minX, tile.minX), e.at]);
+    const [x1, y1] = e.vertical ? v.P([e.at, Math.min(whole.maxZ, tile.maxZ)]) : v.P([Math.min(whole.maxX, tile.maxX), e.at]);
+    s.line(x0, y0, x1, y1, { width: 1.2, dash: [12, 3, 3, 3] });
+    s.text(`MATCH LINE: SEE ${number(e.other)}`, (x0 + x1) / 2 + (e.vertical ? 4 : 0), (y0 + y1) / 2 + (e.vertical ? 0 : 4), { size: 7, font: s.fonts.bold, rotate: e.vertical ? 90 : undefined, align: "center" });
   }
-  const label = drawPlan(s, a, ctx.geo, mode);
-  stampScale(s, label);
-  const notes = mode === "proposed" ? ["fire separation", "Smoke and CO alarms", ...ctx.geo.alarms.map((x) => x.why)] : ["Existing basement as filmed and measured"];
-  return { number, title, notes };
 }
 
-// ---- A4 Section ------------------------------------------------------------------------------
+// A cropped plan: break lines where the rest of the basement goes on.
+function breakLines(s: Sheet, v: View, crop: Box, whole: Box) {
+  const label = "REST OF THE BASEMENT (UNIT 1): NOT PART OF THIS WORK";
+  const sides: [Pt, Pt, boolean][] = [];
+  if (crop.minX > whole.minX + 0.01) sides.push([[crop.minX, crop.minZ], [crop.minX, crop.maxZ], true]);
+  if (crop.maxX < whole.maxX - 0.01) sides.push([[crop.maxX, crop.minZ], [crop.maxX, crop.maxZ], true]);
+  if (crop.minZ > whole.minZ + 0.01) sides.push([[crop.minX, crop.minZ], [crop.maxX, crop.minZ], false]);
+  if (crop.maxZ < whole.maxZ - 0.01) sides.push([[crop.minX, crop.maxZ], [crop.maxX, crop.maxZ], false]);
+  for (const [a, b, vertical] of sides) {
+    const [x0, y0] = v.P(a), [x1, y1] = v.P(b);
+    s.line(x0, y0, x1, y1, { width: 0.7, dash: [10, 2, 2, 2] });
+    s.text(label, (x0 + x1) / 2 + (vertical ? -4 : 0), (y0 + y1) / 2 + (vertical ? 0 : 4), { size: 5.8, color: MUTED, rotate: vertical ? 90 : undefined, align: "center" });
+  }
+}
 
-export function crossSection(ctx: SheetCtx): Printed {
-  const { s, area: a } = newSheet(ctx, "A4", "Cross-section", null);
-  const g = ctx.geo;
-  const ceiling = g?.ceilingM ?? null;
-  const beam = g?.beamM ?? null;
-  const k = 150; // points per metre, schematic
-  const fin = (ceiling ?? 2.1);
-  const left = a.x + 170, base = a.y + 170, width = 3.6 * k;
-  const Yh = (m: number) => base + m * k;
-  // Slab and foundation wall.
-  s.rect(left - 50, base - 18, width + 70, 18, { fill: TONE2, width: 0.6 });
-  s.text("CONCRETE FLOOR SLAB (EXISTING)", left + width / 2, base - 12, { size: 6.5, align: "center" });
-  s.rect(left - 50, base - 18, 34, (fin + 0.45) * k + 18, { fill: TONE2, width: 0.6 });
-  s.text("FOUNDATION WALL (EXISTING)", left - 58, base + 0.15 * k, { size: 6.5, rotate: 90 });
-  // Floor joists of the house above, sitting on the wall.
-  const joist = Yh(fin + 0.02);
-  s.rect(left - 16, joist, width + 36, 0.24 * k, { width: 0.6 });
-  for (let i = 0; i <= 9; i++) s.line(left + i * 0.4 * k, joist, left + i * 0.4 * k, joist + 0.24 * k, { width: 0.4, color: MUTED });
-  s.text("EXISTING FLOOR JOISTS OF THE HOUSE ABOVE, SOUND BATTS BETWEEN (A6)", left + width / 2, joist + 0.24 * k + 8, { size: 6.5, align: "center" });
-  // Finished ceiling: the fire separation.
-  s.rect(left - 16, Yh(fin) - 3, width + 36, 3, { fill: INK, stroke: false });
-  s.wrap("SUITE CEILING: 15.9 mm (5/8\") TYPE X GYPSUM BOARD ON RESILIENT CHANNEL, JOINTS TAPED AND SEALED: SMOKE-TIGHT FIRE SEPARATION (A6, NOTE 3)", left + width + 30, Yh(fin) + 4, a.x + a.w - (left + width + 30) - 8, { size: 6.5, leading: 8 });
-  // Stud wall along the foundation.
-  s.rect(left - 16, base, 0.09 * k, Yh(fin) - 3 - base, { width: 0.6, fill: PAPER });
-  s.text("2x4 STUD WALL, INSULATION, VAPOUR BARRIER, DRYWALL", left - 2, base + 0.15 * k, { size: 6.5, rotate: 90 });
-  // A beam or duct drop.
-  const drop = Yh(beam ?? Math.max(1.85, fin - 0.2));
-  const bx = left + 2.3 * k;
-  s.rect(bx, drop, 0.3 * k, Yh(fin) - 3 - drop, { width: 0.8, fill: TONE2 });
-  s.text("BEAM / DUCT", bx + 0.15 * k, drop + (Yh(fin) - drop) / 2 - 3, { size: 6, align: "center" });
-  s.dim(bx + 0.42 * k, base, bx + 0.42 * k, drop, beam != null ? `${both(beam)} clear${beam < 1.85 ? ": BELOW 1.85 m, confirm and fix" : ""}` : "Measure: 1.85 m min.", -14);
-  s.dim(left + 1.0 * k, base, left + 1.0 * k, Yh(fin) - 3, ceiling != null ? `${both(ceiling)} finished${ceiling < 1.95 ? ": BELOW 1.95 m" : ""}` : "Measure: 1.95 m min.", -14);
-  // Window in the foundation, and grade.
-  const sill = ctx.state.tape?.egressSillMm ? ctx.state.tape.egressSillMm / 1000 : null;
-  const wh = (ctx.state.tape?.egressHeightMm ?? 600) / 1000;
-  const wy = Yh(sill ?? Math.max(0.9, fin - wh - 0.15));
-  s.rect(left - 50, wy, 34, wh * k, { fill: PAPER, width: 0.8 });
-  s.line(left - 50, wy + (wh * k) / 2, left - 16, wy + (wh * k) / 2, { width: 0.4 });
-  const grade = Yh(fin - 0.1);
-  s.line(left - 150, grade, left - 50, grade, { width: 1 });
-  s.text("APPROX. GRADE", left - 148, grade + 4, { size: 6, color: MUTED });
-  s.text("WINDOW (A5)", left - 56, wy + wh * k + 6, { size: 6, align: "right" });
-  s.dim(left - 50, base, left - 50, wy, sill != null ? `sill ${both(sill)}` : "sill: measure", 40);
-  const notes = [
-    "Finished ceiling height in the unit at least 1.95 m over the required area (Building Code 9.5.3.1.(2)).",
-    "Clear height under beams and ducts at least 1.85 m (9.5.3.1.(3)).",
-    "Section is schematic: heights are from the scan or the owner's tape as labelled.",
+// ---- A2 Basement plan, unit 2 ------------------------------------------------------------------
+
+export function basementPlan(ctx: SheetCtx): Printed[] {
+  const m = ctx.model;
+  if (!m) {
+    const { s, a, page } = newSheet(ctx, "A2", SHEETS[2].title, null);
+    s.wrap("There's no plan of this basement yet. Film it again, or give your designer the room sizes.", a.x + 20, a.y + a.h - 40, a.w - 40, { size: 11 });
+    return [{ number: "A2", title: SHEETS[2].title, notes: [], scale: null, page }];
+  }
+  const probe = new Sheet(ctx.doc.addPage(TABLOID), ctx.fonts);
+  const a0 = frame(probe, ctx.project, { number: "A2", title: SHEETS[2].title, scale: null });
+  ctx.doc.removePage(ctx.doc.getPageCount() - 1);
+  const lay = planFrame(a0, m);
+  const box = lay.whole;
+  const out: Printed[] = [];
+  const numberOf = (i: number) => (lay.tiles.length > 1 ? `A2.${i + 1}` : "A2");
+  lay.tiles.forEach((tile, i) => {
+    const number = numberOf(i);
+    const { s, a, page } = newSheet(ctx, number, SHEETS[2].title, lay.scale.label);
+    const area0 = { ...lay.area, y: a.y, h: a.h };
+    const v = makeView({ x: area0.x + PAD, y: area0.y + PAD, w: area0.w - 2 * PAD, h: area0.h - 2 * PAD }, tile, lay.scale);
+    const draw = () => {
+      drawOutside(s, v, m.existing.rooms, bounds(m.existing.rooms.flatMap((r) => r.polygon)));
+      // Unit 2 softly toned; the rated ceiling's outline just inside it.
+      drawUnit(s, v, unitOutline(m), { tone: true, ceiling15: true });
+      drawFixtures(s, v, m.design.proposed.fixtures);
+      drawRoomFixtures(s, v, m);
+      drawWalls(s, v, m, { mode: "plan", review: review(ctx), windows: m.windows });
+      drawRoomLabels(s, v, m, { ceiling: true, unitTag: true });
+      drawAlarms(s, m.design.proposed.alarms.map((x) => ({ kind: x.kind, at: v.P(x.at) })));
+    };
+    const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
+    if (lay.tiles.length > 1 || lay.cropped) s.clipped(cx0 - 2, cy0 - 2, cx1 - cx0 + 4, cy1 - cy0 + 4, draw);
+    else draw();
+    if (lay.tiles.length > 1) s.clipped(cx0 - PAD, cy0 - PAD, cx1 - cx0 + 2 * PAD, cy1 - cy0 + 2 * PAD, () => drawChains(s, v, m, tile));
+    else drawChains(s, v, m, lay.cropped ? tile : undefined);
+    if (lay.tiles.length > 1) matchLines(s, v, tile, box, lay.tiles, numberOf);
+    if (lay.cropped) breakLines(s, v, tile, planBox(m));
+    planLegend(s, ctx, a, v, m);
+    out.push({ number, title: SHEETS[2].title, notes: ["fire separation", ...m.design.proposed.alarms.map((x) => x.why)], scale: lay.scale, page });
+  });
+  return out;
+}
+
+function planLegend(s: Sheet, ctx: SheetCtx, a: Area, v: View, m: PermitModel) {
+  let y = a.y + a.h;
+  heading(s, a.x, y - 8, "Basement plan: unit 2", v.scale.label);
+  y -= 22;
+  y -= legendBox(s, a.x, y, LEGEND_W - 6, "WALLS", [LEGEND.foundation(s), LEGEND.existing(s), LEGEND.new(s), LEGEND.outside(s)]) + 8;
+  y -= legendBox(s, a.x, y, LEGEND_W - 6, "FIRE SEPARATION (A6, A7 NOTE 4)", [LEGEND.rated30(s), LEGEND.rated15(s), LEGEND.door20(s)]) + 8;
+  y -= legendBox(s, a.x, y, LEGEND_W - 6, "ALARMS (A7 NOTES 8-9)", [LEGEND.alarms(s), LEGEND.interconnect(s)]) + 8;
+  const keyNotes = [
+    "Windows tagged W#: width x height of the clear opening, inches (mm); sill heights on A5.",
+    "Doors: clear width, inches (mm).",
+    "Dimensions: feet-inches (mm), inside face of the foundation wall.",
+    `Areas are inside the walls. CLG: finished ceiling height.`,
+    "Stair, furnace room and the suite's walls to unit 1 are 30-minute separations, continuous to the floor above and through bulkheads.",
   ];
-  let ny = a.y + 120;
-  for (const [i, t] of notes.entries()) ny = s.wrap(`${i + 1}. ${t}`, a.x + 4, ny, a.w - 8, { size: 7.5, leading: 10 });
-  return { number: "A4", title: "Cross-section", notes };
+  s.text("KEY NOTES", a.x, y - 4, { size: 6.5, font: s.fonts.bold });
+  y -= 14;
+  keyNotes.forEach((t, i) => {
+    y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6, leading: 7.4 }) - 2;
+  });
+  s.scaleBar(a.x, a.y + 18, v.k, v.scale.label);
+  if (review(ctx) && m.design.proposed.walls.some((w: PWall) => w.guess)) s.wrap("Dashed outlines: walls the camera didn't see. Check them before you submit.", a.x, a.y + 46, LEGEND_W - 8, { size: 6, color: MUTED });
 }
 
-// ---- A5 Escape window -------------------------------------------------------------------------
+// ---- A3 Main floor, unit 1 -----------------------------------------------------------------
 
-export function egressDetail(ctx: SheetCtx): Printed {
-  const { s, area: a } = newSheet(ctx, "A5", "Bedroom escape window", null);
-  const tape = ctx.state.tape ?? {};
-  const widthMm = tape.egressWidthMm ?? (ctx.geo?.egress?.existing ? Math.round((ctx.geo.egress.widthM ?? 0) * 1000) : null);
-  const heightMm = tape.egressHeightMm ?? null;
-  const sillMm = tape.egressSillMm ?? null;
-  const areaM2 = widthMm && heightMm ? (widthMm * heightMm) / 1e6 : null;
-  const k = 0.24; // points per mm, schematic
-  const floor = a.y + 190;
-  const sill = (sillMm ?? 1100) * k, w = (widthMm ?? 600) * k, h = (heightMm ?? 600) * k;
-  // Elevation from inside the bedroom.
-  const ex = a.x + 90;
-  s.text("ELEVATION FROM INSIDE THE BEDROOM", ex, floor + sill + h + 56, { size: 7, font: s.fonts.bold });
-  s.line(ex - 40, floor, ex + w + 60, floor, { width: 1 });
-  s.text("FINISHED FLOOR", ex - 40, floor - 10, { size: 6.5, color: MUTED });
-  s.rect(ex, floor + sill, w, h, { width: 1.4 });
-  s.rect(ex + 5, floor + sill + 5, w - 10, h - 10, { width: 0.5, color: MUTED });
-  s.dim(ex, floor + sill + h, ex + w, floor + sill + h, widthMm ? `${mmBoth(widthMm)} clear (${tape.egressWidthMm ? "taped" : "from the scan"})` : "Clear width: measure", 16);
-  s.dim(ex + w, floor + sill + h, ex + w, floor + sill, heightMm ? `${mmBoth(heightMm)} clear` : "Clear height: measure", 16);
-  s.dim(ex - 14, floor, ex - 14, floor + sill, sillMm ? `sill ${mmBoth(sillMm)}` : "Sill height: measure", 14);
-  // Section through the wall and the well.
-  const sx = a.x + 430;
-  const grade = floor + sill + h + 40;
-  s.text("SECTION THROUGH THE WINDOW WELL", sx, floor + sill + h + 56, { size: 7, font: s.fonts.bold });
-  s.rect(sx, floor - 20, 36, grade - floor + 40, { fill: TONE2, width: 0.6 });
-  s.rect(sx, floor + sill, 36, h, { fill: PAPER, width: 1 });
-  const wellFloor = floor + sill - 40;
-  const wellX = sx + 36 + 550 * k;
-  s.rect(sx + 36, wellFloor - 14, 550 * k + 10, 14, { fill: TONE2, width: 0.5 });
-  s.text("DRAINED GRAVEL", sx + 40, wellFloor - 24, { size: 6, color: MUTED });
-  s.line(wellX, wellFloor - 14, wellX, grade + 6, { width: 1.4 });
-  s.line(wellX, grade, wellX + 80, grade, { width: 1 });
-  s.text("GRADE", wellX + 6, grade + 4, { size: 6, color: MUTED });
-  s.dim(sx + 36, floor + sill + h / 2, wellX, floor + sill + h / 2, "550 mm (1'-10\") min. clear", 12);
-  // The checks.
+export function mainFloor(ctx: SheetCtx): Printed {
+  const { s, a, page } = newSheet(ctx, "A3", SHEETS[3].title, null);
+  const m = ctx.model;
+  if (!m) return { number: "A3", title: SHEETS[3].title, notes: [], scale: null, page };
+  const foot = bounds(m.existing.rooms.flatMap((r) => r.polygon));
+  const up = ctx.state.permit?.upstairs;
+  const floors = Math.max(1, Math.min(3, Math.max(ctx.storeys, ...(up?.bedrooms ?? []).map((b) => b.floor))));
+  const colW = (a.w - LEGEND_W - 8) / floors;
+  const fw = foot.maxX - foot.minX, fh = foot.maxZ - foot.minZ;
+  const scale = largestFit(SMALL_SCALES, fw, fh, colW - 2 * PAD, a.h - 2 * PAD - 40) ?? SMALL_SCALES[SMALL_SCALES.length - 1];
+  const notes: string[] = [];
+  const stair = m.design.proposed.fixtures.find((f) => f.kind === "stairs") ?? null;
+  for (let f = 1; f <= floors; f++) {
+    const area0 = { x: a.x + LEGEND_W + 8 + (f - 1) * colW + PAD, y: a.y + PAD, w: colW - 2 * PAD, h: a.h - 2 * PAD - 40 };
+    const v = makeView(area0, foot, scale);
+    heading(s, area0.x - PAD + 20, a.y + a.h - 10, f === 1 ? "Main floor (unit 1)" : f === 2 ? "Second floor (unit 1)" : "Third floor (unit 1)", "schematic");
+    // The house's outline: the basement's outline below it.
+    const [x0, y0] = v.P([foot.minX, foot.maxZ]), [x1, y1] = v.P([foot.maxX, foot.minZ]);
+    s.rect(x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8, { fill: TONE3, width: 0.6 });
+    s.rect(x0, y0, x1 - x0, y1 - y0, { fill: PAPER, width: 0.6 });
+    s.text(`${ftIn(fw)} (${Math.round(fw * 1000)})`, (x0 + x1) / 2, y1 + 12, { size: 6, align: "center", color: MUTED });
+    s.text(`${ftIn(fh)} (${Math.round(fh * 1000)})`, x0 - 12, (y0 + y1) / 2, { size: 6, align: "center", color: MUTED, rotate: 90 });
+    const alarms: { kind: "smoke" | "co" | "combo"; at: [number, number] }[] = [];
+    if (f === 1 && stair?.sizeM) {
+      // The stair down, inside a 30-minute enclosure with a 20-minute door at the top.
+      const sb: Box = { minX: stair.at[0] - stair.sizeM[0] / 2, maxX: stair.at[0] + stair.sizeM[0] / 2, minZ: stair.at[1] - stair.sizeM[1] / 2, maxZ: stair.at[1] + stair.sizeM[1] / 2 };
+      const [sx0, sy0] = v.P([sb.minX, sb.maxZ]), [sx1, sy1] = v.P([sb.maxX, sb.minZ]);
+      s.rect(sx0, sy0, sx1 - sx0, sy1 - sy0, { width: 0.7, fill: PAPER });
+      const alongX = stair.sizeM[0] >= stair.sizeM[1];
+      const treads = Math.max(4, Math.round((alongX ? stair.sizeM[0] : stair.sizeM[1]) / 0.25));
+      for (let i = 1; i < treads; i++) {
+        const t = i / treads;
+        if (alongX) s.line(sx0 + t * (sx1 - sx0), sy0, sx0 + t * (sx1 - sx0), sy1, { width: 0.4 });
+        else s.line(sx0, sy0 + t * (sy1 - sy0), sx1, sy0 + t * (sy1 - sy0), { width: 0.4 });
+      }
+      s.rect(sx0 - 3, sy0 - 3, sx1 - sx0 + 6, sy1 - sy0 + 6, { width: 2.4, dash: [7, 2.2, 1.6, 2.2] });
+      const label = "DN TO UNIT 2";
+      const lw = s.textWidth(label, 6, s.fonts.bold) + 6;
+      s.rect((sx0 + sx1) / 2 - lw / 2, (sy0 + sy1) / 2 - 4, lw, 11, { fill: PAPER, stroke: false });
+      s.text(label, (sx0 + sx1) / 2, (sy0 + sy1) / 2 - 1, { size: 6, align: "center", font: s.fonts.bold });
+      // The door at the top, on the side facing the middle of the house.
+      const hc: Pt = [(foot.minX + foot.maxX) / 2, (foot.minZ + foot.maxZ) / 2];
+      const toward: Pt = alongX ? [stair.at[0], hc[1] > stair.at[1] ? sb.maxZ : sb.minZ] : [hc[0] > stair.at[0] ? sb.maxX : sb.minX, stair.at[1]];
+      const c = v.P(toward);
+      s.poly([[c[0], c[1] + 7], [c[0] + 7, c[1]], [c[0], c[1] - 7], [c[0] - 7, c[1]]], { fill: PAPER, width: 0.8 });
+      s.text("20", c[0], c[1] - 2.2, { size: 5.5, align: "center", font: s.fonts.bold });
+      alarms.push({ kind: "smoke", at: v.P([stair.at[0], Math.min(foot.maxZ - 0.5, sb.maxZ + 0.7)]) });
+    }
+    const beds = (up?.bedrooms ?? []).filter((b) => b.floor === f);
+    const centres: Pt[] = beds.map((b) => [foot.minX + b.at[0] * fw, foot.minZ + b.at[1] * fh]);
+    centres.forEach((c, i) => {
+      const half = 1.5;
+      const bx0 = Math.max(foot.minX, c[0] - half), bx1 = Math.min(foot.maxX, c[0] + half), bz0 = Math.max(foot.minZ, c[1] - half), bz1 = Math.min(foot.maxZ, c[1] + half);
+      const [px0, py0] = v.P([bx0, bz1]), [px1, py1] = v.P([bx1, bz0]);
+      s.rect(px0, py0, px1 - px0, py1 - py0, { width: 0.6, dash: [4, 2] });
+      s.text(`BEDROOM ${i + 1}`, (px0 + px1) / 2, (py0 + py1) / 2 + 9, { size: 6.5, font: s.fonts.bold, align: "center" });
+      alarms.push({ kind: "smoke", at: v.P([c[0], c[1] - 0.5]) });
+    });
+    if (centres.length) {
+      // Outside the bedrooms, toward the middle of the floor: smoke, and CO with a fuel-burning furnace.
+      const mid = centroid(centres);
+      const hc: Pt = [(foot.minX + foot.maxX) / 2, (foot.minZ + foot.maxZ) / 2];
+      const d = Math.hypot(hc[0] - mid[0], hc[1] - mid[1]) || 1;
+      const hall: Pt = [mid[0] + ((hc[0] - mid[0]) / d) * Math.min(2, d), mid[1] + ((hc[1] - mid[1]) / d) * Math.min(2, d)];
+      alarms.push({ kind: m.fuelBurning ? "combo" : "smoke", at: v.P(hall) });
+    } else if (f > 1 || !stair) {
+      alarms.push({ kind: m.fuelBurning ? "combo" : "smoke", at: v.P([(foot.minX + foot.maxX) / 2, (foot.minZ + foot.maxZ) / 2]) });
+    }
+    drawAlarms(s, alarms);
+    notes.push(`Floor ${f}: ${alarms.length} alarm${alarms.length === 1 ? "" : "s"}`);
+  }
+  // Legend and notes.
+  let y = a.y + a.h;
+  heading(s, a.x, y - 8, "Unit 1", "schematic");
+  y -= 22;
+  y -= legendBox(s, a.x, y, LEGEND_W - 6, "LEGEND", [LEGEND.rated30(s), LEGEND.door20(s), LEGEND.alarms(s), LEGEND.interconnect(s)]) + 10;
+  const lines = [
+    "Unit 1 is not altered except for the work shown. The outline is the house's, over the basement; rooms are placed by the owner.",
+    "Smoke alarms on every floor and in every bedroom of unit 1, and between the bedrooms and the rest of each floor, interconnected with unit 2's, hard-wired with battery backup and a strobe (9.10.19.3., 9.10.19.5.(2)).",
+    m.fuelBurning ? "CO alarms outside the sleeping areas of unit 1, interconnected (9.32.3.9A.)." : "No fuel-burning appliance: CO alarms are not required.",
+    "The stair to the basement is enclosed by a 30-minute fire separation, with a 20-minute self-closing, positive-latching door (A2).",
+  ];
+  lines.forEach((t, i) => {
+    y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6.3, leading: 7.8 }) - 3;
+  });
+  notes.push(...lines);
+  return { number: "A3", title: SHEETS[3].title, notes, scale, page };
+}
+
+// ---- A4 Ceiling plan ------------------------------------------------------------------------
+
+export function ceilingPlan(ctx: SheetCtx): Printed {
+  const m = ctx.model;
+  const { s, a, page } = newSheet(ctx, "A4", SHEETS[4].title, null);
+  if (!m) return { number: "A4", title: SHEETS[4].title, notes: [], scale: null, page };
+  const lay = planFrame(a, m);
+  const tile = lay.tiles.length > 1 ? bounds(unitOutline(m).flat()) : lay.tiles[0];
+  const scale = lay.scale;
+  const v = makeView({ x: lay.area.x + PAD, y: a.y + PAD, w: lay.area.w - 2 * PAD, h: a.h - 2 * PAD }, tile, scale);
+  const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
+  if (lay.cropped) breakLines(s, v, tile, planBox(m));
+  s.clipped(Math.max(lay.area.x, cx0 - 2), Math.max(a.y, cy0 - 2), Math.min(lay.area.w, cx1 - cx0 + 4), Math.min(a.h, cy1 - cy0 + 4), () => {
+    // The rated ceiling: all of unit 2.
+    for (const p of unitOutline(m)) s.hatch(p.map(v.P), 7, { width: 0.25, color: FAINT });
+    drawWalls(s, v, m, { mode: "ceiling", review: review(ctx), windows: m.windows });
+    drawRoomLabels(s, v, m, { ceiling: true, unitTag: false });
+    // Beams, ducts and bulkheads, dashed, with the clear height under each.
+    for (const f of m.design.proposed.fixtures) {
+      if (!(f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead" || f.kind === "post")) continue;
+      const sz = f.sizeM ?? [0.3, 0.3];
+      const [x0, y0] = v.P([f.at[0] - sz[0] / 2, f.at[1] + sz[1] / 2]), [x1, y1] = v.P([f.at[0] + sz[0] / 2, f.at[1] - sz[1] / 2]);
+      if (f.kind === "post") {
+        s.rect(x0, y0, Math.max(5, x1 - x0), Math.max(5, y1 - y0), { fill: INK, width: 0.4 });
+        s.text("POST", x1 + 4, (y0 + y1) / 2 - 2, { size: 5.5 });
+        continue;
+      }
+      s.rect(x0, y0, x1 - x0, y1 - y0, { width: 0.9, dash: [6, 3], fill: f.kind === "bulkhead" ? TONE : undefined });
+      const h = f.heightM ?? null;
+      const label = `${f.kind === "beam" ? "EXISTING BEAM" : f.kind === "duct" ? "EXISTING DUCT" : "BULKHEAD, RATED, CONTINUOUS"}${h ? `: ${ftIn(h)} (${Math.round(h * 1000)}) CLEAR${h < 1.85 ? ", UNDER 1.85 m" : ""}` : ""}${review(ctx) && f.guess ? " (placed from the video: check where it runs)" : ""}`;
+      const horizontal = Math.abs(x1 - x0) >= Math.abs(y0 - y1);
+      const tw = s.textWidth(label, 5.8);
+      if (horizontal) {
+        s.rect((x0 + x1) / 2 - tw / 2 - 2, (y0 + y1) / 2 - 3.5, tw + 4, 9, { fill: PAPER, stroke: false });
+        s.text(label, (x0 + x1) / 2, (y0 + y1) / 2 - 1.5, { size: 5.8, align: "center", font: s.fonts.bold });
+      } else s.text(label, (x0 + x1) / 2 + 2, (y0 + y1) / 2, { size: 5.8, align: "center", font: s.fonts.bold, rotate: 90 });
+    }
+    // The duct smoke detector, at the furnace's return.
+    const furnace = m.design.proposed.fixtures.find((f) => f.kind === "furnace");
+    if (furnace) {
+      const [fx, fy] = v.P(furnace.at);
+      s.rect(fx - 9, fy + 8, 18, 9, { fill: PAPER, width: 0.7 });
+      s.text("DSD", fx, fy + 10.5, { size: 5.5, align: "center", font: s.fonts.bold });
+      s.text("duct smoke detector, return duct", fx + 12, fy + 10.5, { size: 5.3, color: MUTED });
+    }
+  });
+  // The heights, checked.
+  let y = a.y + a.h;
+  heading(s, a.x, y - 8, "Basement ceiling plan", scale.label);
+  y -= 22;
+  y -= legendBox(s, a.x, y, LEGEND_W - 6, "LEGEND", [
+    LEGEND.rated15(s),
+    { draw: (x, yy) => s.rect(x, yy - 3, 26, 6, { width: 0.9, dash: [6, 3] }), label: "Beam, duct or bulkhead overhead, with the clear height under it" },
+    { draw: (x, yy) => s.rect(x + 10, yy - 3, 6, 6, { fill: INK, width: 0.4 }), label: "Post" },
+  ]) + 10;
+  const ceiling = m.ceilingM, beam = m.beamM;
   const checks: [string, string, boolean | null][] = [
-    ["Clear opening area", areaM2 != null ? `${areaM2.toFixed(2)} m² (needs 0.35 m²)` : "Width x height: measure both", areaM2 == null ? null : areaM2 >= 0.35],
-    ["Smallest side", widthMm && heightMm ? `${Math.min(widthMm, heightMm)} mm (needs 380 mm)` : "Measure: no side under 380 mm", widthMm && heightMm ? Math.min(widthMm, heightMm) >= 380 : null],
-    ["Opens without tools or keys", "Casement or slider that opens fully from inside and stays open", null],
-    ["Window well", "550 mm clear in front of the window; a cover opens from inside", null],
-    ["Sill height", sillMm ? `${sillMm} mm above the floor (Kitchener advises 1.5 m or less)` : "Measure the sill height", sillMm ? sillMm <= 1500 : null],
-    ["Foundation cut", "Over 1.2 m wide: an engineer designs the opening and lintel (A7)", null],
+    ["Finished ceiling in unit 2", ceiling ? `${both(ceiling)}; 1.95 m (6'-5") required` : "1.95 m (6'-5\") required", ceiling ? ceiling >= 1.95 : null],
+    ["Clear under beams and ducts", beam ? `${both(beam)}; 1.85 m (6'-1") required` : "1.85 m (6'-1\") required", beam ? beam >= 1.85 : null],
   ];
-  let cy = a.y + a.h - 30;
-  const cx = a.x + a.w - 330;
-  s.text("WHAT THE CODE ASKS (Building Code 9.9.10.1, 9.15.4.3)", cx, cy, { size: 7.5, font: s.fonts.bold });
-  cy -= 16;
+  s.text("HEIGHTS (9.5.3.1.(2) AND (3))", a.x, y, { size: 6.5, font: s.fonts.bold });
+  y -= 12;
   for (const [label, value, ok] of checks) {
-    s.rect(cx, cy - 3, 8, 8, { width: 0.6, fill: ok === false ? TONE2 : PAPER });
-    if (ok === true) s.text("X", cx + 4, cy - 1.5, { size: 6, align: "center", font: s.fonts.bold });
-    s.text(label, cx + 14, cy, { size: 7.5, font: s.fonts.bold });
-    cy = s.wrap(value, cx + 14, cy - 10, 300, { size: 7.5, color: MUTED }) - 6;
+    s.text(ok === true ? "MEETS" : ok === false ? "BELOW" : "", a.x, y, { size: 6, font: s.fonts.bold });
+    s.text(label, a.x + 34, y, { size: 6.5, font: s.fonts.bold });
+    y = s.wrap(value, a.x + 34, y - 8, LEGEND_W - 40, { size: 6.3 }) - 4;
   }
-  const newCut = ctx.geo?.egress && !ctx.geo.egress.existing;
-  const notes = [
-    "Each floor level with a bedroom has a window that opens from inside without tools, with an unobstructed opening of at least 0.35 m² and no dimension under 380 mm (Building Code 9.9.10.1.(1)).",
-    "A window well in front of it leaves at least 550 mm clear in front of the window (9.9.10.1.(3)).",
-    newCut
-      ? "NEW OPENING IN THE FOUNDATION WALL: an engineer designs the opening and its lintel when it's wider than 1.2 m (9.15.4.3.(3)); attach their drawing or letter (A7). Concrete cutting by a contractor."
-      : "Existing opening: if it's enlarged past 1.2 m wide or cut lower, an engineer designs the opening and its lintel (A7).",
+  const lines = [
+    "The 15-minute ceiling (15.9 mm Type X gypsum board, assembly C1 on A6) covers all of unit 2, continuous over and around every bulkhead, beam and duct, sealed at every penetration.",
+    "Supply and return ducts in unit 2 are best dropped to the floor. A duct smoke detector shuts off the furnace when one system serves both units (A7).",
+    "Pot lights and fans in the rated ceiling are boxed in drywall in the joist space.",
   ];
-  let ny = a.y + 120;
-  for (const [i, t] of notes.entries()) ny = s.wrap(`${i + 1}. ${t}`, a.x + 4, ny, a.w - 8, { size: 7.5, leading: 10 });
-  return { number: "A5", title: "Bedroom escape window", notes };
+  y -= 4;
+  lines.forEach((t, i) => {
+    y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6.3, leading: 7.8 }) - 3;
+  });
+  s.scaleBar(a.x, a.y + 18, v.k, scale.label);
+  stampScale(s, scale.label);
+  return { number: "A4", title: SHEETS[4].title, notes: [...checks.map((c) => `${c[0]}: ${c[1]}`), ...lines], scale, page };
 }
 
-// ---- A6 Notes --------------------------------------------------------------------------------
+// ---- A5 Elevations ------------------------------------------------------------------------------
 
-export function generalNotes(ctx: SheetCtx): Printed {
-  const { s, area: a } = newSheet(ctx, "A6", "General notes and specifications", null);
-  const applies = (n: Note) => !n.when || n.when === "always" || (n.when === "fuel_burning" && ctx.geo?.fuelBurning) || (n.when === "egress_new" && ctx.geo?.egress && !ctx.geo.egress.existing);
-  const notes = ctx.diy.notes.filter(applies);
+export function elevations(ctx: SheetCtx): Printed {
+  const m = ctx.model;
+  const { s, a, page } = newSheet(ctx, "A5", SHEETS[5].title, null);
+  if (!m) return { number: "A5", title: SHEETS[5].title, notes: [], scale: null, page };
+  const changed = m.windows.filter((w) => w.change !== "keep");
+  const shown = changed.length ? changed : m.windows.filter((w) => w.escape);
+  const walls = [...new Set(shown.map((w) => w.wallId))].map((id) => m.design.proposed.walls.find((w) => w.id === id)!).filter(Boolean).slice(0, 2);
+  const notes: string[] = [];
+  if (!walls.length) {
+    s.wrap("No window in the basement changes, so there's no elevation to show.", a.x + 20, a.y + a.h - 40, a.w - 40, { size: 11 });
+    return { number: "A5", title: SHEETS[5].title, notes, scale: null, page };
+  }
+  const top = (m.ceilingM ?? 2.1) + 0.25; // top of the foundation wall, at the floor joists
+  const houseH = 2.7; // the storey above, drawn schematically
+  const rowH = (a.h - 30) / walls.length;
+  const maxL = Math.max(...walls.map(wallLen));
+  const scale = largestFit([...PLAN_SCALES, { label: "1:75", ratio: 75 }, { label: "1:100", ratio: 100 }], maxL + 1, top + houseH + 0.6, a.w - 2 * PAD - 230, rowH - 70) ?? { label: "1:100", ratio: 100 };
+  const k = ptPerMetre(scale.ratio);
+  walls.forEach((w, i) => {
+    const L = wallLen(w);
+    const base = a.y + a.h - (i + 1) * rowH + 50;
+    const left = a.x + PAD + (a.w - 2 * PAD - 230 - L * k) / 2;
+    const Y = (h: number) => base + h * k;
+    // Seen from outside: someone facing the wall has its far end on their left or right; on paper
+    // (y up) the plan's z runs down, so turn the wall's direction and outside into paper terms.
+    const d = dir(w), side = outward(w, m.design.proposed.rooms);
+    const n: Pt = [-d[1] * side, d[0] * side];
+    const face: Pt = [-n[0], n[1]]; // the viewer looks back at the wall, in paper terms
+    const right: Pt = [face[1], -face[0]];
+    const flip = d[0] * right[0] + -d[1] * right[1] < 0;
+    const X = (t: number) => left + (flip ? L - t : t) * k;
+    const wins = shown.filter((x) => x.wallId === w.id);
+    heading(s, a.x + 10, base + (top + houseH) * k + 30, `Elevation ${i + 1}: the wall with ${wins.map((x) => x.tag).join(", ")}`, scale.label);
+    // Foundation below grade, the house wall above (schematic).
+    const ops = m.design.proposed.openings.filter((o) => o.wallId === w.id && o.kind === "window");
+    const gradeH = Math.max(...wins.map((x) => (x.sillM ?? 0.9) + (x.heightM ?? 0.6)), top - 0.6) + 0.1;
+    s.rect(X(0), Y(0), L * k, top * k, { fill: TONE2, width: 0.8 });
+    s.rect(X(0), Y(top), L * k, houseH * k, { fill: PAPER, width: 0.8 });
+    s.text("EXISTING HOUSE WALL ABOVE (NO CHANGE)", X(L / 2), Y(top + houseH / 2), { size: 6.5, align: "center", color: MUTED });
+    s.line(X(-0.6), Y(gradeH), X(L + 0.6), Y(gradeH), { width: 1.2 });
+    s.text("GRADE", X(L + 0.65), Y(gradeH) - 2, { size: 6, color: MUTED });
+    s.line(X(-0.6), Y(0), X(L + 0.6), Y(0), { width: 0.5, dash: [5, 3], color: MUTED });
+    s.text("BASEMENT FLOOR", X(L + 0.65), Y(0) - 2, { size: 6, color: MUTED });
+    // Windows: the other ones on this wall as they are, the changed ones at their new size, each with
+    // its well.
+    for (const op of ops) {
+      const info = m.windows.find((x) => x.id === op.id)!;
+      const wm = info.widthM, hm = info.heightM ?? 0.6, sill = info.sillM ?? 0.9;
+      const lx = Math.min(X(op.offsetM - wm / 2), X(op.offsetM + wm / 2)), rx = lx + wm * k;
+      s.rect(lx, Y(sill), wm * k, hm * k, { fill: PAPER, width: info.change === "keep" ? 0.8 : 1.4 });
+      s.line(lx, Y(sill), rx, Y(sill + hm), { width: 0.3, color: MUTED });
+      if (info.was) s.rect(X(op.offsetM) - (info.was.widthM / 2) * k, Y(sill + hm - (info.was.heightM ?? 0.3)), info.was.widthM * k, (info.was.heightM ?? 0.3) * k, { width: 0.6, dash: [3, 2], color: MUTED });
+      // The well, behind the grade line.
+      s.rect(lx - 0.1 * k, Y(sill - 0.2), (wm + 0.2) * k, (gradeH + 0.1 - sill + 0.2) * k, { width: 0.6, dash: [4, 2] });
+      const tag = [`${info.tag}: ${info.change === "new" ? "NEW" : info.change === "enlarge" ? "ENLARGED" : "EXISTING"}${info.escape ? " ESCAPE WINDOW" : ""}`, sizeText(wm, hm)];
+      s.text(tag[0], rx + 0.18 * k, Y(sill + hm / 2) + 3, { size: 6.5, font: s.fonts.bold });
+      s.text(tag[1], rx + 0.18 * k, Y(sill + hm / 2) - 6, { size: 6.3 });
+      s.dim(lx - 6, Y(0), lx - 6, Y(sill), `sill ${dimText(sill)}`, 10, 5.8);
+    }
+    // Where the windows sit along the wall.
+    const ts = [0, L, ...wins.flatMap((x) => {
+      const op = ops.find((o) => o.id === x.id)!;
+      return [op.offsetM - x.widthM / 2, op.offsetM + x.widthM / 2];
+    })].map((t) => X(t)).sort((p, q) => p - q);
+    for (let j = 0; j + 1 < ts.length; j++) s.dim(ts[j], Y(0) - 8, ts[j + 1], Y(0) - 8, dimText((ts[j + 1] - ts[j]) / k), -12, 5.8);
+    // Lot line and the window area, beside the elevation.
+    const bx = a.x + a.w - 230;
+    let by = base + (top + houseH) * k;
+    for (const x of wins) {
+      const lot = ctx.state.permit?.lotLines?.find((l) => l.id === x.id)?.mm ?? null;
+      const lines = [
+        `${x.tag}${x.room ? `, ${x.room.toLowerCase()}` : ""}`,
+        `Clear opening ${sizeText(x.widthM, x.heightM)}: ${x.heightM ? `${(x.widthM * x.heightM).toFixed(2)} m²` : ""}`,
+        x.was ? `Existing ${sizeText(x.was.widthM, x.was.heightM)} enlarged (dashed)` : x.change === "new" ? "New opening cut in the foundation wall" : "Existing window, no change",
+        lot != null ? `To the lot line: ${both(lot / 1000)}` : "",
+        x.change !== "keep" ? "Opening and lintel designed by an engineer (A7 note 2)." : "",
+      ].filter(Boolean);
+      for (const [j, t] of lines.entries()) {
+        by = s.wrap(t, bx, by, 220, { size: j === 0 ? 7.5 : 6.8, font: j === 0 ? s.fonts.bold : s.fonts.regular }) - 2;
+      }
+      by -= 8;
+      notes.push(...lines);
+    }
+  });
+  stampScale(s, scale.label);
+  return { number: "A5", title: SHEETS[5].title, notes, scale, page };
+}
+
+// ---- A6 Details --------------------------------------------------------------------------------
+
+export function details(ctx: SheetCtx): Printed {
+  const { s, a, page } = newSheet(ctx, "A6", SHEETS[6].title, "as noted");
+  const m = ctx.model;
+  const notes: string[] = [];
+  const colW = a.w / 3;
+  const esc = m?.windows.find((w) => w.escape) ?? null;
+  const kitchener = ctx.municipality.startsWith("kitchener");
+
+  // 1. The escape window, in section through the wall and the well.
+  {
+    const k = ptPerMetre(20);
+    const base = a.y + 200;
+    const sill = esc?.sillM ?? 0.9, h = esc?.heightM ?? 0.76, w = esc?.widthM ?? 0.61;
+    const top = Math.max(sill + h + 0.3, (m?.ceilingM ?? 2.1) + 0.1);
+    const grade = Math.min(top - 0.15, sill + h + 0.1);
+    heading(s, a.x + 10, a.y + a.h - 10, "1. Escape window (bedroom)", "1:20");
+    const fx = a.x + 110; // inside face of the foundation wall
+    const Yh = (m2: number) => base + m2 * k;
+    // Foundation wall, cut by the opening.
+    s.rect(fx, Yh(0), 0.2 * k, sill * k, { fill: TONE3, width: 0.6 });
+    s.rect(fx, Yh(sill + h), 0.2 * k, (top - sill - h) * k, { fill: TONE3, width: 0.6 });
+    // The new stud wall inside, with the drywall return into the opening.
+    s.rect(fx - 0.115 * k, Yh(0), 0.089 * k, sill * k, { fill: PAPER, width: 0.5 });
+    s.rect(fx - 0.115 * k, Yh(sill + h), 0.089 * k, (top - sill - h) * k, { fill: PAPER, width: 0.5 });
+    s.rect(fx - 0.128 * k, Yh(0), 0.0127 * k, sill * k, { fill: TONE2, width: 0.3 });
+    s.rect(fx - 0.128 * k, Yh(sill + h), 0.0127 * k, (top - sill - h) * k, { fill: TONE2, width: 0.3 });
+    // Floor joists of the house above.
+    s.rect(fx - 0.3 * k, Yh(top), 1.2 * k, 0.24 * k, { width: 0.5 });
+    s.text("FLOOR ABOVE", fx + 0.35 * k, Yh(top) + 0.09 * k, { size: 5.3, color: MUTED });
+    // The window: frame and sash in the opening.
+    s.rect(fx + 0.06 * k, Yh(sill), 0.08 * k, h * k, { fill: PAPER, width: 0.8 });
+    s.line(fx + 0.1 * k, Yh(sill), fx + 0.1 * k, Yh(sill + h), { width: 0.4 });
+    // The well outside: drained gravel at its foot, its wall 550 mm clear of the window, up past grade.
+    const wellIn = fx + 0.2 * k + 0.55 * k;
+    s.rect(fx + 0.2 * k, Yh(sill - 0.25), 0.6 * k, 0.15 * k, { fill: TONE2, width: 0.4 });
+    s.text("DRAINED GRAVEL", fx + 0.85 * k, Yh(sill - 0.2), { size: 5.3, color: MUTED });
+    s.rect(wellIn, Yh(sill - 0.25), 0.03 * k, (grade + 0.1 - sill + 0.25) * k, { fill: INK, width: 0.3 });
+    s.line(wellIn + 0.03 * k, Yh(grade), wellIn + 0.8 * k, Yh(grade), { width: 1 });
+    s.text("GRADE", wellIn + 0.08 * k, Yh(grade) + 3, { size: 5.5, color: MUTED });
+    s.text("WINDOW WELL", wellIn + 0.08 * k, Yh(grade) - 9, { size: 5.5, color: MUTED });
+    s.line(fx - 0.6 * k, Yh(0), fx + 0.25 * k, Yh(0), { width: 1 });
+    s.text("FINISHED FLOOR", fx - 0.6 * k, Yh(0) - 8, { size: 5.5, color: MUTED });
+    s.dim(fx + 0.2 * k, Yh(sill + h / 2), wellIn, Yh(sill + h / 2), "550 (1'-10\") MIN. CLEAR", 8, 5.5);
+    s.dim(fx - 0.2 * k, Yh(0), fx - 0.2 * k, Yh(sill), dimText(sill), 10, 5.5);
+    s.dim(fx - 0.2 * k, Yh(sill), fx - 0.2 * k, Yh(sill + h), `${dimText(h)} CLEAR`, 10, 5.5);
+    s.text("FOUNDATION", fx + 0.1 * k, Yh(sill / 2), { size: 5.3, rotate: 90, color: PAPER, align: "center" });
+    let ty = base - 24;
+    const area2 = w * h;
+    const checks = [
+      `Clear opening ${sizeText(w, h)} = ${area2.toFixed(2)} m², at least 0.35 m²${escapeOk(w, h) ? " (meets)" : ""}`,
+      `No side under 380 mm: smallest ${Math.round(Math.min(w, h) * 1000)} mm`,
+      `Sill ${Math.round(sill * 1000)} mm above the floor${sill <= 1.0 ? "" : "; a fixed step or built-in below it"} (no Code maximum in a basement, 9.9.10.1.(2); kept at 1.0 m or less where it's new)`,
+      "Opens from inside without tools or keys and stays open on its own",
+      "Window well 550 mm clear in front; a cover opens from inside without tools",
+      kitchener ? "Built to the City of Kitchener's egress window detail, pp. 23-24 of its second-unit guide" : "To Building Code 9.9.10.1.",
+    ];
+    for (const c of checks) ty = s.wrap(`- ${c}`, a.x + 10, ty, colW - 20, { size: 6.5, leading: 8 }) - 1;
+    notes.push(...checks);
+  }
+
+  // 2. W1, the typical wall on the foundation.
+  {
+    const k = ptPerMetre(10);
+    const x0 = a.x + colW + 30, base = a.y + 250;
+    heading(s, a.x + colW + 10, a.y + a.h - 10, "2. W1: wall on the foundation", "1:10");
+    const H = 0.9; // a slice of the wall's height
+    s.rect(x0, base, 0.2 * k, H * k, { fill: TONE3, width: 0.6 }); // concrete
+    s.rect(x0 + 0.2 * k, base, 0.025 * k, H * k, { fill: PAPER, width: 0.4 }); // air gap
+    s.rect(x0 + 0.225 * k, base + 0.04 * k, 0.089 * k, (H - 0.04) * k, { fill: PAPER, width: 0.5 }); // studs + batt
+    s.hatch([[x0 + 0.225 * k, base + 0.04 * k], [x0 + 0.314 * k, base + 0.04 * k], [x0 + 0.314 * k, base + H * k], [x0 + 0.225 * k, base + H * k]], 4, { width: 0.25, color: MUTED });
+    s.line(x0 + 0.316 * k, base + 0.02 * k, x0 + 0.316 * k, base + H * k, { width: 1.1, dash: [3, 1.5] }); // vapour barrier
+    s.rect(x0 + 0.318 * k, base + 0.01 * k, 0.0127 * k, (H - 0.01) * k, { fill: TONE2, width: 0.4 }); // drywall
+    s.rect(x0 + 0.225 * k, base, 0.089 * k, 0.038 * k, { fill: TONE2, width: 0.5 }); // bottom plate
+    s.line(x0 + 0.225 * k, base + 0.002 * k, x0 + 0.314 * k, base + 0.002 * k, { width: 1.6 }); // sill gasket
+    s.line(x0 - 0.1 * k, base, x0 + 0.6 * k, base, { width: 1 });
+    const call = (y: number, t: string) => {
+      s.line(x0 + 0.34 * k, base + y * k, x0 + 0.42 * k, base + y * k, { width: 0.4 });
+      s.wrap(t, x0 + 0.43 * k, base + y * k + 2, colW - 0.5 * k - 20, { size: 6, leading: 7 });
+    };
+    call(0.85, "12.7 mm (1/2\") gypsum board");
+    call(0.7, "Vapour barrier, 0.15 mm poly, on the warm (room) side, lapped and sealed, into the rim joist space");
+    call(0.52, "38 x 89 mm (2x4) studs at 400 mm (16\") o.c., insulation to at least match what's there");
+    call(0.32, "Air space; existing foundation insulation kept (cut any old blanket's vapour barrier)");
+    call(0.16, "Existing concrete foundation wall");
+    call(0.02, "Bottom plate on a sill gasket (0.05 mm poly or Type S roll roofing), or pressure-treated");
+    let ty = base - 26;
+    const t = ["Single top plate on non-loadbearing walls; interior partitions: 2x4 at 16\" o.c., 12.7 mm gypsum each side.", "Foam insulation covered by drywall or another listed protection."];
+    for (const c of t) ty = s.wrap(`- ${c}`, a.x + colW + 10, ty, colW - 20, { size: 6.5, leading: 8 }) - 1;
+    notes.push("W1 typical wall: bottom plate on a sill gasket, insulation, vapour barrier on the warm side", ...t);
+  }
+
+  // 3. The rated assemblies.
+  {
+    const x0 = a.x + 2 * colW + 10;
+    heading(s, x0, a.y + a.h - 10, "3. Fire-rated assemblies", "not to scale");
+    const blocks: [string, string[]][] = [
+      ["W2: 30-minute wall between the units, around the stair and the furnace room", ["38 x 89 mm (2x4) studs at 400 mm (16\") o.c.", "15.9 mm (5/8\") Type X gypsum board both sides, joints taped and filled", "Sound-absorbing insulation in the stud spaces", "Fire-stopped at top and bottom; continuous to the underside of the floor above (Table 11.5.1.1.-C, C156)"]],
+      ["C1: 15-minute ceiling over unit 2", ["15.9 mm (5/8\") Type X gypsum board on the underside of the existing joists (or on resilient channel), joints taped and filled", "150 mm sound-absorbing insulation in the joist spaces", "Continuous over and around bulkheads, beams and ducts; penetrations fire-stopped to CAN/ULC-S115", "Beams and posts holding the floor above wrapped in 15.9 mm Type X (9.10.8.3.(2))"]],
+      ["D20: door in the fire separation", ["20-minute rated door and frame, or an existing 45 mm solid-core wood door (C160)", "Self-closing device, positive latch, lever handle (9.10.13.10.(1))", "No glass unless rated"]],
+    ];
+    let y = a.y + a.h - 34;
+    for (const [title, lines] of blocks) {
+      // A small layered sketch: studs between two boards, or boards under joists.
+      const sx = x0 + 4, sw = 70, sy = y - 44;
+      if (title.startsWith("W2")) {
+        s.rect(sx, sy, sw, 34, { fill: PAPER, width: 0.4 });
+        s.rect(sx, sy, 5, 34, { fill: TONE2, width: 0.5 });
+        s.rect(sx + sw - 5, sy, 5, 34, { fill: TONE2, width: 0.5 });
+        for (let i = 0; i < 3; i++) s.rect(sx + 14 + i * 18, sy + 2, 9, 30, { width: 0.4 });
+      } else if (title.startsWith("C1")) {
+        for (let i = 0; i < 4; i++) s.rect(sx + 4 + i * 18, sy + 12, 7, 22, { width: 0.4 });
+        s.rect(sx, sy + 6, sw, 5, { fill: TONE2, width: 0.5 });
+        s.hatch([[sx, sy + 12], [sx + sw, sy + 12], [sx + sw, sy + 34], [sx, sy + 34]], 5, { width: 0.2, color: MUTED });
+      } else {
+        s.rect(sx + 10, sy, 50, 34, { width: 0.8 });
+        s.poly([[sx + 35, sy + 24], [sx + 42, sy + 17], [sx + 35, sy + 10], [sx + 28, sy + 17]], { fill: PAPER, width: 0.8 });
+        s.text("20", sx + 35, sy + 15, { size: 5.5, align: "center", font: s.fonts.bold });
+      }
+      let ly = s.wrap(title, sx + sw + 8, y, colW - sw - 30, { size: 6.8, font: s.fonts.bold, leading: 8 }) - 2;
+      for (const l of lines) ly = s.wrap(`- ${l}`, sx + sw + 8, ly, colW - sw - 30, { size: 6.2, leading: 7.4 }) - 1;
+      y = Math.min(ly, sy) - 16;
+      notes.push(title, ...lines);
+    }
+  }
+  return { number: "A6", title: SHEETS[6].title, notes, scale: { label: "1:20", ratio: 20 }, page };
+}
+
+// ---- A7 Notes ------------------------------------------------------------------------------------
+
+export function notesSheet(ctx: SheetCtx): Printed {
+  const { s, a, page } = newSheet(ctx, "A7", SHEETS[7].title, null);
+  const m = ctx.model;
+  const list = notesFor({ fuelBurning: m?.fuelBurning ?? true, stairs: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "stairs") ?? true), escapeNew: Boolean(m?.windows.some((w) => w.change !== "keep")) });
   const colW = (a.w - 40) / 3;
   let col = 0, y = a.y + a.h - 20;
   const printed: string[] = [];
-  notes.forEach((n, i) => {
+  list.forEach((n, i) => {
     const body = `${i + 1}. ${n.title.toUpperCase()}: ${n.text}`;
-    const cite = `${n.source.section ? `${n.source.section}, ` : ""}${n.source.title}`;
-    const need = s.measure(body, colW - 10, 7.2, s.fonts.regular, 9) + s.measure(cite, colW - 10, 6, s.fonts.regular, 7.4) + 10;
+    const cite = n.cites.map(citeText).join("; ");
+    const need = s.measure(body, colW - 10, 7, s.fonts.regular, 8.6) + s.measure(cite, colW - 10, 5.8, s.fonts.regular, 7) + 10;
     if (y - need < a.y + 10) {
       col++;
       y = a.y + a.h - 20;
     }
     const x = a.x + 10 + col * (colW + 10);
-    y = s.wrap(body, x, y, colW - 10, { size: 7.2, leading: 9 });
-    y = s.wrap(cite, x, y, colW - 10, { size: 6, leading: 7.4, color: MUTED }) - 8;
-    printed.push(`${n.title}: ${n.text}`);
+    y = s.wrap(body, x, y, colW - 10, { size: 7, leading: 8.6 });
+    y = s.wrap(cite, x, y, colW - 10, { size: 5.8, leading: 7, color: MUTED }) - 8;
+    printed.push(`${n.id}: ${n.title}: ${n.text}`);
   });
-  return { number: "A6", title: "General notes and specifications", notes: printed };
+  return { number: "A7", title: SHEETS[7].title, notes: printed, scale: null, page };
 }
 
-// ---- A7 Needs a pro ----------------------------------------------------------------------------
-
-export function needsPro(ctx: SheetCtx, separateHeating: boolean): Printed {
-  const { s, area: a } = newSheet(ctx, "A7", "Work that needs a licensed pro", null);
-  const egressCut = Boolean(ctx.geo?.egress && !ctx.geo.egress.existing);
-  const applies = (when: string) => when === "always" || (when === "egress_cut" && egressCut) || (when === "separate_heating" && separateHeating);
-  let y = a.y + a.h - 24;
-  s.wrap("These parts of the work can't be drawn or done by the owner alone. Attach each pro's drawings, calculations or letter to the permit application where noted.", a.x + 10, y, a.w - 20, { size: 9.5 });
-  y -= 34;
-  const printed: string[] = [];
-  for (const item of ctx.diy.needsPro) {
-    const live = applies(item.when);
-    const head = `${item.title}${live ? "" : " (only if you do this)"}`;
-    s.rect(a.x + 10, y - 2, 6, 6, { fill: live ? INK : PAPER, width: 0.6 });
-    s.text(head, a.x + 24, y - 1, { size: 9, font: s.fonts.bold, color: live ? INK : MUTED });
-    s.text(`Who: ${item.who}`, a.x + a.w / 2, y - 1, { size: 8, color: MUTED });
-    y = s.wrap(item.detail, a.x + 24, y - 13, a.w - 40, { size: 8 });
-    y = s.wrap(`${item.source.section ? `${item.source.section}, ` : ""}${item.source.title}${item.registry ? ` · Find one: ${item.registry.url}` : ""}`, a.x + 24, y, a.w - 40, { size: 6.5, color: MUTED }) - 10;
-    printed.push(item.title);
-  }
-  return { number: "A7", title: "Work that needs a licensed pro", notes: printed };
+// The review copy's watermark goes over everything drawn on a sheet.
+export function finishSheets(ctx: SheetCtx, printed: Printed[]) {
+  if (!review(ctx)) return;
+  for (const p of printed) watermark(new Sheet(ctx.doc.getPage(p.page), ctx.fonts));
 }
