@@ -60,8 +60,9 @@ export type Outcome = {
   rooms: { name: string; size: string | null }[];
   finds: Record<string, number>;
   asked: { question: string; answer: string }[];
-  permit: { pages: number; sheets: Record<string, string> };
+  permit: { pages: number; sheets: Record<string, string>; left: number };
   photos: number;
+  cards: number;
 };
 
 // Beside its saved answers.

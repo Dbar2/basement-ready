@@ -1,8 +1,9 @@
 // The sample basement, start to finish: it never calls a model, so it runs anywhere for free.
 import { join } from "node:path";
 import { Home } from "./pages/Home";
+import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
-import { Workspace } from "./pages/Workspace";
+import { expectSheets, Workspace } from "./pages/Workspace";
 import { runDir } from "./support/run";
 import { expect, test } from "./support/fixtures";
 import sample from "../../public/samples/sample/result.json" with { type: "json" };
@@ -11,6 +12,7 @@ test("the sample basement: wait screen, plan, ideas, permit, money, build", asyn
   const home = new Home(page);
   const wait = new WaitScreen(page);
   const ws = new Workspace(page);
+  const deck = new StyleDeck(page);
 
   await journey.step("home", () => home.open());
   await journey.step("sample wait screen", async () => {
@@ -19,6 +21,10 @@ test("the sample basement: wait screen, plan, ideas, permit, money, build", asyn
   });
   const asked = await journey.step("wait screen questions", () => wait.answerAll());
   expect(asked!.length, "the sample asks at least one question").toBeGreaterThan(0);
+  await journey.step("swipe your style: two loved, one passed", async () => {
+    await deck.expectOpen();
+    await deck.swipeAll(["love", "pass", "love"]);
+  });
   await journey.step("answer ready", () => wait.waitForAnswer(60_000));
 
   await journey.step("your plan", async () => {
@@ -44,10 +50,9 @@ test("the sample basement: wait screen, plan, ideas, permit, money, build", asyn
     await ws.fillProfileIfAsked();
     await ws.permit().expectOpen();
   });
+  expect(await ws.permit().left(), "things left before the submit copy").toBeGreaterThanOrEqual(0);
   const pdf = await journey.step("permit package downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-sample-permit.pdf`)));
-  expect(pdf!.pageCount, "permit package pages").toBeGreaterThanOrEqual(8);
-  expect(pdf!.index).toMatchObject({ A0: "Cover and key plan", A2: "Existing basement plan", A3: "Proposed basement plan" });
-  expect(pdf!.sheets.map((s) => s.number)).toEqual(Object.keys(pdf!.index));
+  expectSheets(pdf!);
   journey.timing({ take: "sample", kind: "permit", pages: pdf!.pageCount, sheets: pdf!.index });
 
   await journey.step("money", async () => {
