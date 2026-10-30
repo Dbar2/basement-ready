@@ -44,6 +44,8 @@ export type Screen = {
   captureNote?: string;
   // A route only some builds have (the one-flow steps): a "not found" page is skipped, not reported.
   ifPresent?: boolean;
+  // A workspace tab: the names its button may have, in order of preference.
+  tab?: string[];
 };
 
 const S = (s: Screen) => s;
@@ -86,11 +88,24 @@ export const SCREENS: Screen[] = [
     captureNote: "Shot a few seconds in, with the first question up; it's one moment of a moving screen.",
   }),
   S({
-    id: "workspace-plan",
-    title: "Workspace: Your plan",
+    id: "workspace-book",
+    title: "Workspace: Your book",
     group: "journey",
     kind: "page",
     route: "/scans/{scan}",
+    tab: ["Your book"],
+    priority: 2,
+    purpose:
+      "Everything in one place: the design, pictures, mood board, the quote by trade with sources, permit readiness, money, and the steps from applying to moving in, with its PDF.",
+    checks: ["The quote total equals its trades.", "Numbers match the studio, permit and money screens.", "Costs are rough ranges with sources."],
+  }),
+  S({
+    id: "workspace-answer",
+    title: "Workspace: The answer",
+    group: "journey",
+    kind: "page",
+    route: "/scans/{scan}",
+    tab: ["The answer", "Your plan"],
     priority: 1,
     purpose:
       "The answer. The verdict headline (e.g. 'Yes, your basement can be a second home after 1 fix'), what has to change and roughly what it costs, the scanned basement in 3D and as a floor plan, and what was found (windows, exit, stairs, ducts).",
@@ -102,21 +117,12 @@ export const SCREENS: Screen[] = [
     ],
   }),
   S({
-    id: "workspace-ideas",
-    title: "Workspace: Ideas",
-    group: "journey",
-    kind: "page",
-    route: "/scans/{scan}",
-    priority: 4,
-    purpose: "Ideas for the space: 'Make it yours', finished-basement pictures (virtually staged), styles and layouts.",
-    checks: ["Every staged picture says 'Virtually staged'.", "The pictures keep the real windows and stairs of this basement."],
-  }),
-  S({
     id: "workspace-permit",
     title: "Workspace: Permit",
     group: "journey",
     kind: "page",
     route: "/scans/{scan}",
+    tab: ["Permit"],
     priority: 2,
     purpose: "'Your permit package': the sheets, what's still needed before it can be submitted (a readiness count), and the download.",
     checks: ["The readiness count matches the items listed.", "Nothing claims the permit is approved."],
@@ -127,6 +133,7 @@ export const SCREENS: Screen[] = [
     group: "journey",
     kind: "page",
     route: "/scans/{scan}",
+    tab: ["Money"],
     priority: 4,
     purpose: "'Money you can get': grants and loans that may apply, how much, and how to apply, each with its source.",
     checks: ["Amounts and program names are consistent and sourced.", "No promise that they qualify."],
@@ -137,6 +144,7 @@ export const SCREENS: Screen[] = [
     group: "journey",
     kind: "page",
     route: "/scans/{scan}",
+    tab: ["Build"],
     priority: 5,
     purpose: "'Who builds it?': designers and builders, the timeline, and doing parts yourself.",
     checks: ["No generic contractor look (hard hats, 'Call now for a free quote!')."],
@@ -194,27 +202,6 @@ export const SCREENS: Screen[] = [
     priority: 2,
     purpose: "'Your design, from where you stood': pictures of the design from the scan's real camera angles, all agreeing with each other and the plan.",
     checks: ["Pictures keep the real windows and stairs in the right places.", "They look like real rooms a judge would believe.", "They're labelled 'Virtually staged'."],
-  }),
-  S({
-    id: "ideas",
-    title: "Swipe your style",
-    group: "journey",
-    kind: "page",
-    route: "/scans/{scan}/ideas",
-    priority: 4,
-    purpose: "Swipe a style deck made from the scan's angles, watch a mood board build, then pick a layout card.",
-    checks: ["Cards and buttons fit the phone screen.", "The layouts match the basement's shape."],
-  }),
-  S({
-    id: "book",
-    title: "The book",
-    group: "journey",
-    kind: "page",
-    route: "/scans/{scan}/book",
-    priority: 2,
-    purpose:
-      "Everything in one place: the design, pictures, mood board, the quote by trade with sources, permit readiness, money, and the steps from applying to moving in, with its PDF.",
-    checks: ["The quote total equals its trades.", "Numbers match the studio, permit and money screens.", "Costs are rough ranges with sources."],
   }),
   S({
     id: "brief",
@@ -300,7 +287,7 @@ export const SCREENS: Screen[] = [
     title: "The book (PDF pages)",
     group: "docs",
     kind: "pdf",
-    route: "/scans/{scan}/book",
+    route: "/scans/{scan}",
     priority: 4,
     browsers: ["chromium"],
     viewports: ["desktop"],

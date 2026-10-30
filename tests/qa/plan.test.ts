@@ -18,9 +18,11 @@ describe("capture plan", () => {
 
   it("covers the screens the brief names", () => {
     const ids = plan().map((s) => s.screen);
-    for (const id of ["home", "workspace-plan", "workspace-permit", "plan-confirm", "studio", "pictures", "ideas", "book", "home-story", "studio-3d", "scan-3d", "plan-overlay", "permit-pdf", "book-pdf"]) expect(ids).toContain(id);
+    for (const id of ["home", "workspace-answer", "workspace-book", "workspace-permit", "plan-confirm", "style", "layouts", "studio", "pictures", "home-story", "studio-3d", "scan-3d", "plan-overlay", "permit-pdf", "book-pdf"]) expect(ids).toContain(id);
     const routes = new Set(plan().map((s) => s.route));
-    for (const r of ["/", "/scans/sample", "/scans/sample/plan", "/scans/sample/studio", "/scans/sample/pictures", "/scans/sample/ideas", "/scans/sample/book"]) expect(routes).toContain(r);
+    for (const r of ["/", "/scans/sample", "/scans/sample/plan", "/scans/sample/style", "/scans/sample/layouts", "/scans/sample/studio", "/scans/sample/pictures"]) expect(routes).toContain(r);
+    // Every workspace tab names the button it's opened with.
+    for (const s of SCREENS.filter((x) => x.route === "/scans/{scan}" && x.kind === "page" && x.id.startsWith("workspace-"))) expect(s.tab?.length, s.id).toBeGreaterThan(0);
   });
 
   it("gives each 3D view the three fixed cameras, and the home story its scroll steps", () => {
