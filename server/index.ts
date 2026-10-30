@@ -37,6 +37,7 @@ import { FAILURE, failureOf } from "./failure";
 import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger, USED_UP } from "./limits";
 import { startSweeps } from "./sweep";
 import { DEMO_MUNICIPALITY, isDemo, labelled } from "./demo";
+import { readPhotos, savePhotos, type PhotoTake } from "./photoInput";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
 const UUID = /^[0-9a-f-]{36}$/;
@@ -108,8 +109,9 @@ app.get("/api/aerial", async (c) => {
 // The start sheet's check before filming: whether a real scan can run now (server/limits.ts).
 mountLimits(app);
 
-// Create a basement + scan from an uploaded video, then queue the work. Refused takes stay on the
-// phone: the start sheet keeps the file and offers to send it again.
+// Create a basement + scan from an uploaded video, or from 5–20 photos tagged with their rooms
+// (`photos[]` and `photoRooms`, server/photoInput.ts), then queue the work. Refused takes stay on the
+// phone: the start sheet keeps the file (or the photos) and offers to send it again.
 app.post("/api/scans", async (c) => {
   const ip = clientIp(c);
   const allowed = await allowance(ip);
@@ -117,8 +119,11 @@ app.post("/api/scans", async (c) => {
 
   const body = await c.req.parseBody();
   const video = body.video;
-  if (!(video instanceof File)) return c.json({ error: "Please attach a video." }, 400);
-  if (video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 5 minutes." }, 413);
+  // Photos are checked, turned upright and put in room order before anything is saved.
+  const photos = video instanceof File || body["photos[]"] === undefined ? null : await readPhotos(body["photos[]"], body.photoRooms);
+  if (photos && !photos.ok) return c.json({ error: photos.error }, photos.status);
+  if (!photos && !(video instanceof File)) return c.json({ error: "Please attach a video or photos." }, 400);
+  if (video instanceof File && video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 5 minutes." }, 413);
   const household = (["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : "unsure") as Household;
   // The demo house, for anyone outside Ontario: Waterloo's rules, no real address, labelled wherever it shows.
   const demo = isDemo(body.demo);
@@ -157,6 +162,7 @@ app.post("/api/scans", async (c) => {
     ...(lens ? { lens } : {}),
     ...(capture ? { capture: { device: capture.device ?? null, frames: capture.frames.length } } : {}),
     ...(body.wideAt != null && Number.isFinite(wideAt) && wideAt >= 0 && wideAt <= MAX_TAKE_S + 10 ? { wideAt } : {}),
+    ...(photos?.ok ? { photos: photos.take } : {}),
   };
   const [scan] = await db
     .insert(schema.scans)
@@ -164,13 +170,21 @@ app.post("/api/scans", async (c) => {
     .returning();
   if (capture) await storage.put(keys.capture(scan.id), Buffer.from(JSON.stringify(capture)), "application/json");
 
-  const ext = (video.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
-  const videoKey = keys.input(scan.id, ext);
-  await storage.put(videoKey, Buffer.from(await video.arrayBuffer()), video.type || "video/mp4");
+  // The input's key: the video, or a photo take's record (its photos are the frames, kept like a
+  // video's frames; "Try again" reads them again).
+  let videoKey: string;
+  if (photos?.ok) {
+    videoKey = await savePhotos(scan.id, photos.frames, photos.take);
+  } else {
+    const file = video as File;
+    const ext = (file.name.split(".").pop() || "mp4").toLowerCase().replace(/[^a-z0-9]/g, "") || "mp4";
+    videoKey = keys.input(scan.id, ext);
+    await storage.put(videoKey, Buffer.from(await file.arrayBuffer()), file.type || "video/mp4");
+  }
   await db.update(schema.scans).set({ videoKey }).where(eq(schema.scans.id, scan.id));
   await enqueue("scan", { scanId: scan.id });
 
-  return c.json({ id: scan.id, basementId: basement.id, claimToken });
+  return c.json({ id: scan.id, basementId: basement.id, claimToken, ...(photos?.ok ? { photos: photos.take } : {}) });
 });
 
 app.get("/api/scans/:id", async (c) => {
@@ -191,9 +205,12 @@ app.get("/api/scans/:id", async (c) => {
   const owner = await ownerOf(c, currentUser);
   const failure = scan.status === "error" ? failureOf(scan.error) : null;
   const demo = Boolean((scan.inputs as { demo?: boolean } | null)?.demo);
+  // A photo take's rooms: the wait screen shows the photos instead of a video.
+  const photos = (scan.inputs as { photos?: PhotoTake } | null)?.photos ?? null;
   return c.json({
     id: scan.id,
     status: scan.status,
+    photos,
     result: labelled(withMoney ?? null, demo),
     error: failure?.text ?? null,
     failure: failure && { cause: failure.cause, retry: failure.retry && Boolean(scan.videoKey) },
