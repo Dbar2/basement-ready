@@ -16,6 +16,7 @@ server="${SERVER:-http://localhost:5173}"
 [ "$server" = "live" ] && server="https://web-production-0c550.up.railway.app"
 
 xcrun simctl boot "$sim" 2>/dev/null || true
+xcrun simctl terminate "$sim" com.davidbarry.basementready 2>/dev/null || true
 xcrun simctl install "$sim" "$here/build/Build/Products/Debug-iphonesimulator/BasementReady.app"
 if [ -n "$LOG" ]; then
   xcrun simctl spawn "$sim" log stream --style compact --predicate 'subsystem == "com.davidbarry.basementready"' > "$LOG" &
