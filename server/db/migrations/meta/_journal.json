@@ -29,6 +29,13 @@
       "when": 1793322060788,
       "tag": "0003_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793370222852,
+      "tag": "0004_spend",
+      "breakpoints": true
     }
   ]
 }

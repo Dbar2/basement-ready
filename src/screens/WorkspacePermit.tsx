@@ -1,5 +1,5 @@
 // The Permit tab: we make the permit package here, the way a permit service would. Who draws and
-// signs it in this city, three measurements only a tape can give, the entrance and parking traced on
+// signs it in this city, five measurements only a tape can give, the entrance and parking traced on
 // the aerial photo, then one PDF to download (drawings, the city's forms filled in, how to submit)
 // and the city's portal with what to upload where.
 import { useEffect, useRef, useState } from "react";
@@ -59,7 +59,7 @@ const KINDS: { kind: SiteFeature["kind"]; label: string; help: string }[] = [
   { kind: "walkway", label: "Walkway", help: "Tap along the path to the unit's door, then Done." },
 ];
 
-// The lot, the house and what the owner traces, over the 2026 aerial photo.
+// The lot, the house and what the owner traces, over the 2024 aerial photo.
 function SiteTracer({ ws, save, r }: TabProps) {
   const site = ws.site;
   const p = r.property;
@@ -145,7 +145,7 @@ function SiteTracer({ ws, save, r }: TabProps) {
               ))}
             </ul>
           )}
-          <p className="note">Lot and house outlines: {site.sources.join("; ")}. Aerial photo: Region of Waterloo, 2026. Not a survey.</p>
+          <p className="note">Lot and house outlines: {site.sources.join("; ")}. Aerial photo: Region of Waterloo, 2024. Not a survey.</p>
         </div>
       </div>
     </section>

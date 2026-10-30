@@ -1,0 +1,5 @@
+// Signing for the iPhone app. Your own Apple team goes in Signing.local.xcconfig (not committed):
+//   cp Signing.local.xcconfig.example Signing.local.xcconfig
+// then set DEVELOPMENT_TEAM to the 10-character Team ID from Xcode → Settings → Accounts.
+DEVELOPMENT_TEAM =
+#include? "Signing.local.xcconfig"
