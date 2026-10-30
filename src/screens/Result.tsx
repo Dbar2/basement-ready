@@ -1,12 +1,9 @@
-// The answer (brand/explorations/M3-decision-plan.png): a decision first, then the plan to get there,
-// the money, and only then the detail behind it. Nothing here asks a homeowner what a designer knows.
-import { useEffect, useState } from "react";
-import { ANALYSIS_FPS, aerialUrl, answerQuestion, frameUrl, getScan, sampleEarlyAnswers, type AnyAnswer, type Detection, type ScanResult } from "../api";
+// "Your plan", the workspace's first tab (brand/explorations/M3-decision-plan.png): a decision first,
+// then what it could look like and what has to change, and only then the detail behind it. Nothing
+// here asks a homeowner what a designer knows. The money, the permit and the build have their own tabs.
+import { ANALYSIS_FPS, aerialUrl, frameUrl, type AnyAnswer, type Detection, type ScanResult } from "../api";
 import { Answered, Questions } from "../components/Questions";
-import { GetItDone, HowToApply, MoneySection } from "../components/Money";
-import { AccountNav, SaveCta } from "../auth";
-import { Logo } from "../components/Logo";
-import { SiteFooter } from "../marketing/parts";
+import { SaveCta } from "../auth";
 import { ScanViews } from "../components/ScanViews";
 import { StagedViews } from "../components/StagedViews";
 
@@ -16,7 +13,7 @@ const range = (lo: number | null | undefined, hi: number | null | undefined) =>
 const two = (n: number) => String(n).padStart(2, "0");
 const checkedOn = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-CA", { month: "short", year: "numeric" });
 
-const STATUS = {
+export const STATUS = {
   likely_ok: "looks right",
   likely_fix: "needs work",
   needs_measurement: "needs a measurement",
@@ -38,75 +35,11 @@ function Proof({ scanId, d }: { scanId: string; d: Detection }) {
   );
 }
 
-async function sharePlan() {
-  const url = window.location.href;
-  if (navigator.share) await navigator.share({ title: "Our basement plan", url }).catch(() => {});
-  else await navigator.clipboard?.writeText(url).catch(() => {});
-}
+export type Changes = { before: string; after: string; lines: string[] } | null;
 
-export function Result({ scanId, onRestart }: { scanId: string; onRestart: () => void }) {
-  const [r, setR] = useState<ScanResult | null>(null);
-  const [busyRule, setBusyRule] = useState<string | null>(null);
-  const [changes, setChanges] = useState<{ before: string; after: string; lines: string[] } | null>(null);
-  const [answerError, setAnswerError] = useState<string | null>(null);
-  // The sample isn't saved anywhere, so its answers live here.
-  const [sampleAnswers, setSampleAnswers] = useState<Record<string, AnyAnswer | null>>({});
-  useEffect(() => {
-    void getScan(scanId).then(async (s) => {
-      // The sample's answers from the wait screen, applied the way a real scan applies them, over
-      // the money answers the sample comes with.
-      const told = Object.fromEntries((s.result?.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer]));
-      const early = scanId === "sample" ? { ...told, ...sampleEarlyAnswers() } : {};
-      if (s.result && Object.keys(early).length) {
-        const { household, ...answers } = early;
-        const res = await fetch("/api/recheck", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ result: s.result, answers, household: household ?? s.result.household }),
-        });
-        if (res.ok) {
-          setSampleAnswers(early);
-          return setR((await res.json()).result);
-        }
-      }
-      setR(s.result);
-    });
-  }, [scanId]);
-
-  const answer = async (ruleId: string, value: AnyAnswer | null) => {
-    if (!r) return;
-    setBusyRule(ruleId);
-    setAnswerError(null);
-    try {
-      const next = await answerQuestion(scanId, r, sampleAnswers, ruleId, value);
-      if (scanId === "sample") setSampleAnswers((a) => ({ ...a, [ruleId]: value }));
-      // Say what moved, in plain words.
-      const lines = next.findings
-        .filter((f) => r.findings.find((o) => o.ruleId === f.ruleId)?.status !== f.status)
-        .map((f) => `${f.title} → ${STATUS[f.status]}`);
-      if ((next.money?.total ?? 0) !== (r.money?.total ?? 0)) lines.push(`You qualify for up to ${money(next.money?.total ?? 0)}`);
-      setChanges({ before: r.headline, after: next.headline, lines });
-      setR(next);
-    } catch (err) {
-      setAnswerError(err instanceof Error ? err.message : "We couldn't check that.");
-    } finally {
-      setBusyRule(null);
-    }
-  };
-
-  // The photos arrive a little after the answer: check back until they're in.
-  useEffect(() => {
-    if (scanId === "sample" || r?.concepts?.status !== "pending") return;
-    const id = window.setInterval(() => {
-      void getScan(scanId).then((s) => {
-        if (s.result?.concepts?.status !== "pending") setR((prev) => (prev ? { ...prev, concepts: s.result!.concepts } : prev));
-      });
-    }, 4000);
-    return () => clearInterval(id);
-  }, [scanId, r?.concepts?.status]);
-
-  if (!r) return <main className="result-loading"><Logo /></main>;
-
+export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string | null; changes: Changes; answerError: string | null; onAnswer: (ruleId: string, value: AnyAnswer | null) => void }) {
+  const { r, scanId, busyRule, changes, answerError } = props;
+  const answer = props.onAnswer;
   const byId = new Map(r.detections.map((d) => [d.id, d]));
   const questions = r.findings.filter((f) => f.status === "needs_answer" && !f.answer);
   const answered = r.findings.filter((f) => f.answer && (f.answer.outcome !== "unknown" || f.answer.value === "unsure"));
@@ -120,15 +53,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
   const p = r.property;
 
   return (
-    <main className="result" data-verdict={r.verdict}>
-      <header className="nav">
-        <Logo />
-        <span className="nav-right">
-          <button className="link-quiet" onClick={onRestart}>New scan</button>
-          <AccountNav />
-        </span>
-      </header>
-
+    <div data-verdict={r.verdict}>
       <section className="decision">
         <p className="eyebrow mono">
           {r.verdict === "no" ? "Not likely" : "Likely"} · {r.city ?? "Waterloo"} rules checked {checkedOn(r.compiledAt)}
@@ -170,16 +95,12 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
           <h2>{questions.length === 1 ? "One thing only you know" : questions.length ? `${questions.length} things only you know` : "What you told us"}</h2>
           {questions.length > 0 && <p className="lede">The answer re-checks as soon as you tap. Not sure is fine: your designer will check.</p>}
           {answerError && <p className="error" role="alert">{answerError}</p>}
-          <Questions findings={questions} busyRule={busyRule} onAnswer={(id, v) => void answer(id, v)} />
-          <Answered findings={answered} busyRule={busyRule} onClear={(id) => void answer(id, null)} />
+          <Questions findings={questions} busyRule={busyRule} onAnswer={(id, v) => answer(id, v)} />
+          <Answered findings={answered} busyRule={busyRule} onClear={(id) => answer(id, null)} />
         </section>
       )}
 
       <StagedViews scanId={scanId} plan={r.plan ?? null} layout={r.layout ?? null} concepts={r.concepts ?? null} />
-
-      <MoneySection r={r} busy={busyRule} onAnswer={(id, v) => void answer(id, v)} />
-
-      {r.steps && <HowToApply steps={r.steps} />}
 
       {r.fixGroups.length > 0 && (
         <section className="block">
@@ -321,19 +242,7 @@ export function Result({ scanId, onRestart }: { scanId: string; onRestart: () =>
         </section>
       )}
 
-      <GetItDone r={r} scanId={scanId} onShare={() => void sharePlan()} />
-
       {r.heldBack > 0 && <p className="note">We held back {r.heldBack} claim{r.heldBack === 1 ? "" : "s"} the video couldn't prove.</p>}
-      <SiteFooter />
-
-      <div className="result-bar">
-        <a className="btn btn-primary" href={r.pros.registry.searchUrl ?? r.pros.registry.url} target="_blank" rel="noreferrer">
-          Get a designer
-        </a>
-        <button className="btn btn-ghost" onClick={() => void sharePlan()}>
-          Share my plan
-        </button>
-      </div>
-    </main>
+    </div>
   );
 }

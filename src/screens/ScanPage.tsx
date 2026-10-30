@@ -1,10 +1,10 @@
-// /scans/:id. While the scan runs this is the live screen; once done, the same URL shows the answer.
+// /scans/:id. While the scan runs this is the live screen; once done, the same URL is the workspace.
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { getScan } from "../api";
 import { Logo } from "../components/Logo";
 import { LiveScan } from "./LiveScan";
-import { Result } from "./Result";
+import { Workspace } from "./Workspace";
 
 export function ScanPage() {
   const { scanId } = useParams({ from: "/scans/$scanId" });
@@ -36,5 +36,5 @@ export function ScanPage() {
     );
   }
   if (phase === "live") return <LiveScan scanId={scanId} onDone={() => setPhase("result")} />;
-  return <Result scanId={scanId} onRestart={() => navigate({ to: "/" })} />;
+  return <Workspace scanId={scanId} onRestart={() => navigate({ to: "/" })} />;
 }

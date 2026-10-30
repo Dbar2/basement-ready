@@ -1,0 +1,557 @@
+{
+  "schemaVersion": "1.0",
+  "compiledAt": "2026-10-29",
+  "scope": "Ontario-wide facts for the permit package and the do-it-yourself path: standard drawing notes, smoke and CO alarm placement, who may do which work, and what needs a licensed pro. City-specific facts (forms, portals, inspections, who signs) are in each city pack's `permitPackage`.",
+  "notes": [
+    {
+      "id": "general_code",
+      "title": "General",
+      "text": "All work to Ontario's 2024 Building Code (O. Reg. 163/24), Part 9, using the Part 11 compliance alternatives for the existing house where they apply. The owner takes responsibility for the design and construction conforming to the Code.",
+      "source": {
+        "title": "O. Reg. 163/24: Building Code (e-Laws)",
+        "url": "https://www.ontario.ca/laws/regulation/240163",
+        "section": "s. 1-2",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "ceiling_heights",
+      "title": "Ceiling heights",
+      "text": "Finished ceiling height in the unit at least 1.95 m over the required floor area, connected to each room's entrance; clear height under beams and ducts at least 1.85 m.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.5.3.1.(2), (3) and (4)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "fire_separation",
+      "title": "Fire separation between the homes",
+      "text": "Separate the unit from the rest of the house with a 45-minute fire separation, or with a continuous smoke-tight barrier of 15.9 mm (5/8\") Type X gypsum board on the underside of the floor framing above and on both sides of walls between the homes. Joints taped, penetrations sealed, doors in the separation self-closing.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.9.16.(1), (4) and (5)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "supports",
+      "title": "Beams and posts",
+      "text": "Walls, columns and beams that hold up the floor between the two homes are covered with 15.9 mm (5/8\") Type X gypsum board.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.8.3.(2)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "service_room",
+      "title": "Furnace room",
+      "text": "A furnace or water heater serving both homes sits in a service room lined with 15.9 mm (5/8\") Type X gypsum board on both sides of its walls and on the underside of the ceiling framing.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.10.4.(1) and (2)(b)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "fuel_burning"
+    },
+    {
+      "id": "smoke_alarms",
+      "title": "Smoke alarms",
+      "text": "At least one smoke alarm on each storey of each home, one in each sleeping room, and one between the sleeping rooms and the rest of the storey (in the hallway if there is one), on or near the ceiling, installed to CAN/ULC-S553. Hard-wired with no disconnect switch and a battery backup. Interconnected so any alarm sounds all alarms in both homes. Each has a visual (strobe) signal to NFPA 72 s. 18.5.3, at least 175 cd in sleeping rooms.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.19.3.(1)-(6), 9.10.19.4.(1), 9.10.19.5.(2)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "co_alarms",
+      "title": "Carbon monoxide alarms",
+      "text": "With a fuel-burning furnace or water heater: a CO alarm next to each sleeping room in the unit (in the combined living and sleeping area of a studio), in a bedroom that shares a wall, floor or ceiling with the furnace room, and in a service room with a fuel-burning appliance outside the units. Hard-wired with battery backup, and interconnected so one alarm sounds all CO alarms in the house, with a visual signal.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.32.3.9A.(2)-(4), 9.32.3.9B.(1), 9.32.3.9C.(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "fuel_burning"
+    },
+    {
+      "id": "exit",
+      "title": "Way out",
+      "text": "The unit has its own door to the outside, or a shared exit separated by a 30-minute fire separation that doesn't pass through the other home or a service room, with interconnected smoke alarms in both homes.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 11",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+        "section": "Table 11.5.1.1.-C, C139",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "escape_window",
+      "title": "Bedroom escape window",
+      "text": "Each floor level with a bedroom has an outside window that opens from inside without tools and stays open, with an unobstructed opening of at least 0.35 m² and no dimension under 380 mm. A window well leaves at least 550 mm clear in front of the window; any well cover opens from inside without keys or tools.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.9.10.1.(1), (3), (4) and (5)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "heating_air",
+      "title": "Heating and air",
+      "text": "No duct connects one home to the other and no air is recirculated between them. In a house 5 or more years old one existing forced-air system may serve both if a duct smoke detector shuts off the furnace's fuel and power when it senses smoke; otherwise the unit gets its own heating.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.33.1.1.(3)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "sound",
+      "title": "Sound between the homes",
+      "text": "STC 50 (or ASTC 47) between the homes; in a house 5 or more years old, STC 43 / ASTC 40, or 150 mm of sound-absorbing insulation in the joist spaces, filled stud spaces, resilient channel on one side and at least 12.7 mm gypsum board on ceilings and both sides of walls.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.11.1.1.(1)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "stairs",
+      "title": "Stairs",
+      "text": "Stairs serving the house with the unit keep at least 1,950 mm clear headroom (1,850 mm under beams and ducts in the unit) and are at least 860 mm wide.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.8.2.1.(2), 9.8.2.2.(1), (3) and (4)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "plumbing",
+      "title": "Plumbing",
+      "text": "The unit has a kitchen sink, a bathroom sink, a toilet and a tub or shower with hot water, access to laundry (it may be shared), a floor drain, and its own water shut-off valve where the supply enters the unit.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.31.4.1.(1)",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "room_sizes",
+      "title": "Room sizes",
+      "text": "Rooms meet the minimum areas of Subsections 9.5.3A. to 9.5.3D. (living, dining, kitchen, bedrooms). Where living, dining, bedroom and kitchen are combined for up to two people, the combined area is at least 13.5 m². A door is provided to the room with the toilet.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.5.3A.-9.5.3E.1., 9.5.3F.2.",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "doors",
+      "title": "Door sizes",
+      "text": "Doorways at least 810 mm wide for the unit's entrance, the line of passage to the basement and utility rooms; 760 mm for bedrooms and other rooms; 610 mm for bathrooms; 1,980 mm high (1,890 mm inside a secondary suite where the ceiling is at the suite minimum).",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.5.5.1.(1) and (2), Table 9.5.5.1",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "framing",
+      "title": "New walls",
+      "text": "Non-loadbearing walls: 38 x 89 mm (2x4) studs at no more than 400 mm (16\") on centre, a bottom plate on every wall, and a single top plate (two top plates only in loadbearing walls). Wood on the concrete floor is pressure-treated or sits on 0.05 mm polyethylene or Type S roll roofing.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "Table 9.23.10.1, 9.23.11.2.(1), 9.23.11.3.(1), 9.23.2.3.(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "fire_doors",
+      "title": "Doors in the fire separation",
+      "text": "A door in the separation between the homes is a 20-minute closure or a 45 mm solid-core wood door, and every door in a fire separation has a self-closing device.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "Table 9.10.13.1, 9.10.13.2, 9.10.13.10.(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "firestopping",
+      "title": "Fire stopping",
+      "text": "Pipes, wires and ducts through the fire separation are sealed with fire-stopping products tested to CAN/ULC-S115; exhaust fans and plastic pot lights in the suite ceiling get a drywall box in the joist space.",
+      "source": {
+        "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+        "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+        "section": "pp. 8-10, citing 9.10.9.6. and 9.10.9.2.",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "entrance_landing",
+      "title": "Entrance to the unit",
+      "text": "A level landing at least 860 x 860 mm at the unit's entrance door, and a door viewer, glazed door or sidelight.",
+      "source": {
+        "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+        "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+        "section": "p. 27, citing 9.8.6. and 9.7.2.1.",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "range",
+      "title": "Kitchen range",
+      "text": "A 14-50R range receptacle in the unit unless a built-in cooktop or oven is installed; the cooktop's hood ducted outside, 600 mm clear above the burners with a metal hood.",
+      "source": {
+        "title": "2024 Ontario Amendments to the Canadian Electrical Code (ESA); Kitchener inspection guide",
+        "url": "https://esasafe.com/assets/files/esasafe/pdf/amendments/2024/2024-Ontario-Amendments-Final.pdf",
+        "section": "Rule 26-744 4); Kitchener guide p. 31 citing 9.32.3.10.(6)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "electrical_permit",
+      "title": "Electrical",
+      "text": "Electrical work is filed with the Electrical Safety Authority before it starts (a building permit doesn't cover it) and inspected at rough-in, before anything is covered, and at final; ESA then issues a Certificate of Acceptance.",
+      "source": {
+        "title": "Notifications and Inspections (Electrical Safety Authority)",
+        "url": "https://esasafe.com/compliance/what-you-need-to-know/",
+        "section": null,
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    },
+    {
+      "id": "insulation",
+      "title": "Insulation",
+      "text": "Renovation energy rules come from Part 11: new insulation at least matches what was there, with no second vapour barrier over old blanket insulation, and foam insulation covered. In Waterloo, an energy efficiency design summary (EEDS) form goes in when insulation changes.",
+      "source": {
+        "title": "SB-12 1.1.1.1.(4); Part 11, 11.3.1.2 and C207; Kitchener inspection guide pp. 32-34",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/sb-12-energy-efficiency-housing",
+        "section": "SB-12 1.1.1.1.(4); Part 11 11.3.1.2, C207",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "when": "always"
+    }
+  ],
+  "alarms": [
+    {
+      "text": "Smoke alarms: each storey, each sleeping room, and between the sleeping rooms and the rest of the storey (the hallway if there is one); on or near the ceiling; visual signal at least 175 cd in sleeping rooms.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.19.3.(1), (3), (4) and (6)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    {
+      "text": "CO alarms with a fuel-burning appliance: adjacent to each sleeping room in the unit (in the combined living and sleeping area of a studio), in a sleeping room sharing a wall, floor or ceiling with a room that has a fuel-burning appliance, and in a service room with a fuel-burning appliance outside the units.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.32.3.9A.(2)-(4), 9.32.3.9B.(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    }
+  ],
+  "electrical": {
+    "receptacleSpacingM": 1.8,
+    "counterSpacingM": 0.9,
+    "text": "Receptacles placed so no point along a usable wall's floor line is more than 1.8 m from one, and no point along a kitchen counter more than 900 mm from one. These distances are from British Columbia's regulator quoting the national rule text; Ontario's 2024 code text is sold by CSA, so confirm with ESA.",
+    "source": {
+      "title": "Technical Safety BC Directive D-EL 2016-01 (quoting the Canadian Electrical Code, Rule 26-722)",
+      "url": "https://www.technicalsafetybc.ca/regulatory-resources/regulatory-notices/directive-bc-electrical-code-section-26-installation-electrical-equipment",
+      "section": "Rule 26-722 a) and d)iii)",
+      "retrieved": "2026-10-29"
+    },
+    "verified": false,
+    "notes": "The 2024 Ontario Electrical Safety Code (in force 2025-05-01) and ESA's bulletins are paid CSA products; the Ontario rule number and any Ontario changes to these distances were not read.",
+    "esaHomeownerFees": {
+      "bands": [
+        {
+          "upTo": 10,
+          "CAD": 64
+        },
+        {
+          "upTo": 30,
+          "CAD": 143
+        },
+        {
+          "upTo": 40,
+          "CAD": 220
+        },
+        {
+          "upTo": null,
+          "CAD": 340
+        }
+      ],
+      "text": "Homeowner (NC) rates for renovation wiring in one dwelling unit, no service work, by outlet count; the minimum notification fee is $92. There's no separate line for a new unit.",
+      "source": {
+        "title": "2026 Electrical Safety Services Fees: Residential Fees Quick Reference Guide (ESA)",
+        "url": "https://esasafe.com/assets/files/esasafe/pdf/Fees/2026-Residential-Fees-Reference-Guide.pdf",
+        "section": "p. 2 'Additions / Alterations / Renovations'",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "notes": "Whether ESA charges a new unit as one or two dwelling units wasn't confirmed."
+    }
+  },
+  "trades": [
+    {
+      "id": "design",
+      "title": "Drawing the plans",
+      "owner": "yes",
+      "detail": "You may design your own house, or a unit inside it, without designer registration.",
+      "permit": "Part of the building permit",
+      "registry": null,
+      "source": {
+        "title": "2024 Building Code Compendium, Division C Part 3",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications",
+        "section": "3.2.5.1.(3)(b)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "notes": "Waterloo's 2025 ARU guide says an architect, engineer or BCIN designer; its web page and the code allow the owner."
+    },
+    {
+      "id": "building",
+      "title": "Running the job",
+      "owner": "yes",
+      "detail": "You can be the permit applicant and your own builder: you book the inspections and keep the approved drawings on site.",
+      "permit": "The building permit",
+      "registry": null,
+      "source": {
+        "title": "Application for a Permit to Construct or Demolish (effective 2026-02-16)",
+        "url": "https://www.ontario.ca/files/2026-01/mmah-building-development-application-for-a-permit-to-construct-or-demolish-2026-en-2026-01-27.pdf",
+        "section": "Sections C and E: 'Applicant is: Owner'; 'Builder (if known)'",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    {
+      "id": "electrical",
+      "title": "Electrical",
+      "owner": "with_permit",
+      "detail": "You may wire your own house, including a unit you'll rent, if you file with ESA before you start and pass its inspections. Only you: friends and family can't do it for you, and anyone you hire must be a licensed electrical contractor.",
+      "permit": "ESA notification (homeowner rates in the 2026 fee guide)",
+      "registry": {
+        "label": "ESA contractor locator",
+        "url": "https://licensing.esasafe.com/contractor-locator-tool/"
+      },
+      "source": {
+        "title": "O. Reg. 570/05, s. 2, para. 3; ESA FAQ 'Can a homeowner file a notification of work?'",
+        "url": "https://esasafe.com/contractor-licensing-master-electricians/can-a-homeowner-file-a-notification/",
+        "section": "'homeowners are only allowed to do electrical work in their own home or rental building'",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    {
+      "id": "plumbing",
+      "title": "Plumbing",
+      "owner": "ask",
+      "detail": "Plumbing is a compulsory trade in Ontario and no homeowner exemption is written in the regulation. Kitchener lets an owner who lives at the house do the suite's plumbing; Waterloo and Cambridge don't say. Ask your City before you plumb it yourself, and hire a licensed plumber otherwise.",
+      "permit": "Inspected under the building permit",
+      "registry": null,
+      "source": {
+        "title": "Building Opportunities in the Skilled Trades Act, 2021, s. 6; O. Reg. 877/21; Kitchener inspection guide p. 28",
+        "url": "https://www.ontario.ca/page/compulsory-trades-and-enforcement",
+        "section": "'All exemptions are prescribed in the General Regulation (O. Reg. 877/21)'",
+        "retrieved": "2026-10-29"
+      },
+      "verified": false,
+      "notes": "No provincial homeowner exemption found; Kitchener's guide allows a resident owner. A provincial enforcement blitz on electrical and plumbing work runs 2026-10-01 to 2027-01-31."
+    },
+    {
+      "id": "gas",
+      "title": "Gas",
+      "owner": "no",
+      "detail": "Only a certified gas technician working for a TSSA-registered contractor may install, move or connect gas lines or appliances. There's no homeowner exception.",
+      "permit": "The contractor's TSSA work",
+      "registry": {
+        "label": "TSSA registered contractors",
+        "url": "https://www.tssa.org/fuels-contractor"
+      },
+      "source": {
+        "title": "O. Reg. 212/01 (Gaseous Fuels), s. 6(1) and s. 21(1)",
+        "url": "https://www.ontario.ca/laws/regulation/010212",
+        "section": "s. 6(1), 21(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    {
+      "id": "structural",
+      "title": "Structure",
+      "owner": "with_permit",
+      "detail": "A window opening in the foundation up to 1.2 m wide can follow the code's rules, with its lintel shown on your drawings. Wider openings, and removing or adding beams, posts or load-bearing walls, need an engineer's design.",
+      "permit": "Part of the building permit",
+      "registry": null,
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.15.4.3.(3); 9.4.1.1.(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "notes": "Kitchener sets the foundation cut at 3'-11\" before an engineer may be needed (inspection guide p. 18)."
+    },
+    {
+      "id": "hvac",
+      "title": "Heating",
+      "owner": "no",
+      "detail": "A furnace or water heater that burns gas is installed by a TSSA-registered contractor. A separate heating system for the unit is sized by a heat-loss calculation (CSA F280); Kitchener wants a BCIN HVAC designer's Schedule 1 for it.",
+      "permit": "HVAC permit where the City has one",
+      "registry": null,
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9; Kitchener duplex guide",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.33.5.1.(1), 9.33.4.1.(1); Kitchener process guide p. 1",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    }
+  ],
+  "needsPro": [
+    {
+      "id": "egress_cut",
+      "title": "A new or wider foundation window",
+      "who": "Professional engineer (opening and lintel); a concrete cutter",
+      "when": "egress_cut",
+      "detail": "The code treats the wall under a foundation opening wider than 1.2 m as unsupported, and going past its tables means engineering. Kitchener puts the line at a 3'-11\" cut. An egress window big enough for 0.35 m² usually needs a wider cut: attach the engineer's drawing or letter.",
+      "registry": null,
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 9; Kitchener inspection guide p. 18",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.15.4.3.(3), 9.4.1.1.(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    {
+      "id": "beams",
+      "title": "Moving or adding beams, posts or load-bearing walls",
+      "who": "Professional engineer, or engineered software for LVL beams",
+      "when": "beam_change",
+      "detail": "Cities need a permit and drawings showing new beam sizes, supports and spans; LVL beams need software or an engineer's design.",
+      "registry": null,
+      "source": {
+        "title": "Residential building permits (City of Kitchener); Project Information: Residential",
+        "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
+        "section": "'Removing a load-bearing wall'",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    {
+      "id": "separate_heating",
+      "title": "Separate heating for the unit",
+      "who": "BCIN HVAC designer (heat loss); TSSA-registered contractor for gas equipment",
+      "when": "separate_heating",
+      "detail": "Heating is sized from a CSA F280 heat-loss calculation. Kitchener asks for a BCIN HVAC designer's Schedule 1 with the calculations; Cambridge lists heat loss/gain calculations among its usual documents.",
+      "registry": {
+        "label": "QuARTS registry (HVAC - House)",
+        "url": "https://www.search.quarts.mah.gov.on.ca/en"
+      },
+      "source": {
+        "title": "2024 Building Code Compendium 9.33.5.1.; Kitchener process guide p. 1",
+        "url": "https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf",
+        "section": "p. 1, item 4",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true,
+      "notes": "Kitchener's requirement sits uneasily with the owner design exemption in Div. C 3.2.5.1.(3)(b); ask whether your own F280 calculation is accepted."
+    },
+    {
+      "id": "gas",
+      "title": "Any gas line or appliance",
+      "who": "TSSA-registered contractor with a certified gas technician",
+      "when": "gas_work",
+      "detail": "Moving the furnace, adding a gas range or a second meter: only a certificate holder may do it. In Kitchener a second meter needs a TSSA technician's tag on each gas line.",
+      "registry": {
+        "label": "TSSA registered contractors",
+        "url": "https://www.tssa.org/fuels-contractor"
+      },
+      "source": {
+        "title": "O. Reg. 212/01, s. 6(1) and 21(1)",
+        "url": "https://www.ontario.ca/laws/regulation/010212",
+        "section": "s. 6(1), 21(1)",
+        "retrieved": "2026-10-29"
+      },
+      "verified": true
+    },
+    {
+      "id": "plumbing",
+      "title": "Plumbing, unless your City says you may",
+      "who": "Licensed plumber",
+      "when": "always",
+      "detail": "Plumbing is a compulsory trade and the regulation lists no homeowner exemption. Kitchener lets an owner who lives at the house do it; ask Waterloo or Cambridge first.",
+      "registry": null,
+      "source": {
+        "title": "Compulsory trades and enforcement (Government of Ontario)",
+        "url": "https://www.ontario.ca/page/compulsory-trades-and-enforcement",
+        "section": null,
+        "retrieved": "2026-10-29"
+      },
+      "verified": false
+    }
+  ]
+}
