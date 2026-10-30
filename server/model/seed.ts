@@ -3,7 +3,7 @@
 // the headroom under them), then a few designs for the suite, each permit-ready from the start: the
 // stair and furnace room behind 30-minute walls, a 20-minute door with a closer into the suite, a
 // 15-minute ceiling, the bedroom on an escape window, 81 cm doors, alarms by the rules, a clear way out.
-import type { Plan as ScanPlan, RoomResult } from "../../src/api";
+import type { BasementPlan, Plan as ScanPlan, RoomResult } from "../../src/api";
 import { basementRooms } from "../../src/components/basementPlan";
 import { suggestLayout, type Layout, type LayoutOptions } from "../layout";
 import type { Plan, Side } from "../plan";
@@ -28,6 +28,7 @@ type Tape = { egressWidthMm?: number | null; egressHeightMm?: number | null; egr
 type ScanResultLike = {
   plan?: ScanPlan | null;
   rooms?: RoomResult[];
+  floorPlan?: BasementPlan | null;
   mainRoom?: number | null;
   measurements?: { ceilingHeightM: number | null; clearances: { detectionId: string; label: string; clearanceM: number }[] } | null;
 };
@@ -44,6 +45,7 @@ function sideWall(b: Box, side: Side): { a: Pt; b: Pt } {
 // ---- The basement as it is ----
 
 export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Existing | null {
+  if (result.floorPlan?.rooms.length) return existingFromPlan(result.floorPlan, result, tape);
   const placed = basementRooms(result.rooms);
   const areas: { index: number; name: string; plan: ScanPlan; clearances: { detectionId: string; label: string; clearanceM: number }[] }[] = placed
     ? placed.map((p) => ({ index: p.room.index, name: p.room.name, plan: p.plan, clearances: p.room.measurements?.clearances ?? [] }))
@@ -133,6 +135,84 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
     fixtures,
     ceilingM: tape.ceilingMm ? tape.ceilingMm / 1000 : (main.ceilingHeightM ?? result.measurements?.ceilingHeightM ?? null),
     scale: { source, factor: 1 },
+    confirmedAt: null,
+  };
+}
+
+const PLAN_KINDS: RoomKind[] = ["bedroom", "bathroom", "kitchen", "living", "mechanical", "stairs", "closet", "storage", "laundry", "hall", "other"];
+
+// An app take's basement as its whole plan read it (server/floorplan.ts): rooms as polygons, walls with
+// their own thickness (the camera never saw the ones marked guess, or saw through them), the doors and
+// windows on them, and what stands in the rooms, all in the basement frame with the floor at 0.
+export function existingFromPlan(plan: BasementPlan, result: ScanResultLike, tape: Tape = {}): Existing {
+  const walls: Wall[] = plan.walls.map((w) => ({
+    id: w.id,
+    a: [r3(w.a[0]), r3(w.a[1])],
+    b: [r3(w.b[0]), r3(w.b[1])],
+    thicknessM: r3(w.thicknessM),
+    kind: w.kind,
+    rating: null,
+    ...(w.guess ? { guess: true } : {}),
+  }));
+  const openings: Opening[] = plan.openings
+    .filter((o) => walls.some((w) => w.id === o.wallId))
+    .map((o) => ({
+      id: o.id,
+      wallId: o.wallId,
+      kind: o.kind,
+      offsetM: r3(o.offsetM),
+      widthM: r3(o.widthM),
+      heightM: o.heightM ?? null,
+      ...(o.kind === "window" ? { sillM: o.sillM ?? null } : {}),
+      status: "existing" as const,
+      ...(o.detectionId ? { detectionId: o.detectionId } : {}),
+    }));
+  const fixtures: Fixture[] = plan.fixtures.map((f) => ({
+    id: f.id,
+    kind: f.kind,
+    at: [r3(f.at[0]), r3(f.at[1])],
+    ...(f.sizeM ? { sizeM: [r3(f.sizeM[0]), r3(f.sizeM[1])] as Pt } : FIXTURE_SIZE[f.kind] ? { sizeM: FIXTURE_SIZE[f.kind] } : {}),
+    ...(f.heightM != null ? { heightM: f.heightM } : {}),
+    ...(f.detectionId ? { detectionId: f.detectionId } : {}),
+  }));
+  // Headroom SAM measured under something the plan didn't place: by the room's middle, for them to drag.
+  const clear = (result.rooms ?? []).flatMap((r) => r.measurements?.clearances ?? []).filter((c) => c.clearanceM >= MIN_OVERHEAD_M && !fixtures.some((f) => f.detectionId === c.detectionId));
+  const biggest = [...plan.rooms].sort((a, b) => b.areaM2 - a.areaM2)[0];
+  const names = new Set<string>();
+  const rooms: Room[] = plan.rooms.map((r, i) => {
+    const kind: RoomKind = PLAN_KINDS.includes(r.kind as RoomKind) ? (r.kind as RoomKind) : "other";
+    let name = r.name ?? (r === biggest ? "Main room" : kind === "mechanical" ? "Furnace room" : kind === "closet" ? "Closet" : kind === "stairs" ? "Stairs" : r.low ? "Low room" : `Room ${i + 1}`);
+    for (let n = 2; names.has(name); n++) name = `${name.replace(/ \d+$/, "")} ${n}`;
+    names.add(name);
+    return { id: r.id, polygon: r.polygon.map(([x, z]) => [r3(x), r3(z)] as Pt), kind, name, unit: 1, ceilingM: r.ceilingM };
+  });
+  for (const c of clear) {
+    const kind: FixtureKind = /bulkhead/i.test(c.label) ? "bulkhead" : /beam/i.test(c.label) ? "beam" : "duct";
+    const b = bounds(biggest.polygon);
+    const long = b.maxX - b.minX >= b.maxZ - b.minZ;
+    fixtures.push({
+      id: nextId(kind, fixtures),
+      kind,
+      at: [r3((b.minX + b.maxX) / 2), r3((b.minZ + b.maxZ) / 2)],
+      sizeM: long ? [r3(b.maxX - b.minX), 0.3] : [0.3, r3(b.maxZ - b.minZ)],
+      heightM: c.clearanceM,
+      detectionId: c.detectionId,
+      guess: true,
+    });
+  }
+  const big = openings.filter((o) => o.kind === "window").sort((a, b) => b.widthM - a.widthM)[0];
+  if (big && (tape.egressWidthMm || tape.egressHeightMm)) {
+    if (tape.egressWidthMm) big.widthM = tape.egressWidthMm / 1000;
+    if (tape.egressHeightMm) big.heightM = tape.egressHeightMm / 1000;
+    if (tape.egressSillMm) big.sillM = tape.egressSillMm / 1000;
+  }
+  return {
+    walls,
+    openings,
+    rooms,
+    fixtures,
+    ceilingM: tape.ceilingMm ? tape.ceilingMm / 1000 : (biggest.ceilingM ?? plan.ceilingM ?? result.measurements?.ceilingHeightM ?? null),
+    scale: { source: "arkit", factor: 1 },
     confirmedAt: null,
   };
 }
