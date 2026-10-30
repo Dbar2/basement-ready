@@ -17,18 +17,28 @@ function auth(): Record<string, string> {
 // Every call to Meta goes out here, so tests can record and replay them (server/replay.ts).
 const call = (route: string, init: RequestInit = {}) => serviceFetch("meta", BASE, route, init, auth);
 
-export async function responses(body: unknown): Promise<any> {
+export async function responses(body: unknown, signal?: AbortSignal): Promise<any> {
   const res = await call("/responses", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    ...(signal ? { signal } : {}),
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`Meta API ${res.status}: ${text.slice(0, 300)}`);
   const r = JSON.parse(text);
-  // Spark bills by the token; SAM by the frame, counted where it's called.
-  if (/spark/.test(String((body as { model?: string }).model))) charge("spark", (r.usage?.input_tokens ?? 0) * PRICES.sparkIn + (r.usage?.output_tokens ?? 0) * PRICES.sparkOut);
+  // Spark and Wonder bill by the token; SAM by the frame, counted where it's called.
+  const cost = tokenCost(String((body as { model?: string }).model), r.usage);
+  if (cost) charge(cost.kind, cost.usd);
   return r;
+}
+
+// What a Spark or Wonder answer cost, from its token counts. Null for a model billed some other way.
+export function tokenCost(model: string, usage: { input_tokens?: number; output_tokens?: number } | undefined) {
+  const tokens = (inn: number, out: number) => (usage?.input_tokens ?? 0) * inn + (usage?.output_tokens ?? 0) * out;
+  if (/spark/.test(model)) return { kind: "spark", usd: tokens(PRICES.sparkIn, PRICES.sparkOut) };
+  if (/wonder/.test(model)) return { kind: "wonder", usd: tokens(PRICES.wonderIn, PRICES.wonderOut) };
+  return null;
 }
 
 // Pulls the text out of a Responses API result.
