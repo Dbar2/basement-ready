@@ -1,6 +1,6 @@
 // A room's plan moved into the one basement plan: turned by its placement's quarter turns and shifted,
 // so every room draws in the same frame. Walls, openings, stairs and fixtures all move with it.
-import type { Layout, Plan, PlanSide, RoomPlacement, RoomResult } from "../api";
+import { FIXTURE_LABEL, type Layout, type Plan, type PlanSide, type RoomPlacement, type RoomResult } from "../api";
 
 const NORMAL: Record<PlanSide, [number, number]> = { minX: [-1, 0], maxX: [1, 0], minZ: [0, -1], maxZ: [0, 1] };
 
@@ -98,7 +98,7 @@ export function scanLabels(plans: Plan[]): { text: string; kind: "window" | "exi
         return { text: o.kind === "window" ? "Window" : "Door", kind: o.kind === "window" ? ("window" as const) : ("exit" as const), at: [x, o.kind === "window" ? ceiling - 0.35 : 1.0, z] as [number, number, number] };
       }),
       ...p.stairs.map((st) => ({ text: "Stairs", kind: "stairs" as const, at: [(st.x0 + st.x1) / 2, 1.0, (st.z0 + st.z1) / 2] as [number, number, number] })),
-      ...p.fixtures.map((f) => ({ text: f.kind === "panel" ? "Panel" : "Furnace", kind: "mechanical" as const, at: [f.x, 1.4, f.z] as [number, number, number] })),
+      ...p.fixtures.map((f) => ({ text: FIXTURE_LABEL[f.kind], kind: "mechanical" as const, at: [f.x, 1.4, f.z] as [number, number, number] })),
     ];
   });
 }

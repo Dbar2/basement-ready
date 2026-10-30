@@ -1,8 +1,9 @@
 // A starting layout for the suite, drawn inside the real room from the scan: where the bedroom,
 // bathroom, kitchen and living space could go. Pure and rule-checked: the bedroom gets the escape
-// window, rooms meet minimum sizes, the stairs and furnace stay clear. A designer refines it; this
-// is so a homeowner can see their basement as a home.
-import type { Plan, Side } from "./plan";
+// window, rooms meet minimum sizes, the stairs and furnace stay clear, and the bathroom goes where the
+// plumbing already comes up through the floor. A designer refines it; this is so a homeowner can see
+// their basement as a home.
+import { nearestSide, type Plan, type Side } from "./plan";
 
 export type ZoneKind = "bedroom" | "bathroom" | "kitchen" | "living" | "stairs" | "mechanical";
 export type Rect = { x0: number; z0: number; x1: number; z1: number };
@@ -71,11 +72,13 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   const length = f.aMax - f.aMin;
   const studio = opts.kind ? opts.kind === "studio" : plan.areaM2 < 30 || f.reach < BED_DEPTH + 2.5;
 
-  // Keep-outs that stay as they are: the stairs, and the furnace in its own fire-separated corner.
+  // Keep-outs that stay as they are: the stairs, and the furnace (or water heater) in its own
+  // fire-separated corner.
   for (const s of plan.stairs) zone("stairs", "Stairs", { x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1 });
-  for (const fx of plan.fixtures.filter((x) => x.kind === "furnace").slice(0, 1)) {
+  const mech = plan.fixtures.find((x) => x.kind === "furnace") ?? plan.fixtures.find((x) => x.kind === "water_heater");
+  for (const fx of mech ? [mech] : []) {
     const half = 0.9;
-    zone("mechanical", "Furnace room", {
+    zone("mechanical", fx.kind === "furnace" ? "Furnace room" : "Water heater", {
       x0: r2(clamp(fx.x - half, box.minX, box.maxX - 2 * half)),
       x1: r2(clamp(fx.x + half, box.minX + 2 * half, box.maxX)),
       z0: r2(clamp(fx.z - half, box.minZ, box.maxZ - 2 * half)),
@@ -86,29 +89,57 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   // Nothing new goes on top of the stairs or into the furnace corner.
   const keepouts: Rect[] = zones.map((z) => ({ x0: z.x0, z0: z.z0, x1: z.x1, z1: z.z1 }));
   const free = (r: Rect) => !keepouts.some((k) => r.x0 < k.x1 - 0.05 && r.x1 > k.x0 + 0.05 && r.z0 < k.z1 - 0.05 && r.z1 > k.z0 + 0.05);
-  // Slide a span along the wall, nearest to `want` first, until it's clear.
-  const slide = (want: number, len: number, d0: number, d1: number, lo = f.aMin, hi = f.aMax - len) => {
+  // Slide a span along a wall, nearest to `want` first, until it's clear.
+  const slideOn = (fr: ReturnType<typeof frame>, want: number, len: number, d0: number, d1: number, lo = fr.aMin, hi = fr.aMax - len) => {
     const steps = [0, ...Array.from({ length: 40 }, (_, i) => (i % 2 ? -1 : 1) * (Math.floor(i / 2) + 1) * 0.2)];
     for (const s of steps) {
       const a0 = clamp(want + s, lo, hi);
-      if (free(f.rect(a0, a0 + len, d0, d1))) return a0;
+      if (free(fr.rect(a0, a0 + len, d0, d1))) return a0;
     }
     return null;
   };
+  const slide = (want: number, len: number, d0: number, d1: number, lo = f.aMin, hi = f.aMax - len) => slideOn(f, want, len, d0, d1, lo, hi);
 
   // A bathroom always gets its own walls and door: its inner side, and any side that isn't already a
   // room wall or the wall it shares with the bedroom.
-  const encloseBath = (a0: number, shared: number | null) => {
+  const encloseBath = (a0: number, shared: number | null, fr = f) => {
     const a1 = a0 + BATH_ALONG;
-    const inner = f.rect(a0, a1, BATH_DEPTH, BATH_DEPTH);
+    const inner = fr.rect(a0, a1, BATH_DEPTH, BATH_DEPTH);
     walls.push({ x0: inner.x0, z0: inner.z0, x1: inner.x1, z1: inner.z1 });
     for (const a of [a0, a1]) {
-      if ([f.aMin, f.aMax, shared].some((b) => b !== null && Math.abs(a - b) < 0.05)) continue;
-      const s = f.rect(a, a, 0, BATH_DEPTH);
+      if ([fr.aMin, fr.aMax, shared].some((b) => b !== null && Math.abs(a - b) < 0.05)) continue;
+      const s = fr.rect(a, a, 0, BATH_DEPTH);
       walls.push({ x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1 });
     }
-    const d = f.rect(a0 + BATH_ALONG / 2, a0 + BATH_ALONG / 2, BATH_DEPTH, BATH_DEPTH);
-    doors.push({ x: d.x0, z: d.z0, along: f.alongX ? "x" : "z", widthM: DOOR_W });
+    const d = fr.rect(a0 + BATH_ALONG / 2, a0 + BATH_ALONG / 2, BATH_DEPTH, BATH_DEPTH);
+    doors.push({ x: d.x0, z: d.z0, along: fr.alongX ? "x" : "z", widthM: DOOR_W });
+  };
+
+  // Capped pipes in the floor: a bathroom on them needs no new drains. It goes against the wall
+  // nearest the pipes, covering them, when that spot is clear; otherwise the usual spot, with a note.
+  const rough = plan.fixtures.find((x) => x.kind === "plumbing") ?? null;
+  const onRough = () => {
+    if (!rough) return null;
+    const { side: wall, dist } = nearestSide(box, rough.x, rough.z);
+    if (dist > BATH_DEPTH + 0.6) return null;
+    const fr = frame(box, wall);
+    const along = fr.alongX ? rough.x : rough.z;
+    const a0 = slideOn(fr, along - BATH_ALONG / 2, BATH_ALONG, 0, BATH_DEPTH);
+    if (a0 === null || along < a0 - 0.1 || along > a0 + BATH_ALONG + 0.1) return null;
+    return { wall, fr, a0 };
+  };
+  // A bathroom on another wall takes its depth out of the living space there.
+  let livingTrim = { aLo: 0, aHi: 0, far: COUNTER };
+  const placeOnRough = (bedA0: number, bedA1: number) => {
+    const rb = onRough();
+    if (!rb) return null;
+    zone("bathroom", "Bathroom", rb.fr.rect(rb.a0, rb.a0 + BATH_ALONG, 0, BATH_DEPTH));
+    keepouts.push(rb.fr.rect(rb.a0, rb.a0 + BATH_ALONG, 0, BATH_DEPTH));
+    const nextTo = rb.wall === side ? [bedA0, bedA1].find((b) => Math.abs(rb.a0 - b) < 0.05 || Math.abs(rb.a0 + BATH_ALONG - b) < 0.05) ?? null : null;
+    encloseBath(rb.a0, nextTo, rb.fr);
+    if (rb.wall === opposite[side]) livingTrim = { ...livingTrim, far: Math.max(COUNTER, BATH_DEPTH) };
+    else if (rb.wall !== side) livingTrim = rb.wall.startsWith("min") ? { ...livingTrim, aLo: BATH_DEPTH } : { ...livingTrim, aHi: BATH_DEPTH };
+    return rb;
   };
 
   const winAt = win ? f.aMin + win.atM : f.aMin + length / 2;
@@ -124,26 +155,33 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
     // Sleeping corner by the window, a bathroom next to it, the rest is living and kitchen.
     zone("bedroom", "Sleeping area", f.rect(bedA0, bedA1, 0, depth));
     keepouts.push(f.rect(bedA0, bedA1, 0, depth));
-    const bathA0 = slide(bedA0 > f.aMin + length / 2 ? f.aMin : f.aMax - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
-    if (bathA0 !== null) {
-      zone("bathroom", "Bathroom", f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
-      encloseBath(bathA0, null);
+    if (!placeOnRough(bedA0, bedA1)) {
+      const bathA0 = slide(bedA0 > f.aMin + length / 2 ? f.aMin : f.aMax - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
+      if (bathA0 !== null) {
+        zone("bathroom", "Bathroom", f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
+        encloseBath(bathA0, null);
+      }
     }
   } else {
     // Bedroom on the window; bathroom beside it on the roomier side.
     zone("bedroom", "Bedroom", f.rect(bedA0, bedA1, 0, depth));
     keepouts.push(f.rect(bedA0, bedA1, 0, depth));
     const roomLeft = bedA0 - f.aMin, roomRight = f.aMax - bedA1;
-    const bathA0 = slide(roomRight >= roomLeft ? bedA1 : bedA0 - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
+    const rb = placeOnRough(bedA0, bedA1);
+    const bathA0 = rb ? null : slide(roomRight >= roomLeft ? bedA1 : bedA0 - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
     if (bathA0 !== null) {
       zone("bathroom", "Bathroom", f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
       keepouts.push(f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
     }
-    // New walls: along the bedroom's inner edge, and between bedroom and bathroom.
+    // New walls: along the bedroom's inner edge, and between bedroom and bathroom (both ends of the
+    // bedroom when the bathroom is over the plumbing instead).
     const inner = f.rect(bedA0, bedA1, depth, depth);
     walls.push({ x0: inner.x0, z0: inner.z0, x1: inner.x1, z1: inner.z1 });
-    const between = f.rect(roomRight >= roomLeft ? bedA1 : bedA0, roomRight >= roomLeft ? bedA1 : bedA0, 0, depth);
-    walls.push({ x0: between.x0, z0: between.z0, x1: between.x1, z1: between.z1 });
+    const ends = rb ? [bedA0, bedA1].filter((a) => a - f.aMin > 0.05 && f.aMax - a > 0.05) : [roomRight >= roomLeft ? bedA1 : bedA0];
+    for (const a of ends) {
+      const between = f.rect(a, a, 0, depth);
+      walls.push({ x0: between.x0, z0: between.z0, x1: between.x1, z1: between.z1 });
+    }
     // The bedroom door, on the inner wall away from the bathroom.
     const doorA = roomRight >= roomLeft ? bedA0 + 0.3 + DOOR_W / 2 : bedA1 - 0.3 - DOOR_W / 2;
     const d = f.rect(doorA, doorA, depth, depth);
@@ -165,7 +203,7 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   }
   zone("kitchen", "Kitchen", o.rect(kA0 ?? kWant, (kA0 ?? kWant) + kitchenLen, 0, COUNTER));
   const band = studio ? Math.max(BATH_DEPTH, depth) : depth;
-  const living = f.rect(f.aMin, f.aMax, band, f.reach - COUNTER);
+  const living = f.rect(f.aMin + livingTrim.aLo, f.aMax - livingTrim.aHi, band, f.reach - livingTrim.far);
   zone("living", studio ? "Living and kitchen" : "Living and dining", living);
 
   const bed = zones.find((z) => z.kind === "bedroom")!;
@@ -183,6 +221,17 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
     ok: bed.areaM2 >= BEDROOM_MIN_M2,
     detail: `About ${bed.areaM2.toFixed(1)} m².`,
   });
+  if (rough) {
+    const bath = zones.find((z) => z.kind === "bathroom");
+    const over = bath && rough.x >= bath.x0 - 0.1 && rough.x <= bath.x1 + 0.1 && rough.z >= bath.z0 - 0.1 && rough.z <= bath.z1 + 0.1;
+    checks.push({
+      label: "The bathroom sits on your plumbing rough-in",
+      ok: over ? true : null,
+      detail: over
+        ? "The video showed capped pipes there, so the drains are already in the floor."
+        : "The video showed capped pipes, but a bathroom doesn't fit right on them here. Your designer can move it there: drains already in the floor cost much less.",
+    });
+  }
   if (!zones.some((z) => z.kind === "bathroom")) {
     checks.push({
       label: "There's room for a bathroom",

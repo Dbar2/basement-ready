@@ -5,6 +5,15 @@ import { liftBox, type Scan3d } from "./scan3d";
 
 export type Side = "minX" | "maxX" | "minZ" | "maxZ";
 
+// What a mechanical find is on the plan, from SAM's label (server/pipeline.ts CONCEPTS).
+export type FixtureKind = "furnace" | "panel" | "water_heater" | "plumbing";
+export function fixtureKind(label: string): FixtureKind {
+  if (/panel/i.test(label)) return "panel";
+  if (/water heater/i.test(label)) return "water_heater";
+  if (/rough-in|drain/i.test(label)) return "plumbing";
+  return "furnace";
+}
+
 export type Plan = {
   version: 1;
   box: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -15,7 +24,7 @@ export type Plan = {
   ceilingHeightM: number | null;
   openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
-  fixtures: { kind: "furnace" | "panel"; x: number; z: number; detectionId: string }[];
+  fixtures: { kind: FixtureKind; x: number; z: number; detectionId: string }[];
   scaleSource: "model" | "user_measurement" | "door" | "arkit";
   trusted: boolean;
 };
@@ -63,7 +72,7 @@ function locate(s3: Scan3d, d: Detection) {
   };
 }
 
-function nearestSide(box: Plan["box"], x: number, z: number): { side: Side; dist: number } {
+export function nearestSide(box: Plan["box"], x: number, z: number): { side: Side; dist: number } {
   const options: { side: Side; dist: number }[] = [
     { side: "minX", dist: Math.abs(x - box.minX) },
     { side: "maxX", dist: Math.abs(x - box.maxX) },
@@ -109,7 +118,7 @@ export function buildPlan(s3: Scan3d, detections: Detection[], trusted: boolean)
       if (stairs.some((s) => Math.max(s.x0, x0) < Math.min(s.x1, x1) && Math.max(s.z0, z0) < Math.min(s.z1, z1))) continue; // same flight
       stairs.push({ x0: round2(x0), z0: round2(z0), x1: round2(x1), z1: round2(z1), detectionId: d.id });
     } else {
-      const kind = d.label.toLowerCase().includes("panel") ? "panel" : "furnace";
+      const kind = fixtureKind(d.label);
       const x = clamp(cx, minX, maxX), z = clamp(cz, minZ, maxZ);
       if (fixtures.some((f) => f.kind === kind && Math.hypot(f.x - x, f.z - z) < 1)) continue;
       fixtures.push({ kind, x: round2(x), z: round2(z), detectionId: d.id });

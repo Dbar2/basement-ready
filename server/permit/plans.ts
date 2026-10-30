@@ -100,7 +100,10 @@ export function basementGeometry(result: any, state: StoredState | null | undefi
   const tape = state?.tape ?? {};
   const scanCeiling = main?.plan.ceilingHeightM ?? result?.measurements?.ceilingHeightM ?? null;
   const clearances: number[] = (result?.measurements?.clearances ?? []).map((c: { clearanceM: number }) => c.clearanceM);
-  const fuelBurning = rooms.some((r) => r.plan.fixtures.some((f) => f.kind === "furnace")) || (result?.detections ?? []).some((d: { kind: string }) => d.kind === "mechanical");
+  // A furnace or water heater may burn gas; a panel or a floor drain doesn't.
+  const fuelBurning =
+    rooms.some((r) => r.plan.fixtures.some((f) => f.kind === "furnace" || f.kind === "water_heater")) ||
+    (result?.detections ?? []).some((d: { kind: string; label?: string }) => d.kind === "mechanical" && /furnace|water heater/i.test(d.label ?? ""));
   const win = layout?.window ?? null;
   const bedOk = layout?.checks.find((c) => /escape window/i.test(c.label))?.ok ?? null;
   let egress: Geometry["egress"] = null;
@@ -214,7 +217,7 @@ export function drawPlan(s: Sheet, area0: Area, g: Geometry, mode: "existing" | 
       const size = Math.max(10, 0.6 * k);
       s.rect(X(f.x) - size / 2, Y(f.z) - size / 2, size, size, { width: 0.6 });
       s.line(X(f.x) - size / 2, Y(f.z) - size / 2, X(f.x) + size / 2, Y(f.z) + size / 2, { width: 0.4 });
-      s.text(f.kind === "panel" ? "ELEC. PANEL" : "FURNACE", X(f.x), Y(f.z) - size / 2 - 8, { size: 6, align: "center" });
+      s.text({ panel: "ELEC. PANEL", furnace: "FURNACE", water_heater: "WATER HEATER", plumbing: "PLUMBING ROUGH-IN" }[f.kind], X(f.x), Y(f.z) - size / 2 - 8, { size: 6, align: "center" });
     }
     // Room label: only the existing plan, or areas outside the suite.
     if (mode === "existing" || r.plan !== g.main?.plan || !g.layout) {

@@ -1,6 +1,6 @@
 // The measured floor plan, drawn like a sheet from a drawing set: walls, openings, dimensions, labels.
 import { useRef } from "react";
-import type { Layout, Plan, PlanSide } from "../api";
+import { FIXTURE_LABEL, type Layout, type Plan, type PlanSide } from "../api";
 
 export type Units = "m" | "ft";
 
@@ -123,7 +123,7 @@ function RoomShape(props: { plan: Plan; units: Units; name: string; X: (x: numbe
             <rect x={x - size / 2} y={y - size / 2} width={size} height={size} />
             <line x1={x - size / 2} y1={y - size / 2} x2={x + size / 2} y2={y + size / 2} />
             <text x={x} y={y + size / 2 + 18} textAnchor="middle" className="plan-tag">
-              {f.kind === "panel" ? "PANEL" : "FURNACE"}
+              {FIXTURE_LABEL[f.kind].toUpperCase()}
             </text>
           </g>
         );
