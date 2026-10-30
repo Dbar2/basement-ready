@@ -219,7 +219,7 @@ h2{font-weight:800;font-size:24px;letter-spacing:-0.02em;margin:40px 0 12px}h3{m
 .stats{display:flex;flex-wrap:wrap;gap:24px;margin:16px 0 8px}.stats div{min-width:110px}.stats b{display:block;font:500 22px "Geist Mono",monospace}
 table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border)}td,th{padding:10px;border-top:1px solid var(--border);vertical-align:top;text-align:left}
 th{font-weight:600;font-size:13px;color:var(--muted)}.thumbs{white-space:nowrap}.thumbs img{width:56px;height:56px;object-fit:cover;object-position:top;border:1px solid var(--border);margin-right:4px}
-.more{font:13px "Geist Mono",monospace}.pill{font:500 12px "Geist Mono",monospace;padding:2px 8px;border-radius:999px;border:1px solid}
+.more{font:13px "Geist Mono",monospace}.pill{font:500 12px "Geist Mono",monospace;padding:2px 8px;border-radius:999px;border:1px solid;white-space:nowrap}th{white-space:nowrap}
 .pill.pass{color:var(--ok)}.pill.fail{color:var(--stop)}.pill.not-reviewed{color:var(--muted)}
 .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.filters button{font:inherit;border:1px solid var(--border);background:var(--card);padding:4px 12px;border-radius:999px;cursor:pointer}
 .filters button[aria-pressed=true]{background:var(--ink);color:var(--card);border-color:var(--ink)}

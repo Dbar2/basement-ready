@@ -8,7 +8,7 @@ import { parseArgs, USAGE } from "./args";
 import { capture, type CaptureResult } from "./capture";
 import { Budget, MODEL } from "./cost";
 import { anthropicKey, QA_DIR, ROOT } from "./paths";
-import { buildPlan } from "./plan";
+import { buildPlan, matches, screenById } from "./plan";
 import { autoFindings, buildReport, notesFindings, writeReport } from "./report";
 import { review, type ReviewResult } from "./review";
 import { startServers, type Servers } from "./servers";
@@ -54,6 +54,12 @@ try {
     const from = args.from === "latest" ? latestRun() : resolve(QA_DIR, args.from);
     const saved = JSON.parse(readFileSync(join(from, "capture.json"), "utf8"));
     cap = saved.capture;
+    // --only and --all narrow an earlier capture the same way they narrow a new one.
+    const keep = (screen: string) => {
+      const def = screenById(screen);
+      return !def || matches(def, args.only, args.all);
+    };
+    cap = { ...cap, shots: cap.shots.filter((s) => keep(s.screen)), auto: cap.auto.filter((a) => keep(a.screen)) };
     facts = saved.facts ?? {};
     baseURL = saved.baseURL;
     scans = saved.scans;

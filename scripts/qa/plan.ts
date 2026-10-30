@@ -241,6 +241,10 @@ export const SCREENS: Screen[] = [
     priority: 6,
     purpose: "The scene the design pictures are drawn from, seen from fixed cameras.",
     checks: ["Furniture on the floor, walls straight, windows where the scan has them."],
+    // The pictures page draws into a hidden canvas meant to be laid over the photos (src/views/AngleRender.tsx):
+    // from our cameras it's mostly invisible occluders, so it's only shot when asked for.
+    optIn: true,
+    captureNote: "Drawn from the page's hidden render canvas, which is made to be laid over the real photos: invisible walls and an empty background are expected.",
   }),
   S({
     id: "plan-overlay",
