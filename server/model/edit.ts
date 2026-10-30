@@ -27,7 +27,8 @@ function fit(o: Opening, w: Wall): Opening {
 function moveWall(layer: Layer, wallId: string, a: Pt, b: Pt): Layer {
   const w = layer.walls.find((x) => x.id === wallId);
   if (!w) return layer;
-  const moved: Wall = { ...w, a: roundPt(a), b: roundPt(b) };
+  // Put where they say it is: no longer a guess.
+  const moved: Wall = { ...w, a: roundPt(a), b: roundPt(b), ...(w.guess ? { guess: false } : {}) };
   const L = wallLength(w);
   // A slide sideways (same direction and length): what's joined to the wall comes along.
   const d = sub(moved.a, w.a);
@@ -124,7 +125,7 @@ export function editLayer<T extends Layer>(layer: T, e: Edit): T {
         ...layer,
         walls: layer.walls.map((w) =>
           w.id === e.wallId
-            ? { ...w, ...(e.rating !== undefined ? { rating: e.rating } : {}), ...(e.kind ? { kind: e.kind } : {}), ...(e.thicknessM ? { thicknessM: e.thicknessM } : {}) }
+            ? { ...w, ...(e.rating !== undefined ? { rating: e.rating } : {}), ...(e.kind ? { kind: e.kind } : {}), ...(e.thicknessM ? { thicknessM: e.thicknessM } : {}), ...(e.guess === false ? { guess: false } : {}) }
             : w,
         ),
       };

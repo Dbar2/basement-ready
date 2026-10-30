@@ -82,7 +82,7 @@ export const EditSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("move_wall"), wallId: id, a: pt, b: pt }),
   z.object({ op: z.literal("add_wall"), wall: WallSchema.extend({ id: id.default("") }) }),
   z.object({ op: z.literal("remove_wall"), wallId: id }),
-  z.object({ op: z.literal("set_wall"), wallId: id, rating: rating.optional(), kind: z.enum(["foundation", "existing", "new"]).optional(), thicknessM: num.min(0.05).max(0.5).optional() }),
+  z.object({ op: z.literal("set_wall"), wallId: id, rating: rating.optional(), kind: z.enum(["foundation", "existing", "new"]).optional(), thicknessM: num.min(0.05).max(0.5).optional(), guess: z.literal(false).optional() }),
   z.object({ op: z.literal("add_opening"), opening: OpeningSchema.extend({ id: id.default("") }) }),
   z.object({ op: z.literal("move_opening"), openingId: id, offsetM: size }),
   z.object({
