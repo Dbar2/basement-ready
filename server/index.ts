@@ -487,7 +487,7 @@ app.post("/api/scans/:id/replan", async (c) => {
       for (let n = 0; n < result.frameCount; n++) await storage.download(keys.frame(id, n), join(work, "frames", `${String(n).padStart(4, "0")}.jpg`));
       const known = (scan.inputs as { floorToJoistsM?: number } | null)?.floorToJoistsM;
       const cameraFor = await cameraLookup(() => storedText(keys.capture(id)), ANALYSIS_FPS);
-      const b = await scanBasement(work, result.frameCount, known ? { floorToJoistsM: known } : {}, async (t) => console.log(`[replan] ${id}: ${t}`), cameraFor);
+      const b = await scanBasement(work, result.frameCount, known ? { floorToJoistsM: known } : {}, async (t) => console.log(`[replan] ${id}: ${t}`), cameraFor, undefined, Promise.resolve(result.watch ?? null));
       if (!b) return c.json({ error: "No 3D" }, 500);
       const low = new Set(lowOverhead(b.scans, result.detections));
       const detections = (result.detections as Detection[]).filter((d) => !low.has(d));

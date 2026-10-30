@@ -106,7 +106,8 @@ export type BasementPlan = {
   areaFloors?: { area: number; y: number; offsetM: number; spreadM: number }[]; // each area's own floor, same world
   ceilingM: number | null;
   footprintM2: number;
-  rooms: { id: string; polygon: [number, number][]; areaM2: number; ceilingM: number | null; low: boolean; cameras: number; kind: string; name?: string }[];
+  // entered false: nobody went in; it was drawn from what the camera saw through its door (seenFrom).
+  rooms: { id: string; polygon: [number, number][]; areaM2: number; ceilingM: number | null; low: boolean; cameras: number; entered?: boolean; seenFrom?: string | null; kind: string; name?: string }[];
   walls: {
     id: string;
     a: [number, number];
@@ -116,13 +117,15 @@ export type BasementPlan = {
     rooms: string[];
     seenShare: number;
     guess?: boolean;
+    seenFromDoor?: boolean; // a wall of a room nobody went into
     check?: { confidence: number; agree: number; contradict: number; frames: number };
   }[];
   openings: { id: string; kind: "door" | "window"; wallId: string; offsetM: number; widthM: number; heightM: number | null; sillM?: number | null; at: [number, number]; rooms: string[]; source: string; detectionId?: string }[];
   fixtures: { id: string; kind: "stairs" | "furnace" | "water_heater" | "panel" | "plumbing" | "beam" | "duct" | "bulkhead"; at: [number, number]; sizeM?: [number, number]; heightM?: number | null; source: string; detectionId?: string; bottom?: [number, number] }[];
   // Spark's corrections, each with whether the points agreed and why.
   edits: ({ op: string; ok: boolean; why: string } & Record<string, unknown>)[];
-  review?: { rounds: number; unsure: string[]; note?: string } | null;
+  // notPlaced: rooms the whole-take watch saw that the 3D gave no room for.
+  review?: { rounds: number; unsure: string[]; note?: string; notPlaced?: string[] } | null;
 };
 
 // Each area of the basement is measured on its own, then placed in one plan. Older scans have no placement.

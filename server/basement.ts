@@ -22,9 +22,18 @@ export type BasementScan = {
   placements: RoomPlacement[];
   rects: Rect[]; // each area's box in the basement frame
   path: V2[]; // where the camera walked, on the floor, in the basement frame
-  // App takes: the phone's camera centres along the walk and the first plan read from every area at once,
-  // for the full plan once SAM's finds are in (server/floorplan.ts).
-  tracked?: { cameras: number[][]; plan: FloorPlanResult };
+  // App takes: the phone's camera centres along the walk (and our frame number for each) and the first
+  // plan read from every area at once, for the full plan once SAM's finds are in (server/floorplan.ts).
+  tracked?: { cameras: number[][]; frames: number[]; plan: FloorPlanResult };
+  // What a model that watched the whole take saw (server/watch.ts), for the full plan's rooms.
+  watch?: Promise<WatchLike | null>;
+};
+
+// The parts of the whole-take watch (server/watch.ts Watch) the floor plan reads: the rooms in order,
+// the seconds the camera was inside each, which were only seen from a doorway, and the doors.
+export type WatchLike = {
+  rooms: { id: string; name: string; spokenName?: string | null; kind: string; visits: [number, number][]; entered: boolean; seenFrom: string | null }[];
+  doors: { from: string; to: string; kind: string }[];
 };
 
 // What the wait screen draws while the 3D works: the camera's walk first, then each area as it's
@@ -81,10 +90,11 @@ export async function scanBasement(
   log: (text: string) => Promise<void>,
   cameraFor?: (n: number) => KnownCamera | null,
   progress?: BasementProgress,
+  watch?: Promise<WatchLike | null>,
 ): Promise<BasementScan | null> {
   if (cameraFor) {
     const tracked = await scanTracked(work, frameCount, known, log, cameraFor, progress);
-    if (tracked) return tracked;
+    if (tracked) return { ...tracked, watch };
   }
   await log("Mapping your whole basement");
   const whole = await runScan3d(work, { from: 0, to: frameCount }, known, { maxFrames: WHOLE_FRAMES, maxFaces: 0 });
@@ -183,7 +193,7 @@ async function scanTracked(
   const plan = await runFloorPlan(scans, centres).catch(() => null);
   if (plan?.rooms.length) {
     const placed = fromFloorPlan(plan, scans, spans, idx, pos);
-    if (placed) return { ...placed, tracked: { cameras: centres, plan } };
+    if (placed) return { ...placed, tracked: { cameras: centres, frames: idx, plan } };
   }
 
   // Each area's room frame in the phone's world: its x axis is the first row of the rotation.

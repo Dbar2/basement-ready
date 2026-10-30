@@ -6,9 +6,10 @@ A wall face sampled from knee to head height, in each frame that faces it:
 - contradicts where the depth runs on past it (the camera saw through where the wall should be),
 - says nothing where something nearer hides it.
 
-A wall's confidence is its agreeing samples against agreeing plus contradicting ones. Doors and windows
-aren't sampled (the camera sees through them). A wall few frames looked at, or one the frames see
-through, is a guess: the plan screen asks about it.
+A wall's confidence is its agreeing samples against agreeing plus contradicting ones, and lower for a
+wall of a room nobody went into. Doors and windows aren't sampled (the camera sees through them). A wall
+few frames looked at, one the frames see through, or one only seen from a doorway is a guess: the plan
+screen asks about it.
 """
 
 from __future__ import annotations
@@ -88,8 +89,10 @@ def check_walls(plan: dict, views: list[dict]) -> dict:
     for k, w in enumerate(plan["walls"]):
         n_seen = agree[k] + contra[k]
         conf = float((agree[k] + 1) / (n_seen + 2))
+        if w.get("seenFromDoor"):
+            conf *= 0.6  # a wall of a room nobody went into, seen from far off through its door
         w["check"] = {"confidence": round(conf, 2), "agree": int(agree[k]), "contradict": int(contra[k]), "frames": int(frames[k])}
-        if n_seen < MIN_SEEN or conf < SURE:
+        if n_seen < MIN_SEEN or conf < SURE or w.get("seenFromDoor"):
             w["guess"] = True
             doubtful += 1
         else:

@@ -187,7 +187,29 @@ BASEMENTS = [
         ducts=[dict(rect=(0.9, 3.25, 6.0, 3.55), depth=0.20, hang=0.0)],
         furnace=dict(x=8.2, y=3.55, face="S"), heater=dict(x=8.65, y=1.0), panel=dict(wall="S", room=1, at=1.6),
     ),
+    dict(
+        id="b8-peek-storage",
+        about="A storage room only looked into from its doorway, never entered: the plan has to infer it from the door.",
+        seed=88, duration=58, subfloor=2.55, joists="y", exposure=0.4,
+        walls_ext="poured", floor="concrete",
+        rooms=[
+            dict(name="Rec room", rect=(0, 0, 6.0, 4.6), ceiling=2.30, finish="drywall", floor="vinyl", clutter=5,
+                 lights=[("pot", 1.6, 1.5), ("pot", 4.4, 1.5), ("pot", 1.6, 3.2), ("pot", 4.4, 3.2)]),
+            dict(name="Furnace room", rect=(6.12, 0, 9.2, 3.0), ceiling="joists", clutter=2,
+                 lights=[("bulb", 7.6, 1.5)]),
+            # `peek`: the camera stops in the doorway, looks round the room and leaves.
+            dict(name="Storage", rect=(6.12, 3.12, 9.2, 4.6), ceiling="joists", clutter=4, shelves=True, peek=True,
+                 lights=[("bulb", 7.6, 3.9)]),
+        ],
+        stairs=dict(axis="x", line=4.6, side=-1, bottom=3.6, up=-1),
+        doors=[dict(wall="E", room=0, at=1.5, width=0.81), dict(wall="N", room=1, at=1.2, width=0.76)],
+        windows=[("S", 0, 2.0, 0.90, 0.60, 1.10), ("W", 0, 2.3, 0.80, 0.40, 1.50), ("E", 1, 1.5, 0.60, 0.35, 1.60),
+                 ("N", 2, 2.2, 0.50, 0.30, 1.60)],
+        ducts=[dict(rect=(0.5, 2.0, 5.5, 2.4), depth=0.22, hang=0.015)],
+        furnace=dict(x=8.4, y=1.9, face="W"), heater=dict(x=8.8, y=0.5), panel=dict(wall="S", room=1, at=1.0),
+    ),
 ]
+
 
 # ---------------------------------------------------------------------------------------------
 # Materials (procedural; object coordinates are world metres, since every object sits at the origin)
@@ -1171,7 +1193,21 @@ def plan_walkthrough(cfg, windows_info):
             tr.go(yaw=heading(cx - here[0], cy - here[1]), pitch=min(40, math.degrees(math.atan2(cz - EYE, dist))), hold=1.0, label=f"room{ri}:windows")
         # 5. A moment to say what this room should be.
         tr.go(pitch=-5, hold=1.2, label=f"room{ri}:plans")
-        # 6. On to the next room, through the door.
+        # 6. On to the next room, through the door; a room to peek into is only looked at from its doorway.
+        if ri + 1 < len(rooms) and rooms[ri + 1].get("peek"):
+            d = cfg["doors"][ri]
+            o, nrm, al = wall_frame(rooms[d["room"]]["rect"], d["wall"], d["at"])
+            sign = 1 if d["room"] == ri else -1
+            n = (nrm[0] * sign, nrm[1] * sign)
+            cx, cy = o[0] + nrm[0] * INT_WALL / 2, o[1] + nrm[1] * INT_WALL / 2
+            # Stand just short of the doorway, on this side, and look in: across, then each way, then down.
+            here = (cx - n[0] * (INT_WALL / 2 + 0.3), cy - n[1] * (INT_WALL / 2 + 0.3))
+            tr.go(cx - n[0] * 1.0, cy - n[1] * 1.0, yaw=heading(*n), pitch=-4, label=f"room{ri}:to-door")
+            tr.go(*here, label=f"peek{ri + 1}")
+            ahead = heading(*n)
+            for yaw, pitch, hold in ((ahead, -10, 0.8), (ahead - 50, -12, 0.8), (ahead + 50, -12, 0.8), (ahead, -30, 0.6), (ahead, 20, 0.6), (ahead, -5, 0.4)):
+                tr.go(yaw=yaw, pitch=pitch, hold=hold, label=f"peek{ri + 1}")
+            break
         if ri + 1 < len(rooms):
             d = cfg["doors"][ri]
             o, nrm, al = wall_frame(rooms[d["room"]]["rect"], d["wall"], d["at"])
@@ -1341,7 +1377,8 @@ def truth(cfg, frames, total, windows_info, wboxes):
         if idx[f] != idx[f - 1]:
             starts.append(round(f / FPS, 2))
             order.append(idx[f])
-    assert order == list(range(len(rooms))), f"rooms filmed out of order: {order}"
+    entered = [ri for ri, r in enumerate(rooms) if not r.get("peek")]
+    assert order == entered, f"rooms filmed out of order: {order}"
     out_rooms = []
     for ri, r in enumerate(rooms):
         x0, y0, x1, y1 = r["rect"]
@@ -1359,9 +1396,12 @@ def truth(cfg, frames, total, windows_info, wboxes):
             if bh["room"] == ri:
                 obstructions.append(dict(kind="bulkhead", bottomM=bh["bottom"]))
         mine = [w_ for w_ in windows_out(cfg) if w_["room"] == ri]
+        k = entered.index(ri) if ri in entered else None
         out_rooms.append(dict(
             index=ri, name=r["name"],
-            startS=starts[ri], endS=starts[ri + 1] if ri + 1 < len(starts) else round(total, 2),
+            entered=k is not None,  # false: only looked into from its doorway
+            startS=starts[k] if k is not None else None,
+            endS=(starts[k + 1] if k + 1 < len(starts) else round(total, 2)) if k is not None else None,
             widthM=max(w, d), depthM=min(w, d), alongX=w, alongY=d, areaM2=round(w * d, 2),
             ceiling="exposed_joists" if r["ceiling"] == "joists" else "drywall",
             ceilingHeightM=rule_ceiling(cfg, r),

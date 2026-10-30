@@ -184,3 +184,30 @@ def test_floorplan_endpoint_returns_the_plan():
     assert len(out["plan"]["rooms"]) == 2 and out["plan"]["walls"] and out["renders"]["topDown"]
     bad = client.post("/floorplan", files=files, data={**data, "edits": "{}"}, headers=auth)
     assert bad.status_code == 400
+
+
+def test_a_closet_looked_into_from_its_door_is_still_a_room():
+    # Room A as before; B is a 1.5 x 1.6 m closet behind a 0.8 m door, filmed only from A's side of it.
+    rng = np.random.default_rng(3)
+    pts = np.concatenate([
+        wall(0, 0, 5, 0), wall(0, 4, 5, 4), wall(0, 0, 0, 4),
+        wall(5, 0, 5, 4, gaps=[(1.0, 1.8)]), wall(5.12, 0.6, 5.12, 1.8 + 0.4, gaps=[(1.0, 1.8)]),
+        wall(5.12, 0.6, 6.62, 0.6), wall(5.12, 2.2, 6.62, 2.2), wall(6.62, 0.6, 6.62, 2.2),
+        np.array([[x, y, z] for x in (5.0, 5.12) for z in np.arange(1.0, 1.8, 0.03) for y in np.arange(2.05, 2.3, 0.05)]),
+        flat(0, 5, 0, 4, 0.0, 50000, rng),
+        # Through the door only part of the closet's floor is seen: a wedge from the door.
+        np.array([[5.12 + d, 0.0, 1.4 + (rng.uniform(-1, 1)) * (0.4 + 0.25 * d)] for d in rng.uniform(0, 1.5, 6000)]),
+        flat(0, 5, 0, 4, 2.3, 15000, rng),
+    ])
+    walk = [(1.5, 1.5), (2.5, 2.5), (3.5, 1.8), (4.3, 1.4)]
+    cams = np.array([[x0 + t * (x1 - x0), 1.45, z0 + t * (z1 - z0)] for (x0, z0), (x1, z1) in zip(walk, walk[1:]) for t in np.linspace(0, 1, 6, endpoint=False)])
+    plan = read_plan(pts, cams, hints={"peek": 1}).to_json()
+    rooms = sorted(plan["rooms"], key=lambda r: -r["areaM2"])
+    assert len(rooms) == 2, [(r["areaM2"], r["entered"]) for r in rooms]
+    a, closet = rooms
+    assert a["entered"] and not closet["entered"] and closet["seenFrom"] == a["id"]
+    # Its hidden corners are filled in: the whole closet, not the wedge the camera saw.
+    assert abs(closet["areaM2"] - 2.4) < 0.4, closet["areaM2"]
+    own = [w for w in plan["walls"] if set(w["rooms"]) == {closet["id"]}]
+    assert own and all(w.get("guess") and w.get("seenFromDoor") for w in own)
+    assert any(o["kind"] == "door" and set(o["rooms"]) == {a["id"], closet["id"]} for o in plan["openings"])

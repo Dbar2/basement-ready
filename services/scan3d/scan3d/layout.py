@@ -39,6 +39,8 @@ WALL_RISE = 0.8  # m: a wall rises through the band; a table or bench shows up o
 DOOR_HALF = 0.40  # m: half a doorway; open floor narrower than a door splits rooms
 MIN_ROOM_M2 = 1.0
 SMALL_ROOM_M2 = 2.5  # below this a room must be walled most of the way round (a closet), or it joins a neighbour
+CLOSET_M2 = 0.8  # the smallest room kept when it opens only through a door and nobody went in
+DOOR_MAX_M = 1.3  # metres of open boundary a doorway has, at most
 OPEN_JOIN_M = 1.6  # two rooms that meet along this much unwalled boundary are one open room
 FACE_TOL = 0.04  # m: a point within this of a wall plane is on it
 SNAP_DEG = 8.0  # a wall within this of the main axes is square to them
@@ -995,12 +997,15 @@ def read_plan(
         dil = cv2.dilate(grown.astype(np.float32), np.ones((3, 3), np.uint8)).astype(np.int32)
         add = (grown == 0) & (free > 0) & (dil > 0)
         grown[add] = dil[add]
-    # Open floor nobody claimed, where the person stood, is a room too (a cluttered room's floor).
+    # Open floor nobody claimed is a room too: where the person stood (a cluttered room's floor), or floor
+    # the camera saw without going in (a room looked into from its doorway).
     left = ((free > 0) & (grown == 0)).astype(np.uint8)
     n_left, left_lab = cv2.connectedComponents(left)
+    min_seen = CLOSET_M2 if hints.get("peek") else MIN_ROOM_M2
     for k in range(1, n_left):
         piece = left_lab == k
-        if piece.sum() * CELL * CELL >= MIN_ROOM_M2 and (walked[piece] > 0).sum() >= 3:
+        a = piece.sum() * CELL * CELL
+        if (a >= MIN_ROOM_M2 and (walked[piece] > 0).sum() >= 3) or (a >= min_seen and floor_pts[piece].mean() >= 0.3):
             grown[piece] = grown.max() + 1
 
     # 6. Floor next to the open floor (clutter, a hidden corner) joins the room it's reachable from
@@ -1089,6 +1094,9 @@ def read_plan(
                 continue
             if not sliver and area >= MIN_ROOM_M2 and enclosed(labels, k, blocked, footprint) >= 0.6:
                 continue
+            touching = sum(contact(labels, k, o) for o in np.unique(labels[labels > 0]) if o != k)
+            if not sliver and area >= CLOSET_M2 and 0 < touching <= DOOR_MAX_M and not (walked[mask] > 0).any():
+                continue  # through a door, and nobody went in: a closet looked into from its doorway
             if ext < 1.2 and facing.get(k, 0.0) >= 0.6 and split_ghost(labels, k):
                 changed = True
                 break
@@ -1106,10 +1114,20 @@ def read_plan(
     # Outlines: square polygons, each edge pushed out to its wall.
     raw_rooms = []
     for k in [int(k) for k in np.unique(labels[labels > 0])]:
-        poly = room_outline(labels == k, grid)
-        if len(poly) < 3 or poly_area(poly) < MIN_ROOM_M2:
+        mask = labels == k
+        entered = bool((walked[mask] > 0).any())
+        if entered:
+            poly = room_outline(mask, grid)
+        else:
+            # Seen only from its doorway: the floor in view is a wedge from the door. The room is the box
+            # round it, squared to the axes; its hidden corners are where the walls seen would meet.
+            yy, xx = np.nonzero(mask)
+            x0, x1 = grid.lo[0] + xx.min() * CELL, grid.lo[0] + (xx.max() + 1) * CELL
+            z0, z1 = grid.lo[1] + yy.min() * CELL, grid.lo[1] + (yy.max() + 1) * CELL
+            poly = [(x0, z0), (x1, z0), (x1, z1), (x0, z1)]
+        if len(poly) < 3 or poly_area(poly) < (MIN_ROOM_M2 if entered else CLOSET_M2):
             continue
-        raw_rooms.append({"label": k, "polygon": poly})
+        raw_rooms.append({"label": k, "polygon": poly, "entered": entered})
     snap_out(raw_rooms, walls, grid)
     settle(raw_rooms)
 
@@ -1153,6 +1171,7 @@ def read_plan(
             "areaM2": _r(poly_area(r["polygon"]), 2),
             "ceilingM": None if ceil is None else _r(ceil, 2),
             "cameras": int(cam_in),
+            "entered": bool(r.get("entered", True)) or cam_in > 0,
         })
     ceil_vals = [r["ceilingM"] for r in rooms if r["ceilingM"]]
     main_ceiling = max(ceil_vals, key=lambda c: sum(r["areaM2"] for r in rooms if r["ceilingM"] == c)) if ceil_vals else ceiling
@@ -1360,6 +1379,19 @@ def read_plan(
         openings.append({"kind": "window", "wallId": w["id"], "offsetM": _r(off), "widthM": _r(width, 2), "heightM": _r(np.clip(height, 0.2, 1.6), 2), "sillM": _r(max(0.0, sill), 2), "at": _pt(c), "detectionId": d.get("id"), "source": "sam", "rooms": w["rooms"]})
     for k, o in enumerate(openings, start=1):
         o["id"] = f"{'d' if o['kind'] == 'door' else 'win'}{k}"
+
+    # Rooms nobody went into: seen from the room their door opens onto. Their own walls (not the one
+    # shared with that room) are guesses: the plan screen asks about them.
+    for r in rooms:
+        if r["entered"]:
+            continue
+        via = [x for o in openings if o["kind"] == "door" and r["id"] in o.get("rooms", []) for x in o["rooms"] if x != r["id"]]
+        shared = [x for w in walls_out if r["id"] in w["rooms"] for x in w["rooms"] if x != r["id"]]
+        r["seenFrom"] = (via or shared or [None])[0]
+        for w in walls_out:
+            if set(w["rooms"]) <= {r["id"]}:
+                w["guess"] = True
+                w["seenFromDoor"] = True
 
     # Fixtures: stairs, SAM's mechanicals, and what hangs low under the ceiling.
     fixtures = []
