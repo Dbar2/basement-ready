@@ -161,7 +161,8 @@ describe("photos turned upright", () => {
 const sam = (...boxes: [number, number, number, number, number][]) =>
   `<0f>${boxes.map(([x1, y1, x2, y2, c], i) => `${i ? "," : ""}${i}<|box;x1=${x1};y1=${y1};x2=${x2};y2=${y2};w=1280;h=960;c=${c}|><|mask;x=0;y=0;data=1,1,!|>`).join("")}`;
 const WINDOW = CONCEPTS.find((c) => c.label === "Window")!;
-const FURNACE = CONCEPTS.find((c) => c.label === "Furnace")!;
+// Any concept will do for the photo loop; the scan itself no longer asks SAM for a furnace by name.
+const FURNACE = { concept: "furnace", kind: "mechanical", label: "Furnace" };
 const BEAM = CONCEPTS.find((c) => c.label === "Beam")!;
 
 describe("SAM on each photo", () => {
