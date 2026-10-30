@@ -36,11 +36,15 @@ REPLAY_DIR=media/private/replay/practice tsx --env-file=.env scripts/practice/sc
 
 - `--dry` counts the calls that aren't saved yet and what they'd cost, and calls nothing
 - `--split train|holdout`, `--ids a,b`
-- `--spark labelled` has Spark read the photos whose label says what it should find (about $0.03 a photo)
+- `--spark labelled` has the reader (Spark unless `--model` names another, e.g. `muse-wonder-1.0`) read the photos whose label says what it should find. Spark costs about $0.01–0.04 a photo, Wonder about $0.06; the ledger counts both
 - `--concepts file.json` tries other SAM wordings: a list of `{ concept, kind, label }`
 - `--budget 10` stops before new calls would take the ledger (`practice-spend.jsonl` in `REPLAY_DIR`) past that many dollars
 - `--out`, `--report` save the JSON and the Markdown
 
 Then, for free: `tsx scripts/practice/sweep.ts --from out.json --labels labels.json`.
+
+## Video
+
+`video.ts` records SAM's answers for a whole video (already the scan's 5 fps analysis video), the same way a scan asks, within a budget. `tracks.ts` runs them through the app's video finds (`server/videoFinds.ts`) and counts what each kept track really is, from labels that name each track by its id in SAM's answer. Label a track by looking at its clearest frame.
 
 Never publish the scores: they go in private notes, not this repo.
