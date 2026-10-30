@@ -25,22 +25,24 @@ export function ScanPage() {
       if (tab || !canEdit) return setPhase("result");
       const step = await lastStep(scanId);
       if (cancelled) return;
-      if (step === "book") return setPhase("result");
+      if (step === "book") {
+        // The workspace, with its tab in the address so a refresh stays on it.
+        window.history.replaceState(window.history.state, "", stepUrl(scanId, "book"));
+        return setPhase("result");
+      }
       if (!step && scanId === "sample") return setPhase("live");
       router.history.replace(stepUrl(scanId, step ?? "plan"));
     };
-    if (scanId === "sample") {
-      void land(true);
-      return;
-    }
-    getScan(scanId)
-      .then((s) => {
-        if (cancelled) return;
-        setOwner(Boolean(s.canEdit));
-        if (s.status === "done") void land(Boolean(s.canEdit));
-        else setPhase("live");
-      })
-      .catch(() => !cancelled && setPhase("missing"));
+    if (scanId === "sample") void land(true);
+    else
+      getScan(scanId)
+        .then((s) => {
+          if (cancelled) return;
+          setOwner(Boolean(s.canEdit));
+          if (s.status === "done") void land(Boolean(s.canEdit));
+          else setPhase("live");
+        })
+        .catch(() => !cancelled && setPhase("missing"));
     return () => {
       cancelled = true;
     };

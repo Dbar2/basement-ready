@@ -17,7 +17,7 @@ export async function getViews(scanId: string, designHash?: string, perRoom = 5,
   return res.json();
 }
 
-export async function postPicture(scanId: string, angleId: string, guide: Blob, meta: { designHash: string; viewKey: string; items: unknown; finishes: Design["finishes"] }): Promise<Picture> {
+export async function postPicture(scanId: string, angleId: string, guide: Blob, meta: { designHash: string; viewKey: string; items: unknown; walls?: unknown; finishes: Design["finishes"] }): Promise<Picture> {
   const form = new FormData();
   form.append("guide", guide, `${angleId}.jpg`);
   form.append("meta", JSON.stringify(meta));

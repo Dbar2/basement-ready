@@ -11,7 +11,6 @@ import { Applications, HowToApply, MoneySection } from "../components/Money";
 import { Logo } from "../components/Logo";
 import { FlowFoot, FlowHead } from "../flow/FlowNav";
 import { SiteFooter } from "../marketing/parts";
-import { loadModel } from "../studio/api";
 import type { Design, Existing } from "../../server/model/types";
 import { getWorkspace, saveWorkspace, type Profile, type Workspace as WorkspaceData, type WorkspaceState } from "../workspaceApi";
 import { PlanTab, STATUS, type Changes } from "./Result";
@@ -93,8 +92,10 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
       setReadOnly(shared);
       // A shared link has no book to open: it reads the answer.
       if (shared && tab === "book") setTab("decision");
+      // The model's checks load with it, not with the first page.
       if (!shared)
-        void loadModel(scanId)
+        void import("../studio/api")
+          .then(({ loadModel }) => loadModel(scanId))
           .then(({ model }) => {
             const d = model.designs.find((x) => x.chosen) ?? model.designs[0];
             if (d) setDesign({ existing: model.existing, design: d });
@@ -204,8 +205,10 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
   const next = NEXT[tab];
 
   return (
+    <div className="flow-page">
+    {!readOnly && <FlowHead scanId={scanId} step="book" />}
     <main className="result workspace" data-verdict={r.verdict}>
-      {readOnly ? (
+      {readOnly && (
         <header className="nav">
           <Logo />
           <span className="nav-right">
@@ -213,8 +216,6 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
             <AccountNav />
           </span>
         </header>
-      ) : (
-        <FlowHead scanId={scanId} step="book" />
       )}
       <div className="ws-head">
         {!readOnly && (
@@ -284,15 +285,15 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
       {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty mono ws-wait">Opening your workspace…</p>}
 
       <SiteFooter />
-      {readOnly ? (
+      {readOnly && (
         <div className="result-bar">
           <button className="btn btn-primary" onClick={() => void share()}>
             Share
           </button>
         </div>
-      ) : (
-        <FlowFoot scanId={scanId} step="book" next={next ? { label: next.label, onClick: () => go(next.tab) } : null} />
       )}
     </main>
+    {!readOnly && <FlowFoot scanId={scanId} step="book" next={next ? { label: next.label, onClick: () => go(next.tab) } : null} />}
+    </div>
   );
 }

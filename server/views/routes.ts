@@ -19,7 +19,7 @@ import { designHash } from "../model/furniture";
 import type { Design } from "../model/types";
 import { keys, storage } from "../storage";
 import { anchorsAt, angleById, bestAngles, designAngles, designFor, frameUrl, meshUrl, readStored, SAMPLE, sampleFile, scanResult, type Anchor } from "./load";
-import { ANCHOR_CONCEPT, makePicture, sameBox, type DrawnItem, type PictureMeta } from "./photoreal";
+import { ANCHOR_CONCEPT, makePicture, type DrawnItem, type PictureMeta } from "./photoreal";
 
 const UUID = /^[0-9a-f-]{36}$/;
 const ANGLE = /^\d{1,2}-\d{4}$/;
@@ -83,25 +83,27 @@ async function designPicture(id: string, angle: string, hash: string): Promise<P
   return view && HASH.test(view) ? storedMeta(id, angle, view) : null;
 }
 
-// What a picture of this frame must keep, and must not add to: the windows, doors and stairs SAM
-// tracked through the video there, plus what SAM sees in the frame itself (it can miss one in the
-// video). Looked at once per angle and kept.
-async function anchorsFor(id: string, angle: { id: string; frame: number }): Promise<Anchor[]> {
-  const video = await anchorsAt(id, angle.frame);
-  const merge = (seen: Anchor[]) => [...video, ...seen.filter((s) => !video.some((v) => v.kind === s.kind && sameBox(v.box, s.box)))];
+// What a picture of this frame must keep (the windows, doors and stairs SAM tracked through the video
+// there), and what it may show at all: those, plus the windows and stairs SAM sees in the frame itself
+// (it can miss one in the video). The frame is looked at once per angle and kept.
+async function anchorsFor(id: string, angle: { id: string; frame: number }): Promise<{ keep: Anchor[]; known: Anchor[] }> {
+  const keep = await anchorsAt(id, angle.frame);
   const kept = await readPic(id, anchorsRel(angle.id));
-  if (kept) return merge(JSON.parse(kept.toString("utf8")) as Anchor[]);
-  if (!(await canSpend(id))) return video;
+  if (kept) return { keep, known: JSON.parse(kept.toString("utf8")) as Anchor[] };
+  if (!(await canSpend(id))) return { keep, known: [] };
   const frame = id === SAMPLE ? sampleFile(`frames/${String(angle.frame).padStart(4, "0")}.jpg`) : await readStored(keys.frame(id, angle.frame));
-  if (!frame) return video;
-  const kinds = Object.keys(ANCHOR_CONCEPT) as Anchor["kind"][];
+  if (!frame) return { keep, known: [] };
+  const kinds = ["window", "stairs"] as const;
   charge(kinds.length * SAM_USD);
-  const seen = (await Promise.all(kinds.map(async (kind) => (await boxesIn(frame, ANCHOR_CONCEPT[kind]).catch(() => [])).map((box) => ({ kind, box }))))).flat();
-  await writePic(id, anchorsRel(angle.id), Buffer.from(JSON.stringify(seen)), "application/json");
-  return merge(seen);
+  const known = (await Promise.all(kinds.map(async (kind) => (await boxesIn(frame, ANCHOR_CONCEPT[kind]).catch(() => [])).map((box) => ({ kind, box }))))).flat();
+  await writePic(id, anchorsRel(angle.id), Buffer.from(JSON.stringify(known)), "application/json");
+  return { keep, known };
 }
 
 const okId = (id: string) => UUID.test(id) || id === SAMPLE;
+
+const cleanBoxes = (raw: unknown): DrawnItem["box"][] =>
+  (Array.isArray(raw) ? raw : []).slice(0, 40).flatMap((b: any) => ([b?.x, b?.y, b?.w, b?.h].every((v) => typeof v === "number" && Number.isFinite(v)) ? [{ x: b.x, y: b.y, w: b.w, h: b.h }] : []));
 
 const cleanItems = (raw: unknown): DrawnItem[] =>
   (Array.isArray(raw) ? raw : []).slice(0, 40).flatMap((i: any) => {
@@ -170,6 +172,7 @@ export function mountViews(app: Hono) {
     const hash = String(meta.designHash), view = String(meta.viewKey);
     const finishes = { style: String(meta.finishes?.style ?? "").slice(0, 120), floor: String(meta.finishes?.floor ?? "").slice(0, 60), walls: String(meta.finishes?.walls ?? "").slice(0, 60) };
     let saved = true;
+    const { keep, known } = await anchorsFor(id, angle);
     const picture = await makePicture(
       {
         angleId,
@@ -178,7 +181,9 @@ export function mountViews(app: Hono) {
         guide: Buffer.from(await guide.arrayBuffer()),
         size: [angle.intrinsics.width, angle.intrinsics.height],
         items: cleanItems(meta.items),
-        anchors: await anchorsFor(id, angle),
+        anchors: keep,
+        known,
+        hidden: cleanBoxes(meta.walls),
         finishes,
       },
       {
