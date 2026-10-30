@@ -55,7 +55,7 @@ export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: 
                   <span data-ok={f.count.fix === 0 || undefined}>
                     Meets {f.count.ok} checks{f.count.fix ? ` · ${f.count.fix} to fix` : ""}
                   </span>
-                  <span>{cad(f.low)}–{cad(f.high)} hired out</span>
+                  <span data-total data-low={f.low} data-high={f.high}>{cad(f.low)}–{cad(f.high)} hired out</span>
                 </p>
                 <span className={d.chosen ? "btn btn-primary layout-pick" : "btn btn-ghost layout-pick"}>{d.chosen ? "Picked ✓" : "Pick this layout"}</span>
               </button>

@@ -13,6 +13,7 @@ import { FlowFoot, FlowHead, FlowLink } from "../flow/FlowNav";
 import { stepUrl } from "../flow/flow";
 import { fmtLength, type Units } from "../components/FloorPlan";
 import { lazy3d, View3DBoundary } from "../components/View3D";
+import { getScan } from "../api";
 import { describeChange, loadModel, saveModel, type Proposal } from "./api";
 import { basisOf, cad, quoteFor } from "./cost";
 import { useHistory } from "./history";
@@ -44,12 +45,14 @@ function useReducedMotion() {
 export function Studio() {
   const { scanId } = useParams({ from: "/scans/$scanId/studio" });
   const [model, setModel] = useState<Model | null>(null);
+  const [municipality, setMunicipality] = useState<string | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     document.title = "Your basement, designed | Basement Ready";
     loadModel(scanId)
       .then((r) => setModel(r.model))
       .catch((e) => setError(e instanceof Error ? e.message : "We couldn't open your design."));
+    void getScan(scanId).then((s) => setMunicipality(s.result?.municipality)).catch(() => {});
   }, [scanId]);
   return (
     <MotionConfig reducedMotion="user">
@@ -58,7 +61,7 @@ export function Studio() {
         {error ? (
           <p className="error studio-wait">{error}</p>
         ) : model && model.designs.length ? (
-          <Editor scanId={scanId} initial={model} />
+          <Editor scanId={scanId} initial={model} municipality={municipality} />
         ) : model ? (
           <p className="studio-wait muted">There's no design for this basement yet: it needs a measured plan.</p>
         ) : (
@@ -72,7 +75,7 @@ export function Studio() {
   );
 }
 
-function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
+function Editor({ scanId, initial, municipality }: { scanId: string; initial: Model; municipality?: string }) {
   const reduced = useReducedMotion();
   const [model, setModel] = useState(initial);
   const first = initial.designs.find((d) => d.chosen) ?? initial.designs[0];
@@ -92,7 +95,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
   // The checks follow what's committed; the cost follows the finger.
   const checks = useMemo(() => checkDesign(hist.present, existing), [hist.present, existing]);
   const count = tally(checks);
-  const quote = useMemo(() => quoteFor(model, design), [model, design]);
+  const quote = useMemo(() => quoteFor(model, design, municipality), [model, design, municipality]);
 
   // Each committed change goes into the model, which saves itself a moment later.
   const loaded = useRef(true);
@@ -260,7 +263,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
             Meets {count.ok} checks{count.fix ? ` · ${count.fix} to fix` : ""}
           </button>
           <button className="status-chip" data-state="cost" aria-expanded={panel === "cost"} onClick={() => setPanel((p) => (p === "cost" ? null : "cost"))}>
-            {cad(quote.totalLow)}–{cad(quote.totalHigh)} hired out
+            <span data-total data-low={quote.totalLow} data-high={quote.totalHigh}>{cad(quote.totalLow)}–{cad(quote.totalHigh)} hired out</span>
           </button>
           <button className="status-chip" data-state="ask" aria-expanded={panel === "describe"} onClick={() => setPanel((p) => (p === "describe" ? null : "describe"))}>
             Describe a change
@@ -294,7 +297,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
           )}
           {panel === "describe" && (
             <motion.div key="describe" className="side-card" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-              <Describe scanId={scanId} design={hist.present} model={model} onPreview={hist.preview} onApply={(d) => hist.commit(d)} />
+              <Describe scanId={scanId} design={hist.present} model={model} municipality={municipality} onPreview={hist.preview} onApply={(d) => hist.commit(d)} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -361,7 +364,7 @@ function Checks({ checks, onFix, onShow }: { checks: Check[]; onFix: (c: Check) 
 
 // "Describe a change": their words, muse-spark's proposal, what it does to the checks and the cost,
 // then Apply. The proposal shows in the 3D and the plan while it's open.
-function Describe({ scanId, design, model, onPreview, onApply }: { scanId: string; design: Design; model: Model; onPreview: (d: Design | null) => void; onApply: (d: Design) => void }) {
+function Describe({ scanId, design, model, municipality, onPreview, onApply }: { scanId: string; design: Design; model: Model; municipality?: string; onPreview: (d: Design | null) => void; onApply: (d: Design) => void }) {
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -369,8 +372,8 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
   useEffect(() => () => onPreview(null), [onPreview]);
   const before = useMemo(() => tally(checkDesign(design, model.existing)), [design, model.existing]);
   const after = useMemo(() => (proposal ? tally(checkDesign(proposal.result, model.existing)) : null), [proposal, model.existing]);
-  const costBefore = useMemo(() => quoteFor(model, design), [model, design]);
-  const costAfter = useMemo(() => (proposal ? quoteFor(model, proposal.result) : null), [model, proposal]);
+  const costBefore = useMemo(() => quoteFor(model, design, municipality), [model, design, municipality]);
+  const costAfter = useMemo(() => (proposal ? quoteFor(model, proposal.result, municipality) : null), [model, proposal, municipality]);
   const send = async () => {
     setBusy(true);
     setError(null);

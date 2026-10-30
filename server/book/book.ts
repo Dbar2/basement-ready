@@ -381,7 +381,7 @@ function readinessPage(doc: PDFDocument, fonts: Fonts, ready: ReadinessItem[], o
 
 function moneyPage(doc: PDFDocument, fonts: Fonts, result: any, o: { address: string }, pages: string[]) {
   const grants = (result?.grants ?? []).filter((g: any) => g.qualify !== "no");
-  const f = new Flow(doc, fonts, "Money", "Money you may qualify for", o, pages);
+  const f = new Flow(doc, fonts, "Money", "Money you may be eligible for", o, pages);
   if (!grants.length) {
     f.s.wrap("Answer the money questions on the workspace and the programs that fit show here.", M, f.y, f.s.width - 2 * M, { size: 10, color: MOSS });
     return;
@@ -390,7 +390,7 @@ function moneyPage(doc: PDFDocument, fonts: Fonts, result: any, o: { address: st
     const text = [g.amount, g.apply?.detail, g.apply?.paidWhen ? `Paid ${g.apply.paidWhen}.` : null].filter(Boolean).join(" ");
     f.need(f.s.measure(text, f.s.width - 2 * M - 12, 8.5) + 40);
     f.s.text(g.shortName ?? g.name, M, f.y, { size: 11, color: FOREST, font: fonts.bold });
-    f.s.text(g.qualify === "yes" ? "You qualify" : "You may qualify", f.s.width - M, f.y, { size: 8, color: g.qualify === "yes" ? LEAF : AMBER, font: fonts.bold, align: "right" });
+    f.s.text(g.qualify === "yes" ? "Looks eligible" : "Could be eligible", f.s.width - M, f.y, { size: 8, color: g.qualify === "yes" ? LEAF : AMBER, font: fonts.bold, align: "right" });
     f.y = f.s.wrap(text, M, f.y - 13, f.s.width - 2 * M - 12, { size: 8.5, color: MOSS });
     if (g.source?.url) f.y = f.s.wrap(`Source: ${g.source.title}, ${g.source.url}`, M, f.y, f.s.width - 2 * M, { size: 6.5, color: MOSS });
     f.y -= 10;

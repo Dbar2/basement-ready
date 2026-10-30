@@ -245,6 +245,7 @@ export type FixGroup = {
   costLow: number | null;
   costHigh: number | null;
   sources: Source[];
+  priced?: boolean; // false: the quote can't price it yet (the design has no place for it)
 };
 
 // A money program, decided in code (server/eligibility.ts): yes, no, or one answer away.
@@ -284,6 +285,7 @@ export type ScanResult = {
   id: string;
   household: Household;
   city?: string;
+  municipality?: string; // the rules pack and the permit fee it's priced with ("waterloo-on")
   authority?: string; // who issues the permit: "City of Waterloo", "Township of Woolwich"
   coverage?: "full" | "provincial";
   coverageNote?: string | null; // what Ontario-only coverage means for this municipality
@@ -321,7 +323,10 @@ export type ScanResult = {
   demo?: boolean; // the demo house: Waterloo's rules, no real address
   disclaimer?: string | null; // the rules pack's own words: a screening aid, not a permit decision
   heldBack: number;
-  cost: { low: number; high: number; fixesLow?: number; fixesHigh?: number; standardLow?: number; standardHigh?: number; pricedFixes: number; unpricedFixes: number };
+  // `design`: the design whose quote this is (server/priced.ts); null while it's the rules' rough sum.
+  cost: { low: number; high: number; fixesLow?: number; fixesHigh?: number; standardLow?: number; standardHigh?: number; pricedFixes: number; unpricedFixes: number; design?: string | null };
+  // The design they picked, as the answer's 3D draws it, with its own checks (server/priced.ts).
+  design?: { id: string; name: string; plan: Plan; layout: Layout } | null;
   grants: Grant[];
   process: { step: number; title: string; detail: string; source?: Source }[];
   pros: {
@@ -538,7 +543,7 @@ export async function answerQuestion(scanId: string, current: ScanResult, sample
     const res = await fetch("/api/recheck", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ result: current, answers, household: household ?? current.household }),
+      body: JSON.stringify({ result: current, answers, household: household ?? current.household, model: sampleModel() }),
     });
     if (!res.ok) throw new Error("We couldn't check that. Try again.");
     return (await res.json()).result as ScanResult;
@@ -586,8 +591,34 @@ export type ScanStatus = {
   answers?: Record<string, AnyAnswer>;
   asks?: WaitAsk[];
 };
+// The example keeps its model in this browser (src/workspaceApi.ts, "br-sample-workspace").
+function sampleModel(): unknown {
+  try {
+    return JSON.parse(localStorage.getItem("br-sample-workspace") ?? "null")?.state?.model ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// The example's answer, re-checked with what its visitor answered and priced on the design it picked
+// here (server/priced.ts), as a real scan's comes from the server: one quote and one list of fixes.
+async function sampleScan(): Promise<ScanStatus> {
+  const result = await (await fetch("/samples/sample/result.json")).json();
+  const told = Object.fromEntries(((result.moneyAnswered ?? []) as { id: string; answer: unknown }[]).filter((q) => q.id !== "household").map((q) => [q.id, q.answer]));
+  const { household, ...answers } = { ...told, ...sampleEarlyAnswers() } as Record<string, unknown>;
+  const res = await fetch("/api/recheck", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ result, answers, household: household ?? result.household, model: sampleModel() }),
+  }).catch(() => null);
+  return { status: "done", result: res?.ok ? (await res.json()).result : result, canEdit: true };
+}
+
+// Every cost on every screen is the quote for the design they picked (server/priced.ts): say which.
+export const costLabel = (r: Pick<ScanResult, "cost">) => (r.cost.design ? `Hired out, ${r.cost.design.toLowerCase()}` : "Rough cost, all in");
+
 export async function getScan(id: string): Promise<ScanStatus> {
-  if (id === "sample") return { status: "done", result: await (await fetch("/samples/sample/result.json")).json(), canEdit: true };
+  if (id === "sample") return sampleScan();
   const res = await fetch(`/api/scans/${id}`, { headers: await authHeaders() });
   if (!res.ok) throw new Error("not found");
   return res.json();
