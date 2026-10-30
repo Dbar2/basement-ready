@@ -1,10 +1,11 @@
 import { existsSync, readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db, migrateDb, schema } from "../../server/db";
-import { cardsSoFar, checkedWords, makeDeck, pickViews, runCards, sharpen, type CardWork } from "../../server/ideas/cards";
-import { cardId, disliked, emptySwipes, moodFrom, moodWords, planDeck, swipes, upNext, type Card, type Deck, type SwipeState, type View } from "../../server/ideas/deck";
+import { pickAngles, shotsFrom, type Shot } from "../../server/ideas/angles";
+import { anglePicks, cardsSoFar, checkedWords, makeDeck, pickViews, runCards, sharpen, type CardWork } from "../../server/ideas/cards";
+import { cardId, colourFurniture, disliked, emptySwipes, moodFrom, moodWords, planDeck, swipes, upNext, type Card, type Deck, type SwipeState, type View } from "../../server/ideas/deck";
 import { cameras, designFrom, frameFacing, layoutOptions, withCorners } from "../../server/ideas/layouts";
-import { cardPrompt, DECK_STYLES, STYLES, tagsFor } from "../../server/ideas/styles";
+import { cardPrompt, COLOURS, DECK_STYLES, furnitureOf, STYLES, tagsFor } from "../../server/ideas/styles";
 
 beforeAll(async () => {
   await migrateDb();
@@ -59,6 +60,71 @@ describe("idea cards: which real views", () => {
     expect(views.every((v) => frames.includes(v.frame))).toBe(true);
     expect(new Set(views.map((v) => v.frame)).size).toBe(views.length);
     expect(views[0].frame).toBe(0); // the window
+  });
+});
+
+// A camera in a 6 × 4 m room: where it stands, which way it looks on the floor (degrees, 0 = +z),
+// how far it tips down, how high it is.
+function pose(x: number, z: number, yawDeg: number, down = 0.1, height = 1.5): number[][] {
+  const yaw = (yawDeg * Math.PI) / 180;
+  const f = [Math.sin(yaw) * Math.sqrt(1 - down * down), -down, Math.cos(yaw) * Math.sqrt(1 - down * down)];
+  return [
+    [0, 0, f[0], x],
+    [0, 0, f[1], height],
+    [0, 0, f[2], z],
+    [0, 0, 0, 1],
+  ];
+}
+const room = { floor: { heightM: 0 }, box: { min: [-3, 0, -2], max: [3, 2.4, 2] } };
+
+describe("idea cards: the best angles from the 3D", () => {
+  it("measures how far each frame sees to the wall ahead, and how level and high the camera is", () => {
+    const [s] = shotsFrom({ room, frames: [{ name: "0120.jpg", sharpness: 300, pose: pose(-2.5, 0, 90) }] }, null, 0);
+    expect(s).toMatchObject({ frame: 120, room: 0, heightM: 1.5 });
+    expect(s.aheadM).toBeCloseTo(5.5, 1); // looking along the room to the far wall
+    expect(s.tilt).toBeCloseTo(0.1);
+  });
+
+  it("never picks a frame looking down, held too low, or facing a wall close up", () => {
+    const shots = shotsFrom(
+      {
+        room,
+        frames: [
+          { name: "0010.jpg", sharpness: 500, pose: pose(-2.5, 0, 90, 0.7) }, // at the floor
+          { name: "0030.jpg", sharpness: 500, pose: pose(-2.5, 0, 90, 0.1, 0.6) }, // knee height
+          { name: "0050.jpg", sharpness: 500, pose: pose(2.4, 0, 90) }, // 0.6 m from the wall
+          { name: "0070.jpg", sharpness: 100, pose: pose(-2.5, 0.5, 80) }, // the one good view
+        ],
+      },
+      null,
+      0,
+    );
+    expect(pickAngles(shots).map((s) => s.frame)).toEqual([70]);
+  });
+
+  it("prefers the sharper of two wide views, and spreads around: every room, then other directions", () => {
+    const a = shotsFrom({ room, frames: [
+      { name: "0100.jpg", sharpness: 50, pose: pose(-2.5, 0, 90) },
+      { name: "0110.jpg", sharpness: 400, pose: pose(-2.5, 0.2, 92) },
+      { name: "0150.jpg", sharpness: 300, pose: pose(2.5, 0, -90) },
+    ] }, null, 0);
+    const b = shotsFrom({ room, frames: [{ name: "0300.jpg", sharpness: 200, pose: pose(0, -1.8, 0) }] }, null, 1);
+    const picks = pickAngles([...a, ...b]);
+    expect(picks[0].frame).toBe(110); // sharp and wide
+    expect(picks.map((p) => p.room).slice(0, 2).sort()).toEqual([0, 1]); // both rooms before a second of either
+    expect(picks.map((p) => p.frame)).toContain(150); // the same room, looking the other way
+    expect(picks.map((p) => p.frame)).not.toContain(100); // too close in direction to 110
+  });
+
+  it("keeps the window corner in the deck when the video saw one, and names views by room", () => {
+    const shots: Shot[] = shotsFrom({ room, frames: [
+      { name: "0100.jpg", sharpness: 400, pose: pose(-2.5, 0, 90) },
+      { name: "0200.jpg", sharpness: 100, pose: pose(0, -1.8, 0) },
+    ] }, null, 0);
+    const window = det("window", "Window", 200, 3);
+    const picks = anglePicks(shots, [window], new Map([[0, "Room 1"]]), 1);
+    expect(picks).toEqual([{ frame: 200, title: "By the window" }]);
+    expect(anglePicks(shots, [], new Map([[0, "Room 1"]]))[0]).toEqual({ frame: 100, title: "Room 1" });
   });
 });
 
@@ -138,9 +204,32 @@ describe("idea cards: likes into finishes", () => {
     expect(moodFrom(cards, ["c3", "c1", "c2"], ["c6"]).style).toBe("warm");
   });
 
+  it("colours the furniture from the board: each piece in the style loved most for its room", () => {
+    const mood = moodFrom([card(1, "industrial", "living"), card(2, "warm", "bedroom"), card(3, "bright", "kitchen")], ["c1", "c2", "c3"]);
+    expect(mood.colours.sofa).toBe(STYLES.industrial.furniture.sofa);
+    expect(mood.colours.bed).toBe(STYLES.warm.furniture.bed);
+    expect(mood.colours.dining).toBe(STYLES.bright.furniture.dining);
+    // Nothing loved for the bathroom: the board's own style.
+    expect(mood.colours.vanity).toBe(furnitureOf(mood.style as "industrial").vanity);
+    for (const name of Object.values(mood.colours)) expect(COLOURS[name!]).toMatch(/^#[0-9A-F]{6}$/i);
+  });
+
+  it("paints a design's furniture from the board, never over a colour they picked", () => {
+    const colours = { sofa: "Charcoal", bed: "Oat linen" };
+    const out = colourFurniture(
+      [
+        { id: "f1", kind: "sofa", at: [0, 0], rotDeg: 0, sizeM: [2, 0.9] },
+        { id: "f2", kind: "bed", at: [1, 1], rotDeg: 0, sizeM: [1.5, 2], colour: "Forest velvet" },
+        { id: "f3", kind: "lamp" as never, at: [0, 1], rotDeg: 0, sizeM: [0.3, 0.3] },
+      ],
+      colours,
+    );
+    expect(out.map((f) => f.colour)).toEqual(["Charcoal", "Forest velvet", undefined]);
+  });
+
   it("reads nothing until something is loved", () => {
     const mood = moodFrom(cards, [], ["c1"]);
-    expect(mood).toMatchObject({ style: null, finishes: {}, liked: [] });
+    expect(mood).toMatchObject({ style: null, finishes: {}, liked: [], colours: {} });
     expect(moodWords(mood)).toBeNull();
   });
 });
@@ -188,8 +277,8 @@ describe("idea cards: swiping", () => {
 // Muse Image and SAM, faked: the window is in frame 0 only; a restyle keeps it unless told to lose it,
 // and adds one where there was none when told to.
 const fakeJpeg = (w: number, h: number) => Buffer.from([0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, h >> 8, h & 255, w >> 8, w & 255, 0x03, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
-function fakeWork(opts: { lose?: (frame: number) => boolean; add?: (frame: number) => boolean; overCapAfter?: number } = {}) {
-  const log = { edits: 0, running: 0, maxRunning: 0, landed: [] as number[], dropped: [] as number[], planned: 0 };
+function fakeWork(opts: { lose?: (frame: number) => boolean; add?: (frame: number) => boolean; overCapAfter?: number; editMs?: (frame: number) => number } = {}) {
+  const log = { edits: 0, running: 0, maxRunning: 0, landed: [] as number[], dropped: [] as number[], planned: 0, editsOf: new Map<number, number>() };
   const original = new Map<Buffer, number>();
   const edited = new Map<Buffer, number>();
   const work: CardWork = {
@@ -200,9 +289,10 @@ function fakeWork(opts: { lose?: (frame: number) => boolean; add?: (frame: numbe
     },
     edit: async (frame) => {
       log.edits++;
+      log.editsOf.set(original.get(frame)!, (log.editsOf.get(original.get(frame)!) ?? 0) + 1);
       log.running++;
       log.maxRunning = Math.max(log.maxRunning, log.running);
-      await new Promise((r) => setTimeout(r, 5));
+      await new Promise((r) => setTimeout(r, opts.editMs?.(original.get(frame)!) ?? 5));
       log.running--;
       const out = Buffer.from(`edit ${log.edits}`);
       edited.set(out, original.get(frame)!);
@@ -238,12 +328,24 @@ describe("idea cards: making them", () => {
     // The window view's four cards each tried twice and were left out; the rest landed.
     expect(deck.dropped).toEqual(deck.slots.filter((s) => s.frame === 0).map((s) => s.n));
     expect(deck.cards.length).toBe(12);
-    expect(log.edits).toBe(12 + 4 * 2);
+    // Each turned-down card tried twice; once two of a view are turned down, its others aren't tried.
+    expect(log.edits).toBeGreaterThanOrEqual(12 + 2 * 2);
+    expect(log.edits).toBeLessThanOrEqual(12 + 4 * 2);
     expect(log.maxRunning).toBeGreaterThan(1);
     expect(log.maxRunning).toBeLessThanOrEqual(6);
     // SAM's window made the view the window corner.
     expect(deck.slots.find((s) => s.frame === 0)!.view).toBe("By the window");
     expect(deck.cards.find((c) => c.frame === 100)!.checked).toBe("Room shape kept");
+  });
+
+  it("stops trying a view once two of its cards are turned down", async () => {
+    // The bad view's tries come back fast, the rest slowly: its first two are turned down before its
+    // last two would start, so those two are never tried.
+    const { work, log } = fakeWork({ add: (frame) => frame === 200, editMs: (frame) => (frame === 200 ? 1 : 40) });
+    const deck = await makeDeck("t", picks, work);
+    expect(deck.dropped).toEqual(deck.slots.filter((s) => s.frame === 200).map((s) => s.n));
+    expect(log.editsOf.get(200)).toBe(2 * 2);
+    expect(deck.cards.length).toBe(12);
   });
 
   it("leaves out a card that grew a window the basement doesn't have", async () => {

@@ -30,6 +30,8 @@ import { leftWords, secondsLeft, waitState } from "./waitTime";
 
 // three.js only loads once there's a basement to draw.
 const Assembling = lazy(() => import("../components/Assembling"));
+// Swipe your style: their own basement restyled while it measures (src/ideas).
+const StyleDeck = lazy(() => import("../ideas/StyleDeck"));
 
 type Props = {
   scanId: string; // "sample" replays the recorded sample scan
@@ -272,12 +274,13 @@ export function LiveScan({ scanId, onDone }: Props) {
     setAsks(next ?? (await waitAsks(scanId).catch(() => asks ?? [])));
   };
 
-  // Ready and nothing left to ask: open the answer on its own after a moment.
+  // Ready and nothing left to ask: open the answer on its own after a moment, unless they're swiping.
+  const [swiped, setSwiped] = useState(0);
   useEffect(() => {
-    if (!done || ask || (asks === null && canEdit)) return;
+    if (!done || ask || (asks === null && canEdit) || swiped > 0) return;
     const id = window.setTimeout(onDone, 2500);
     return () => clearTimeout(id);
-  }, [done, ask, asks]);
+  }, [done, ask, asks, swiped]);
 
   // Draw SAM's boxes for whatever frame the video is on.
   useEffect(() => {
@@ -507,6 +510,18 @@ export function LiveScan({ scanId, onDone }: Props) {
           )}
         </aside>
       </section>
+
+      {canEdit && !failed && (
+        <section className="live-ideas" aria-labelledby="live-ideas-title">
+          <div className="live-ideas-head">
+            <h2 id="live-ideas-title">Swipe your style</h2>
+            <p className="muted">Your own basement, restyled while it measures. Right if you love it, left if it's not for you: your board sets the finishes.</p>
+          </div>
+          <Suspense fallback={null}>
+            <StyleDeck scanId={scanId} onSwiped={setSwiped} />
+          </Suspense>
+        </section>
+      )}
     </main>
   );
 }

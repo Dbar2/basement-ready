@@ -1,11 +1,13 @@
 // Client for the swipe deck and the layout picker (server/ideas/routes.ts). The example ("sample")
 // reads its deck from public/samples/sample/cards and keeps its pick in this tab.
-import type { Card, Deck, Slot } from "../../server/ideas/deck";
+import type { BoardMood, Card, Deck, Slot } from "../../server/ideas/deck";
 import type { LayoutOption } from "../../server/ideas/layouts";
-import type { Design, Finishes, Mood } from "../../server/model/types";
+import type { Design, Finishes } from "../../server/model/types";
 import type { Plan } from "../api";
 
-export type { Card, Deck, LayoutOption, Mood, Slot };
+// The board's read: the model's Mood plus the furniture colours it sets.
+export type Mood = BoardMood;
+export type { Card, Deck, LayoutOption, Slot };
 
 const isSample = (scanId: string) => scanId === "sample";
 

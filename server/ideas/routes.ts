@@ -10,6 +10,7 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { db, schema } from "../db";
 import { enqueue } from "../jobs";
+import { metaKey, overSpend, USED_UP } from "../limits";
 import { keys, storage } from "../storage";
 import { basementFor, loadWorkspace, parseClaims, saveWorkspace } from "../workspace";
 import type { Design, Model } from "../model/types";
@@ -24,7 +25,6 @@ const SAMPLE = "public/samples/sample";
 const NEED_ACCESS = "Open this on the device you scanned with, or sign in.";
 const MAX_CORNERS = 24; // per scan and server run: a board changes the finishes, not without end
 
-const metaKey = () => Boolean(process.env.MODEL_API_KEY || process.env.RELAY_TOKEN);
 
 async function read(key: string) {
   const s = await storage.get(key);
@@ -53,6 +53,7 @@ const MoodSchema = z.object({
   disliked: z.array(text(12)).max(40),
   style: z.enum(Object.keys(STYLES) as [StyleId, ...StyleId[]]).nullable(),
   finishes: FinishesSchema,
+  colours: z.record(z.string().max(20), text(40)).optional(),
 });
 
 function sampleResult() {
@@ -97,6 +98,7 @@ export function mountIdeas(app: Hono, currentUser: (c: Context) => Promise<strin
     if (!a) return c.json({ error: "Not found" }, 404);
     if (!a.allowed) return c.json({ error: NEED_ACCESS }, 403);
     if (!metaKey()) return c.json({ error: "Cards need the Muse Image key on this server." }, 503);
+    if (await overSpend()) return c.json({ error: USED_UP }, 503);
     const [scan] = await db.select({ status: schema.scans.status }).from(schema.scans).where(eq(schema.scans.id, a.id));
     if (scan?.status === "error") return c.json({ error: "This scan didn't finish." }, 409);
     // Development only: ?again=1 deals a fresh deck.
@@ -157,6 +159,7 @@ export function mountIdeas(app: Hono, currentUser: (c: Context) => Promise<strin
     const run = `${a.id}:${hash}`;
     if (!cornerRuns.has(run)) {
       if (!metaKey()) return c.json({ error: "Pictures need the Muse Image key on this server." }, 503);
+      if (await overSpend()) return c.json({ error: USED_UP }, 503);
       if ((cornerCount.get(a.id) ?? 0) >= MAX_CORNERS) return c.json({ error: "That's enough pictures for this basement today." }, 429);
       cornerCount.set(a.id, (cornerCount.get(a.id) ?? 0) + 1);
       cornerRuns.set(
