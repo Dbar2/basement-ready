@@ -85,7 +85,7 @@ export const SCREENS: Screen[] = [
     purpose:
       "While the scan runs: the video with what the model found boxed on it, the stages (reading video, finding things, measuring rooms, checking the rules), a time left, and questions asked while it checks. For the example it says it's a recorded scan, replayed.",
     checks: ["Boxes and labels sit on the right objects in the frame.", "The time left and the stages agree with each other.", "No internal model names, error codes or confidence numbers shown to the homeowner."],
-    captureNote: "Shot a few seconds in, with the first question up; it's one moment of a moving screen.",
+    captureNote: "Shot a few seconds in, with the first question up; it's one moment of a moving screen. Only the example replays it: a finished take opens on its last step.",
   }),
   S({
     id: "workspace-book",
