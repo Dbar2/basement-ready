@@ -171,6 +171,10 @@ for (const take of TAKES) {
       await ws.fillProfileIfAsked();
       await ws.permit().expectOpen();
     });
+    // Saving the owner's details ticks "Owner details": the count is read once the heading has caught up
+    // with the server's (WebKit can draw the old one for a moment after the save).
+    const serverLeft = (await api(page, `/api/scans/${scanId}/permit/status`)).left;
+    await expect.poll(() => ws.permit().left(), { timeout: 15_000 }).toBe(serverLeft);
     const left = await ws.permit().left();
     const pdf = (await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-${take.id}-permit.pdf`))))!;
     expectSheets(pdf);
