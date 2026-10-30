@@ -1,6 +1,6 @@
 # Basement Ready UI: Drawing Set
 
-Locked Oct 30, 2026. David picked it over "Open Room" and "Grade Line" (boards in the private notes, `brand-ui/`). It sits on top of the Fresh Air brand (`brand/brand.md`): same colours, type and logo. Every value here is a token in `brand/tokens.css`; the living reference is `/dev/ui` on a dev server.
+Locked Oct 30, 2026. David picked it over "Open Room" and "Grade Line" (boards in the private notes, `brand-ui/`). It sits on top of the Fresh Air brand (`brand/brand.md`): same colours, type and logo. Every value here is a token in `brand/tokens.css`. The living reference is `/dev/ui` on a dev server (`src/dev/UiReference.tsx`); it isn't in the production build's routes.
 
 **The idea:** every screen is one sheet of an architect's drawing set. The plan, the 3D and the photos are drawn on the sheet; hairlines divide it; a sheet index runs across the top and a title strip along the bottom. It looks like the permit set we hand over at the end, made friendly.
 
@@ -34,7 +34,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 
 - **Mono is for figures only:** `2.10 m`, `41.7 m²`, `$50k–$86k`, `9 of 14`, `03`. Never a sentence, a hint or a label. "Drag a wall to move it" is body text.
 - **No labels above headings.** No small caps line, no uppercase kicker, no mono eyebrow over a title. If the context matters, it goes in the sentence under the title.
-- **No uppercase** anywhere except unit abbreviations that are uppercase anyway.
+- **No uppercase** anywhere except unit abbreviations and the labels drawn inside a plan.
 - **Headings are never highlighted.** The mint fill is for the action and the selected thing, not for words.
 - Big figures (a total, "9 of 14") are Hanken 900 at h2 size, with the unit in Geist Mono beside them.
 
@@ -50,7 +50,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 ## The step bar (sheet index)
 
 - Six sheets: `01 Style  02 Plan  03 Layout  04 Design  05 Pictures  06 Book`. Numbers in Geist Mono, names in Hanken 600.
-- The current sheet: ink text with a 2 px ink underline that slides across from the previous one. Done sheets: ink. Sheets ahead: muted. All six are links.
+- The current sheet: ink text with a 2 px ink underline that draws in from the left when you arrive. Done sheets: ink. Sheets ahead: muted. All six are links (`src/flow/FlowNav.tsx`).
 - No circles, pills or check marks.
 - Phone: the numbers only, with the current sheet's name beside its number (`01 02 [03 Layout] 04 05 06`), in one line.
 - Below the bar, a 1 px ink rule: the top edge of the sheet.
@@ -58,7 +58,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 ## The title strip
 
 - The bottom of every step: a 1 px ink rule, then `← Plan` on the left, the title block in the middle (desktop only), and the primary on the right.
-- **Title block:** a small hairline box with the sheet number (`03 / 06`) over the sheet name in `--text-tiny` mono, and on desktop a 0–1–2–3 m scale bar for the plan steps. It's information, not decoration: it says where you are.
+- **Title block:** a small ink box with the sheet number (`03 / 06`) and the sheet's name in `--text-tiny` mono. Desktop only. It's information, not decoration: it says where you are.
 
 ## Lists
 
@@ -78,6 +78,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 
 - Drawn on `--color-card` paper inside a hairline frame (4 px corners). Walls in ink, a new wall thinner, an unseen wall dashed in muted.
 - Finds in their colours (`--find-*`), each with its text label. Rooms: a name in Hanken 800 and an area in mono.
+- Labels drawn inside a plan (`STAIRS`, `DUCT · 1.64 m CLEAR`) may be set in mono capitals, like a drawing. That's the only place capitals appear.
 - The plan draws itself in when it first appears (walls stroke in over `--dur-draw`), once.
 
 ## The 3D viewer
@@ -91,6 +92,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 - Real photos, lightly brightened, 4 px corners, no filters, no gradient washes fading them into text.
 - Anything an AI changed says **"Virtually staged"** in a caption line under the photo, in body small, muted. Nothing floats on top of a photo except a callout leader.
 - Placeholders while a photo loads: a flat `--color-surface` block the photo's size, with one line of muted text if it takes more than a second. No shimmer.
+- Camera screens (filming) are the one dark context: the live camera fills the screen, and the guide's panels sit on it in ink. Corners and type follow the same rules; nothing blinks.
 
 ## Icons
 
@@ -102,8 +104,8 @@ Hanken Grotesk for words, Geist Mono for figures.
 
 | Section | Motion |
 |---|---|
-| Step bar | The current sheet's underline slides from the old sheet to the new one (`--dur-2`). |
-| Home | The dimension line under the basement photo draws itself once, then the figure fades in. |
+| Step bar | The current sheet's underline draws in from the left (`--dur-2`, `--ease-draw`). |
+| Home | The scroll story's own motion: the walk, the scan and the plan arrive one at a time as you scroll (`src/marketing/Home.tsx`). |
 | Wait screen | The 3D assembles piece by piece as the scan reports; the time-left line fills; swiped cards leave sideways. |
 | Plan | Walls stroke in once (`--dur-draw`, `--ease-draw`); a dragged wall's length updates live. |
 | Layouts | Picking a layout draws its ink frame around it; the picture fades in from its plan. |
