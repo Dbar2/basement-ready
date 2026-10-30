@@ -377,8 +377,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
     basis: `${smoke} smoke, ${combo} smoke and CO, ${co} CO, where the design places them; hard-wired, interconnected with the house's, a visual signal in each sleeping area (9.10.19, 9.32.3.9).`,
     parts: [
       part("alarm_smoke_hardwired", "Hard-wired smoke alarms with strobe", smoke, 0, 1),
-      part("alarm_combo_hardwired", "Hard-wired smoke and CO alarms", combo, 0, 1),
-      part("alarm_strobe", "Strobe beside each combination alarm", combo, 0, 1),
+      part("alarm_combo_strobe", "Hard-wired smoke and CO alarms with strobe", combo, 0, 1),
       part("alarm_co_hardwired", "Hard-wired CO alarms", co, 0, 1),
     ].filter((p) => p.buy > 0),
     labour: { rate: "lab_electrician", qty: P.alarms.length * 1 },
