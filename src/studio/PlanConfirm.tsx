@@ -188,15 +188,15 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
 
       <aside className="studio-side" aria-label="Your basement">
         <div className="side-card">
-          <p className="mono side-eyebrow">{taped ? "Scaled to your tape" : e.scale.source === "arkit" ? "Measured by the iPhone app" : photos ? "From your photos, give or take a fifth" : "From the video, give or take a little"}</p>
           <p className="side-big">{areaText}</p>
           {roughArea && <p className="muted">Until you check the dashed walls.</p>}
-          <p className="muted">Ceiling {e.ceilingM ? fmtLength(e.ceilingM, units) : "not measured"}</p>
+          <p className="muted">Ceiling {e.ceilingM ? <span className="mono">{fmtLength(e.ceilingM, units)}</span> : "not measured"}</p>
+          <p className="side-eyebrow">{taped ? "Scaled to your tape." : e.scale.source === "arkit" ? "Measured by the iPhone app." : photos ? "From your photos, give or take a fifth." : "From the video, give or take a little."}</p>
         </div>
 
         {questions.length > 0 && (
           <div className="side-card plan-check" aria-live="polite">
-            <p className="mono side-eyebrow">Checked against your {photos ? "photos" : "video"}</p>
+            <p className="side-eyebrow">Checked against your {photos ? "photos" : "video"}</p>
             <h2>{questions.length === 1 ? "One thing to look at" : `${questions.length} things to look at`}</h2>
             <ul className="plan-questions">
               {questions.map(({ q, i }) => (

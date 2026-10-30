@@ -42,7 +42,7 @@ const PHOTO_EVERY_MS = 4000;
 const NEXT: Partial<Record<Tab, { label: string; tab: Tab }>> = {
   book: { label: "Your permit set", tab: "permit" },
   decision: { label: "Your permit set", tab: "permit" },
-  permit: { label: "Money you may be eligible for", tab: "money" },
+  permit: { label: "Money you can get", tab: "money" },
   money: { label: "Who builds it", tab: "build" },
 };
 
@@ -204,23 +204,26 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
         </header>
       )}
       <div className="ws-head">
-        {!readOnly && (
-          <p className="ws-tools">
-            <button className="link-quiet" onClick={() => void share()}>Share</button>
-            <button className="link-quiet" onClick={onRestart}>New scan</button>
-          </p>
-        )}
-        <p className="ws-address mono">{p ? `${p.address}, ${p.municipality}` : scanId === "sample" ? "The example basement" : r.demo ? "Demo house, Waterloo" : (r.city ?? "Your basement")}</p>
-        {scanId === "sample" && (
-          <p className="example-label" role="note">
-            <span className="tag-mono">Example</span> {EXAMPLE_LABEL}
-          </p>
-        )}
-        {r.demo && (
-          <p className="example-label" role="note">
-            <span className="tag-mono">Demo house</span> {DEMO_LABEL}
-          </p>
-        )}
+        {/* One line above the tabs: whose basement this is (or that it's the example), and Share and New scan. */}
+        <div className="ws-line">
+          {scanId === "sample" ? (
+            <p className="example-label" role="note">
+              <span className="tag-mono">Example</span> {EXAMPLE_LABEL}
+            </p>
+          ) : r.demo ? (
+            <p className="example-label" role="note">
+              <span className="tag-mono">Demo house</span> {DEMO_LABEL}
+            </p>
+          ) : (
+            <p className="ws-address">{p ? `${p.address}, ${p.municipality}` : (r.city ?? "Your basement")}</p>
+          )}
+          {!readOnly && (
+            <p className="ws-tools">
+              <button className="link-quiet" onClick={() => void share()}>Share</button>
+              <button className="link-quiet" onClick={onRestart}>New scan</button>
+            </p>
+          )}
+        </div>
         <nav className="ws-tabs" role="tablist" aria-label="Workspace">
           {TABS.filter((t) => !readOnly || t.id !== "book").map((t) => (
             <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => go(t.id)}>
@@ -268,12 +271,12 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
           <BuildTab {...props} />
         </div>
       )}
-      {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty mono ws-wait">Opening your workspace…</p>}
+      {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty ws-wait">Opening your workspace…</p>}
 
       <SiteFooter />
       {readOnly && (
         <div className="result-bar">
-          <button className="btn btn-primary" onClick={() => void share()}>
+          <button className="btn btn-ghost" onClick={() => void share()}>
             Share
           </button>
         </div>
