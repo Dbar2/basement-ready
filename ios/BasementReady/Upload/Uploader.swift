@@ -11,6 +11,12 @@ struct ScanCreated: Codable, Equatable, Sendable {
   var server: URL?
 
   var resultURL: URL? { server?.appending(path: "scans/\(id)") }
+
+  // The last take this phone sent, so the start screen can open its answer again.
+  static let lastKey = "lastScan"
+  static var last: ScanCreated? {
+    UserDefaults.standard.data(forKey: lastKey).flatMap { try? JSONDecoder().decode(ScanCreated.self, from: $0) }
+  }
 }
 
 // What's being sent, kept on disk so a relaunch can pick the answer up.
@@ -117,21 +123,10 @@ final class Uploader: ObservableObject {
     }
     created.server = pending?.server
     UserDefaults.standard.removeObject(forKey: Self.pendingKey)
-    UserDefaults.standard.set(try? JSONEncoder().encode(created), forKey: "lastScan")
-    if let pending {
-      try? FileManager.default.removeItem(at: pending.folder) // sent: the take doesn't need to stay on the phone
-      if let rent = pending.answers.who.rent { Task { await Self.saveRent(rent, scan: created.id, server: pending.server) } }
-    }
+    UserDefaults.standard.set(try? JSONEncoder().encode(created), forKey: ScanCreated.lastKey)
+    // Sent: the take doesn't need to stay on the phone. Who it's for (and so the rent) went with it.
+    if let pending { try? FileManager.default.removeItem(at: pending.folder) }
     state = .done(created)
-  }
-
-  // The rent answer is a money question (server/eligibility.ts), saved like the wait screen saves it.
-  private static func saveRent(_ rent: RentAnswer, scan: String, server: URL) async {
-    var req = URLRequest(url: server.appending(path: "api/scans/\(scan)/answers"))
-    req.httpMethod = "POST"
-    req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    req.httpBody = try? JSONSerialization.data(withJSONObject: ["ruleId": "rent", "value": rent.jsonValue])
-    _ = try? await Net.session.data(for: req)
   }
 }
 

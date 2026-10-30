@@ -1,5 +1,7 @@
-// Thin client for Meta Model API. Every model call in the app goes through here.
-import { readFileSync } from "node:fs";
+// Thin client for Meta Model API. Every model call in the app goes through here, and each one's cost
+// is reported to server/spend.ts for the daily cap.
+import { readFileSync, statSync } from "node:fs";
+import { charge, PRICES } from "./spend";
 
 // META_API_BASE points at the Canada relay in production (see services/meta-relay); direct otherwise.
 const BASE = process.env.META_API_BASE ?? "https://api.meta.ai/v1";
@@ -19,7 +21,10 @@ export async function responses(body: unknown): Promise<any> {
   });
   const text = await res.text();
   if (!res.ok) throw new Error(`Meta API ${res.status}: ${text.slice(0, 300)}`);
-  return JSON.parse(text);
+  const r = JSON.parse(text);
+  // Spark bills by the token; SAM by the frame, counted where it's called.
+  if (/spark/.test(String((body as { model?: string }).model))) charge("spark", (r.usage?.input_tokens ?? 0) * PRICES.sparkIn + (r.usage?.output_tokens ?? 0) * PRICES.sparkOut);
+  return r;
 }
 
 // Pulls the text out of a Responses API result.
@@ -44,7 +49,8 @@ export async function uploadFile(path: string, mime: string, name: string): Prom
 }
 
 // SAM 3.1 on a whole video for one concept ("basement window"). Returns raw special-token text.
-export async function samVideo(concept: string, fileId: string): Promise<string> {
+// `frames` is the video's length in frames, for the cost.
+export async function samVideo(concept: string, fileId: string, frames = 0): Promise<string> {
   const r = await responses({
     model: "sam-3.1",
     input: [
@@ -59,6 +65,7 @@ export async function samVideo(concept: string, fileId: string): Promise<string>
     ],
     metadata: { include_confidence: "true", mask_encoding: "one_bit" },
   });
+  charge("sam_video", Math.max(PRICES.samVideoMinFrames, frames) * PRICES.samVideoFrame);
   return outputText(r);
 }
 
@@ -78,6 +85,7 @@ export async function samImage(concept: string, imageUrl: string): Promise<strin
     ],
     metadata: { include_confidence: "true", mask_encoding: "one_bit" },
   });
+  charge("sam_image", PRICES.samImage);
   return outputText(r);
 }
 
@@ -93,6 +101,8 @@ export async function transcribe(wavPath: string): Promise<{ transcript: string;
   const res = await fetch(`${BASE}/asr/transcribe`, { method: "POST", headers: auth(), body: form });
   const text = await res.text();
   if (!res.ok) throw new Error(`Transcribe ${res.status}: ${text.slice(0, 300)}`);
+  // 16 kHz mono 16-bit WAV: 32,000 bytes a second.
+  charge("transcribe", (statSync(wavPath).size / 32000 / 60) * PRICES.transcribeMinute);
   const json = JSON.parse(text);
   return { transcript: json.transcript ?? "", turns: json.turns ?? [] };
 }
@@ -119,6 +129,7 @@ export async function museEdit(image: Buffer, mime: string, prompt: string, size
   const res = await fetch(`${BASE}/images/edits`, { method: "POST", headers: auth(), body: form, signal: AbortSignal.timeout(120_000) });
   const text = await res.text();
   if (!res.ok) throw new Error(`Muse Image ${res.status}: ${text.slice(0, 300)}`);
+  charge("muse_image", PRICES.museImage);
   const b64 = JSON.parse(text).data?.[0]?.b64_json;
   if (!b64) throw new Error("Muse Image returned no image");
   return Buffer.from(b64, "base64");

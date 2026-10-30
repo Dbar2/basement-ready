@@ -35,6 +35,7 @@ export type Step = {
 
 type Input = {
   city: string;
+  authority: string; // "City of Waterloo", "Township of Woolwich", "your municipality"
   household: Household;
   programs: Pick<Program, "id" | "shortName" | "qualify" | "apply">[];
   fixGroups: { title: string; costLow: number | null; costHigh: number | null }[];
@@ -125,7 +126,7 @@ export function planSteps(r: Input, pack: Pack): Step[] {
     costHigh: null,
     detail: applyFirst.length
       ? "These programs turn down projects that have already started, so apply before anyone picks up a tool."
-      : "Get the City to confirm your lot allows a second unit before you pay for drawings.",
+      : `Get ${r.authority === "your municipality" ? "your municipality" : `the ${r.authority}`} to confirm your lot allows a second unit before you pay for drawings.`,
     tasks: [...before.tasks, ...applyFirst],
     source: moneyFirst?.source ?? before.steps[0]?.source ?? null,
   });
@@ -158,7 +159,7 @@ export function planSteps(r: Input, pack: Pack): Step[] {
     costLow: designerCost?.lowCAD ?? null,
     costHigh: designerCost?.highCAD ?? null,
     costNote: designerCost?.note ?? null,
-    detail: `Plans of the suite for the permit, drawn to the City's checklist${pros.selfDraw ? ": by you, or by a registered designer" : ""}.`,
+    detail: `Plans of the suite for the permit, drawn to the building department's checklist${pros.selfDraw ? ": by you, or by a registered designer" : ""}.`,
     tasks: [...drawTasks, ...drawings.tasks],
     source: drawings.steps.find((p) => /drawings/i.test(p.title))?.source ?? null,
   });
@@ -200,7 +201,7 @@ export function planSteps(r: Input, pack: Pack): Step[] {
     id: "build",
     when: "After the permit",
     title: "Build it, with inspections",
-    who: "Licensed trades, and the City's inspector",
+    who: "Licensed trades, and the building inspector",
     time: null,
     costLow: r.cost.low || null,
     costHigh: r.cost.high || null,
@@ -226,7 +227,7 @@ export function planSteps(r: Input, pack: Pack): Step[] {
     time: null,
     costLow: null,
     costHigh: null,
-    detail: `The City approves occupancy after the final inspection.${payouts ? " The money pays out after that, against your paid invoices." : ""}`,
+    detail: `The building department signs off on occupancy after the final inspection.${payouts ? " The money pays out after that, against your paid invoices." : ""}`,
     tasks: afterTasks,
     source: after.steps[0]?.source ?? null,
   });
