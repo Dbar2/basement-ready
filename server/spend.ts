@@ -7,6 +7,9 @@ export const PRICES = {
   samVideoMinFrames: 50,
   sparkIn: 1.25 / 1e6, // per token
   sparkOut: 4.25 / 1e6,
+  // Muse Wonder (preview): text, pictures, video and sound in, by the token like Spark.
+  wonderIn: 4 / 1e6,
+  wonderOut: 20 / 1e6,
   museImage: 0.01, // per image
   // Estimates: transcription by the minute of audio, and one area of 3D on Modal's L40S (about 20 s of
   // work plus its share of start-up and idle). The Mac runner costs nothing.

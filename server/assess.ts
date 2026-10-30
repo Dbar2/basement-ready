@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { dataUrl, outputText, responses } from "./meta";
+import { dataUrl, outputText, responses, tokenCost } from "./meta";
 import type { Detection } from "./pipeline";
 import type { Measurements } from "./scan3d";
 import type { Property } from "./property";
@@ -20,10 +20,6 @@ type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?:
 
 // `photos`: a photo take of that many photos, not a video (server/photoInput.ts).
 export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number };
-
-// Meta pricing for Muse Spark (USD per token).
-const SPARK_IN = 1.25 / 1e6;
-const SPARK_OUT = 4.25 / 1e6;
 
 // Where the house is, for the model: "Toronto, Ontario", or "Ontario" when we don't know.
 const where = (c: Pick<Coverage, "city" | "coverage" | "authority">) => (c.city === "Ontario" ? "Ontario" : `${c.city}, Ontario`);
@@ -110,7 +106,7 @@ async function askSpark(ctx: AssessContext, place: Coverage, rules: Rule[], dete
           { role: "user", content },
         ],
       });
-      costUsd += (r.usage?.input_tokens ?? 0) * SPARK_IN + (r.usage?.output_tokens ?? 0) * SPARK_OUT;
+      costUsd += tokenCost("muse-spark-1.3", r.usage)!.usd;
       return { model: parseJson(outputText(r)), costUsd };
     } catch (err) {
       lastErr = err;
