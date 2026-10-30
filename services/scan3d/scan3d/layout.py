@@ -236,14 +236,15 @@ def stairs_from_walk(cams_uv: np.ndarray, cams_h: np.ndarray) -> dict | None:
 # ---- 2. The main axes ----
 
 
-def main_axis(xz: np.ndarray, seed: int = 0) -> float:
+def main_axis(xz: np.ndarray, seed: int = 0, prior: float | None = None) -> float:
     """The walls' dominant direction, modulo 90 degrees: wall lines found by RANSAC without snapping,
-    their angles averaged on the 90-degree circle, weighted by points times length."""
+    their angles averaged on the 90-degree circle, weighted by points times length. `prior`: where each
+    area's own room frame put its walls; the walls are then only looked for within 4 degrees of it."""
     if len(xz) < 200:
         return _main_axis(xz)
     rng = np.random.default_rng(seed)
     pool = xz if len(xz) <= 60_000 else xz[rng.choice(len(xz), 60_000, replace=False)]
-    sx = sc = 0.0
+    found: list[tuple[float, float]] = []  # (angle modulo 90 degrees, weight)
     for _ in range(25):
         if len(pool) < 200:
             break
@@ -262,18 +263,47 @@ def main_axis(xz: np.ndarray, seed: int = 0) -> float:
         P = pool[on]
         if len(P) < 100:
             break
+        # The longest unbroken run along the line: a line through points of several walls isn't a wall.
+        tdir = np.array([-n[k][1], n[k][0]])
+        al = P @ tdir
+        order = np.argsort(al)
+        cuts = np.nonzero(np.diff(al[order]) > 0.25)[0]
+        runs = np.split(order, cuts + 1)
+        P = P[max(runs, key=len)]
+        if len(P) < 60:
+            pool = pool[~on]
+            continue
         ctr = P.mean(0)
         u, sv, vt = np.linalg.svd(P - ctr, full_matrices=False)
         d = vt[0]
         span = float(np.ptp((P - ctr) @ d))
-        ang = np.arctan2(d[1], d[0])
-        w = len(P) * span
-        sx += w * np.sin(4 * ang)
-        sc += w * np.cos(4 * ang)
+        found.append((float(np.arctan2(d[1], d[0]) % (np.pi / 2)), len(P) * span))
         pool = pool[~on]
-    if sx == 0 and sc == 0:
+    if not found:
         return _main_axis(xz)
-    return float(0.25 * np.arctan2(sx, sc))
+    # The most common direction (a few odd walls or a diagonal shelf don't pull it), then the weighted
+    # mean of the walls within 3 degrees of it.
+    ang = np.array([a for a, _ in found])
+    w = np.array([x for _, x in found])
+    grid_a = np.deg2rad(np.arange(0, 90, 0.25))
+    if prior is not None:
+        grid_a = grid_a[np.abs(np.angle(np.exp(4j * (grid_a - prior))) / 4) <= np.deg2rad(4)]
+    diff = np.angle(np.exp(4j * (grid_a[:, None] - ang[None, :]))) / 4
+    peak = grid_a[int(((np.exp(-0.5 * (diff / np.deg2rad(1.5)) ** 2)) * w).sum(1).argmax())]
+    near = np.abs(np.angle(np.exp(4j * (ang - peak))) / 4) <= np.deg2rad(3)
+    z = (w[near] * np.exp(4j * ang[near])).sum()
+    return float(np.angle(z) / 4)
+
+
+def area_axis(rotations: list) -> float | None:
+    """The walls' direction the areas' own room frames agree on (each frame's x runs along its longest
+    wall): their median on the 90-degree circle, in the world's (x, z)."""
+    if not rotations:
+        return None
+    ang = np.array([np.arctan2(R[0][2], R[0][0]) for R in rotations])
+    z = np.exp(4j * ang)
+    med = min(ang, key=lambda a: np.abs(np.angle(z * np.exp(-4j * a))).sum())
+    return float(med % (np.pi / 2))
 
 
 # ---- 4. Wall faces ----
@@ -636,25 +666,35 @@ def snap_out(rooms: list[dict], walls: np.ndarray, grid: Grid) -> None:
     """Each square edge of each outline moves out to the furthest wall line within WALL_SEARCH: the 3D
     pulls a bare wall towards the camera (more from further away) and clutter hides the floor next to it,
     so the nearest wall points are often a copy short of the wall. Never into another room, and never
-    across open floor past a wall (whatever's there is something else)."""
+    across open floor past a wall (whatever's there is something else). Every edge's new line is found
+    first; the corners are then where neighbouring lines cross, so the outline stays square."""
     others = np.zeros((grid.H, grid.W), np.int32)
     for k, r in enumerate(rooms, start=1):
         cv2.fillPoly(others, [grid.ij(np.array(r["polygon"])).astype(np.int32)], k)
     reach = int(WALL_SEARCH / CELL)
     for k, r in enumerate(rooms, start=1):
-        P = [list(p) for p in r["polygon"]]
+        P = _clean([tuple(map(float, p)) for p in r["polygon"]])
         n = len(P)
+        if n < 4 or n % 2:
+            continue
+        # Each edge as a line: (axis it's constant on, value), and how far it moves.
+        lines = []
         for e in range(n):
             a, b = np.array(P[e]), np.array(P[(e + 1) % n])
-            d = b - a
-            L = float(np.hypot(*d))
-            if L < 0.3 or (abs(d[0]) > 1e-6 and abs(d[1]) > 1e-6):
+            axis = 1 if abs(a[1] - b[1]) < 1e-9 else 0 if abs(a[0] - b[0]) < 1e-9 else -1
+            lines.append([axis, float(a[axis]) if axis >= 0 else 0.0])
+        if any(l[0] < 0 for l in lines) or any(lines[e][0] == lines[(e + 1) % n][0] for e in range(n)):
+            continue  # not a clean square outline: leave it
+        for e in range(n):
+            a, b = np.array(P[e]), np.array(P[(e + 1) % n])
+            L = float(np.hypot(*(b - a)))
+            if L < 0.3:
                 continue
-            t = d / L
+            t = (b - a) / L
             nrm = np.array([t[1], -t[0]])
-            if _inside(r["polygon"], (a + b) / 2 + nrm * 0.03):
+            if _inside(P, (a + b) / 2 + nrm * 0.03):
                 nrm = -nrm
-            ts = np.arange(0.1, L - 0.1, CELL) if L > 0.3 else np.array([L / 2])
+            ts = np.arange(0.1, L - 0.1, CELL)
             base = a + ts[:, None] * t
             last = None
             for step in range(1, reach + 1):
@@ -667,15 +707,20 @@ def snap_out(rooms: list[dict], walls: np.ndarray, grid: Grid) -> None:
                     break
                 if (walls[q[ok, 1], q[ok, 0]] > 0).mean() >= WALL_SHARE:
                     last = step
+                    if not r.get("entered", True):
+                        break  # seen from its door: its wall is the first one, not a copy behind it
                 elif last is not None and (step - last) * CELL >= OPEN_GAP:
                     break
-            if last is None:
-                continue
-            # The wall raster is thickened by a cell: its far side is the face.
-            move = nrm * (last * CELL)
-            P[e] = list(a + move)
-            P[(e + 1) % n] = list(b + move)
-        r["polygon"] = simplify([tuple(p) for p in P])
+            if last is not None:
+                lines[e][1] += float(nrm[lines[e][0]]) * last * CELL
+        # Corner k sits where edge k-1's line meets edge k's.
+        out = []
+        for e in range(n):
+            prev, cur = lines[e - 1], lines[e]
+            pt = [0.0, 0.0]
+            pt[prev[0]], pt[cur[0]] = prev[1], cur[1]
+            out.append(tuple(pt))
+        r["polygon"] = simplify(out)
 
 
 def outline(mask: np.ndarray, xs: list[float], zs: list[float]) -> list[tuple[float, float]]:
@@ -876,6 +921,7 @@ def read_plan(
     hints: dict | None = None,
     edits: list[dict] | None = None,
     views: list[dict] | None = None,
+    axis_prior: float | None = None,
     seed: int = 0,
 ) -> Plan:
     """points: N x 3, cams: M x 3 camera centres along the walk, both in a +Y-up world in metres.
@@ -903,7 +949,7 @@ def read_plan(
 
     # 2. Axes: the walls' main direction (unsnapped wall lines, weighted by length), everything turned onto it.
     band = (h > WALL_BAND[0]) & (h < WALL_BAND[1])
-    phi = main_axis(points[band][:, [0, 2]], seed)
+    phi = main_axis(points[band][:, [0, 2]], seed, axis_prior)
     cs, sn = np.cos(-phi), np.sin(-phi)
 
     def turn(xz):
@@ -1128,7 +1174,8 @@ def read_plan(
         if len(poly) < 3 or poly_area(poly) < (MIN_ROOM_M2 if entered else CLOSET_M2):
             continue
         raw_rooms.append({"label": k, "polygon": poly, "entered": entered})
-    snap_out(raw_rooms, walls, grid)
+    for _ in range(2):  # a second pass lets a notch, emptied by its neighbours' moves, close
+        snap_out(raw_rooms, walls, grid)
     settle(raw_rooms)
 
     # Wall moves: an edge of a room's outline moved to a new line, if a wall face is there.
@@ -1171,7 +1218,9 @@ def read_plan(
             "areaM2": _r(poly_area(r["polygon"]), 2),
             "ceilingM": None if ceil is None else _r(ceil, 2),
             "cameras": int(cam_in),
-            "entered": bool(r.get("entered", True)) or cam_in > 0,
+            # Whether the camera walked on its open floor; its squared outline may reach into the doorway
+            # the camera looked in from.
+            "entered": bool(r.get("entered", True)),
         })
     ceil_vals = [r["ceilingM"] for r in rooms if r["ceilingM"]]
     main_ceiling = max(ceil_vals, key=lambda c: sum(r["areaM2"] for r in rooms if r["ceilingM"] == c)) if ceil_vals else ceiling

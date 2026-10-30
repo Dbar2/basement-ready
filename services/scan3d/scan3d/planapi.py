@@ -18,7 +18,7 @@ import cv2
 import numpy as np
 
 from .export import read_ply
-from .layout import read_plan
+from .layout import area_axis, read_plan
 from .plandraw import top_down, wall_in_frame
 from .selfcheck import check_walls
 
@@ -87,7 +87,8 @@ def _png(img: np.ndarray, ext: str = ".png") -> str:
 
 def respond(areas, plys, depths, cams, hints=None, edits=None, keyframes=None, key_cams=None, render=False) -> dict:
     points, rgb, area, views = fuse(areas, plys, depths)
-    p = read_plan(points, cams, area=area, hints=hints, edits=edits, views=views or None)
+    prior = area_axis([a["world"]["rotation"] for a in areas if a.get("world")])
+    p = read_plan(points, cams, area=area, hints=hints, edits=edits, views=views or None, axis_prior=prior)
     plan = p.to_json()
     checked = check_walls(plan, views) if views else None
     floor_y = plan["floor"]["y"] if plan["floor"] else 0.0
