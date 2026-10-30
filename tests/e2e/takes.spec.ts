@@ -8,7 +8,7 @@ import { Home } from "./pages/Home";
 import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
 import { expectSheets, Workspace } from "./pages/Workspace";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Page, Response, TestInfo } from "@playwright/test";
 import { api, expect, oneAtATime, test, type Journey } from "./support/fixtures";
 import { costOf, realCalls } from "./support/costs";
 import { mode, runDir } from "./support/run";
@@ -166,15 +166,20 @@ for (const take of TAKES) {
     const deckNow = await api(page, `/api/scans/${scanId}/cards`);
 
     // ---- Permit: the owner once, the readiness count, then the review copy, opened ----
+    // Saving the owner's details ticks "Owner details": the count is read once the heading has caught up
+    // with the newest status the page was sent (WebKit can draw the old one for a moment after the save).
+    let sent: number | null = null;
+    const onStatus = (res: Response) => {
+      if (new URL(res.url()).pathname.endsWith("/permit/status") && res.ok()) void res.json().then((s) => (sent = s.left), () => {});
+    };
+    page.on("response", onStatus);
     await journey.step("permit, owner asked once", async () => {
       await ws.open("Permit");
       await ws.fillProfileIfAsked();
       await ws.permit().expectOpen();
     });
-    // Saving the owner's details ticks "Owner details": the count is read once the heading has caught up
-    // with the server's (WebKit can draw the old one for a moment after the save).
-    const serverLeft = (await api(page, `/api/scans/${scanId}/permit/status`)).left;
-    await expect.poll(() => ws.permit().left(), { timeout: 15_000 }).toBe(serverLeft);
+    await expect.poll(async () => sent !== null && (await ws.permit().left()) === sent, { timeout: 15_000 }).toBe(true);
+    page.off("response", onStatus);
     const left = await ws.permit().left();
     const pdf = (await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-${take.id}-permit.pdf`))))!;
     expectSheets(pdf);
