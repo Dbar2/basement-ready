@@ -70,16 +70,29 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.davidbarry.basementready.tests
         GENERATE_INFOPLIST_FILE: YES
+  # start → film (a replayed take) → send → result, with no person. Needs scripts/test-server.sh (make test starts it).
+  BasementReadyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [BasementReadyUITests]
+    dependencies:
+      - target: BasementReady
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.davidbarry.basementready.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: BasementReady
 schemes:
   BasementReady:
     build:
       targets:
         BasementReady: all
         BasementReadyTests: [test]
+        BasementReadyUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
-      targets: [BasementReadyTests]
+      targets: [BasementReadyTests, BasementReadyUITests]
     archive:
       config: Release

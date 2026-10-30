@@ -3,7 +3,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { Budget, costOf, estimate, imageTokens } from "../../scripts/qa/cost";
+import { Budget, costOf, estimate, imageTokens, MODELS } from "../../scripts/qa/cost";
 import { toShotBox } from "../../scripts/qa/review";
 import { ConsistencyReview, Finding, jsonSchema, rank, Report, ScreenReview } from "../../scripts/qa/schema";
 
@@ -126,6 +126,12 @@ describe("cost control", () => {
     expect(costOf({ input_tokens: 0, output_tokens: 1_000_000 })).toBeCloseTo(20);
     expect(costOf({ input_tokens: 0, output_tokens: 0, cache_read_input_tokens: 1_000_000 })).toBeCloseTo(0.2);
     expect(estimate([{ w: 1280, h: 800 }], "x".repeat(3600), 1000)).toBeCloseTo((1366 + 1000) * 4e-6 + 1000 * 20e-6, 6);
+  });
+
+  it("prices the full reviews at Fable 5.1 rates", () => {
+    expect(costOf({ input_tokens: 1_000_000, output_tokens: 0 }, MODELS.fable)).toBeCloseTo(10);
+    expect(costOf({ input_tokens: 0, output_tokens: 1_000_000 }, MODELS.fable)).toBeCloseTo(50);
+    expect(estimate([{ w: 1280, h: 800 }], "x".repeat(3600), 1000, MODELS.fable)).toBeCloseTo((1366 + 1000) * 10e-6 + 1000 * 50e-6, 6);
   });
 
   it("never lets parallel calls pass the cap", () => {
