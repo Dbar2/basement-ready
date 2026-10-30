@@ -67,10 +67,21 @@ async function proofFrames(work: string, detections: Detection[]) {
   return out;
 }
 
-function parseJson(text: string): any {
+// Spark's answer. Now and then it sends one cut off partway and then the whole one again, both in the
+// same reply: the answer is the first object with findings that runs whole to the end of the text.
+// Otherwise the text is read as it stands, which throws on a cut-off answer, so the call is retried.
+export function parseJson(text: string): any {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end < start) throw new Error("Spark did not return JSON");
+  for (let at = start; at >= 0 && at < end; at = text.indexOf("{", at + 1)) {
+    try {
+      const answer = JSON.parse(text.slice(at, end + 1));
+      if (Array.isArray(answer?.findings)) return answer;
+    } catch {
+      // Not whole from here: try the next object.
+    }
+  }
   return JSON.parse(text.slice(start, end + 1));
 }
 
