@@ -42,10 +42,10 @@ export function PicturesPage() {
       <FlowHead scanId={scanId} step="pictures" />
       <main className="views-page">
         <h1>{design ? `${design.name}, from where you stood` : "Your design, from where you stood"}</h1>
-        <p className="views-page-lede">The same design in every picture, from the best spots in your {scanId === "sample" ? "video" : "take"}. Tap anything to change it.</p>
+        <p className="views-page-lede">The same design from the best spots in your {scanId === "sample" ? "video" : "take"}. Tap anything to change it.</p>
         {error ? <p className="error">{error}</p> : design ? <DesignPictures key={design.id} scanId={scanId} design={design} onDesignChange={change} view="swipe" /> : <div className="views-skeleton" aria-busy="true" />}
       </main>
-      <FlowFoot scanId={scanId} step="pictures" extra={<span className="mono muted save-state" aria-live="polite">{saved === "saving" ? "Saving…" : saved === "error" ? "Not saved" : ""}</span>} />
+      <FlowFoot scanId={scanId} step="pictures" extra={<span className="aside save-state" aria-live="polite">{saved === "saving" ? "Saving…" : saved === "error" ? "Not saved" : ""}</span>} />
     </div>
   );
 }
