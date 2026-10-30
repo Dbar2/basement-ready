@@ -21,6 +21,7 @@ import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { cameraLookup, cleanCapture } from "./capture";
 import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { scanBasement } from "./basement";
+import { readBasementPlan } from "./floorplan";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { liteSurfels, lowOverhead, runScan3d, scan3dReady, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
@@ -486,17 +487,20 @@ app.post("/api/scans/:id/replan", async (c) => {
       for (let n = 0; n < result.frameCount; n++) await storage.download(keys.frame(id, n), join(work, "frames", `${String(n).padStart(4, "0")}.jpg`));
       const known = (scan.inputs as { floorToJoistsM?: number } | null)?.floorToJoistsM;
       const cameraFor = await cameraLookup(() => storedText(keys.capture(id)), ANALYSIS_FPS);
-      const b = await scanBasement(work, result.frameCount, known ? { floorToJoistsM: known } : {}, async (t) => console.log(`[replan] ${id}: ${t}`), cameraFor);
+      const b = await scanBasement(work, result.frameCount, known ? { floorToJoistsM: known } : {}, async (t) => console.log(`[replan] ${id}: ${t}`), cameraFor, undefined, Promise.resolve(result.watch ?? null));
       if (!b) return c.json({ error: "No 3D" }, 500);
       const low = new Set(lowOverhead(b.scans, result.detections));
       const detections = (result.detections as Detection[]).filter((d) => !low.has(d));
       const rooms = await finishRooms(id, b.spans.map((s, index) => ({ index, ...s })), b.scans, detections, async () => {}, b.placements);
       await saveBasement3d(id, b);
+      // The whole basement's plan for an app take; { review: false } skips Spark (no Meta calls).
+      const floorPlan = b.tracked ? await readBasementPlan(work, b, detections, { said: result.transcript ?? "", review: body?.review !== false, log: async (t) => console.log(`[replan] ${id}: ${t}`) }) : null;
       const main = mainRoom(rooms);
       const next = {
         ...result,
         detections,
         rooms,
+        floorPlan,
         mainRoom: main?.index ?? null,
         has3d: rooms.some((r) => r.has3d),
         plan: main?.plan ?? null,
@@ -504,7 +508,11 @@ app.post("/api/scans/:id/replan", async (c) => {
         layout: main?.plan ? suggestLayout(main.plan) : null,
       };
       await db.update(schema.scans).set({ result: next }).where(eq(schema.scans.id, id));
-      return c.json({ rooms: rooms.map(({ name, startS, endS, plan, placement }) => ({ name, startS, endS, size: plan && `${plan.widthM} × ${plan.depthM} m`, placement })), rects: b.rects });
+      return c.json({
+        rooms: rooms.map(({ name, startS, endS, plan, placement }) => ({ name, startS, endS, size: plan && `${plan.widthM} × ${plan.depthM} m`, placement })),
+        rects: b.rects,
+        floorPlan: floorPlan && { rooms: floorPlan.rooms.map((r) => ({ id: r.id, areaM2: r.areaM2, ceilingM: r.ceilingM, kind: r.kind })), walls: floorPlan.walls.length, doubtful: floorPlan.walls.filter((w) => w.guess).length, doors: floorPlan.openings.filter((o) => o.kind === "door").length, edits: floorPlan.edits, review: floorPlan.review },
+      });
     } finally {
       rmSync(work, { recursive: true, force: true });
     }

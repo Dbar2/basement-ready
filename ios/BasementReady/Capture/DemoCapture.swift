@@ -1,6 +1,6 @@
-// Debug builds only: a pretend walk around an 8 × 6 m basement, so the filming screen, map, guide,
-// voice and upload can be tried in the simulator, which has no ARKit. It writes a small real video
-// and capture.json with the same contract as a real take. Launch with -BRDemoWalk to use it.
+// Debug builds only: a pretend walk around an 8 × 6 m basement, for the simulator, which has no
+// ARKit and may have no replay take to hand. It goes through the same pipeline as a real take, so it
+// writes a small real video and capture.json. Launch with -BRDemoWalk to use it on a phone too.
 #if DEBUG
 import CoreImage
 import CoreVideo
@@ -10,13 +10,13 @@ import simd
 final class DemoCapture: CaptureSource, @unchecked Sendable {
   static var requested: Bool { ProcessInfo.processInfo.arguments.contains("-BRDemoWalk") }
 
+  let feed = OverlayFeed()
+  let perf = CapturePerf()
   private let queue = DispatchQueue(label: "demo-capture")
   private let send: @Sendable (CaptureEvent) -> Void
   private var timer: DispatchSourceTimer?
-  private var map = CoverageMap()
-  private var log = CaptureLog(device: DeviceModel.identifier, imageResolution: (640, 480))
-  private var video: VideoWriter?
-  private var folder: URL?
+  private var pipeline: CapturePipeline?
+  private let viewCheck = CoverageMap()
   private var t: Double = 0
   private var seen = Set<Int>() // walls already turned into planes
   private let floorID = UUID()
@@ -27,7 +27,7 @@ final class DemoCapture: CaptureSource, @unchecked Sendable {
 
   // The room: x −4…4, z −7…−1, floor at y 0, ceiling at 2.3 m. The stairs come down at the origin.
   private let room = (minX: Float(-4), maxX: Float(4), minZ: Float(-7), maxZ: Float(-1), ceiling: Float(2.3))
-  private let k = SIMD4<Float>(500, 500, 320, 240)
+  private let geometry = ImageGeometry(resolution: SIMD2(640, 480), intrinsics: SIMD4(500, 500, 320, 240), rotationCW: 90)
 
   init(send: @escaping @Sendable (CaptureEvent) -> Void) {
     self.send = send
@@ -35,12 +35,10 @@ final class DemoCapture: CaptureSource, @unchecked Sendable {
 
   func start() throws {
     let folder = try Take.newFolder()
-    try queue.sync {
-      self.folder = folder
-      self.video = try VideoWriter(url: folder.appending(path: "video.mp4"), width: 640, height: 480)
-    }
+    let pipeline = CapturePipeline(folder: folder, feed: feed, perf: perf, copyFrames: false, keepSensors: false, send: send)
+    queue.sync { self.pipeline = pipeline }
     let timer = DispatchSource.makeTimerSource(queue: queue)
-    timer.schedule(deadline: .now(), repeating: .milliseconds(100))
+    timer.schedule(deadline: .now(), repeating: .milliseconds(33))
     timer.setEventHandler { [weak self] in self?.tick() }
     timer.resume()
     self.timer = timer
@@ -69,48 +67,44 @@ final class DemoCapture: CaptureSource, @unchecked Sendable {
   }
 
   private func tick() {
-    guard !stopped else { return }
-    t += 0.1
+    guard !stopped, let pipeline else { return }
+    t += 1.0 / 30
     let T = pose(at: t)
-    let cam = CameraObs(transform: T, intrinsics: k, resolution: SIMD2(640, 480), tracked: t > 1)
-    for i in 0..<3 {
-      log.frames.append(FrameRecord(t: t - 0.1 + Double(i) / 30, transform: T, intrinsics: k, tracking: t > 1 ? "normal" : "limited:initializing"))
-    }
-    if let buffer = frame(T) { video?.append(buffer, at: t - 0.1) }
+    guard let buffer = frame(T) else { return }
+    feed.publish(LiveFrame(image: buffer, cameraToWorld: T, geometry: geometry))
+    guard let step = pipeline.frame(buffer, timestamp: t, cameraToWorld: T, geometry: geometry, tracking: t > 1 ? "normal" : "limited:initializing"), step.look else { return }
+    let cam = CameraObs(transform: T, intrinsics: geometry.intrinsics, resolution: geometry.resolution, tracked: t > 1)
 
     // What ARKit would find: the floor around where they've been, walls once looked at, some points.
     let pos = SIMD2(T.columns.3.x, T.columns.3.z)
     floorLo = simd_min(floorLo, simd_max(pos - 2.2, SIMD2(room.minX, room.minZ)))
     floorHi = simd_max(floorHi, simd_min(pos + 2.2, SIMD2(room.maxX, room.maxZ)))
     let (lo, hi) = (floorLo, floorHi)
-    map.upsert(PlaneObs(id: floorID, vertical: false, transform: matrix_identity_float4x4,
-                        boundary: [SIMD3(lo.x, 0, lo.y), SIMD3(hi.x, 0, lo.y), SIMD3(hi.x, 0, hi.y), SIMD3(lo.x, 0, hi.y)]))
+    pipeline.plane(PlaneObs(id: floorID, vertical: false, transform: matrix_identity_float4x4,
+                            boundary: [SIMD3(lo.x, 0, lo.y), SIMD3(hi.x, 0, lo.y), SIMD3(hi.x, 0, hi.y), SIMD3(lo.x, 0, hi.y)]), at: step.t)
     let walls: [(SIMD2<Float>, SIMD2<Float>)] = [
       (SIMD2(room.minX, room.minZ), SIMD2(room.maxX, room.minZ)), (SIMD2(room.maxX, room.minZ), SIMD2(room.maxX, -1)),
       (SIMD2(room.minX, -1), SIMD2(room.minX, room.minZ)), (SIMD2(room.minX, -1), SIMD2(-1, -1)), (SIMD2(1, -1), SIMD2(room.maxX, -1)),
     ]
     let inverse = T.inverse
+    let eye = SIMD3(T.columns.3.x, 1.4, T.columns.3.z)
     for (n, w) in walls.enumerated() where !seen.contains(n) {
       let mid = (w.0 + w.1) / 2
-      if map.sees(SIMD3(mid.x, 1, mid.y), cam, inverse, SIMD3(T.columns.3.x, 1.4, T.columns.3.z)) {
+      if viewCheck.sees(SIMD3(mid.x, 1, mid.y), cam, inverse, eye) {
         seen.insert(n)
         let along = simd_normalize(w.1 - w.0), len = simd_distance(w.0, w.1)
         let normal = SIMD2(-along.y, along.x)
         let x = SIMD3(along.x, 0, along.y), y = SIMD3(normal.x, 0, normal.y)
         let anchor = simd_float4x4(SIMD4(x, 0), SIMD4(y, 0), SIMD4(simd_cross(x, y), 0), SIMD4(mid.x, 1.2, mid.y, 1))
-        map.upsert(PlaneObs(id: UUID(), vertical: true, transform: anchor, boundary: [SIMD3(-len / 2, 0, -1), SIMD3(len / 2, 0, -1), SIMD3(len / 2, 0, 1), SIMD3(-len / 2, 0, 1)]))
+        pipeline.plane(PlaneObs(id: UUID(), vertical: true, transform: anchor, boundary: [SIMD3(-len / 2, 0, -1), SIMD3(len / 2, 0, -1), SIMD3(len / 2, 0, 1), SIMD3(-len / 2, 0, 1)]), at: step.t)
       }
     }
     var points: [SIMD3<Float>] = []
-    for _ in 0..<60 {
+    for _ in 0..<120 {
       let p = SIMD3(Float.random(in: room.minX...room.maxX), [0, room.ceiling, Float.random(in: 0.4...2)].randomElement()!, Float.random(in: room.minZ...room.maxZ))
-      if map.sees(p, cam, inverse, SIMD3(T.columns.3.x, 1.4, T.columns.3.z)) { points.append(p) }
+      if viewCheck.sees(p, cam, inverse, eye) { points.append(p) }
     }
-    if Int(t * 10) % 2 == 0 {
-      map.observe(cam, points: points)
-      let still = t > 92
-      send(.update(CaptureUpdate(elapsed: t, tracking: t > 1 ? .normal : .initializing, map: map.snapshot(), still: still, depth: false)))
-    }
+    pipeline.look(t: step.t, image: buffer, cameraToWorld: T, geometry: geometry, tracking: t > 1 ? .normal : .initializing, points: points)
   }
 
   // A plain picture that changes with where the camera points, so the video isn't blank.
@@ -128,32 +122,28 @@ final class DemoCapture: CaptureSource, @unchecked Sendable {
   }
 
   func stop() async throws -> Take {
-    let (video, log, folder, snap) = queue.sync { () -> (VideoWriter?, CaptureLog, URL?, MapSnapshot) in
+    let pipeline = queue.sync { () -> CapturePipeline? in
       stopped = true
       timer?.cancel()
-      return (self.video, self.log, self.folder, map.snapshot())
+      return self.pipeline
     }
-    guard let video, let folder else { throw CaptureError.video("Nothing was filmed.") }
-    try await video.finish()
-    let url = folder.appending(path: "capture.json")
-    try log.encoded().write(to: url)
-    return Take(folder: folder, video: video.url, capture: url, depth: nil, duration: t, frames: log.frames.count, floorAreaM2: snap.stats.floorAreaM2,
-                wallsFound: snap.stats.wallsFound, ceilingCovered: snap.stats.ceilingCovered, wideAt: nil, device: log.device)
+    guard let pipeline else { throw CaptureError.video("Nothing was filmed.") }
+    return try await pipeline.stop(depth: nil, depthURL: nil)
   }
 
   func cancel() {
-    queue.sync {
+    let pipeline = queue.sync { () -> CapturePipeline? in
       stopped = true
       timer?.cancel()
-      video?.cancel()
-      if let folder { try? FileManager.default.removeItem(at: folder) }
+      return self.pipeline
     }
+    pipeline?.cancel()
   }
 
   func jpeg() async -> Data? { nil } // no live finds in the pretend walk
 
   func pin(key: String, label: String, id: String) {
-    queue.async { self.map.addPin(key: key, label: label, id: id) }
+    queue.async { self.pipeline?.pin(key: key, label: label, id: id) }
   }
 }
 #endif
