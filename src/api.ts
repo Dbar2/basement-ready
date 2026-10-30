@@ -1,4 +1,6 @@
 // Client for the scan API, plus the frozen sample that replays the same events.
+import type { PlanCheck } from "../server/planCheck";
+import type { Watch } from "../server/watch";
 
 export type Household = "relative" | "renter" | "unsure";
 
@@ -312,6 +314,10 @@ export type ScanResult = {
   layout?: Layout | null;
   concepts?: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
   plans?: string | null; // what they'd like it to be, from the wait screen
+  watch?: Watch | null; // what Muse Wonder watched and heard in the whole take (server/watch.ts)
+  // Muse Wonder's check of the plan against the take, for "Is this your basement?" (server/planCheck.ts).
+  // Lands a little after the answer; null when it failed or was skipped.
+  planCheck?: PlanCheck | null;
   demo?: boolean; // the demo house: Waterloo's rules, no real address
   disclaimer?: string | null; // the rules pack's own words: a screening aid, not a permit decision
   heldBack: number;
