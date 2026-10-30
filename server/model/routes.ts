@@ -6,6 +6,7 @@ import type { Context, Hono } from "hono";
 import { clientIp, metaKey, overSpend } from "../limits";
 import { basementFor, loadWorkspace, parseClaims } from "../workspace";
 import { describeChange } from "./describe";
+import { currentModel } from "./current";
 import { DesignSchema, ExistingSchema, ModelSchema } from "./schema";
 import { seedDesigns, seedModel } from "./seed";
 import type { Design, Existing, Model } from "./types";
@@ -48,10 +49,8 @@ export function mountModel(app: Hono, currentUser: (c: Context) => Promise<strin
     if (!a?.result) return c.json({ error: "Not found" }, 404);
     if (!a.allowed) return c.json({ error: "Open this on the device you scanned with, or sign in." }, 403);
     const w = await loadWorkspace(a.basement.id);
-    const saved = ModelSchema.safeParse((w.state as { model?: unknown }).model);
-    if (saved.success) return c.json({ model: saved.data, saved: true });
-    const model = seedModel(a.result, { tape: w.state.tape, ideas: w.state.ideas });
-    return model ? c.json({ model, saved: false }) : c.json({ error: "This scan has no measured plan yet." }, 404);
+    const m = currentModel(a.result, w.state, c.req.param("id"));
+    return m ? c.json(m) : c.json({ error: "This scan has no measured plan yet." }, 404);
   });
 
   // Designs for the basement as they confirmed it: every option drawn again on the corrected plan.
@@ -59,8 +58,9 @@ export function mountModel(app: Hono, currentUser: (c: Context) => Promise<strin
     const body = await c.req.json().catch(() => null);
     const existing = ExistingSchema.safeParse(body?.existing);
     if (!existing.success) return c.json({ error: "That plan didn't make sense. Try again." }, 400);
-    const finishes = typeof body?.finishes === "object" && body.finishes ? body.finishes : undefined;
-    return c.json({ designs: seedDesigns(existing.data as Existing, { finishes }) });
+    const mood = ModelSchema.shape.mood.partial().safeParse({ finishes: body?.finishes ?? {}, colours: body?.colours ?? undefined });
+    const { finishes, colours } = mood.success ? mood.data : {};
+    return c.json({ designs: seedDesigns(existing.data as Existing, { finishes, colours }) });
   });
 
   // "Describe a change": muse-spark proposes edits; the studio shows them before anything is applied.

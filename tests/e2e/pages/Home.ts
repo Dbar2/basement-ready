@@ -12,7 +12,7 @@ export class Home {
 
   // The hero and the closing call to action both offer these: the first is the hero's.
   async trySample() {
-    await this.page.getByRole("button", { name: /^Try (the example|a sample basement)$/ }).first().click();
+    await this.page.getByRole("button", { name: "Try the example" }).first().click();
     await this.page.waitForURL("**/scans/sample");
   }
 
