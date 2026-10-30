@@ -293,9 +293,15 @@ export async function lookPage(doc: PDFDocument, favourites: PackageInput["favou
   }
 }
 
+// The numbers every document shares, from the chosen design: unit 2's floor (server/model/suite.ts),
+// its bedrooms and the scope of work. The permit set, its forms, the designer's brief and the grant
+// applications all print these.
+export function projectFacts(result: any, model: PermitModel | null) {
+  return { areaM2: suiteAreaM2(model?.design), bedrooms: bedroomsOf(model), scope: scopeOfWork({ model, result }) };
+}
+
 // The values the forms route fills: the same as the package's.
 export function formInputs(input: Pick<PackageInput, "result" | "municipality" | "state" | "profile">) {
   const status = permitStatus(input);
-  const areaM2 = suiteAreaM2(status.model?.design);
-  return { status, areaM2, bedrooms: bedroomsOf(status.model), scope: scopeOfWork({ model: status.model, result: input.result }) };
+  return { status, ...projectFacts(input.result, status.model) };
 }

@@ -371,7 +371,7 @@ export function basementPlan(ctx: SheetCtx): Printed[] {
       drawFixtures(s, v, m.design.proposed.fixtures);
       drawRoomFixtures(s, v, m);
       drawWalls(s, v, m, { mode: "plan", review: review(ctx), windows: m.windows });
-      drawRoomLabels(s, v, m, { ceiling: true, unitTag: true });
+      drawRoomLabels(s, v, m, { ceiling: true, unitTag: true, tile: lay.tiles.length > 1 ? tile : undefined });
       drawAlarms(s, m.design.proposed.alarms.map((x) => ({ kind: x.kind, at: v.P(x.at) })));
     };
     const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);

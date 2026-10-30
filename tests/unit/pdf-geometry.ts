@@ -6,7 +6,8 @@ import { decodePDFRawStream, PDFArray, PDFDocument, PDFRawStream } from "pdf-lib
 type Rect = { x: number; y: number; w: number; h: number };
 // `seq`: drawing order on the page, so a label can be paired with the line drawn just before it.
 export type Seg = { seq: number; x0: number; y0: number; x1: number; y1: number; width: number; grey: number | null; clip: Rect | null };
-export type Label = { seq: number; x: number; y: number; text: string };
+// `size`: its font size; `turned`: set at an angle; `clip`: the sheet's clip box around it.
+export type Label = { seq: number; x: number; y: number; text: string; size: number; turned: boolean; clip: Rect | null };
 
 export async function pageDrawing(bytes: Uint8Array) {
   const doc = await PDFDocument.load(bytes);
@@ -23,6 +24,8 @@ export async function pageDrawing(bytes: Uint8Array) {
     let at: [number, number] | null = null;
     let pendingClip: Rect | null = null;
     let tm: [number, number] = [0, 0];
+    let turned = false;
+    let size = 0;
     const num = (i: number) => Number(tokens[i]);
     for (let i = 0; i < tokens.length; i++) {
       const t = tokens[i];
@@ -37,8 +40,11 @@ export async function pageDrawing(bytes: Uint8Array) {
         const to: [number, number] = [num(i - 2), num(i - 1)];
         segs.push({ seq: i, x0: at[0], y0: at[1], x1: to[0], y1: to[1], ...g });
         at = to;
-      } else if (t === "Tm") tm = [num(i - 2), num(i - 1)];
-      else if (t === "Tj" && tokens[i - 1]?.startsWith("<")) labels.push({ seq: i, x: tm[0], y: tm[1], text: Buffer.from(tokens[i - 1].slice(1, -1).replace(/\s/g, ""), "hex").toString("latin1") });
+      } else if (t === "Tm") {
+        tm = [num(i - 2), num(i - 1)];
+        turned = Math.abs(num(i - 5)) > 1e-6;
+      } else if (t === "Tf") size = num(i - 1);
+      else if (t === "Tj" && tokens[i - 1]?.startsWith("<")) labels.push({ seq: i, x: tm[0], y: tm[1], text: Buffer.from(tokens[i - 1].slice(1, -1).replace(/\s/g, ""), "hex").toString("latin1"), size, turned, clip: g.clip });
     }
     return { segs, labels };
   });
