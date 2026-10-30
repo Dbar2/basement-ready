@@ -55,3 +55,23 @@ describe("one solid surface for the whole basement", () => {
     expect(out.pos[2]).toBe(1000);
   });
 });
+
+describe("an app-filmed area placed in the phone's world while the rest still measure", () => {
+  it("puts room points where world = rotationᵀ·(room / factor) + origin says", async () => {
+    const { trackedPlace } = await import("../../server/basement");
+    const a = 0.7, f = 1.25;
+    // Rotation about +Y (room -> world is its transpose), as fit_room makes with the gravity hint.
+    const R = [
+      [Math.cos(a), 0, Math.sin(a)],
+      [0, 1, 0],
+      [-Math.sin(a), 0, Math.cos(a)],
+    ];
+    const origin = [2, 0.1, -3];
+    const p = trackedPlace({ scan: { world: { frame: "arkit", rotation: R, origin }, scale: { factor: f } } } as any)!;
+    const [x, z] = [1.5, -0.4];
+    const world = [0, 2].map((i) => (R[0][i] * x + R[2][i] * z) / f + origin[i]);
+    expect(p.scale * (Math.cos(p.angle) * x - Math.sin(p.angle) * z) + p.x).toBeCloseTo(world[0], 9);
+    expect(p.scale * (Math.sin(p.angle) * x + Math.cos(p.angle) * z) + p.z).toBeCloseTo(world[1], 9);
+    expect(trackedPlace({ scan: { world: { frame: "view0" } } } as any)).toBeNull();
+  });
+});

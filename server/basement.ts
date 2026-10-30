@@ -20,10 +20,29 @@ export type BasementScan = {
   scans: Scan3d[];
   placements: RoomPlacement[];
   rects: Rect[]; // each area's box in the basement frame
+  path: V2[]; // where the camera walked, on the floor, in the basement frame
 };
 
+// What the wait screen draws while the 3D works: the camera's walk first, then each area as it's
+// measured. `place` puts an area's own frame into the walk's frame: x' = scale·(cos·x − sin·z) + x,
+// z' = scale·(sin·x + cos·z) + z. It's provisional; the final layout squares and settles the areas.
+export type AreaPlace = { angle: number; scale: number; x: number; z: number };
+export type BasementProgress = { path: (points: V2[]) => Promise<void>; area: (i: number, s3: Scan3d, place: AreaPlace | null) => Promise<void> };
+
+// An area measured with the phone's cameras sits in the phone's world: world = rotationᵀ·(room / factor) + origin.
+export function trackedPlace(s3: Scan3d): AreaPlace | null {
+  const w = s3.scan.world;
+  if (w?.frame !== "arkit") return null;
+  return { angle: Math.atan2(w.rotation[0][2], w.rotation[0][0]), scale: 1 / (s3.scan.scale?.factor ?? 1), x: w.origin[0], z: w.origin[2] };
+}
+
 // Every area measured, up to AREAS_AT_ONCE at a time, in filming order.
-async function measureAreas(spans: { from: number; to: number }[], log: (text: string) => Promise<void>, measure: (span: { from: number; to: number }) => Promise<Scan3d>) {
+async function measureAreas(
+  spans: { from: number; to: number }[],
+  log: (text: string) => Promise<void>,
+  measure: (span: { from: number; to: number }) => Promise<Scan3d>,
+  measured?: (i: number, s3: Scan3d) => Promise<void>,
+) {
   const scans: Scan3d[] = new Array(spans.length);
   let next = 0;
   const worker = async () => {
@@ -31,6 +50,7 @@ async function measureAreas(spans: { from: number; to: number }[], log: (text: s
       const i = next++;
       await log(spans.length > 1 ? `Measuring area ${i + 1} of ${spans.length}` : "Measuring your basement");
       scans[i] = await measure(spans[i]);
+      await measured?.(i, scans[i]);
     }
   };
   await Promise.all(Array.from({ length: Math.min(AREAS_AT_ONCE, spans.length) }, worker));
@@ -56,14 +76,16 @@ export async function scanBasement(
   known: { floorToJoistsM?: number },
   log: (text: string) => Promise<void>,
   cameraFor?: (n: number) => KnownCamera | null,
+  progress?: BasementProgress,
 ): Promise<BasementScan | null> {
   if (cameraFor) {
-    const tracked = await scanTracked(work, frameCount, known, log, cameraFor);
+    const tracked = await scanTracked(work, frameCount, known, log, cameraFor, progress);
     if (tracked) return tracked;
   }
   await log("Mapping your whole basement");
   const whole = await runScan3d(work, { from: 0, to: frameCount }, known, { maxFrames: WHOLE_FRAMES, maxFaces: 0 });
   const w = cameras(whole);
+  await progress?.path(w.pos);
 
   // Areas from where the camera went; a stretch too short to measure joins the one before it.
   const edges = [0];
@@ -71,7 +93,16 @@ export async function scanBasement(
   if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
   const spans = edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount }));
 
-  const scans = await measureAreas(spans, log, (span) => runScan3d(work, span, known, { maxFaces: meshFaces(spans.length) }));
+  const scans = await measureAreas(
+    spans,
+    log,
+    (span) => runScan3d(work, span, known, { maxFaces: meshFaces(spans.length) }),
+    async (i, s3) => {
+      const c = cameras(s3);
+      const p = place(c.idx, c.pos, c.fwd, w.idx, w.pos, w.fwd);
+      await progress?.area(i, s3, p && { angle: p.theta, scale: p.scale, x: p.shift[0], z: p.shift[1] });
+    },
+  );
 
   const placed = scans.map((s3) => {
     const c = cameras(s3);
@@ -96,6 +127,7 @@ export async function scanBasement(
     scans: kept.map((k) => scans[k]),
     placements: kept.map((k, i) => ({ turn: quarterTurns(theta[k]), x: centre[k][0] + moves[i][0], z: centre[k][1] + moves[i][1] })),
     rects: kept.map((k, i) => ({ x0: rects[k].x0 + moves[i][0], z0: rects[k].z0 + moves[i][1], x1: rects[k].x1 + moves[i][0], z1: rects[k].z1 + moves[i][1] })),
+    path: w.pos.map(([x, z]): V2 => [x / S, z / S]),
   };
 }
 
@@ -107,6 +139,7 @@ async function scanTracked(
   known: { floorToJoistsM?: number },
   log: (text: string) => Promise<void>,
   cameraFor: (n: number) => KnownCamera | null,
+  progress?: BasementProgress,
 ): Promise<BasementScan | null> {
   const idx: number[] = [], pos: V2[] = [];
   for (let n = 0; n < frameCount; n += 3) {
@@ -116,13 +149,19 @@ async function scanTracked(
     pos.push([c.pose[0][3], c.pose[2][3]]);
   }
   if (idx.length < Math.max(12, (frameCount / 3) * 0.5)) return null;
+  await progress?.path(pos);
 
   const edges = [0];
   for (const [a] of splitWalk(pos).slice(1)) if (idx[a] - edges.at(-1)! >= MIN_ROOM_FRAMES) edges.push(idx[a]);
   if (frameCount - edges.at(-1)! < MIN_ROOM_FRAMES && edges.length > 1) edges.pop();
   const spans = edges.map((from, i) => ({ from, to: edges[i + 1] ?? frameCount }));
 
-  const scans = await measureAreas(spans, log, (span) => runScan3d(work, span, known, { cameraFor, maxFaces: meshFaces(spans.length) }));
+  const scans = await measureAreas(
+    spans,
+    log,
+    (span) => runScan3d(work, span, known, { cameraFor, maxFaces: meshFaces(spans.length) }),
+    (i, s3) => progress?.area(i, s3, trackedPlace(s3)) ?? Promise.resolve(),
+  );
   if (scans.some((s3) => s3.scan.world?.frame !== "arkit")) return null;
 
   // One floor plan from all of it: rooms from walls and doorways, not a box per stretch of video.
@@ -157,6 +196,7 @@ async function scanTracked(
     scans: kept.map((k) => scans[k]),
     placements: kept.map((k, i) => ({ turn: quarterTurns(turned[k]), x: centre[k][0] + moves[i][0], z: centre[k][1] + moves[i][1] })),
     rects: kept.map((k, i) => ({ x0: rects[k].x0 + moves[i][0], z0: rects[k].z0 + moves[i][1], x1: rects[k].x1 + moves[i][0], z1: rects[k].z1 + moves[i][1] })),
+    path: pos.map((p) => turn(p, -theta[big])),
   };
 }
 
@@ -213,7 +253,7 @@ function fromFloorPlan(plan: FloorPlanResult, scans: Scan3d[], spans: { from: nu
     placements.push({ turn: quarterTurns(theta - phi), x: c[0], z: c[1] });
     rects.push({ x0, z0, x1, z1 });
   }
-  return { spans: kept.map((k) => spans[k]), scans: kept.map((k) => scans[k]), placements, rects };
+  return { spans: kept.map((k) => spans[k]), scans: kept.map((k) => scans[k]), placements, rects, path: pos.map((p) => turn(p, -phi)) };
 }
 
 // The 3D matrix of a placement: x' = c x - s z, z' = s x + c z, y unchanged.

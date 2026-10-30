@@ -4,7 +4,7 @@
 //   it by its `place`. The placement is provisional, so a later event for the same area moves it.
 // - The final frame: the whole basement (`area: "all"`), which re-sends the walk in its own frame.
 //   It replaces the walk frame once it's in; the two never overlay, since the turn between them isn't sent.
-type Logged = { type: string; data?: { points?: V2[]; area?: number | "all"; files?: { surfels: string; mesh?: string }; place?: Place; path?: V2[] } };
+type Logged = { type: string; data?: { points?: V2[]; area?: number | "all"; files?: { surfels: string; mesh?: string }; place?: Place | null; path?: V2[] } };
 
 export type V2 = [number, number];
 
@@ -29,7 +29,7 @@ export function walkFrom(events: Logged[]): V2[] | null {
   return [...events].reverse().find((e) => e.type === "path" && (e.data?.points?.length ?? 0) > 1)?.data?.points ?? null;
 }
 
-const finite = (p: Place | undefined): p is Place => !!p && [p.angle, p.scale, p.x, p.z].every(Number.isFinite) && p.scale > 0;
+const finite = (p: Place | null | undefined): p is Place => !!p && [p.angle, p.scale, p.x, p.z].every(Number.isFinite) && p.scale > 0;
 
 // One model per area, the newest event for it winning (its placement settles as the layout does).
 export function modelsFrom(events: Logged[]): AreaModel[] {

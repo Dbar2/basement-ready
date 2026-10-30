@@ -26,7 +26,7 @@ export type ScanEvent = {
     points?: [number, number][]; // path: [x, z] in metres, in the walk frame
     area?: number | "all"; // model: which area; the whole basement's files use ?room=all
     files?: { surfels: string; scan: string; mesh?: string }; // mesh: BRM1 (src/three/RealScan.tsx parseMesh)
-    place?: { angle: number; scale: number; x: number; z: number }; // model, an area: its own frame into the walk frame
+    place?: { angle: number; scale: number; x: number; z: number } | null; // model, an area: its own frame into the walk frame; null when it couldn't be placed
     path?: [number, number][]; // model, the whole basement: the walk again, in the final frame
     n?: number; // photo
     url?: string;

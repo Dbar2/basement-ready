@@ -18,7 +18,7 @@ import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
 import { buildPlan, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
-import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type BasementScan, type RoomPlacement } from "./basement";
+import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type BasementProgress, type BasementScan, type RoomPlacement } from "./basement";
 import { cameraLookup } from "./capture";
 import { doorHeights, doorScale, lowOverhead, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
 import { keys, storage } from "./storage";
@@ -53,7 +53,8 @@ export type Detection = {
   track: [number, number, number, number, number][];
 };
 
-export type ScanEventType = "log" | "find" | "measure" | "stage" | "done" | "error";
+// `path` and `model` show the basement assembling on the wait screen (server/basement.ts BasementProgress).
+export type ScanEventType = "log" | "find" | "measure" | "stage" | "done" | "error" | "path" | "model";
 
 function emitter(scanId: string, started: number) {
   return async (type: ScanEventType, text: string, data?: unknown) => {
@@ -103,6 +104,28 @@ export async function storedText(key: string): Promise<string | null> {
   const parts: Buffer[] = [];
   for await (const chunk of body) parts.push(chunk as Buffer);
   return Buffer.concat(parts).toString("utf8");
+}
+
+const cm = (points: [number, number][]) => points.map(([x, z]) => [Math.round(x * 100) / 100, Math.round(z * 100) / 100]);
+const files3d = (scanId: string, query: string, mesh: boolean) => ({
+  surfels: `/api/scans/${scanId}/3d/surfels.bin?${query}`,
+  ...(mesh ? { mesh: `/api/scans/${scanId}/3d/mesh.bin?${query}` } : {}),
+  scan: `/api/scans/${scanId}/3d/scan.json?${query}`,
+});
+
+// The walk, then each area saved and shown the moment it's measured, while the others still measure.
+function progress3d(scanId: string, emit: (type: ScanEventType, text: string, data?: unknown) => Promise<void>): BasementProgress {
+  return {
+    path: (points) => emit("path", "", { points: cm(points) }),
+    area: async (i, s3, place) => {
+      await Promise.all([
+        storage.put(keys.area3d(scanId, i, "scan.json"), Buffer.from(JSON.stringify(s3.scan)), "application/json"),
+        ...(s3.surfels ? [storage.put(keys.area3d(scanId, i, "surfels.bin"), Buffer.from(s3.surfels), "application/octet-stream")] : []),
+        ...(s3.mesh ? [storage.put(keys.area3d(scanId, i, "mesh.bin"), Buffer.from(s3.mesh), "application/octet-stream")] : []),
+      ]);
+      if (s3.surfels) await emit("model", "", { area: i, files: files3d(scanId, `area=${i}`, Boolean(s3.mesh)), place });
+    },
+  };
 }
 
 // The basement's own 3D files: every room's surface points and solid surface in one frame, and where
@@ -219,7 +242,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const known = inputs.floorToJoistsM ? { floorToJoistsM: inputs.floorToJoistsM } : {};
     // One connected basement: a rough whole-walk pass places the areas, each measured on its own.
     const basementP: Promise<BasementScan | null> = (await scan3dReady())
-      ? scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS)).catch(async (err) => {
+      ? scanBasement(work, frameCount, known, (text) => emit("log", text), await cameraLookup(() => storedText(keys.capture(scanId)), ANALYSIS_FPS), progress3d(scanId, emit)).catch(async (err) => {
           console.error(`[scan3d] ${scanId}: ${err instanceof Error ? err.message : err}`);
           await emit("log", "3D scan unavailable this time; checking from the video instead");
           return null;
@@ -286,7 +309,10 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
     }
     const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements);
-    if (basement3d) await saveBasement3d(scanId, basement3d);
+    if (basement3d) {
+      await saveBasement3d(scanId, basement3d);
+      await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
+    }
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
     const measurements = main?.measurements ?? null;
