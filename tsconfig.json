@@ -12,5 +12,7 @@
     "allowImportingTsExtensions": true,
     "types": ["node", "vite/client"]
   },
-  "include": ["src", "server", "scripts", "vite.config.ts"]
+  "include": ["src", "server", "scripts", "vite.config.ts"],
+  // The QA reviewer, a development tool, checks on its own (tsconfig.qa.json).
+  "exclude": ["scripts/qa"]
 }
