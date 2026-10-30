@@ -5,19 +5,22 @@
 // door where it was; it's announced the moment it lands as a `card` scan event, so the wait screen
 // (and GET /api/scans/:id/cards) can deal it. Every card is labelled "virtually staged".
 //
-// About 20 cards at $0.01 each, plus SAM's checks at $0.0025 a picture: roughly $0.30 a deck. Each
-// call goes through server/meta.ts, which counts it toward the daily cap once that ledger is in.
+// About 20 cards at $0.01 each, plus SAM's checks at $0.0025 a picture: roughly $0.30 a deck, counted
+// toward the daily cap like every other paid call.
 import { and, eq, inArray } from "drizzle-orm";
 import { frameViews, jpegSize, keptInPlace, pickFrames, type FrameView } from "../concepts";
 import { db, schema } from "../db";
 import { enqueueOnce } from "../jobs";
+import { overSpend } from "../limits";
 import { museEdit } from "../meta";
 import type { Detection } from "../pipeline";
 import { photoInputs } from "../photos";
+import { MAX_ROOMS } from "../rooms";
 import { photoSpaces, type PhotoSpaces } from "../plans";
 import type { Household } from "../rules";
 import { keys, storage } from "../storage";
 import { cardId, planDeck, type Card, type Deck, type Slot, type View } from "./deck";
+import { pickAngles, storedShots, type Shot } from "./angles";
 import { boxes, toJpeg, type Box } from "./looks";
 import { cardPrompt } from "./styles";
 
@@ -31,9 +34,9 @@ export const cardKey = (scanId: string, n: number) => `scans/${scanId}/cards/${n
 export const cardUrl = (scanId: string, n: number, v: string) => `/api/scans/${scanId}/cards/${n}.jpg?v=${v}`;
 export const frameUrl = (scanId: string, frame: number) => `/api/scans/${scanId}/frames/${frame}`;
 
-// The daily cap. Until the spend ledger is merged nothing is counted here; then index.ts sets
-// `spendGate.over = overSpend` (server/limits.ts) and a deck stops dealing once the day's money is gone.
-export const spendGate = { over: async () => false };
+// The daily cap (server/limits.ts): a deck stops dealing once the day's money is spent. Every Muse
+// Image and SAM call here is counted by server/meta.ts.
+export const spendGate = { over: overSpend };
 
 // ---- Which views ----
 
@@ -105,6 +108,36 @@ export function pickViews(f: ViewInputs, max = MAX_VIEWS): ViewPick[] {
   return picks;
 }
 
+// The views from the 3D's best angles (server/ideas/angles.ts), keeping the window corner and the pipes
+// in the deck when the video saw them. Named by room when the rooms are known.
+export function anglePicks(shots: Shot[], detections: Find[], names: Map<number, string> = new Map(), max = MAX_VIEWS): ViewPick[] {
+  const chosen: { shot: Shot; title: string | null }[] = pickAngles(shots, max).map((shot) => ({ shot, title: null }));
+  const must: [string, (d: Find) => boolean][] = [
+    ["By the window", (d) => d.kind === "window"],
+    ["On your pipes", (d) => /rough-in|drain/i.test(d.label)],
+  ];
+  for (const [title, is] of must) {
+    const d = detections.filter(is).sort((a, b) => b.framesSeen - a.framesSeen)[0];
+    if (!d) continue;
+    const seen = new Set(d.track.map((t) => t[0]));
+    const already = chosen.find((c) => seen.has(c.shot.frame) && !c.title);
+    if (already) {
+      already.title = title;
+      continue;
+    }
+    const alt = pickAngles(shots.filter((s) => seen.has(s.frame) && chosen.every((c) => c.shot.frame !== s.frame)), 1)[0];
+    if (!alt) continue;
+    const spare = [...chosen].reverse().find((c) => !c.title);
+    if (chosen.length >= max && spare) chosen.splice(chosen.indexOf(spare), 1);
+    if (chosen.length < max) chosen.push({ shot: alt, title });
+  }
+  const first = chosen[0]?.shot.room;
+  return chosen.map((c, i) => ({
+    frame: c.shot.frame,
+    title: c.title ?? names.get(c.shot.room) ?? (i === 0 ? "The wide view" : c.shot.room === first ? "Another angle" : "The other room"),
+  }));
+}
+
 // Each view moved to the sharpest frame within a second of it, by JPEG size: a camera mid-sweep blurs,
 // and Muse Image fills blur with things that aren't there.
 export async function sharpen(picks: ViewPick[], frameCount: number, work: Pick<CardWork, "frame">, reach = 5): Promise<ViewPick[]> {
@@ -158,6 +191,9 @@ async function lookAt(frame: Buffer, work: CardWork): Promise<{ anchors: Anchor[
   return { anchors, window: windows.length > 0, pipes: pipes.length > 0 };
 }
 
+// What a view is called once SAM has said: these stay as they are.
+const NAMED = new Set(["By the window", "On your pipes"]);
+
 const NAMES = { window: "windows", stairs: "stairs", door: "doors" } as const;
 
 // "Windows, stairs and doors kept where they are · checked by SAM 3.1"
@@ -208,7 +244,13 @@ export async function makeDeck(scanId: string, picks: ViewPick[], work: CardWork
   // What SAM saw names the view when the pick couldn't.
   const views: View[] = seen.map(({ p, frame, window, pipes }) => ({
     frame: p.frame,
-    title: p.title === "Another angle" && pipes ? "On your pipes" : p.title === "Another angle" && window && !seen.some((s) => s.p.title === "By the window") ? "By the window" : p.title,
+    title: NAMED.has(p.title)
+      ? p.title
+      : pipes && !seen.some((s) => s.p.title === "On your pipes")
+        ? "On your pipes"
+        : window && !seen.some((s) => s.p.title === "By the window")
+          ? "By the window"
+          : p.title,
     window,
     pipes,
     aspect: Math.round((cardSize(frame)[0] / cardSize(frame)[1]) * 1000) / 1000,
@@ -219,14 +261,22 @@ export async function makeDeck(scanId: string, picks: ViewPick[], work: CardWork
   const cards: Card[] = [];
   const dropped: number[] = [];
   const queue = [...slots];
+  // A cluttered view Muse Image keeps reinventing (a window where a box hangs, stairs that aren't
+  // there): after two cards turned down and none kept, its other cards aren't tried.
+  const tally = new Map<number, { kept: number; lost: number }>();
+  const hopeless = (frame: number) => (tally.get(frame)?.lost ?? 0) >= 2 && !tally.get(frame)?.kept;
   await Promise.all(
     Array.from({ length: Math.min(AT_ONCE, queue.length) }, async () => {
       for (let slot = queue.shift(); slot; slot = queue.shift()) {
         const view = byFrame.get(slot.frame)!;
-        const card = await makeCard(scanId, slot, view.frame, view.anchors, work).catch((err) => {
-          console.error(`[cards] ${scanId} card ${slot!.n}: ${err instanceof Error ? err.message : err}`);
-          return null;
-        });
+        const card = hopeless(slot.frame)
+          ? null
+          : await makeCard(scanId, slot, view.frame, view.anchors, work).catch((err) => {
+              console.error(`[cards] ${scanId} card ${slot!.n}: ${err instanceof Error ? err.message : err}`);
+              return null;
+            });
+        const t = tally.get(slot.frame) ?? { kept: 0, lost: 0 };
+        tally.set(slot.frame, card ? { ...t, kept: t.kept + 1 } : { ...t, lost: t.lost + 1 });
         if (card) {
           cards.push(card);
           await work.landed(card);
@@ -266,7 +316,7 @@ export const realCardWork = (scanId: string, startedAt: Date | null): CardWork =
     planned: (slots) => event(scanId, startedAt, "cards", `${slots.length} cards on the way`, { status: "pending", slots }),
     landed: (c) => event(scanId, startedAt, "card", c.title, c),
     dropped: (n) => event(scanId, startedAt, "card", "Left out", { n, dropped: true }),
-    overCap: spendGate.over,
+    overCap: () => spendGate.over(),
     url: (n) => cardUrl(scanId, n, v),
     from: (frame) => frameUrl(scanId, frame),
   };
@@ -314,7 +364,17 @@ async function detailOf(scanId: string, frameCount: number, work: CardWork) {
 }
 
 // `work` swaps out the model calls (tests); the events are always the scan's own.
-export async function runCards(scanId: string, opts: { lastAttempt: boolean; work?: Partial<Omit<CardWork, "planned" | "landed" | "dropped">>; waitMs?: number }) {
+// Whether this scan's 3D is still to come: the service is on, the scan isn't over, and it hasn't said
+// it's checking without the 3D.
+async function threeDComing(scanId: string) {
+  if (!process.env.SCAN3D_URL) return false;
+  const [scan] = await db.select({ status: schema.scans.status }).from(schema.scans).where(eq(schema.scans.id, scanId));
+  if (!scan || scan.status === "done" || scan.status === "error") return false;
+  const logs = await db.select({ text: schema.scanEvents.text }).from(schema.scanEvents).where(and(eq(schema.scanEvents.scanId, scanId), eq(schema.scanEvents.type, "log")));
+  return !logs.some((l) => /3D scan unavailable/.test(l.text));
+}
+
+export async function runCards(scanId: string, opts: { lastAttempt: boolean; work?: Partial<Omit<CardWork, "planned" | "landed" | "dropped">>; waitMs?: number; wait3dMs?: number }) {
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, scanId));
   if (!scan) return;
   const work: CardWork = { ...realCardWork(scanId, scan.startedAt), ...opts.work };
@@ -333,9 +393,21 @@ export async function runCards(scanId: string, opts: { lastAttempt: boolean; wor
 
   // A fresh deck replaces any earlier one.
   await db.delete(schema.scanEvents).where(and(eq(schema.scanEvents.scanId, scanId), inArray(schema.scanEvents.type, ["card", "cards"])));
-  const detail = await detailOf(scanId, f.frameCount, work);
+  // The best angles come from the 3D. Its first area lands about a minute in: worth the wait, unless
+  // there's no 3D this time.
+  const rooms = (f.rooms ?? []).filter((r) => r.has3d).map((r) => r.index);
+  const wait3d = Date.now() + (opts.wait3dMs ?? 60_000);
+  let shots = await storedShots(scanId, rooms, MAX_ROOMS);
+  while (!shots.length && Date.now() < wait3d && (await threeDComing(scanId))) {
+    await sleep(2000);
+    shots = await storedShots(scanId, rooms, MAX_ROOMS);
+  }
+  const names = new Map(((scan.result as { rooms?: { index: number; name: string }[] } | null)?.rooms ?? []).map((r) => [r.index, r.name]));
+  const angled = shots.length ? anglePicks(shots, f.detections, names) : [];
+  // Without the 3D (or too little of it), the frames themselves: the sharpest in each stretch.
+  const detail = angled.length >= 3 ? new Map<number, number>() : await detailOf(scanId, f.frameCount, work);
   const views = await frameViews(scanId, f.rooms).catch(() => null);
-  const picks = await sharpen(pickViews({
+  const byFrames = angled.length >= 3 ? [] : await sharpen(pickViews({
     frameCount: f.frameCount,
     detections: f.detections,
     vision: f.vision,
@@ -346,6 +418,7 @@ export async function runCards(scanId: string, opts: { lastAttempt: boolean; wor
     spaces: photoSpaces(f.plans, f.household),
     detail,
   }), f.frameCount, work);
+  const picks = [...angled, ...byFrames.filter((p) => angled.every((a) => Math.abs(a.frame - p.frame) >= 25))].slice(0, MAX_VIEWS);
   try {
     const deck = await makeDeck(scanId, picks, work);
     await event(scanId, scan.startedAt, "cards", `${deck.cards.length} cards`, { status: "done", slots: deck.slots });

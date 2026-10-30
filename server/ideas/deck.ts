@@ -5,8 +5,8 @@
 // style once, the first round showing each style, so a handful of swipes already tells them apart.
 // Each card's tags are the finishes it shows; the loved ones become the model's `mood`
 // (server/model/types.ts Mood), the board's first card counting most.
-import type { Finishes, Mood } from "../model/types";
-import { DECK_STYLES, STYLES, tagsFor, USES, type StyleId, type Tags, type Use } from "./styles";
+import type { Finishes, Furniture, FurnitureKind, Mood } from "../model/types";
+import { DECK_STYLES, furnitureOf, STYLES, tagsFor, USES, type StyleId, type Tags, type Use } from "./styles";
 
 // A real view to restyle: the frame, and what SAM saw in it (a window makes it a bedroom; capped pipes
 // in the floor, a bathroom).
@@ -55,11 +55,29 @@ export function planDeck(views: View[], max = MAX_CARDS): Slot[] {
   return slots.slice(0, max);
 }
 
+// The board also colours the furniture: each piece in the style they loved most for its room (the
+// sofa from the living rooms, the bed from the bedrooms, the table from the kitchens), else the board's.
+// Stored with the mood as `colours`; a Furniture.colour is one of these names (COLOURS has the hex).
+export type BoardMood = Mood & { colours: Partial<Record<FurnitureKind, string>> };
+
+const ROOM_OF: Record<FurnitureKind, Use | null> = {
+  sofa: "living", armchair: "living", rug: "living", tv: "living", shelf: "living",
+  bed: "bedroom", dresser: "bedroom",
+  kitchen: "kitchen", dining: "kitchen", fridge: "kitchen",
+  vanity: "bathroom", toilet: "bathroom", shower: "bathroom",
+  desk: null, washer_dryer: null, other: null,
+};
+
+// The board's colours onto a design's furniture, leaving any colour they picked themselves.
+export function colourFurniture(furniture: Furniture[], colours: BoardMood["colours"]): Furniture[] {
+  return furniture.map((f) => (f.colour || !colours[f.kind] ? f : { ...f, colour: colours[f.kind] }));
+}
+
 // Loved cards, in board order, as weights: the first counts double, then less and less.
 const weight = (i: number) => 1 + 1 / (i + 1);
 
 // The style and finishes their board reads. A pass counts half against; the board's order breaks ties.
-export function moodFrom(cards: Pick<Card, "id" | "tags">[], liked: string[], disliked: string[] = []): Mood {
+export function moodFrom(cards: Pick<Card, "id" | "tags">[], liked: string[], disliked: string[] = []): BoardMood {
   const byId = new Map(cards.map((c) => [c.id, c]));
   const loves = liked.map((id) => byId.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
   const passes = disliked.map((id) => byId.get(id)).filter((c): c is NonNullable<typeof c> => Boolean(c));
@@ -87,7 +105,16 @@ export function moodFrom(cards: Pick<Card, "id" | "tags">[], liked: string[], di
     finishes.kitchen = best((t) => t.kitchen, (t) => t.use === "kitchen") ?? s.kitchen;
     finishes.bath = best((t) => t.bath, (t) => t.use === "bathroom") ?? s.bath;
   }
-  return { liked: loves.map((c) => c.id), disliked: passes.map((c) => c.id), style, finishes };
+  const colours: BoardMood["colours"] = {};
+  if (style) {
+    for (const kind of Object.keys(ROOM_OF) as FurnitureKind[]) {
+      const room = ROOM_OF[kind];
+      const from = ((room && best((t) => t.style, (t) => t.use === room)) ?? style) as StyleId;
+      const colour = furnitureOf(from)[kind] ?? furnitureOf(style)[kind];
+      if (colour) colours[kind] = colour;
+    }
+  }
+  return { liked: loves.map((c) => c.id), disliked: passes.map((c) => c.id), style, finishes, colours };
 }
 
 // The board in one line: "Warm wood, light oak floor, cream walls".

@@ -4,7 +4,7 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useState } from "react";
 import { moodWords, type SwipeAction, type SwipeState } from "../../server/ideas/deck";
-import { STYLES, type StyleId } from "../../server/ideas/styles";
+import { COLOURS, STYLES, type StyleId } from "../../server/ideas/styles";
 import type { Card, Mood } from "./api";
 import { CardDialog } from "./CardDialog";
 import "./ideas.css";
@@ -90,6 +90,17 @@ export function MoodBoard({ cards, state, dispatch, mood }: { cards: Map<string,
           <dd>{f.kitchen}</dd>
           <dt>Bathroom</dt>
           <dd>{f.bath}</dd>
+          <dt>Furniture</dt>
+          <dd className="board-colours">
+            {(["sofa", "bed", "dining"] as const)
+              .filter((k) => mood.colours[k])
+              .map((k) => (
+                <span key={k}>
+                  <i style={{ background: COLOURS[mood.colours[k]!] }} aria-hidden="true" />
+                  {mood.colours[k]} {k === "dining" ? "table" : k}
+                </span>
+              ))}
+          </dd>
         </dl>
       )}
 

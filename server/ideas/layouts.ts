@@ -121,7 +121,8 @@ const r2 = (n: number) => Math.round(n * 100) / 100;
 const ZONE_ROOM: Record<Zone["kind"], RoomKind> = { bedroom: "bedroom", bathroom: "bathroom", kitchen: "kitchen", living: "living", stairs: "stairs", mechanical: "mechanical" };
 
 // A layout as the model's design: its new walls, their doors, the rooms as rectangles and the mood's
-// finishes. Fixtures and alarms come with the model's own seeding.
+// finishes. Fixtures, alarms and furniture come with the model's own seeding (colourFurniture in
+// server/ideas/deck.ts paints the furniture from the board).
 export function designFrom(o: Pick<LayoutOption, "id" | "name" | "kind" | "layout">, finishes: Partial<Finishes>): Design {
   const walls: Wall[] = o.layout.walls.map((w, i) => ({ id: `${o.id}-w${i + 1}`, a: [w.x0, w.z0], b: [w.x1, w.z1], thicknessM: 0.12, kind: "new", rating: null }));
   const openings: Opening[] = o.layout.doors.flatMap((d, i) => {
@@ -148,7 +149,7 @@ export function designFrom(o: Pick<LayoutOption, "id" | "name" | "kind" | "layou
     id: o.id,
     name: o.name,
     layout: o.kind,
-    proposed: { walls, openings, rooms, fixtures: [], alarms: [] },
+    proposed: { walls, openings, rooms, fixtures: [], alarms: [], furniture: [] },
     finishes: { style, floor: finishes.floor ?? s.floors[0], walls: finishes.walls ?? s.walls[0], kitchen: finishes.kitchen ?? s.kitchen, bath: finishes.bath ?? s.bath },
     chosen: true,
     updatedAt: new Date().toISOString(),

@@ -23,7 +23,17 @@ function cardFor(cards: Card[], o: LayoutOption, mood: Mood): Card | null {
 
 const cad = (n: number) => `$${Math.round(n / 1000)}k`;
 
-export function LayoutPicker({ scanId, mood, cards, onPicked }: { scanId: string; mood: Mood; cards: Card[]; onPicked?: (option: LayoutOption) => void }) {
+// `renderFor`: a picture of the layout's design itself, rendered from the 3D (server/views, the design
+// pictures). When it gives one, the card shows that; until then, the real corner restyled.
+type Props = {
+  scanId: string;
+  mood: Mood;
+  cards: Card[];
+  onPicked?: (option: LayoutOption) => void;
+  renderFor?: (option: LayoutOption, mood: Mood) => Promise<string | null>;
+};
+
+export function LayoutPicker({ scanId, mood, cards, onPicked, renderFor }: Props) {
   const [data, setData] = useState<{ plan: Plan | null; options: LayoutOption[] } | null>(null);
   const [corners, setCorners] = useState<Record<string, Corner>>({});
   const [picked, setPicked] = useState<string | null>(null);
@@ -39,19 +49,26 @@ export function LayoutPicker({ scanId, mood, cards, onPicked }: { scanId: string
     };
   }, [scanId]);
 
-  // Each corner, finished the way the board reads now. A new board gets new pictures.
+  // Each corner, finished the way the board reads now. A new board gets new pictures. The design's own
+  // render first, when there is one; else the real corner restyled (the example: a card of its deck).
   useEffect(() => {
     if (!data) return;
     let live = true;
-    for (const o of data.options) {
-      if (!o.corner) continue;
+    const show = (o: LayoutOption, corner: Corner) => live && setCorners((c) => ({ ...c, [o.id]: corner }));
+    const restyled = async (o: LayoutOption): Promise<Corner> => {
       if (scanId === "sample") {
         const k = cardFor(cards, o, mood);
-        setCorners((c) => ({ ...c, [o.id]: k ? { url: k.url, note: null } : { url: frameSrc(scanId, o.corner!.frame), note: `This corner today: the ${o.corner!.zone.toLowerCase()} goes here` } }));
-        continue;
+        return k ? { url: k.url, note: null } : { url: frameSrc(scanId, o.corner!.frame), note: `This corner today: the ${o.corner!.zone.toLowerCase()} goes here` };
       }
-      setCorners((c) => ({ ...c, [o.id]: { url: null, note: null } }));
-      cornerPicture(scanId, o.id, mood.finishes).then((r) => live && setCorners((c) => ({ ...c, [o.id]: "error" in r ? { url: null, note: r.error } : { url: r.url, note: null } })));
+      const r = await cornerPicture(scanId, o.id, mood.finishes);
+      return "error" in r ? { url: null, note: r.error } : { url: r.url, note: null };
+    };
+    for (const o of data.options.filter((x) => x.corner)) {
+      show(o, { url: null, note: null });
+      void (async () => {
+        const url = renderFor ? await renderFor(o, mood).catch(() => null) : null;
+        show(o, url ? { url, note: null } : await restyled(o));
+      })();
     }
     return () => {
       live = false;
