@@ -57,6 +57,7 @@ type MoneyContext = {
   property?: Pick<Property, "unitsRegistered" | "building"> | null;
   plan?: { areaM2?: number | null } | null;
   city?: string;
+  authority?: string; // who issues the permit: "City of Waterloo", "Township of Woolwich"
 };
 
 // The money they qualify for and the road to it, from who it's for, their answers and the plan.
@@ -70,7 +71,7 @@ export function moneyAndSteps(
   const money = evaluateMoney(pack, { household, answers: answers as MoneyAnswers, property: r.property ?? null, costHigh: verdict.cost.high });
   // The floor being finished: the scan's plan, or failing that the house's footprint.
   const areaM2 = r.plan?.areaM2 ?? r.property?.building?.footprintM2 ?? null;
-  const steps = planSteps({ city: r.city ?? "your city", household, programs: money.programs, ...verdict, areaM2 }, pack);
+  const steps = planSteps({ city: r.city ?? "Ontario", authority: r.authority ?? (r.city && !["Ontario", "your city"].includes(r.city) ? `City of ${r.city}` : "your municipality"), household, programs: money.programs, ...verdict, areaM2 }, pack);
   return {
     grants: money.programs,
     money: { total: money.total, ifYes: money.ifYes },

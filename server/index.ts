@@ -14,9 +14,9 @@ import { db, migrateDb, schema, usingPglite } from "./db";
 import { enqueue, startWorker } from "./jobs";
 import { listModels } from "./meta";
 import { buildPlan } from "./plan";
-import { searchAddresses } from "./address";
+import { resolveAddress, searchOntario } from "./address";
 import { suggestLayout } from "./layout";
-import { fetchAerial, lookupProperty, type Property } from "./property";
+import { AERIAL_YEAR, fetchAerial, lookupProperty, type Property } from "./property";
 import { recheck, type Answers, type AnswerValue } from "./recheck";
 import { cameraLookup, cleanCapture } from "./capture";
 import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
@@ -25,21 +25,27 @@ import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, M
 import { liteSurfels, lowOverhead, runScan3d, summarize, type Scan3d } from "./scan3d";
 import { admit, detectLive, LIVE_CONCEPTS } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
-import { MUNICIPALITIES, packFor, type Household } from "./rules";
+import { cleanMunicipality, MUNICIPALITIES, packFor, type Household } from "./rules";
 import { cleanMoneyAnswer, evaluateMoney, fromWho, STORED_MONEY_QUESTIONS, waitQuestions, WHO_ID, WHO_IDS, type MoneyAnswers, type Who } from "./eligibility";
 import { cleanPlans, plansHousehold, plansQuestion, plansWords, PLANS_ID } from "./plans";
 import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
 import { keys, storage, type Scan3dFile } from "./storage";
 import { mountWorkspace } from "./workspaceRoutes";
+import { answerFor, asksFor, mountAnswers, NOT_YOURS, ownerOf, saveAnswer, savedAnswers } from "./answers";
+import { FAILURE, failureOf } from "./failure";
+import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger, USED_UP } from "./limits";
+import { startSweeps } from "./sweep";
+import { DEMO_MUNICIPALITY, isDemo, labelled } from "./demo";
 import { mountBook } from "./book/routes";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
-const SCANS_PER_IP_PER_HOUR = Number(process.env.SCANS_PER_IP_PER_HOUR ?? 6);
-const DAILY_COST_CAP_USD = Number(process.env.DAILY_COST_CAP_USD ?? 25);
 const UUID = /^[0-9a-f-]{36}$/;
+// "Try again" re-runs a failed scan's stored video, up to this many times.
+const MAX_RETRIES = 3;
 
 await migrateDb();
+startSpendLedger();
 
 if (process.env.MODEL_API_KEY || process.env.RELAY_TOKEN) {
   listModels()
@@ -48,11 +54,6 @@ if (process.env.MODEL_API_KEY || process.env.RELAY_TOKEN) {
 }
 
 const app = new Hono();
-
-function clientIp(c: Context) {
-  const fwd = c.req.header("x-forwarded-for")?.split(",")[0]?.trim();
-  return fwd || (c.env as any)?.incoming?.socket?.remoteAddress || "unknown";
-}
 
 function rows<T>(result: unknown): T[] {
   return (Array.isArray(result) ? result : (result as { rows: T[] }).rows) as T[];
@@ -80,25 +81,21 @@ app.get("/api/municipalities", (c) => c.json(MUNICIPALITIES));
 
 // ---- The house: address type-ahead, then what public data already says about it ----
 
-app.get("/api/address", (c) => c.json({ results: searchAddresses(String(c.req.query("q") ?? "").slice(0, 80)) }));
-
-// Only addresses from our own list: the client sends the text it picked, we find the point again.
-function resolveAddress(address: unknown, municipality: unknown) {
-  const text = String(address ?? "").slice(0, 120);
-  return searchAddresses(text, 10).find((a) => a.address.toLowerCase() === text.toLowerCase() && (!municipality || a.municipality === municipality)) ?? null;
-}
+// Waterloo Region's own list first, then the rest of Ontario (NRCan); outside Ontario, a clear answer.
+app.get("/api/address", async (c) => c.json(await searchOntario(String(c.req.query("q") ?? "").slice(0, 120))));
 
 app.get("/api/property", async (c) => {
-  const a = resolveAddress(c.req.query("address"), c.req.query("municipality"));
-  if (!a) return c.json({ error: "We couldn't find that address in Waterloo Region." }, 404);
+  const a = await resolveAddress(c.req.query("address"), c.req.query("municipality"));
+  if (!a) return c.json({ error: "We couldn't find that address in Ontario." }, 404);
   return c.json({ property: await lookupProperty(a) });
 });
 
-// The house from above (Region of Waterloo, 2026). Cached, since the photo doesn't change.
+// The house from above (Region of Waterloo, 2024, open data). Cached, since the photo doesn't change.
+// Only inside Waterloo Region: nowhere else has an open photo we can use.
 app.get("/api/aerial", async (c) => {
-  const a = resolveAddress(c.req.query("address"), c.req.query("municipality"));
-  if (!a) return c.body(null, 404);
-  const key = `aerial/${a.municipality}/${a.address.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.jpg`;
+  const a = await resolveAddress(c.req.query("address"), c.req.query("municipality"));
+  if (!a || a.source !== "region") return c.body(null, 404);
+  const key = `aerial/${AERIAL_YEAR}/${a.municipality}/${a.address.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.jpg`;
   if (!(await storage.get(key))) {
     try {
       await storage.put(key, await fetchAerial(a.lon, a.lat), "image/jpeg");
@@ -109,27 +106,27 @@ app.get("/api/aerial", async (c) => {
   return sendStored(key, "image/jpeg");
 });
 
-// Create a basement + scan from an uploaded video, then queue the work.
+// The start sheet's check before filming: whether a real scan can run now (server/limits.ts).
+mountLimits(app);
+
+// Create a basement + scan from an uploaded video, then queue the work. Refused takes stay on the
+// phone: the start sheet keeps the file and offers to send it again.
 app.post("/api/scans", async (c) => {
   const ip = clientIp(c);
-  const [{ count }] = rows<{ count: number }>(
-    await db.execute(sql`SELECT count(*)::int AS count FROM scans WHERE client_ip = ${ip} AND created_at > now() - interval '1 hour'`),
-  );
-  if (count >= SCANS_PER_IP_PER_HOUR) return c.json({ error: "You've scanned a lot this hour. Please try again a bit later." }, 429);
-  const [{ spent }] = rows<{ spent: number }>(
-    await db.execute(sql`SELECT coalesce(sum(cost_usd), 0)::float AS spent FROM scans WHERE created_at > now() - interval '1 day'`),
-  );
-  if (spent >= DAILY_COST_CAP_USD) return c.json({ error: "We've reached today's scanning limit. Please try again tomorrow." }, 503);
+  const allowed = await allowance(ip);
+  if (!allowed.ok) return c.json({ error: allowed.message, allowance: allowed }, allowed.reason === "hour" ? 429 : 503);
 
   const body = await c.req.parseBody();
   const video = body.video;
   if (!(video instanceof File)) return c.json({ error: "Please attach a video." }, 400);
-  if (video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 3 minutes." }, 413);
+  if (video.size > MAX_VIDEO_BYTES) return c.json({ error: "That video is too large. Keep it under 5 minutes." }, 413);
   const household = (["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : "unsure") as Household;
+  // The demo house, for anyone outside Ontario: Waterloo's rules, no real address, labelled wherever it shows.
+  const demo = isDemo(body.demo);
   // A picked address sets the city and brings its public facts; otherwise the chosen city's rules.
-  const picked = resolveAddress(body.address, body.addressMunicipality);
+  const picked = demo ? null : await resolveAddress(body.address, body.addressMunicipality);
   const property = picked ? await lookupProperty(picked).catch(() => null) : null;
-  const municipality = picked ? (picked.city ?? "ontario") : String(body.municipality ?? "waterloo-on");
+  const municipality = demo ? DEMO_MUNICIPALITY : picked ? (picked.city ?? "ontario") : cleanMunicipality(body.municipality ?? "waterloo-on");
   // Who it's for, one tap on the start sheet with the rent folded in: saved now, never asked again.
   const who = WHO_IDS.includes(body.who as Who) ? (body.who as Who) : null;
   const start = who ? fromWho(who, packFor(municipality).pack) : null;
@@ -137,7 +134,7 @@ app.post("/api/scans", async (c) => {
   const claimToken = randomBytes(24).toString("base64url");
   const [basement] = await db
     .insert(schema.basements)
-    .values({ claimToken, household: start?.household ?? household, municipality, address: (picked?.address ?? String(body.address ?? "")).slice(0, 200), property })
+    .values({ claimToken, household: start?.household ?? household, municipality, address: demo ? "" : (picked?.address ?? String(body.address ?? "")).slice(0, 200), property })
     .returning();
   if (who) await saveAnswer(basement.id, WHO_ID, who);
   if (start?.rent != null) await saveAnswer(basement.id, "rent", start.rent);
@@ -153,6 +150,7 @@ app.post("/api/scans", async (c) => {
   const capture = body.capture instanceof File && body.capture.size < 40 * 1024 * 1024 ? cleanCapture(await body.capture.text()) : null;
   const wideAt = Number(body.wideAt);
   const inputs = {
+    ...(demo ? { demo: true } : {}),
     ...(Number.isFinite(tape) && tape >= 1 && tape <= 4 ? { floorToJoistsM: tape } : {}),
     ...(rooms ? { rooms } : {}),
     ...(ideas ? { ideas } : {}),
@@ -190,15 +188,54 @@ app.get("/api/scans/:id", async (c) => {
   // Who it's for and every answer saved (rule, money, who, plans), and what's still worth asking.
   const [basement] = await db.select().from(schema.basements).where(eq(schema.basements.id, scan.basementId));
   const household = (basement?.household ?? "unsure") as Household;
+  // Only the owner answers; a shared link reads.
+  const owner = await ownerOf(c, currentUser);
+  const failure = scan.status === "error" ? failureOf(scan.error) : null;
+  const demo = Boolean((scan.inputs as { demo?: boolean } | null)?.demo);
   return c.json({
     id: scan.id,
     status: scan.status,
-    result: withMoney ?? null,
-    error: scan.status === "error" ? "We couldn't read this video." : null,
+    result: labelled(withMoney ?? null, demo),
+    error: failure?.text ?? null,
+    failure: failure && { cause: failure.cause, retry: failure.retry && Boolean(scan.videoKey) },
+    demo,
+    canEdit: Boolean(owner?.allowed),
     household,
     answers,
     asks: asksFor(withMoney?.municipality ?? basement?.municipality, household, answers, basement?.property as Property | null, withMoney),
   });
+});
+
+// "Try again": the stored video runs again. For a failed scan, or one that stopped moving: no new event
+// in 10 minutes and no job waiting for it.
+app.post("/api/scans/:id/retry", async (c) => {
+  const a = await ownerOf(c, currentUser);
+  if (!a) return c.json({ error: "Not found" }, 404);
+  if (!a.allowed) return c.json({ error: NOT_YOURS }, 403);
+  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, a.id));
+  if (scan.status === "done") return c.json({ status: "done" });
+  if (!scan.videoKey) return c.json({ error: "This video was deleted after 30 days. Film it again to scan it." }, 410);
+  const waiting = rows<{ id: number }>(
+    await db.execute(sql`SELECT id FROM jobs WHERE kind = 'scan' AND payload->>'scanId' = ${a.id} AND status IN ('queued', 'running') LIMIT 1`),
+  );
+  if (waiting.length) return c.json({ status: scan.status, waiting: true });
+  if (scan.status !== "error") {
+    const [last] = rows<{ at: number | null }>(
+      await db.execute(sql`SELECT (extract(epoch from max(created_at)) * 1000)::float AS at FROM scan_events WHERE scan_id = ${a.id}`),
+    );
+    if (Date.now() - (last?.at ?? scan.createdAt.getTime()) < 10 * 60 * 1000) return c.json({ status: scan.status, waiting: true });
+  }
+  if (!metaKey()) return c.json({ error: FAILURE.no_key.text }, 503);
+  if (await overSpend()) return c.json({ error: USED_UP }, 503);
+  const inputs = (scan.inputs ?? {}) as { retries?: number };
+  if ((inputs.retries ?? 0) >= MAX_RETRIES) return c.json({ error: "We tried this video a few times already. Film it again, or try the example." }, 429);
+  await db.delete(schema.scanEvents).where(eq(schema.scanEvents.scanId, a.id));
+  await db
+    .update(schema.scans)
+    .set({ status: "queued", error: null, result: null, finishedAt: null, inputs: { ...inputs, retries: (inputs.retries ?? 0) + 1 } })
+    .where(eq(schema.scans.id, a.id));
+  await enqueue("scan", { scanId: a.id });
+  return c.json({ status: "queued" });
 });
 
 // Live scan events: replays what already happened, then follows new rows until done.
@@ -206,7 +243,8 @@ app.get("/api/scans/:id/events", async (c) => {
   const id = c.req.param("id");
   if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
   return streamSSE(c, async (stream) => {
-    let lastId = 0;
+    // A reconnecting EventSource carries on from the last event it had, instead of hearing it all twice.
+    let lastId = Number.parseInt(c.req.header("last-event-id") ?? "", 10) || 0;
     let closed = false;
     stream.onAbort(() => {
       closed = true;
@@ -315,7 +353,7 @@ app.post("/api/live/detect", async (c) => {
   if (!(frame instanceof File) || frame.size > 400 * 1024 || !keys.length || session.length < 8) {
     return c.json({ error: "Send a small JPEG frame, a session id and 1–3 concepts." }, 400);
   }
-  const refused = admit(clientIp(c), session, keys.length);
+  const refused = admit(clientIp(c), session, keys.length) ?? ((await overSpend()) ? "daily limit" : null);
   const started = Date.now();
   const jpeg = Buffer.from(await frame.arrayBuffer());
   // The same frames build the 3D preview; the compass heading turns its map with the phone. A frame
@@ -336,112 +374,8 @@ app.get("/api/live/3d", (c) => {
 });
 
 // ---- Answers: the homeowner confirms what the video couldn't show, and the verdict re-checks ----
-
-function cleanAnswer(v: unknown): number | boolean | "unsure" | null {
-  if (typeof v === "boolean" || v === "unsure") return v;
-  if (typeof v === "number" && Number.isFinite(v) && Math.abs(v) < 1e6) return v;
-  return null;
-}
-
-// A rule answer (yes/no, a number, or "unsure"), a money question's own option, who it's for, or what
-// they'd like it to be.
-function answerFor(ruleId: string, v: unknown, pack: ReturnType<typeof packFor>["pack"]) {
-  if (ruleId === WHO_ID) return WHO_IDS.includes(v as Who) ? (v as Who) : null;
-  if (ruleId === PLANS_ID) return cleanPlans(v);
-  return STORED_MONEY_QUESTIONS.has(ruleId) ? cleanMoneyAnswer(ruleId, v, pack) : cleanAnswer(v);
-}
-
-async function savedAnswers(basementId: string): Promise<Answers> {
-  const rows = await db.select().from(schema.answers).where(eq(schema.answers.basementId, basementId));
-  return Object.fromEntries(rows.map((r) => [r.ruleId, r.value as AnswerValue]));
-}
-
-// null clears it.
-async function saveAnswer(basementId: string, ruleId: string, value: AnswerValue | null) {
-  if (value === null) {
-    await db.delete(schema.answers).where(and(eq(schema.answers.basementId, basementId), eq(schema.answers.ruleId, ruleId)));
-    return;
-  }
-  await db
-    .insert(schema.answers)
-    .values({ basementId, ruleId, value })
-    .onConflictDoUpdate({ target: [schema.answers.basementId, schema.answers.ruleId], set: { value, updatedAt: new Date() } });
-}
-
-// A re-checked result, written without undoing photos that landed meanwhile (server/photos.ts writes
-// those on its own).
-async function saveResult(id: string, result: unknown) {
-  const json = JSON.stringify(result);
-  const current = sql`${schema.scans.result} -> 'concepts'`;
-  await db
-    .update(schema.scans)
-    .set({ result: sql`CASE WHEN ${current} IS NOT NULL THEN ${json}::jsonb || jsonb_build_object('concepts', ${current}) ELSE ${json}::jsonb END` })
-    .where(eq(schema.scans.id, id));
-}
-
-const RULE_ASKS = Object.entries(TRIAGE).flatMap(([ruleId, t]) => (t.who === "ask" && t.question ? [{ ruleId, question: t.question, hint: t.hint ?? "" }] : []));
-
-// What the wait screen still asks, each question once (server/eligibility.ts waitQuestions).
-function asksFor(municipality: string | undefined, household: Household, answers: Record<string, unknown>, property: Property | null, result: any) {
-  const { pack } = packFor(municipality ?? "waterloo-on");
-  return waitQuestions(pack, { household, answers, property, findings: result?.findings ?? null, ruleAsks: RULE_ASKS, plans: plansQuestion(household) });
-}
-
-app.post("/api/scans/:id/answers", async (c) => {
-  const id = c.req.param("id");
-  if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
-  const body = await c.req.json().catch(() => ({}));
-  const ruleId = String(body.ruleId ?? "");
-  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
-  const result = scan?.result as any;
-  if (!scan) return c.json({ error: "Not found" }, 404);
-  const [basement] = await db.select().from(schema.basements).where(eq(schema.basements.id, scan.basementId));
-  const { pack } = packFor(result?.municipality ?? basement?.municipality ?? "waterloo-on");
-  const value = answerFor(ruleId, body.value, pack);
-  const known =
-    ruleId === WHO_ID || ruleId === PLANS_ID || STORED_MONEY_QUESTIONS.has(ruleId) || (result ? result.findings?.some((f: any) => f.ruleId === ruleId) : ruleId in TRIAGE);
-  if (!known) return c.json({ error: "Unknown question." }, 400);
-  // null clears an answer; anything else the question doesn't offer is refused, never taken as a clear.
-  if (value === null && body.value !== null) return c.json({ error: "Unknown answer." }, 400);
-  await saveAnswer(scan.basementId, ruleId, value);
-  // Who it's for brings its rent; a suite for family or a rental settles a "Not sure".
-  let household = (basement?.household ?? "unsure") as Household;
-  if (ruleId === WHO_ID && value !== null) {
-    const w = fromWho(value as Who, pack);
-    household = w.household;
-    await saveAnswer(scan.basementId, "rent", w.rent);
-  }
-  if (ruleId === PLANS_ID) household = plansHousehold(value as string | null, household);
-  if (household !== basement?.household) await db.update(schema.basements).set({ household }).where(eq(schema.basements.id, scan.basementId));
-  const answers = await savedAnswers(scan.basementId);
-  const property = (basement?.property ?? null) as Property | null;
-  // Answered while the scan runs: kept, and the scan applies them when it finishes.
-  if (!result) return c.json({ saved: true, asks: asksFor(basement?.municipality, household, answers, property, null) });
-  // What they'd like it to be is the wish, unless the video already said one.
-  const plans =
-    ruleId === PLANS_ID ? { plans: value, wants: result.wants && result.wants !== plansWords(result.plans) ? result.wants : plansWords(value as string | null) } : {};
-  const updated = recheck({ ...result, household, ...plans }, answers);
-  await saveResult(id, updated);
-  return c.json({ result: updated, asks: asksFor(updated.municipality, household, answers, property, updated) });
-});
-
-// Who the suite is for, answered while the scan runs or afterwards. It changes which money fits.
-app.post("/api/scans/:id/household", async (c) => {
-  const id = c.req.param("id");
-  if (!UUID.test(id)) return c.json({ error: "Not found" }, 404);
-  const body = await c.req.json().catch(() => ({}));
-  const household = String(body.household ?? "");
-  if (!["relative", "renter", "unsure"].includes(household)) return c.json({ error: "Pick who it's for." }, 400);
-  const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
-  if (!scan) return c.json({ error: "Not found" }, 404);
-  await db.update(schema.basements).set({ household }).where(eq(schema.basements.id, scan.basementId));
-  const result = scan.result as any;
-  if (!result) return c.json({ saved: true });
-  // Re-check with the saved answers: the money and the plan's steps follow who it's for.
-  const updated = recheck({ ...result, household }, await savedAnswers(scan.basementId));
-  await saveResult(id, updated);
-  return c.json({ result: updated });
-});
+// The owner's answer and household routes (server/answers.ts).
+mountAnswers(app, currentUser);
 
 // The money questions still open for this basement, and everything the wait screen still asks.
 app.get("/api/scans/:id/money", async (c) => {
@@ -612,7 +546,10 @@ app.use("/*", serveStatic({ root: "./dist" }));
 app.get("*", serveStatic({ path: "./dist/index.html" }));
 
 // PGlite is single-process, so in development the worker runs here. Production runs `pnpm worker`.
-if (usingPglite || process.env.WORKER_INLINE === "1") startWorker(handlers);
+if (usingPglite || process.env.WORKER_INLINE === "1") {
+  startWorker(handlers);
+  startSweeps();
+}
 
 // API_PORT wins in dev, where the preview launcher sets PORT for the web server.
 const port = Number(process.env.API_PORT ?? process.env.PORT ?? 8787);

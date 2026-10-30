@@ -95,6 +95,19 @@ export const workspaces = pgTable("workspaces", {
   updatedAt: updatedAt(),
 });
 
+// Every paid call (server/spend.ts), for the live site's daily cap (server/limits.ts). Not tied to a
+// scan, so deleting a basement doesn't hand its spend back.
+export const spend = pgTable(
+  "spend",
+  {
+    id: serial("id").primaryKey(),
+    kind: text("kind").notNull(), // sam_video | sam_image | spark | transcribe | muse_image | scan3d
+    usd: doublePrecision("usd").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("spend_created_idx").on(t.createdAt)],
+);
+
 // Durable job queue: workers claim rows with FOR UPDATE SKIP LOCKED.
 export const jobs = pgTable(
   "jobs",

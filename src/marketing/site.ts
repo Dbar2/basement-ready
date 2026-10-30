@@ -1,5 +1,4 @@
-// Paths and the few facts every marketing page shares. Fill the placeholders
-// before launch; anything still null renders as a visible "[to come]" note.
+// Paths and the few facts every marketing page shares.
 
 export const PATHS = {
   home: "/",
@@ -22,12 +21,12 @@ export const NAV = [
   { path: PATHS.about, label: "About" },
 ];
 
+// The open data behind address and property look-ups (data/rules/SOURCES.md, "Data licences").
+export const DATA_CREDIT = "Open data: Region of Waterloo, City of Cambridge. Addresses outside Waterloo Region: Natural Resources Canada.";
+
 export const SITE = {
   name: "Basement Ready",
   builder: "David Barry",
-  // Placeholder until the domain and inbox exist.
-  contactEmail: null as string | null,
-  // David's own line on why this matters to him (PLAN.md, to-dos). Not written yet.
-  firsthandLine: null as string | null,
+  contactEmail: "davidbarry476@gmail.com" as string | null,
   legalDraftDate: "October 28, 2026",
 };

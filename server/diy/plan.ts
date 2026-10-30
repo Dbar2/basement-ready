@@ -34,10 +34,10 @@ function service(id: string, item: string, only: string | null = null): Cost | n
 }
 
 // The build in the order inspections need it: nothing gets covered before it's been seen.
-export function buildOrder(inspections: Inspection[], o: { egressNew: boolean; city: string }): BuildStep[] {
+export function buildOrder(inspections: Inspection[], o: { egressNew: boolean; authority: string }): BuildStep[] {
   const find = (re: RegExp) => inspections.find((i) => re.test(`${i.id} ${i.title}`))?.title ?? null;
   const steps: Omit<BuildStep, "n">[] = [
-    { title: "Permits in hand", who: "You", detail: `Building permit from the City of ${o.city}; the electrical permit from ESA before any wiring; keep the approved drawings on site.`, inspection: null },
+    { title: "Permits in hand", who: "You", detail: `Building permit from ${o.authority === "your municipality" ? "your municipality" : `the ${o.authority}`}; the electrical permit from ESA before any wiring; keep the approved drawings on site.`, inspection: null },
   ];
   if (o.egressNew) steps.push({ title: "Cut the escape window", who: "Concrete cutter, to the engineer's design", detail: "Opening, lintel, window and well, before the walls go up.", inspection: find(/footing|structur|excavat/i) });
   steps.push(
@@ -48,13 +48,13 @@ export function buildOrder(inspections: Inspection[], o: { egressNew: boolean; c
     { title: "Fire separation", who: "You", detail: "5/8\" Type X board on the ceiling and the furnace room, joints taped and sealed, smoke-tight.", inspection: find(/fire/i) },
     { title: "Drywall, paint, floors, doors, trim, kitchen", who: "You", detail: "Finish the rooms; hang the self-closing door between the homes.", inspection: null },
     { title: "Fixtures, devices and alarms", who: "You", detail: "Toilet, sinks, shower, receptacles, lights, interconnected smoke and CO alarms with strobes.", inspection: [find(/plumbing final|final plumbing/i), find(/hvac final/i), "ESA final"].filter(Boolean).join(", ") },
-    { title: "Final inspection and occupancy", who: "You and the City", detail: "The final building inspection; then the unit can be lived in.", inspection: [find(/zoning/i), find(/final building|building final|occupancy|^final/i)].filter(Boolean).join(", ") || "Final building inspection" },
+    { title: "Final inspection and occupancy", who: "You and the building inspector", detail: "The final building inspection; then the unit can be lived in.", inspection: [find(/zoning/i), find(/final building|building final|occupancy|^final/i)].filter(Boolean).join(", ") || "Final building inspection" },
   );
   return steps.map((s, i) => ({ n: i + 1, ...s }));
 }
 
 export function diyPlan(result: any, state: StoredState, municipality: string): DiyPlan {
-  const { city, permit } = cityPermit(municipality);
+  const { city, authority, permit } = cityPermit(municipality);
   const diy = ontarioDiy();
   const geo = basementGeometry(result, state);
   const t: Takeoff = geo ? takeoff(geo) : { lines: [], assumptions: ["No measured plan yet."], materialsCAD: 0, hstCAD: 0, missing: [], wallHeightM: 2.3, checked: loadPrices().compiledAt };
@@ -63,7 +63,7 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
 
   const permits: Cost[] = [];
   const fee = permitFee(pack, result?.plan?.areaM2 ?? null);
-  if (fee?.amount) permits.push({ id: "building_permit", item: `Building permit, City of ${city}`, lowCAD: fee.amount, highCAD: fee.amount, source: fee.source ? { title: fee.source.title, url: fee.source.url, checked: (fee.source as { retrieved?: string }).retrieved ?? "" } : null, estimate: fee.estimate });
+  if (fee?.amount) permits.push({ id: "building_permit", item: `Building permit, ${authority === "your municipality" ? "your municipality" : authority}`, lowCAD: fee.amount, highCAD: fee.amount, source: fee.source ? { title: fee.source.title, url: fee.source.url, checked: (fee.source as { retrieved?: string }).retrieved ?? "" } : null, estimate: fee.estimate });
   if (permit?.plumbing?.perFixtureCAD) {
     const fixtures = (geo?.layout?.zones.some((z) => z.kind === "bathroom") ? 3 : 0) + (geo?.layout?.zones.some((z) => z.kind === "kitchen") ? 1 : 0);
     const amount = Math.max(permit.plumbing.minimumCAD ?? 0, fixtures * permit.plumbing.perFixtureCAD);
@@ -101,6 +101,6 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
     permits,
     hires,
     totals: { diyLow: Math.round(low), diyHigh: Math.round(high), hiredLow: result?.cost?.low ?? null, hiredHigh: result?.cost?.high ?? null },
-    steps: buildOrder(permit?.inspections ?? [], { egressNew, city }),
+    steps: buildOrder(permit?.inspections ?? [], { egressNew, authority }),
   };
 }

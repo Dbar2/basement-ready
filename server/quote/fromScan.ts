@@ -114,7 +114,7 @@ function designFromGeometry(geo: Geometry, foundation: Wall[], openings: Opening
     id: `d_${L.kind}`,
     name: L.kind === "studio" ? "Studio" : "One bedroom",
     layout: L.kind,
-    proposed: { walls, openings: opens, rooms, fixtures: fixtures.map((f) => ({ ...f })), alarms: geo.alarms.map((a, i) => ({ id: `a_${i}`, kind: a.kind, at: [a.x, a.z], why: a.why })) },
+    proposed: { walls, openings: opens, rooms, fixtures: fixtures.map((f) => ({ ...f })), alarms: geo.alarms.map((a, i) => ({ id: `a_${i}`, kind: a.kind, at: [a.x, a.z], why: a.why })), furniture: [] },
     finishes: { style: FINISH[finish ?? "light"], floor: "Vinyl plank", walls: "White" },
     chosen: true,
     updatedAt: at,

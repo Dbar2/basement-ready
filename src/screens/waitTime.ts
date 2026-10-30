@@ -40,3 +40,16 @@ export function leftWords(sec: number | null): string {
   if (sec < 90) return "About a minute left";
   return `About ${Math.round(sec / 60)} min left`;
 }
+
+// When the wait itself is the news: nothing new for a minute and a half, or well past a usual scan, is
+// slow; nothing new for 10 minutes is stalled, and "Try again" is offered (the server only re-runs it
+// once no job is waiting for it).
+export const SLOW_QUIET_S = 90;
+export const SLOW_TOTAL_S = 8 * 60;
+export const STALLED_QUIET_S = 10 * 60;
+
+export function waitState(quietS: number, scanS: number): "ok" | "slow" | "stalled" {
+  if (quietS >= STALLED_QUIET_S) return "stalled";
+  if (quietS >= SLOW_QUIET_S || scanS >= SLOW_TOTAL_S) return "slow";
+  return "ok";
+}

@@ -29,12 +29,13 @@ const PROCESSORS = [
   { name: "Railway", role: "Hosts our app and database.", data: "Your project and account details" },
   { name: "Clerk", role: "Handles accounts and sign-in.", data: "Name, email, sign-in details" },
   { name: "Resend", role: "Sends our emails, including briefs you choose to send.", data: "Email address, message content" },
+  { name: "Natural Resources Canada", role: "Finds addresses outside Waterloo Region as you type, with its public Geolocator.", data: "What you type in the address box" },
+  { name: "Region of Waterloo and City of Cambridge", role: "Their public map services give the building footprint, the aerial photo (Region of Waterloo, 2024) and, in Cambridge, the zone.", data: "Your address's location" },
 ];
 
 const KEPT = [
-  { what: "Raw video", detail: "Deleted 30 days after upload, unless you save your project." },
-  { what: "Unsaved projects", detail: "Deleted with the raw video after 30 days, including frames and results." },
-  { what: "Saved projects", detail: "Kept until you delete the project or your account." },
+  { what: "Raw video", detail: "Deleted 30 days after upload." },
+  { what: "Frames, 3D scan and answer", detail: "Kept so your plan still opens, until you delete the project or your account. Without an account, email us and we'll delete it." },
   { what: "Your account", detail: "Kept until you delete it." },
   { what: "Briefs you send", detail: "We keep a record of what went to whom while your account is open. The pro's copy is theirs." },
   { what: "Server logs", detail: <Placeholder>retention period to confirm</Placeholder> },
