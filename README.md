@@ -37,7 +37,8 @@ Tests: `pnpm test` runs 104 unit tests. `services/scan3d` has its own 13 tests, 
 | Model | What it does here | Code |
 |---|---|---|
 | **SAM 3.1** (`sam-3.1`, Meta Model API) | Finds and tracks windows, doors, stairs, the furnace, ducts and beams through the video. It also checks that the staged photos kept every window and the stairs where they really are. | `server/meta.ts`, `server/pipeline.ts`, `server/concepts.ts` |
-| **Muse Spark 1.3** (`muse-spark-1.3`) | Reads the city's rules, what SAM found and what the homeowner said. It writes the decision, the fixes and the few plain-language questions. | `server/assess.ts` |
+| **Muse Spark 1.3** (`muse-spark-1.3`) | Reads the city's rules, what SAM found and what the homeowner said. It writes the decision, the fixes and the few plain-language questions. It also stands in for Muse Wonder when Wonder (in preview) fails. | `server/assess.ts`, `server/watch.ts` |
+| **Muse Wonder 1.0** (`muse-wonder-1.0`) | Watches the whole take with its sound, once, beside SAM and the 3D: the rooms in the order filmed, which were only seen through a doorway, how they join, ceilings, low ducts and beams, windows, and what the homeowner said about each room. Then, before "Is this your basement?", it compares the drawn plan with the take and turns any mismatch into a plain question. It describes; it never measures. | `server/watch.ts`, `server/planCheck.ts` |
 | **Muse Voice Transcribe** (`muse-voice-transcribe-1.0`) | Turns what the homeowner says while filming ("this could be Mom's bedroom") into text. | `server/meta.ts` |
 | **Muse Image** (`muse-image-1.0`) | Finishes the homeowner's own frames into "what it could look like" photos, labelled *virtually staged*. | `server/concepts.ts` |
 | **MapAnything** (`facebook/map-anything-apache`, open weights, Apache-2.0) | Measured 3D from the video frames: room size, ceiling height and the floor plan. It runs self-hosted. | `services/scan3d` |
