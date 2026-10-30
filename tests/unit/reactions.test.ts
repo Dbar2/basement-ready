@@ -3,18 +3,14 @@ import { cheerDue, CHEER_EVERY_MS, CHEER_QUIET_MS, findLine, OncePerSpace, timeL
 import { LINES } from "../../src/capture/script";
 
 describe("what the guide says about a find", () => {
-  it("talks about the furnace and the water heater together, whichever shows first", () => {
-    expect(findLine("furnace", [])).toBe("furnace_found");
-    expect(LINES.furnace_found[0]).toMatch(/water heater/);
-    expect(findLine("heater", ["furnace"])).toBe("heater_too");
+  it("talks about the water heater once (a furnace isn't looked for live: the scan points at it)", () => {
     expect(findLine("heater", [])).toBe("heater_found");
-    expect(findLine("furnace", ["door", "heater"])).toBe("furnace_too");
+    expect(findLine("heater", ["heater"])).toBeNull();
   });
 
-  it("points out plumbing as where a bathroom goes, once, from either a drain or a rough-in", () => {
-    expect(findLine("roughin", [])).toBe("plumbing_found");
+  it("points out a floor drain as where a bathroom goes, once", () => {
     expect(findLine("drain", [])).toBe("plumbing_found");
-    expect(findLine("drain", ["roughin"])).toBeNull();
+    expect(findLine("drain", ["drain"])).toBeNull();
     expect(LINES.plumbing_found[0]).toMatch(/bathroom/);
   });
 
@@ -24,7 +20,6 @@ describe("what the guide says about a find", () => {
     expect(findLine("panel", [])).toBe("panel_found");
     expect(findLine("panel", ["panel"])).toBeNull();
     expect(findLine("door", ["door"])).toBeNull();
-    expect(findLine("bulkhead", [])).toBe("low_ceiling");
     // The stairs step has its own praise; beams aren't asked for live.
     expect(findLine("stairs", [])).toBeNull();
     expect(findLine("beam", [])).toBeNull();
