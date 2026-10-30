@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { parseArgs, USAGE } from "./args";
 import { capture, type CaptureResult } from "./capture";
 import { stillHolds } from "./lint";
-import { Budget, MODEL } from "./cost";
+import { Budget, MODELS } from "./cost";
 import { anthropicKey, QA_DIR, ROOT } from "./paths";
 import { buildPlan, matches, screenById } from "./plan";
 import { autoFindings, buildReport, notesFindings, writeReport } from "./report";
@@ -112,11 +112,11 @@ try {
 const key = args.captureOnly ? null : anthropicKey();
 let result: ReviewResult | null = null;
 if (args.dryRun) {
-  await review({ runDir, shots: cap.shots, apiKey: "", budget: new Budget(args.budget), effort: args.effort, concurrency: 1, facts, log, dryRun: true });
+  await review({ runDir, shots: cap.shots, apiKey: "", budget: new Budget(args.budget), model: MODELS[args.model], effort: args.effort, concurrency: 1, facts, log, dryRun: true });
 } else if (key) {
-  log(`Reviewing with ${MODEL} (effort ${args.effort}, budget $${args.budget.toFixed(2)})…`);
+  log(`Reviewing with ${MODELS[args.model].name} (effort ${args.effort}, budget $${args.budget.toFixed(2)})…`);
   const budget = new Budget(args.budget);
-  result = await review({ runDir, shots: cap.shots, apiKey: key, budget, effort: args.effort, concurrency: args.concurrency, facts, log });
+  result = await review({ runDir, shots: cap.shots, apiKey: key, budget, model: MODELS[args.model], effort: args.effort, concurrency: args.concurrency, facts, log });
 } else {
   log(args.captureOnly ? "Capture only (--capture-only)." : "No ANTHROPIC_API_KEY in the environment or .env: capture and free checks only.");
 }
@@ -130,7 +130,7 @@ const report = buildReport({
   baseURL,
   scans,
   mode: result ? "review" : "capture only",
-  model: MODEL,
+  model: MODELS[args.model].id,
   budgetUsd: args.budget,
   shots: cap.shots,
   findings: [...(result?.findings ?? []), ...noted, ...auto],
