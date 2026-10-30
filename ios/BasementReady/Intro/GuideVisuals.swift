@@ -1,6 +1,7 @@
-// The guide's drawings, in the live map's own look (MapView): forest ground, light walls once filmed, glowing
-// mint dashes where nobody has looked yet, the camera as a mint dot with its view cone. Each one loops calmly;
-// with Reduce Motion it's the last frame, still.
+// The guide's drawings: plan-symbol line drawings in ink on the sheet, like the rest of the drawing set.
+// 1.5 pt lines with square caps; thin lines and dashes for paths and sightlines; a wall drawn thick once it's
+// filmed (the live map fills in the same way). Mint only as a fill, on the spot that was missed. Each drawing
+// strokes in once and holds. With Reduce Motion it's the finished drawing, still.
 import SwiftUI
 
 struct GuideVisual: View {
@@ -9,10 +10,10 @@ struct GuideVisual: View {
 
     var label: String {
       switch self {
-      case .stairs: "Drawing: a phone held upright goes down the stairs into the basement, filming ahead."
-      case .walls: "Drawing from above: the phone moves along each wall about 2 metres back, and each wall fills in once it's filmed."
-      case .doorway: "Drawing from above: the phone stays in a room's doorway and pans across the room, and the room fills in."
-      case .missedSpot: "Drawing from above: a missed part of the wall glows. The phone turns back to it and it fills in."
+      case .stairs: "Drawing: a phone held upright at the top of the basement stairs, with an arrow down the stairs."
+      case .walls: "Plan drawing: the phone goes round the room about 2 metres from the walls. Each wall it has filmed is drawn thick."
+      case .doorway: "Plan drawing: the phone stands in a room's doorway and pans across it, and the room's walls are drawn thick."
+      case .missedSpot: "Plan drawing: one stretch of wall is marked in mint, not filmed yet. The phone turns back to point at it."
       }
     }
   }
@@ -21,382 +22,236 @@ struct GuideVisual: View {
   var playing = true
   var freezeAt: Double?
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var start = Date()
+  @State private var start: Date?
+  @State private var drawn = false
 
   var body: some View {
-    TimelineView(.animation(paused: !playing || reduceMotion || freezeAt != nil)) { context in
-      // nil: the finished drawing.
-      let t: Double? = reduceMotion ? nil : (freezeAt ?? max(0, context.date.timeIntervalSince(start)))
+    TimelineView(.animation(paused: !playing || drawn || reduceMotion || freezeAt != nil)) { context in
+      // nil: the finished drawing. Before its sheet has been shown, an empty one.
+      let t: Double? = reduceMotion || drawn ? nil : (freezeAt ?? start.map { context.date.timeIntervalSince($0) } ?? 0)
       Canvas { ctx, size in
-        GuideDrawing.draw(kind, t: t, in: &ctx, size: size)
+        Sketch.of(kind).draw(at: t, in: &ctx, size: size)
       }
     }
-    .onChange(of: playing) { _, now in
-      if now { start = .now }
-    }
+    .task(id: playing) { await strokeIn() }
     .accessibilityElement()
     .accessibilityLabel(kind.label)
     .accessibilityAddTraits(.isImage)
   }
+
+  /// Draws once, the first time the sheet is shown; it's still there when you come back.
+  private func strokeIn() async {
+    guard playing, !drawn, !reduceMotion, freezeAt == nil else { return }
+    let begun = start ?? .now
+    if start == nil { start = begun }
+    let left = Sketch.of(kind).length - Date.now.timeIntervalSince(begun)
+    do {
+      if left > 0 { try await Task.sleep(for: .seconds(left)) }
+    } catch {
+      return
+    }
+    drawn = true
+  }
 }
 
-enum GuideDrawing {
-  static let light = Brand.bg
-  static let floorFill = Color(hex: 0x24432F) // the live map's floor
-  static let filmed = Brand.mint.opacity(0.42) // the live map's filmed floor
-  /// Every drawing is laid out in a 300 × 300 space; this is the part it uses, which is scaled to fit the card.
-  static func bounds(_ kind: GuideVisual.Kind) -> CGRect {
-    switch kind {
-    case .stairs: CGRect(x: 10, y: 6, width: 280, height: 244)
-    case .walls: CGRect(x: 18, y: 26, width: 264, height: 248)
-    case .doorway: CGRect(x: 10, y: 26, width: 280, height: 240)
-    case .missedSpot: CGRect(x: 18, y: 30, width: 264, height: 240)
-    }
+/// A drawing as a list of marks, each drawn in over its own stretch of time.
+struct Sketch {
+  enum Mark {
+    case line(Path, width: CGFloat, dash: [CGFloat]) // drawn in along its length
+    case wall(Path) // a filmed wall: thick ink, drawn in along its length
+    case fill(Path, Color) // fades in
+    case label(String, at: CGPoint, anchor: UnitPoint) // a figure, mono 12
   }
 
-  static func draw(_ kind: GuideVisual.Kind, t: Double?, in ctx: inout GraphicsContext, size: CGSize) {
-    let b = bounds(kind), pad: CGFloat = 22
-    let s = min((size.width - 2 * pad) / b.width, (size.height - 2 * pad) / b.height)
+  struct Step {
+    let mark: Mark
+    let from: Double
+    let to: Double
+  }
+
+  /// The part of the 300 × 300 layout the drawing uses; it's scaled to fit, but lines stay their own width.
+  let bounds: CGRect
+  private(set) var steps: [Step] = []
+  var length: Double { steps.map(\.to).max() ?? 0 }
+
+  static let line: CGFloat = 1.5
+  static let thin: CGFloat = 1
+  static let dash: [CGFloat] = [4, 4]
+
+  mutating func add(_ mark: Mark, _ from: Double, _ to: Double) {
+    steps.append(Step(mark: mark, from: from, to: to))
+  }
+
+  func draw(at t: Double?, in ctx: inout GraphicsContext, size: CGSize) {
+    let pad: CGFloat = 12
+    let s = min((size.width - 2 * pad) / bounds.width, (size.height - 2 * pad) / bounds.height)
     guard s > 0 else { return }
-    ctx.translateBy(x: (size.width - b.width * s) / 2 - b.minX * s, y: (size.height - b.height * s) / 2 - b.minY * s)
-    ctx.scaleBy(x: s, y: s)
-    switch kind {
-    case .stairs: stairs(&ctx, t)
-    case .walls: walls(&ctx, t)
-    case .doorway: doorway(&ctx, t)
-    case .missedSpot: missedSpot(&ctx, t)
+    let fit = CGAffineTransform(translationX: (size.width - bounds.width * s) / 2 - bounds.minX * s,
+                                y: (size.height - bounds.height * s) / 2 - bounds.minY * s).scaledBy(x: s, y: s)
+    for step in steps {
+      let p = t.map { Ease.plan(Ease.ramp($0, step.from, step.to)) } ?? 1
+      guard p > 0 else { continue }
+      switch step.mark {
+      case .line(let path, let width, let dash):
+        ctx.stroke(path.applying(fit).trimmedPath(from: 0, to: p), with: .color(Brand.ink),
+                   style: StrokeStyle(lineWidth: width, lineCap: dash.isEmpty ? .square : .butt, lineJoin: .miter, dash: dash))
+      case .wall(let path):
+        ctx.stroke(path.applying(fit).trimmedPath(from: 0, to: p), with: .color(Brand.ink),
+                   style: StrokeStyle(lineWidth: 5, lineCap: .square, lineJoin: .miter))
+      case .fill(let path, let color):
+        ctx.fill(path.applying(fit), with: .color(color.opacity(p)))
+      case .label(let text, let at, let anchor):
+        var figure = ctx
+        figure.opacity = p
+        figure.draw(figure.resolve(Text(text).font(Brand.mono(12)).foregroundStyle(Brand.ink)), at: at.applying(fit), anchor: anchor)
+      }
     }
   }
 
-  // MARK: 1. Start at the stairs (a cutaway from the side)
+  static func of(_ kind: GuideVisual.Kind) -> Sketch {
+    switch kind {
+    case .stairs: stairs()
+    case .walls: walls()
+    case .doorway: doorway()
+    case .missedSpot: missedSpot()
+    }
+  }
 
-  static func stairs(_ ctx: inout GraphicsContext, _ time: Double?) {
-    let period = 5.6
-    let t = time.map { $0.truncatingRemainder(dividingBy: period) }
-    let p = t.map { Ease.inOut(Ease.ramp($0, 0.6, 3.8)) } ?? 1
-    let o = t.map { presence($0, period: period, fadeIn: 0.3, fadeOut: 0.6) } ?? 1
+  // MARK: 1. Start at the stairs (a section)
 
-    let groundY: CGFloat = 70, ceilY: CGFloat = 94, floorY: CGFloat = 246
-    let leftX: CGFloat = 16, farX: CGFloat = 284
-    let topX: CGFloat = 96, bottomX: CGFloat = 212, openingEnd: CGFloat = 172
+  static func stairs() -> Sketch {
+    var s = Sketch(bounds: CGRect(x: 0, y: 30, width: 300, height: 240))
+    let groundY: CGFloat = 84, slabY: CGFloat = 104, floorY: CGFloat = 262
+    let leftX: CGFloat = 8, farX: CGFloat = 292, topX: CGFloat = 104, bottomX: CGFloat = 220, openEnd: CGFloat = 178
     let steps = 7
     let run = (bottomX - topX) / CGFloat(steps), rise = (floorY - groundY) / CGFloat(steps)
 
-    // The ground floor, cut through, with the opening over the stairs.
-    let slab = Path { p in
-      p.addRect(CGRect(x: leftX, y: groundY, width: topX - leftX, height: ceilY - groundY))
-      p.addRect(CGRect(x: openingEnd, y: groundY, width: farX - openingEnd, height: ceilY - groundY))
-    }
-    ctx.fill(slab, with: .color(light.opacity(0.14)))
-    var ground = Path()
-    ground.move(to: CGPoint(x: leftX, y: groundY))
-    ground.addLine(to: CGPoint(x: topX, y: groundY))
-    ground.move(to: CGPoint(x: openingEnd, y: groundY))
-    ground.addLine(to: CGPoint(x: farX, y: groundY))
-    ctx.stroke(ground, with: .color(light), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-
-    // The basement: walls and floor.
-    var shell = Path()
-    shell.move(to: CGPoint(x: leftX, y: groundY))
-    shell.addLine(to: CGPoint(x: leftX, y: floorY))
-    shell.addLine(to: CGPoint(x: farX, y: floorY))
-    shell.addLine(to: CGPoint(x: farX, y: groundY))
-    ctx.stroke(shell, with: .color(light), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+    // The basement, cut through: walls and floor, then the ground floor slab with the stair opening.
+    s.add(.line(polyline([CGPoint(x: leftX, y: groundY), CGPoint(x: leftX, y: floorY), CGPoint(x: farX, y: floorY), CGPoint(x: farX, y: groundY)]),
+                width: line, dash: []), 0, 0.55)
+    let slabs = [CGRect(x: leftX, y: groundY, width: topX - leftX, height: slabY - groundY),
+                 CGRect(x: openEnd, y: groundY, width: farX - openEnd, height: slabY - groundY)]
+    s.add(.line(Path { p in slabs.forEach { p.addRect($0) } }, width: line, dash: []), 0.1, 0.55)
+    s.add(.line(Path { p in slabs.forEach { p.addPath(hatch($0, spacing: 7)) } }, width: thin, dash: []), 0.45, 0.8)
 
     // The stairs.
-    var profile: [CGPoint] = [CGPoint(x: topX, y: groundY)]
+    var profile = [CGPoint(x: topX, y: groundY)]
     for i in 0..<steps {
       let x = topX + CGFloat(i) * run, y = groundY + CGFloat(i + 1) * rise
       profile.append(CGPoint(x: x, y: y))
       profile.append(CGPoint(x: x + run, y: y))
     }
-    var mass = Path()
-    mass.addLines(profile + [CGPoint(x: bottomX - 28, y: floorY), CGPoint(x: topX, y: groundY + 40)])
-    mass.closeSubpath()
-    ctx.fill(mass, with: .color(light.opacity(0.12)))
-    ctx.stroke(polyline(profile), with: .color(light), style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+    s.add(.line(polyline(profile), width: line, dash: []), 0.3, 0.85)
+    s.add(.line(polyline([CGPoint(x: topX, y: groundY + 34), CGPoint(x: bottomX - 36, y: floorY)]), width: thin, dash: []), 0.55, 0.85)
 
-    // What the phone has filmed: points on the far wall, then the floor.
-    var dots: [CGPoint] = []
-    for y in stride(from: 102.0, through: 238.0, by: 12) { dots.append(CGPoint(x: farX - 7, y: y)) }
-    for x in stride(from: 268.0, through: 232.0, by: -12) { dots.append(CGPoint(x: x, y: floorY - 7)) }
-    for (i, d) in dots.enumerated() {
-      let when = 0.12 + 0.8 * Double(i) / Double(dots.count)
-      let a = Ease.ramp(p, when, when + 0.06) * o
-      if a > 0 { ctx.fill(circle(d, 2.8), with: .color(Brand.mint.opacity(a))) }
-    }
-
-    // The phone goes down the stairs, upright, filming ahead.
-    let route = [CGPoint(x: 70, y: 24), CGPoint(x: 96, y: 24), CGPoint(x: 212, y: 198), CGPoint(x: 236, y: 198)]
-    let at = along(route, p)
-    var air = Path()
-    air.addRect(CGRect(x: leftX, y: -40, width: farX - leftX, height: groundY + 40))
-    air.addRect(CGRect(x: topX, y: groundY - 1, width: openingEnd - topX, height: ceilY - groundY + 2))
-    air.addRect(CGRect(x: leftX, y: ceilY, width: farX - leftX, height: floorY - ceilY))
-    var seeing = ctx
-    seeing.clip(to: air)
-    cone(&seeing, at: at, heading: 1.95, reach: 128, half: 0.48, opacity: o)
-    ctx.stroke(polyline(partial(route, p)), with: .color(light.opacity(0.45 * o)), style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [1, 5]))
-    let body = CGRect(x: at.x - 7, y: at.y - 12, width: 14, height: 24)
-    ctx.fill(Path(roundedRect: body, cornerRadius: 3.5), with: .color(light.opacity(o)))
-    ctx.fill(Path(roundedRect: body.insetBy(dx: 2.2, dy: 2.6), cornerRadius: 1.8), with: .color(Brand.mint.opacity(o)))
-
-    var label = ctx
-    label.opacity = 0.8
-    label.draw(label.resolve(Text("Start").font(Brand.body(12, .semibold)).foregroundStyle(light)), at: CGPoint(x: 54, y: 24), anchor: .trailing)
+    // The phone at the top, upright, and the way down.
+    let phone = CGRect(x: 67, y: 38, width: 14, height: 24)
+    s.add(.line(Path(roundedRect: phone, cornerRadius: 3), width: line, dash: []), 0.75, 0.95)
+    s.add(.fill(circle(CGPoint(x: phone.midX, y: phone.minY + 5), 1.6), Brand.ink), 0.9, 1)
+    let route = [CGPoint(x: 88, y: 50), CGPoint(x: 108, y: 50), CGPoint(x: 214, y: 214), CGPoint(x: 246, y: 214)]
+    s.add(.line(polyline(route), width: thin, dash: dash), 0.95, 1.55)
+    s.add(.line(arrow(to: route[3], from: route[2]), width: thin, dash: []), 1.5, 1.6)
+    return s
   }
 
-  // MARK: 2. Sweep each wall slowly, about 2 m back (from above)
+  // MARK: 2. Sweep each wall slowly, about 2 m back (a plan)
 
-  static func walls(_ ctx: inout GraphicsContext, _ time: Double?) {
-    let period = 8.6
-    let t = time.map { $0.truncatingRemainder(dividingBy: period) }
-    let o = t.map { presence($0, period: period, fadeIn: 0.4, fadeOut: 0.8) } ?? 1
+  static func walls() -> Sketch {
+    var s = Sketch(bounds: CGRect(x: 22, y: 32, width: 256, height: 236))
+    let room = CGRect(x: 30, y: 40, width: 240, height: 220)
+    let tl = CGPoint(x: room.minX, y: room.minY), tr = CGPoint(x: room.maxX, y: room.minY)
+    let br = CGPoint(x: room.maxX, y: room.maxY), bl = CGPoint(x: room.minX, y: room.maxY)
+    s.add(.line(polyline([tl, tr, br, bl, tl]), width: line, dash: []), 0, 0.5)
 
-    let rect = CGRect(x: 28, y: 36, width: 244, height: 228)
-    let inset: CGFloat = 50 // 2 m
-    let outer = [CGPoint(x: rect.minX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.minY), CGPoint(x: rect.maxX, y: rect.maxY), CGPoint(x: rect.minX, y: rect.maxY)]
-    let inner = outer.enumerated().map { i, p in CGPoint(x: p.x + (i == 0 || i == 3 ? inset : -inset), y: p.y + (i < 2 ? inset : -inset)) }
-    let outward = [CGPoint(x: 0, y: -1), CGPoint(x: 1, y: 0), CGPoint(x: 0, y: 1), CGPoint(x: -1, y: 0)]
+    // The way round, 2 m in from the walls; each wall is drawn thick as it's filmed.
+    let walk = [CGPoint(x: 150, y: 80), CGPoint(x: 230, y: 80), CGPoint(x: 230, y: 220), CGPoint(x: 70, y: 220), CGPoint(x: 70, y: 150)]
+    s.add(.line(circle(walk[0], 3), width: thin, dash: []), 0.45, 0.5) // where the walk starts
+    s.add(.line(polyline([CGPoint(x: walk[0].x + 3, y: walk[0].y)] + walk.dropFirst()), width: thin, dash: dash), 0.5, 1.45)
+    s.add(.wall(polyline([tl, tr])), 0.55, 0.8)
+    s.add(.wall(polyline([tr, br])), 0.8, 1.05)
+    s.add(.wall(polyline([br, bl])), 1.05, 1.3)
 
-    // The walk, one unit per wall: along the wall 2 m back, facing it, then a turn at the corner. It gives where
-    // the camera is (on the inner loop), which way it faces, and the spot on the walls it faces (on the outer loop).
-    let turnAt = 0.78
-    func corner(_ k: Int) -> Double { Double(inset / (k % 2 == 0 ? rect.width : rect.height)) }
-    func walk(_ w: Double) -> (at: Double, heading: Double, facing: Double, along: Double?) {
-      let k = Int(w.rounded(.down)), f = w - Double(k)
-      let here = corner(k), next = corner(k + 1)
-      if f < turnAt {
-        let m = f / turnAt
-        return (Double(k) + m, Double(k) * .pi / 2, Double(k) + here + (1 - 2 * here) * m, m)
-      }
-      let r = Ease.inOut((f - turnAt) / (1 - turnAt))
-      return (Double(k + 1), (Double(k) + r) * .pi / 2, Double(k + 1) - here + (here + next) * r, nil)
-    }
-    let w0 = 0.39 // halfway along the top wall
-    let w = w0 + (t.map { 4 * Ease.inOut(Ease.ramp($0, 0.6, 6.6)) } ?? 4)
-    let first = walk(w0), now = walk(w)
-    let spread = 0.11 // the cone's width on the wall
-    let start = first.facing - spread, end = min(now.facing + spread, start + 4)
+    // The phone on the last wall, and what it sees.
+    let phone = walk[4]
+    s.add(.fill(circle(phone, 5), Brand.ink), 1.45, 1.55)
+    s.add(.line(polyline([CGPoint(x: room.minX, y: 124), phone, CGPoint(x: room.minX, y: 176)]), width: thin, dash: []), 1.5, 1.7)
 
-    let room = Path(rect)
-    ctx.fill(room, with: .color(floorFill))
-    let done = polyline(loop(outer, start, end))
-    var band = ctx
-    band.clip(to: room)
-    band.stroke(done, with: .color(Brand.mint.opacity(0.3 * o)), style: StrokeStyle(lineWidth: 80, lineCap: .butt, lineJoin: .miter))
-
-    if start + 4 - end > 0.001 { glow(&ctx, polyline(loop(outer, end, start + 4)), time) }
-    if o < 1 { glow(&ctx, done, time, opacity: 1 - o) }
-    wall(&ctx, done, opacity: o)
-    if now.at - first.at > 0.001 {
-      ctx.stroke(polyline(loop(inner, first.at, now.at)), with: .color(light.opacity(0.45 * o)),
-                 style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [1, 5]))
-    }
-
-    let c = point(inner, now.at)
-    var seeing = ctx
-    seeing.clip(to: room)
-    cone(&seeing, at: c, heading: now.heading, reach: 66, half: 0.5, opacity: o)
-    dot(&ctx, at: c, opacity: o)
-
-    // About 2 m: beside the cone, from the camera's path to the wall, while it walks along a wall.
-    guard let m = now.along else { return }
-    let k = Int(w.rounded(.down)) % 4
-    let n = outward[k]
-    let back = unit(CGPoint(x: inner[k].x - inner[(k + 1) % 4].x, y: inner[k].y - inner[(k + 1) % 4].y))
-    let a = CGPoint(x: c.x + back.x * 32 + n.x * 5, y: c.y + back.y * 32 + n.y * 5)
-    let b = CGPoint(x: c.x + back.x * 32 + n.x * (inset - 5), y: c.y + back.y * 32 + n.y * (inset - 5))
-    let dimOpacity = o * min(Ease.ramp(m, 0.08, 0.2), 1 - Ease.ramp(m, 0.8, 0.95))
-    if dimOpacity > 0 {
-      var dim = ctx
-      dim.opacity = dimOpacity
-      let tick = CGPoint(x: -n.y * 5, y: n.x * 5)
-      var line = Path()
-      line.move(to: a)
-      line.addLine(to: b)
-      for end in [a, b] {
-        line.move(to: CGPoint(x: end.x - tick.x, y: end.y - tick.y))
-        line.addLine(to: CGPoint(x: end.x + tick.x, y: end.y + tick.y))
-      }
-      dim.stroke(line, with: .color(light.opacity(0.85)), style: StrokeStyle(lineWidth: 1.5, lineCap: .round))
-      let mid = CGPoint(x: (a.x + b.x) / 2 + back.x * 20, y: (a.y + b.y) / 2 + back.y * 20)
-      dim.draw(dim.resolve(Text("2 m").font(Brand.mono(13)).foregroundStyle(light)), at: mid, anchor: .center)
-    }
+    // About 2 m, between the way round and the bottom wall.
+    let a = CGPoint(x: 190, y: 220), b = CGPoint(x: 190, y: room.maxY)
+    var dimension = polyline([a, b])
+    dimension.addPath(tick(a))
+    dimension.addPath(tick(b))
+    s.add(.line(dimension, width: thin, dash: []), 1.5, 1.7)
+    s.add(.label("2 m", at: CGPoint(x: 198, y: 240), anchor: .leading), 1.6, 1.75)
+    return s
   }
 
-  // MARK: 3. No need to walk in: stand in the doorway and pan (from above)
+  // MARK: 3. No need to walk in: stand in the doorway and pan (a plan)
 
-  static func doorway(_ ctx: inout GraphicsContext, _ time: Double?) {
-    let period = 7.0
-    let t = time.map { $0.truncatingRemainder(dividingBy: period) }
-    let swing = 70 * Double.pi / 180, half = 0.42
-    var heading = 0.0, reached = swing, o = 1.0
-    if let t {
-      let across = Ease.inOut(Ease.ramp(t, 0.8, 3.8)), back = Ease.inOut(Ease.ramp(t, 3.8, 4.8))
-      reached = -swing + 2 * swing * across
-      heading = reached - swing * back
-      o = presence(t, period: period, fadeIn: 0.4, fadeOut: 0.8)
-    }
-    let lo = -swing - half, hi = reached + half // what the cone has swept, edge to edge
-
-    let room = CGRect(x: 54, y: 34, width: 192, height: 150)
+  static func doorway() -> Sketch {
+    var s = Sketch(bounds: CGRect(x: 10, y: 30, width: 280, height: 232))
+    let room = CGRect(x: 60, y: 40, width: 180, height: 150)
     let doorL: CGFloat = 132, doorR: CGFloat = 168, wallY = room.maxY
-    let c = CGPoint(x: 150, y: 196)
+    s.add(.line(polyline([CGPoint(x: doorL, y: wallY), CGPoint(x: room.minX, y: wallY), CGPoint(x: room.minX, y: room.minY),
+                          CGPoint(x: room.maxX, y: room.minY), CGPoint(x: room.maxX, y: wallY), CGPoint(x: doorR, y: wallY)]),
+                width: line, dash: []), 0, 0.5)
+    // The hall outside.
+    var hall = polyline([CGPoint(x: 16, y: wallY), CGPoint(x: room.minX, y: wallY)])
+    hall.addPath(polyline([CGPoint(x: room.maxX, y: wallY), CGPoint(x: 284, y: wallY)]))
+    hall.addPath(polyline([CGPoint(x: 16, y: 256), CGPoint(x: 284, y: 256)]))
+    s.add(.line(hall, width: line, dash: []), 0.1, 0.5)
 
-    // The basement outside the room, then the room.
-    ctx.fill(Path(CGRect(x: 14, y: wallY, width: 272, height: 80)), with: .color(floorFill))
-    ctx.fill(Path(room), with: .color(floorFill))
-    var swept = Path()
-    swept.move(to: c)
-    swept.addArc(center: c, radius: 320, startAngle: .radians(lo - .pi / 2), endAngle: .radians(hi - .pi / 2), clockwise: false)
-    swept.closeSubpath()
-    var inRoom = ctx
-    inRoom.clip(to: Path(room))
-    inRoom.fill(swept, with: .color(Brand.mint.opacity(0.42 * o)))
+    // The door, open into the room.
+    s.add(.line(polyline([CGPoint(x: doorR, y: wallY), CGPoint(x: doorR, y: wallY - (doorR - doorL))]), width: line, dash: []), 0.4, 0.55)
+    var swing = Path()
+    swing.move(to: CGPoint(x: doorR, y: wallY - (doorR - doorL)))
+    swing.addArc(center: CGPoint(x: doorR, y: wallY), radius: doorR - doorL, startAngle: .degrees(270), endAngle: .degrees(180), clockwise: true)
+    s.add(.line(swing, width: thin, dash: []), 0.5, 0.7)
 
-    // The wall with the doorway in it, already filmed from outside.
-    var front = Path()
-    front.move(to: CGPoint(x: 14, y: wallY))
-    front.addLine(to: CGPoint(x: doorL, y: wallY))
-    front.move(to: CGPoint(x: doorR, y: wallY))
-    front.addLine(to: CGPoint(x: 286, y: wallY))
-    wall(&ctx, front)
+    // Walk up to the doorway and stop there; pan across the room.
+    let phone = CGPoint(x: 150, y: 204)
+    s.add(.line(polyline([CGPoint(x: phone.x, y: 248), CGPoint(x: phone.x, y: phone.y + 10)]), width: thin, dash: dash), 0.55, 0.75)
+    s.add(.fill(circle(phone, 5), Brand.ink), 0.75, 0.85)
+    let r: CGFloat = 70
+    var pan = Path()
+    pan.addArc(center: phone, radius: r, startAngle: .degrees(215), endAngle: .degrees(325), clockwise: false)
+    let left = point(phone, r, 215), right = point(phone, r, 325)
+    pan.addPath(arrow(to: right, from: point(phone, r, 318)))
+    pan.addPath(arrow(to: left, from: point(phone, r, 222)))
+    s.add(.line(pan, width: thin, dash: []), 0.85, 1.2)
 
-    // The room's other walls fill in as the cone passes them.
-    let corners = [CGPoint(x: room.minX, y: wallY), CGPoint(x: room.minX, y: room.minY), CGPoint(x: room.maxX, y: room.minY), CGPoint(x: room.maxX, y: wallY)]
-    var samples: [CGPoint] = []
-    for i in 0..<3 {
-      for j in 0...60 where !(j == 0 && i > 0) {
-        samples.append(lerp(corners[i], corners[i + 1], Double(j) / 60))
-      }
-    }
-    let angles = samples.map { atan2(Double($0.x - c.x), Double(c.y - $0.y)) }
-    let first = angles.firstIndex { $0 >= lo } ?? samples.count
-    let last = angles.lastIndex { $0 <= hi } ?? -1
-    if first > 0 { glow(&ctx, polyline(Array(samples[...min(first, samples.count - 1)])), time) }
-    if last < samples.count - 1 { glow(&ctx, polyline(Array(samples[max(last, 0)...])), time) }
-    if last > first {
-      let done = polyline(Array(samples[first...last]))
-      if o < 1 { glow(&ctx, done, time, opacity: 1 - o) }
-      wall(&ctx, done, opacity: o)
-    }
-
-    // The door, swung open against the room's wall.
-    var door = Path()
-    door.move(to: CGPoint(x: doorR, y: wallY))
-    door.addLine(to: CGPoint(x: doorR, y: wallY - (doorR - doorL)))
-    door.addArc(center: CGPoint(x: doorR, y: wallY), radius: doorR - doorL, startAngle: .degrees(270), endAngle: .degrees(180), clockwise: true)
-    ctx.stroke(door, with: .color(light.opacity(0.35)), lineWidth: 1.5)
-
-    // They walked up to the door and stopped.
-    var trail = Path()
-    trail.move(to: CGPoint(x: c.x, y: 262))
-    trail.addLine(to: CGPoint(x: c.x, y: c.y + 16))
-    ctx.stroke(trail, with: .color(light.opacity(0.45)), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [1, 5]))
-
-    var seeing = ctx
-    seeing.clip(to: Path(room).union(Path(CGRect(x: doorL, y: wallY - 1, width: doorR - doorL, height: 40))))
-    cone(&seeing, at: c, heading: heading, reach: 210, half: half, opacity: o)
-    dot(&ctx, at: c, opacity: o)
-
-    var label = ctx
-    label.opacity = 0.8
-    label.draw(label.resolve(Text("Stand here").font(Brand.body(12, .semibold)).foregroundStyle(light)), at: CGPoint(x: c.x + 20, y: c.y + 8), anchor: .leading)
+    // The room's walls, drawn thick as the pan films them.
+    s.add(.wall(polyline([CGPoint(x: room.minX, y: wallY), CGPoint(x: room.minX, y: room.minY),
+                          CGPoint(x: room.maxX, y: room.minY), CGPoint(x: room.maxX, y: wallY)])), 1.1, 1.7)
+    return s
   }
 
-  // MARK: 4. Missed a spot? It glows. Point back at it (from above)
+  // MARK: 4. Missed a spot? Point back at it (a plan)
 
-  static func missedSpot(_ ctx: inout GraphicsContext, _ time: Double?) {
-    let period = 7.0
-    let t = time.map { $0.truncatingRemainder(dividingBy: period) }
-    let room = CGRect(x: 28, y: 40, width: 244, height: 220)
-    let gapTop = CGPoint(x: room.maxX, y: 118), gapBottom = CGPoint(x: room.maxX, y: 194)
-    let patch = CGRect(x: 214, y: 112, width: room.maxX - 214, height: 88)
-    let c = CGPoint(x: 116, y: 178)
-    let away = -0.8
-    let toward = atan2(Double(room.maxX - c.x), Double(c.y - (gapTop.y + gapBottom.y) / 2))
+  static func missedSpot() -> Sketch {
+    var s = Sketch(bounds: CGRect(x: 22, y: 32, width: 264, height: 236))
+    let room = CGRect(x: 30, y: 40, width: 240, height: 220)
+    let gapTop = CGPoint(x: room.maxX, y: 112), gapBottom = CGPoint(x: room.maxX, y: 188)
 
-    var heading = toward, fill = 1.0, ring = 0.0, o = 1.0
-    if let t {
-      heading = away + (toward - away) * Ease.inOut(Ease.ramp(t, 1.6, 2.8))
-      fill = Ease.inOut(Ease.ramp(t, 2.9, 3.9)) * (1 - Ease.ramp(t, 6.1, 6.8))
-      ring = Ease.ramp(t, 3.85, 4.75)
-      o = presence(t, period: period, fadeIn: 0.4, fadeOut: 0.7)
-    }
+    // The missed stretch, marked in mint under the line.
+    s.add(.fill(Path(CGRect(x: room.maxX - 8, y: gapTop.y, width: 16, height: gapBottom.y - gapTop.y)), Brand.mint), 0.9, 1.05)
+    s.add(.line(Path(room), width: line, dash: []), 0, 0.45)
+    s.add(.wall(polyline([gapBottom, CGPoint(x: room.maxX, y: room.maxY), CGPoint(x: room.minX, y: room.maxY),
+                          CGPoint(x: room.minX, y: room.minY), CGPoint(x: room.maxX, y: room.minY), gapTop])), 0.3, 0.95)
 
-    // Filmed floor, except the patch by the gap.
-    ctx.fill(Path(room), with: .color(floorFill))
-    var filmedFloor = Path(room)
-    filmedFloor.addRect(patch)
-    ctx.fill(filmedFloor, with: .color(filmed), style: FillStyle(eoFill: true))
-    ctx.fill(Path(patch), with: .color(Brand.mint.opacity(0.42 * fill)))
-
-    // Every wall but the gap.
-    var walls = Path()
-    walls.move(to: gapBottom)
-    walls.addLine(to: CGPoint(x: room.maxX, y: room.maxY))
-    walls.addLine(to: CGPoint(x: room.minX, y: room.maxY))
-    walls.addLine(to: CGPoint(x: room.minX, y: room.minY))
-    walls.addLine(to: CGPoint(x: room.maxX, y: room.minY))
-    walls.addLine(to: gapTop)
-    wall(&ctx, walls)
-
-    // The gap glows until it's filmed, then fills in from the top.
-    var gap = Path()
-    gap.move(to: gapTop)
-    gap.addLine(to: gapBottom)
-    if fill < 1 { glow(&ctx, gap, time, opacity: 1 - fill) }
-    if fill > 0 { wall(&ctx, gap.trimmedPath(from: 0, to: fill)) }
-    if ring > 0, ring < 1 {
-      let mid = CGPoint(x: room.maxX, y: (gapTop.y + gapBottom.y) / 2)
-      var inRoom = ctx
-      inRoom.clip(to: Path(room))
-      inRoom.stroke(circle(mid, 10 + 34 * Ease.out(ring)), with: .color(Brand.mint.opacity(0.8 * (1 - ring))), lineWidth: 3)
-    }
-
-    var seeing = ctx
-    seeing.clip(to: Path(room))
-    cone(&seeing, at: c, heading: heading, reach: 172, half: 0.5, opacity: o)
-    dot(&ctx, at: c, opacity: o)
+    // The phone turns back to it.
+    let phone = CGPoint(x: 120, y: 172)
+    s.add(.fill(circle(phone, 5), Brand.ink), 1.0, 1.1)
+    let r: CGFloat = 26
+    var turn = Path()
+    turn.addArc(center: phone, radius: r, startAngle: .degrees(225), endAngle: .degrees(345), clockwise: false)
+    turn.addPath(arrow(to: point(phone, r, 345), from: point(phone, r, 335)))
+    s.add(.line(turn, width: thin, dash: []), 1.05, 1.4)
+    s.add(.line(polyline([gapTop, phone, gapBottom]), width: thin, dash: [3, 3]), 1.35, 1.65)
+    return s
   }
 
   // MARK: Pieces
-
-  /// 0 → 1 as a loop starts, 1 → 0 as it ends.
-  static func presence(_ t: Double, period: Double, fadeIn: Double, fadeOut: Double) -> Double {
-    min(Ease.ramp(t, 0, fadeIn), 1 - Ease.ramp(t, period - fadeOut, period))
-  }
-
-  /// The camera's view cone and dot, as on the live map. Heading: radians clockwise from straight up.
-  static func cone(_ ctx: inout GraphicsContext, at c: CGPoint, heading: Double, reach: CGFloat, half: Double, opacity: Double) {
-    var cone = Path()
-    cone.move(to: c)
-    cone.addArc(center: c, radius: reach, startAngle: .radians(heading - .pi / 2 - half), endAngle: .radians(heading - .pi / 2 + half), clockwise: false)
-    cone.closeSubpath()
-    let tip = CGPoint(x: c.x + CGFloat(sin(heading)) * reach, y: c.y - CGFloat(cos(heading)) * reach)
-    ctx.fill(cone, with: .linearGradient(Gradient(colors: [light.opacity(0.4 * opacity), light.opacity(0)]), startPoint: c, endPoint: tip))
-  }
-
-  static func dot(_ ctx: inout GraphicsContext, at c: CGPoint, opacity: Double) {
-    ctx.fill(circle(c, 11), with: .color(light.opacity(opacity)))
-    ctx.fill(circle(c, 8), with: .color(Brand.mint.opacity(opacity)))
-  }
-
-  static func wall(_ ctx: inout GraphicsContext, _ path: Path, opacity: Double = 1) {
-    ctx.stroke(path, with: .color(light.opacity(opacity)), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
-  }
-
-  /// An edge nobody has looked at yet: bright mint dashes with a soft halo that breathes. Still without a clock.
-  static func glow(_ ctx: inout GraphicsContext, _ path: Path, _ time: Double?, opacity: Double = 1) {
-    let clock = time ?? 0
-    let pulse = time == nil ? 1 : 0.55 + 0.45 * (0.5 + 0.5 * sin(clock * 3))
-    ctx.stroke(path, with: .color(Brand.mint.opacity(0.25 * pulse * opacity)), style: StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
-    ctx.stroke(path, with: .color(Brand.mint.opacity(pulse * opacity)),
-               style: StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round, dash: [7, 5], dashPhase: CGFloat(clock * 12)))
-  }
-
-  static func circle(_ c: CGPoint, _ r: CGFloat) -> Path { Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)) }
 
   static func polyline(_ points: [CGPoint]) -> Path {
     var p = Path()
@@ -404,53 +259,43 @@ enum GuideDrawing {
     return p
   }
 
-  static func lerp(_ a: CGPoint, _ b: CGPoint, _ f: Double) -> CGPoint {
-    CGPoint(x: a.x + (b.x - a.x) * CGFloat(f), y: a.y + (b.y - a.y) * CGFloat(f))
+  static func circle(_ c: CGPoint, _ r: CGFloat) -> Path {
+    Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
   }
 
-  static func unit(_ v: CGPoint) -> CGPoint {
-    let l = max(0.0001, (v.x * v.x + v.y * v.y).squareRoot())
-    return CGPoint(x: v.x / l, y: v.y / l)
+  /// A point at an angle (degrees, clockwise from +x on screen) round a centre.
+  static func point(_ c: CGPoint, _ r: CGFloat, _ degrees: Double) -> CGPoint {
+    let a = degrees * .pi / 180
+    return CGPoint(x: c.x + r * CGFloat(cos(a)), y: c.y + r * CGFloat(sin(a)))
   }
 
-  /// A point on a closed four-sided loop: u runs 0 to 4, one side per unit, and wraps.
-  static func point(_ r: [CGPoint], _ u: Double) -> CGPoint {
-    let w = u.truncatingRemainder(dividingBy: 4)
-    let k = min(Int(w), 3)
-    return lerp(r[k], r[(k + 1) % 4], w - Double(k))
+  /// An open arrowhead at the tip, pointing away from the tail.
+  static func arrow(to tip: CGPoint, from tail: CGPoint, size: CGFloat = 7) -> Path {
+    let a = atan2(Double(tip.y - tail.y), Double(tip.x - tail.x))
+    var p = Path()
+    p.move(to: CGPoint(x: tip.x - size * CGFloat(cos(a - 0.5)), y: tip.y - size * CGFloat(sin(a - 0.5))))
+    p.addLine(to: tip)
+    p.addLine(to: CGPoint(x: tip.x - size * CGFloat(cos(a + 0.5)), y: tip.y - size * CGFloat(sin(a + 0.5))))
+    return p
   }
 
-  /// The loop from u = a to u = b, corners included.
-  static func loop(_ r: [CGPoint], _ a: Double, _ b: Double) -> [CGPoint] {
-    var points = [point(r, a)]
-    var corner = a.rounded(.down) + 1
-    while corner < b {
-      points.append(point(r, corner))
-      corner += 1
-    }
-    points.append(point(r, b))
-    return points
+  /// A dimension tick: the architect's short 45° slash.
+  static func tick(_ at: CGPoint) -> Path {
+    polyline([CGPoint(x: at.x - 4, y: at.y + 4), CGPoint(x: at.x + 4, y: at.y - 4)])
   }
 
-  /// The point a fraction f of the way along a route.
-  static func along(_ route: [CGPoint], _ f: Double) -> CGPoint {
-    partial(route, f).last ?? route[0]
-  }
-
-  /// The route up to a fraction f of its length.
-  static func partial(_ route: [CGPoint], _ f: Double) -> [CGPoint] {
-    let lengths = zip(route, route.dropFirst()).map { a, b in Double(((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)).squareRoot()) }
-    var left = lengths.reduce(0, +) * Ease.clamp(f)
-    var points = [route[0]]
-    for (i, length) in lengths.enumerated() {
-      if left >= length {
-        points.append(route[i + 1])
-        left -= length
-      } else {
-        points.append(lerp(route[i], route[i + 1], length > 0 ? left / length : 0))
-        break
+  /// Section hatching for a cut slab: 45° lines inside the rect.
+  static func hatch(_ r: CGRect, spacing: CGFloat) -> Path {
+    var p = Path()
+    var c = r.minX + r.minY + spacing
+    while c < r.maxX + r.maxY {
+      let x0 = max(r.minX, c - r.maxY), x1 = min(r.maxX, c - r.minY)
+      if x1 > x0 {
+        p.move(to: CGPoint(x: x0, y: c - x0))
+        p.addLine(to: CGPoint(x: x1, y: c - x1))
       }
+      c += spacing
     }
-    return points
+    return p
   }
 }

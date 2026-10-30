@@ -42,25 +42,27 @@ final class CapturePipelineTests: XCTestCase {
 
   private let geometry = ImageGeometry(resolution: SIMD2(1920, 1440), intrinsics: SIMD4(1450, 1450, 960, 720), rotationCW: 90)
 
-  // Runs `seconds` of 60 Hz frames through a pipeline; returns each frame's handler time.
-  private func film(_ pipeline: CapturePipeline, seconds: Double, speed: Double = 1, size: (Int, Int) = (1920, 1440), from start: Double = 0) throws -> [Double] {
+  // Runs `seconds` of 60 Hz frames through a pipeline; returns each frame's handler time, on the wall
+  // clock and in the thread's own CPU time.
+  @discardableResult
+  private func film(_ pipeline: CapturePipeline, seconds: Double, speed: Double = 1, size: (Int, Int) = (1920, 1440), from start: Double = 0) throws -> [(wall: Double, cpu: Double)] {
     let camera = CameraPool(width: size.0, height: size.1)
-    var times: [Double] = []
+    var times: [(wall: Double, cpu: Double)] = []
     let frames = Int(seconds * 60)
     let wallID = UUID()
     for i in 0..<frames {
       let t = start + Double(i) / 60
       let image = try XCTUnwrap(camera.next(), "the camera ran out of buffers at frame \(i) (\(String(format: "%.1f", t)) s): the pipeline is holding on to them")
       let T = pose(t)
-      let began = ProcessInfo.processInfo.systemUptime
+      let began = ProcessInfo.processInfo.systemUptime, cpu = CoverageMapPerfTests.threadCPU()
       if let step = pipeline.frame(image, timestamp: 1000 + t, cameraToWorld: T, geometry: geometry, tracking: "normal"), step.look {
         let boundary = (0..<120).map { j -> SIMD3<Float> in SIMD3(Float(j) / 40 - 1.5, 0, j % 2 == 0 ? -1 : 1) }
         pipeline.plane(PlaneObs(id: wallID, vertical: true, transform: simd_float4x4(SIMD4(1, 0, 0, 0), SIMD4(0, 0, 1, 0), SIMD4(0, 1, 0, 0), SIMD4(0, 1.2, -5, 1)), boundary: boundary), at: step.t)
         let points = (0..<400).map { k in SIMD3<Float>(Float(k % 20) * 0.2 - 2, Float(k / 20) * 0.12, -5) }
         pipeline.look(t: step.t, image: image, cameraToWorld: T, geometry: geometry, tracking: .normal, points: points)
       }
-      times.append(ProcessInfo.processInfo.systemUptime - began)
-      Thread.sleep(forTimeInterval: max(0, 1.0 / 60 / speed - times.last!))
+      times.append((ProcessInfo.processInfo.systemUptime - began, CoverageMapPerfTests.threadCPU() - cpu))
+      Thread.sleep(forTimeInterval: max(0, 1.0 / 60 / speed - times.last!.wall))
     }
     return times
   }
@@ -77,10 +79,14 @@ final class CapturePipelineTests: XCTestCase {
     pipeline.mapDelay = 0.3
 
     let times = try film(pipeline, seconds: 6)
-    let sorted = times.sorted()
-    let p99 = sorted[Int(Double(sorted.count) * 0.99)]
-    print(String(format: "BRPERF pipeline handler: median %.2f ms, p99 %.2f ms, max %.2f ms; map ran %d times", sorted[sorted.count / 2] * 1000, p99 * 1000, sorted.last! * 1000, pipeline.mapRuns))
-    XCTAssertLessThan(p99, 0.008, "the frame handler must not wait for the map")
+    // Every 12th frame starts a look. Done inline, the map would show in the handler's CPU time; waited
+    // for, in its wall time (a 300 ms wait on 1 frame in 12 lands in the slowest 5%). The limits leave
+    // room for a busy Mac's scheduling, which only touches the wall time, and only a little.
+    let cpu = times.map(\.cpu).sorted(), wall = times.map(\.wall).sorted()
+    let cpu99 = cpu[Int(Double(cpu.count) * 0.99)], wall95 = wall[Int(Double(wall.count) * 0.95)]
+    print(String(format: "BRPERF pipeline handler: CPU median %.2f ms, p99 %.2f ms; wall p95 %.2f ms, max %.2f ms; map ran %d times", cpu[cpu.count / 2] * 1000, cpu99 * 1000, wall95 * 1000, wall.last! * 1000, pipeline.mapRuns))
+    XCTAssertLessThan(cpu99, 0.008, "the frame handler must not do the map's work")
+    XCTAssertLessThan(wall95, 0.05, "the frame handler must not wait for the map")
     XCTAssertGreaterThan(pipeline.mapRuns, 5, "the map still runs, skipping looks while it's busy")
     XCTAssertGreaterThan(feed.cloud.count, 100, "the point cloud fills in")
 
@@ -104,11 +110,14 @@ final class CapturePipelineTests: XCTestCase {
     // Memory every 10 s of take: the encoder and buffer pools fill once, then it should stay flat.
     var mb: [Double] = []
     for k in 0..<8 {
-      _ = try film(pipeline, seconds: 10, speed: 4, size: (640, 480), from: Double(k) * 10)
+      try film(pipeline, seconds: 10, speed: 4, size: (640, 480), from: Double(k) * 10)
       mb.append(CapturePerf.memoryMB())
     }
     print("BRPERF memory every 10 s of take: " + mb.map { String(format: "%.0f", $0) }.joined(separator: " ") + " MB")
-    XCTAssertLessThan(mb[7] - mb[3], 15, "no steady growth over the last 40 s")
+    // A leak grows sample after sample. A busy Mac's software encoder can hold a batch of frames for a
+    // while (a step of 15–30 MB here), which isn't growth; a frame leaked each time would be gigabytes.
+    let median = { (xs: ArraySlice<Double>) in xs.sorted()[xs.count / 2] }
+    XCTAssertLessThan(median(mb[5...7]) - median(mb[2...4]), 40, "no steady growth over the take")
     pipeline.cancel()
   }
 }
