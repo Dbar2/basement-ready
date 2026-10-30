@@ -42,6 +42,8 @@ export type Screen = {
   optIn?: boolean;
   // What the capture itself does to this screen, so the reviewer doesn't report it.
   captureNote?: string;
+  // A route only some builds have (the one-flow steps): a "not found" page is skipped, not reported.
+  ifPresent?: boolean;
 };
 
 const S = (s: Screen) => s;
@@ -149,6 +151,28 @@ export const SCREENS: Screen[] = [
     purpose:
       "The measured floor plan drawn cleanly with what was found (doors, windows, stairs, ducts). The owner fixes what's off and says yes; every design is drawn on this plan.",
     checks: ["Walls close into rooms, with no gaps, overlaps or doubled walls.", "Dimensions add up and match the area shown.", "Windows, doors and stairs sit on walls where they belong."],
+  }),
+  S({
+    id: "style",
+    title: "Swipe your style (flow step)",
+    group: "journey",
+    kind: "page",
+    route: "/scans/{scan}/style",
+    priority: 4,
+    ifPresent: true,
+    purpose: "Step 1 of the flow once the scan is done: swipe a style deck made from the scan's angles and watch the mood board build.",
+    checks: ["Cards and buttons fit the phone screen.", "Staged cards say 'Virtually staged'."],
+  }),
+  S({
+    id: "layouts",
+    title: "Pick a layout (flow step)",
+    group: "journey",
+    kind: "page",
+    route: "/scans/{scan}/layouts",
+    priority: 2,
+    ifPresent: true,
+    purpose: "Step 3 of the flow: layout cards for the confirmed plan, each with a picture, its rooms and a rough cost; picking one opens the studio on it.",
+    checks: ["Each card's rooms fit inside the basement's shape.", "Card costs match what the studio and book show for that layout."],
   }),
   S({
     id: "studio",
