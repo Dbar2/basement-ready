@@ -36,6 +36,12 @@ export const CONCEPTS: { concept: string; kind: string; label: string }[] = [
   { concept: "support beam", kind: "beam", label: "Beam" },
   { concept: "furnace", kind: "mechanical", label: "Furnace" },
   { concept: "electrical panel", kind: "mechanical", label: "Electrical panel" },
+  { concept: "water heater", kind: "mechanical", label: "Water heater" },
+  // Pipes already in the floor: where a bathroom is cheapest (server/layout.ts puts it there).
+  { concept: "plumbing rough-in", kind: "mechanical", label: "Plumbing rough-in" },
+  { concept: "floor drain", kind: "mechanical", label: "Floor drain" },
+  // A boxed-in duct or beam: it sets the headroom under it, like a duct.
+  { concept: "ceiling bulkhead", kind: "duct", label: "Bulkhead" },
   { concept: "door", kind: "exit", label: "Door" },
 ];
 

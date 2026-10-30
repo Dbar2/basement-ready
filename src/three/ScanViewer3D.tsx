@@ -5,7 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useState } from "react";
 import * as THREE from "three";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
-import type { Plan } from "../api";
+import { FIXTURE_LABEL, type Plan } from "../api";
 import { Tag, TagRoot, TagTracker } from "./Tags";
 
 const REVEAL_S = 3.2;
@@ -90,7 +90,7 @@ function Labels({ plan }: { plan: Plan }) {
       {plan.fixtures.map((f) => (
         <Tag key={f.detectionId} position={[f.x, 1.4, f.z]}>
           <span className="viewer-tag" data-kind="mechanical">
-            <i /> {f.kind === "panel" ? "Panel" : "Furnace"}
+            <i /> {FIXTURE_LABEL[f.kind]}
           </span>
         </Tag>
       ))}

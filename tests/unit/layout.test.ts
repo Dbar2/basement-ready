@@ -77,3 +77,65 @@ describe("suggested layout", () => {
     }
   });
 });
+
+describe("the bathroom goes where the plumbing comes up", () => {
+  const overlap = (a: { x0: number; x1: number; z0: number; z1: number }, b: typeof a) =>
+    Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) > 0.05 && Math.min(a.z1, b.z1) - Math.max(a.z0, b.z0) > 0.05;
+  const rough = (x: number, z: number) => ({ kind: "plumbing" as const, x, z, detectionId: "p1" });
+  const covers = (z: { x0: number; x1: number; z0: number; z1: number }, x: number, zz: number) => x >= z.x0 && x <= z.x1 && zz >= z.z0 && zz <= z.z1;
+
+  it("on the far wall: over the pipes, clear of the other rooms, and the living space makes room", () => {
+    const p = plan({ fixtures: [rough(2, -2.8)] });
+    const l = suggestLayout(p);
+    const bath = l.zones.find((z) => z.kind === "bathroom")!;
+    expect(covers(bath, 2, -2.8)).toBe(true);
+    expect(bath.z0).toBe(-3); // against the minZ wall, across from the window wall
+    for (const z of l.zones) {
+      expect(inside(z, p.box)).toBe(true);
+      if (z !== bath && z.kind !== "stairs") expect(overlap(z, bath)).toBe(false);
+    }
+    expect(l.checks.find((c) => c.label.includes("plumbing rough-in"))!.ok).toBe(true);
+    // The bedroom still has the window.
+    expect(l.checks.find((c) => c.label.startsWith("The bedroom has"))!.ok).toBe(true);
+  });
+
+  it("on the window wall: beside the bedroom, over the pipes", () => {
+    const l = suggestLayout(plan({ fixtures: [rough(2.5, 2.8)] }));
+    const bath = l.zones.find((z) => z.kind === "bathroom")!;
+    const bed = l.zones.find((z) => z.kind === "bedroom")!;
+    expect(covers(bath, 2.5, 2.8)).toBe(true);
+    expect(overlap(bath, bed)).toBe(false);
+  });
+
+  it("on a side wall: the living space gives up that end", () => {
+    const p = plan({ fixtures: [rough(-3.8, 0)] });
+    const l = suggestLayout(p);
+    const bath = l.zones.find((z) => z.kind === "bathroom")!;
+    expect(covers(bath, -3.8, 0)).toBe(true);
+    expect(bath.x0).toBe(-4);
+    const living = l.zones.find((z) => z.kind === "living")!;
+    expect(overlap(living, bath)).toBe(false);
+  });
+
+  it("in the middle of the room: the usual spot, and a note for the designer", () => {
+    const l = suggestLayout(plan({ fixtures: [rough(0, 0)] }));
+    expect(l.zones.some((z) => z.kind === "bathroom")).toBe(true);
+    expect(l.checks.find((c) => c.label.includes("plumbing rough-in"))!.ok).toBeNull();
+  });
+
+  it("reads SAM's labels into fixtures", async () => {
+    const { fixtureKind } = await import("../../server/plan");
+    expect(["Plumbing rough-in", "Floor drain", "Water heater", "Electrical panel", "Furnace"].map(fixtureKind)).toEqual([
+      "plumbing",
+      "plumbing",
+      "water_heater",
+      "panel",
+      "furnace",
+    ]);
+  });
+
+  it("a water heater alone gets the mechanical corner", () => {
+    const l = suggestLayout(plan({ fixtures: [{ kind: "water_heater", x: -3.5, z: -2.5, detectionId: "h1" }] }));
+    expect(l.zones.find((z) => z.kind === "mechanical")?.name).toBe("Water heater");
+  });
+});

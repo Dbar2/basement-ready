@@ -66,6 +66,13 @@ export type Measurements = {
 
 export type PlanSide = "minX" | "maxX" | "minZ" | "maxZ";
 
+export const FIXTURE_LABEL: Record<Plan["fixtures"][number]["kind"], string> = {
+  furnace: "Furnace",
+  panel: "Panel",
+  water_heater: "Water heater",
+  plumbing: "Plumbing rough-in",
+};
+
 export type Plan = {
   version: 1;
   box: { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -76,7 +83,7 @@ export type Plan = {
   ceilingHeightM: number | null;
   openings: { kind: "window" | "door"; side: PlanSide; atM: number; widthM: number; detectionId: string }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
-  fixtures: { kind: "furnace" | "panel"; x: number; z: number; detectionId: string }[];
+  fixtures: { kind: "furnace" | "panel" | "water_heater" | "plumbing"; x: number; z: number; detectionId: string }[];
   scaleSource: "model" | "user_measurement" | "door" | "arkit";
   trusted: boolean;
 };
