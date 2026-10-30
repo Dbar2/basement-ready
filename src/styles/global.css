@@ -189,6 +189,8 @@ a { color: inherit; }
 .scan-views-frame { position: relative; border: var(--line); border-radius: var(--radius-2); overflow: hidden; background: var(--color-surface); aspect-ratio: 16 / 10; }
 .viewer-canvas { position: absolute !important; inset: 0; }
 .viewer-empty { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--color-ink-muted); }
+/* A loading or empty sentence is body text, even where its markup still says mono. */
+.viewer-empty, .viewer-empty.mono { font-family: var(--font-body); font-size: var(--text-small); letter-spacing: 0; }
 .viewer-failed { display: grid; justify-items: center; gap: 12px; padding: 16px; text-align: center; }
 @media (max-width: 600px) { .scan-views-frame .stage-finish ~ .viewer-hint { bottom: 52px; } }
 .scan-spots { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border-radius: 6px; background: var(--color-card); font-size: 12px; }
