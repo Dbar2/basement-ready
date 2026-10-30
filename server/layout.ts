@@ -50,7 +50,10 @@ function frame(box: Plan["box"], side: Side) {
 
 const opposite: Record<Side, Side> = { minX: "maxX", maxX: "minX", minZ: "maxZ", maxZ: "minZ" };
 
-export function suggestLayout(plan: Plan): Layout {
+// Options for exploring ideas: force a studio or a one-bedroom, or put the bedroom on another wall.
+export type LayoutOptions = { kind?: Layout["kind"] | null; side?: Side | null };
+
+export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   const { box } = plan;
   const checks: Layout["checks"] = [];
   const zones: Zone[] = [];
@@ -60,13 +63,13 @@ export function suggestLayout(plan: Plan): Layout {
 
   // The bedroom goes where the biggest window is: it's the escape window.
   const windows = plan.openings.filter((o) => o.kind === "window").sort((a, b) => b.widthM - a.widthM);
-  const win = windows[0] ?? null;
+  const win = (opts.side ? windows.find((w) => w.side === opts.side) : windows[0]) ?? null;
   const sides: Side[] = ["minX", "maxX", "minZ", "maxZ"];
   const longest = sides.sort((a, b) => frame(box, b).aMax - frame(box, b).aMin - (frame(box, a).aMax - frame(box, a).aMin))[0];
-  const side: Side = win?.side ?? longest;
+  const side: Side = opts.side ?? win?.side ?? longest;
   const f = frame(box, side);
   const length = f.aMax - f.aMin;
-  const studio = plan.areaM2 < 30 || f.reach < BED_DEPTH + 2.5;
+  const studio = opts.kind ? opts.kind === "studio" : plan.areaM2 < 30 || f.reach < BED_DEPTH + 2.5;
 
   // Keep-outs that stay as they are: the stairs, and the furnace in its own fire-separated corner.
   for (const s of plan.stairs) zone("stairs", "Stairs", { x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1 });

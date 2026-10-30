@@ -83,6 +83,18 @@ export const answers = pgTable(
   (t) => [uniqueIndex("answers_basement_rule_idx").on(t.basementId, t.ruleId)],
 );
 
+// The homeowner's workspace for a basement (server/workspace.ts): the owner profile, asked once,
+// and what they've done since: site tracing, tape numbers, ideas, quotes, applications sent.
+export const workspaces = pgTable("workspaces", {
+  basementId: uuid("basement_id")
+    .primaryKey()
+    .references(() => basements.id, { onDelete: "cascade" }),
+  profile: jsonb("profile"),
+  state: jsonb("state").notNull().default({}),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
 // Durable job queue: workers claim rows with FOR UPDATE SKIP LOCKED.
 export const jobs = pgTable(
   "jobs",

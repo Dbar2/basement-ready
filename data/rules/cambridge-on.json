@@ -2884,7 +2884,7 @@
     "trades": [
       {
         "title": "Electrician",
-        "detail": "Must hold an ESA licence; they take out the ESA permit for the electrical work.",
+        "detail": "Hire one with an ESA licence, who takes out the ESA permit; or do the wiring yourself in your own house, including a unit you'll rent, after filing an ESA homeowner notification (O. Reg. 570/05, s. 2).",
         "label": "ESA contractor locator",
         "url": "https://licensing.esasafe.com/contractor-locator-tool/"
       },
@@ -3386,6 +3386,140 @@
       "url": "https://www.cambridge.ca/media/nridbsyx/municipal-fees-and-charges-by-law-25-079.pdf",
       "section": "Building: alterations / interior finishes; zoning review",
       "retrieved": "2026-10-28"
+    }
+  },
+  "permitPackage": {
+    "signer": "owner",
+    "signerNote": "Drawn by the owner of the house. Cambridge accepts drawings prepared by the owner, or by a qualified designer whose BCIN details are on them.",
+    "signerSource": {
+      "title": "Building Permits (City of Cambridge)",
+      "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/",
+      "section": "Drawings; How to apply",
+      "retrieved": "2026-10-28"
+    },
+    "signerVerified": true,
+    "drawings": [
+      "Site plan",
+      "Lot grading and site service plan",
+      "Foundation plan",
+      "Floor and framing plans",
+      "Roof plans",
+      "Elevations and sections",
+      "Fully dimensioned at 3/16\" = 1'-0\" or larger"
+    ],
+    "drawingsSource": {
+      "title": "Building Permits (City of Cambridge)",
+      "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/",
+      "section": "Drawings; How to apply",
+      "retrieved": "2026-10-28"
+    },
+    "scaleRule": "3/16\" = 1'-0\" or larger",
+    "forms": [
+      {
+        "id": "on_application",
+        "title": "Application for a Permit to Construct or Demolish (with Schedule 1)",
+        "url": "https://www.ontario.ca/files/2026-01/mmah-building-development-application-for-a-permit-to-construct-or-demolish-2026-en-2026-01-27.pdf",
+        "fill": "acroform",
+        "who": "You sign it as the applicant and the exempt designer",
+        "when": "Upload it on the City's portal",
+        "required": "always",
+        "source": {
+          "title": "Building Code forms (Government of Ontario)",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/building-code-forms",
+          "section": "Application for a Permit to Construct or Demolish, effective 2026-02-16",
+          "retrieved": "2026-10-29"
+        },
+        "verified": true
+      },
+      {
+        "id": "cambridge_owner_acknowledgement",
+        "title": "Owner Acknowledgement Form (City of Cambridge)",
+        "url": null,
+        "fill": "summary",
+        "who": "You, as your own contractor",
+        "when": "Ask building@cambridge.ca for the form: it isn't published online",
+        "required": "owner_builder",
+        "source": {
+          "title": "Building Permits (City of Cambridge)",
+          "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/",
+          "section": "Residential application documents",
+          "retrieved": "2026-10-29"
+        },
+        "verified": true,
+        "notes": "Required when the homeowner is the contractor; no public copy was found, so its questions weren't read."
+      }
+    ],
+    "portal": {
+      "label": "City of Cambridge application portal",
+      "url": "https://permits.cambridge.ca/"
+    },
+    "upload": [
+      {
+        "what": "Drawings",
+        "where": "This package's sheets A0 to A7, at 3/16\" = 1'-0\" or larger."
+      },
+      {
+        "what": "Application with Schedule 1",
+        "where": "Filled in this package: sign page 1 and Schedule 1."
+      },
+      {
+        "what": "Owner Acknowledgement Form",
+        "where": "If you're your own contractor: ask building@cambridge.ca for it."
+      },
+      {
+        "what": "Heat loss/gain calculations",
+        "where": "With the mechanical summary form, if the unit gets its own heating."
+      }
+    ],
+    "ownerBuilder": {
+      "allowed": true,
+      "detail": "Cambridge asks for an Owner Acknowledgement Form when the owner is the contractor.",
+      "source": {
+        "title": "Building Permits (City of Cambridge)",
+        "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/",
+        "section": "Drawings; How to apply",
+        "retrieved": "2026-10-28"
+      },
+      "verified": true
+    },
+    "inspections": [
+      {
+        "id": "start",
+        "title": "Commencement of construction meeting",
+        "when": "Required before work starts",
+        "who": "building"
+      },
+      {
+        "id": "stages",
+        "title": "The stages printed on your permit",
+        "when": "Call the inspector named on the permit at least 24 hours ahead ($100 re-inspection fee)",
+        "who": "building"
+      },
+      {
+        "id": "final",
+        "title": "Final building inspection",
+        "when": "Work finished",
+        "who": "building"
+      }
+    ],
+    "inspectionsSource": {
+      "title": "Building Inspections (City of Cambridge)",
+      "url": "https://www.cambridge.ca/business-building-development/building-planning/building-inspections/",
+      "section": null,
+      "retrieved": "2026-10-28"
+    },
+    "plumbing": {
+      "separatePermit": false,
+      "detail": "Cambridge's plumbing permit is $18 a fixture ($107 minimum) for work independent of a building permit; which line applies to a basement ARU isn't stated.",
+      "perFixtureCAD": 18,
+      "minimumCAD": 107,
+      "source": {
+        "title": "Municipal Fees and Charges By-law 25-079, Schedule A (City of Cambridge)",
+        "url": "https://www.cambridge.ca/media/nridbsyx/municipal-fees-and-charges-by-law-25-079.pdf",
+        "section": "pp. 18-21",
+        "retrieved": "2026-10-29"
+      },
+      "verified": false
     }
   }
 }

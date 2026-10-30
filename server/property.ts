@@ -125,9 +125,126 @@ export async function lookupProperty(a: Address): Promise<Property> {
   return property;
 }
 
+// ---- The lot and the house as shapes, for the permit's site plan ----------------------------
+// Same layers as above, asked for their outlines (WGS 84) and turned into metres around the address
+// point: x east, y north. Good to a few centimetres over a lot; it's GIS data, not a survey.
+
+export type SiteGeometry = {
+  origin: { lon: number; lat: number };
+  parcel: [number, number][] | null;
+  footprint: [number, number][] | null; // the house
+  others: [number, number][][]; // garages and sheds on the lot
+  pin: string | null;
+  legalDescription: string | null;
+  rollNumber: string | null;
+  // The aerial photo's half size in metres, so a point traced on it maps to the same frame.
+  aerial: { halfWidthM: number; halfHeightM: number };
+  sources: string[];
+};
+
+type Ring = [number, number][];
+
+// Metres per degree at this latitude (the standard ellipsoid series).
+export function metresPerDegree(lat: number) {
+  const p = (lat * Math.PI) / 180;
+  return {
+    lat: 111132.954 - 559.822 * Math.cos(2 * p) + 1.175 * Math.cos(4 * p),
+    lon: 111412.84 * Math.cos(p) - 93.5 * Math.cos(3 * p) + 0.118 * Math.cos(5 * p),
+  };
+}
+
+async function shapes(layer: string, a: Address, outFields: string, extra = ""): Promise<{ attributes: Record<string, any>; rings: Ring[] }[]> {
+  const params = `geometry=${a.lon},${a.lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&returnGeometry=true&outSR=4326&outFields=${outFields}${extra}&f=json`;
+  try {
+    const res = await fetch(`${layer}/query?${params}`, { signal: AbortSignal.timeout(TIMEOUT) });
+    const json = await res.json();
+    return (json.features ?? []).map((f: { attributes: Record<string, any>; geometry?: { rings?: Ring[] } }) => ({ attributes: f.attributes, rings: f.geometry?.rings ?? [] }));
+  } catch {
+    return [];
+  }
+}
+
+// Shoelace area of a ring in square metres (already local).
+export function ringArea(r: Ring) {
+  let s = 0;
+  for (let i = 0; i < r.length; i++) {
+    const [x0, y0] = r[i], [x1, y1] = r[(i + 1) % r.length];
+    s += x0 * y1 - x1 * y0;
+  }
+  return Math.abs(s) / 2;
+}
+
+export async function lookupSiteGeometry(a: Address): Promise<SiteGeometry> {
+  const m = metresPerDegree(a.lat);
+  const local = (r: Ring): Ring => r.map(([lon, lat]) => [Math.round((lon - a.lon) * m.lon * 100) / 100, Math.round((lat - a.lat) * m.lat * 100) / 100]);
+  // The outer ring: the one with the biggest area.
+  const outer = (rings: Ring[]) => rings.map(local).sort((p, q) => ringArea(q) - ringArea(p))[0] ?? null;
+  const sources = ["Region of Waterloo open data (building footprints)"];
+  let parcel: Ring | null = null, pin: string | null = null, legal: string | null = null, roll: string | null = null;
+  if (a.municipality === "Waterloo") {
+    const p = (await shapes(LAYERS.waterlooParcels, a, "PIN,PARCELTYPE"))[0];
+    if (p) {
+      parcel = outer(p.rings);
+      pin = p.attributes.PIN ? String(p.attributes.PIN) : null;
+      sources.push("City of Waterloo property fabric");
+    }
+  } else if (a.municipality === "Cambridge") {
+    const number = a.address.split(" ")[0];
+    const all = await shapes(LAYERS.cambridgeParcels, a, "PIN,HOUSE_NUMBER");
+    const p = all.find((x) => String(x.attributes.HOUSE_NUMBER) === number) ?? (all.length === 1 ? all[0] : null);
+    if (p) {
+      parcel = outer(p.rings);
+      pin = p.attributes.PIN ? String(p.attributes.PIN) : null;
+      sources.push("City of Cambridge parcel map");
+    }
+  } else if (a.municipality === "Kitchener" && process.env.PROPERTY_KITCHENER !== "0") {
+    const p = (await shapes(LAYERS.kitchenerZoning, a, "LEGAL_DESCRIPTION,ROLL_NUMBER"))[0];
+    if (p) {
+      parcel = outer(p.rings);
+      legal = p.attributes.LEGAL_DESCRIPTION ? String(p.attributes.LEGAL_DESCRIPTION).trim() : null;
+      roll = p.attributes.ROLL_NUMBER ? String(p.attributes.ROLL_NUMBER) : null;
+      sources.push("City of Kitchener zoning map");
+    }
+  }
+  // Buildings within a few metres of the point; the biggest residential one is the house.
+  const buildings = (await shapes(LAYERS.footprints, a, "FootprintSqft,BuildingType", "&distance=40&units=esriSRUnit_Meter"))
+    .map((b) => ({ ring: outer(b.rings), type: String(b.attributes.BuildingType ?? "") }))
+    .filter((b): b is { ring: Ring; type: string } => Boolean(b.ring));
+  const onLot = (r: Ring) => {
+    if (!parcel) return true;
+    const cx = r.reduce((s, p) => s + p[0], 0) / r.length, cy = r.reduce((s, p) => s + p[1], 0) / r.length;
+    return pointInRing([cx, cy], parcel);
+  };
+  const near = buildings.filter((b) => onLot(b.ring));
+  const house = near.filter((b) => !b.type || /resid/i.test(b.type)).sort((p, q) => ringArea(q.ring) - ringArea(p.ring))[0] ?? null;
+  return {
+    origin: { lon: a.lon, lat: a.lat },
+    parcel,
+    footprint: house?.ring ?? null,
+    others: near.filter((b) => b !== house).map((b) => b.ring),
+    pin,
+    legalDescription: legal,
+    rollNumber: roll,
+    aerial: { halfWidthM: Math.round(AERIAL.dx * m.lon * 100) / 100, halfHeightM: Math.round(AERIAL.dy * m.lat * 100) / 100 },
+    sources,
+  };
+}
+
+export function pointInRing([x, y]: [number, number], r: Ring) {
+  let inside = false;
+  for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
+    const [xi, yi] = r[i], [xj, yj] = r[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+// The aerial photo's reach around the point, in degrees.
+export const AERIAL = { dx: 0.00045, dy: 0.00033 };
+
 // A square of 2026 aerial photo around the house, about 70 m across. Region of Waterloo, 10 cm.
 export async function fetchAerial(lon: number, lat: number, size = 720): Promise<Buffer> {
-  const dx = 0.00045, dy = 0.00033;
+  const { dx, dy } = AERIAL;
   const bbox = [lon - dx, lat - dy, lon + dx, lat + dy].join(",");
   const url = `https://gis.regionofwaterloo.ca/waimagery/rest/services/Imagery_2026/ImageServer/exportImage?bbox=${bbox}&bboxSR=4326&imageSR=3857&size=${size},${size}&format=jpg&f=image`;
   const res = await fetch(url, { signal: AbortSignal.timeout(20_000) });

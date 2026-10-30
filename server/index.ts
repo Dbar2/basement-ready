@@ -31,6 +31,7 @@ import { cleanPlans, plansHousehold, plansQuestion, plansWords, PLANS_ID } from 
 import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
 import { keys, storage, type Scan3dFile } from "./storage";
+import { mountWorkspace } from "./workspaceRoutes";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
 const SCANS_PER_IP_PER_HOUR = Number(process.env.SCANS_PER_IP_PER_HOUR ?? 6);
@@ -591,6 +592,9 @@ app.post("/api/scans/:id/replan", async (c) => {
   await db.update(schema.scans).set({ result: { ...result, measurements, plan } }).where(eq(schema.scans.id, id));
   return c.json({ plan, measurements });
 });
+
+// The workspace: owner profile, permit package, materials, applications, looks (server/workspaceRoutes.ts).
+mountWorkspace(app, currentUser);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {
