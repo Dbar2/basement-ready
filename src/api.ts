@@ -23,9 +23,11 @@ export type ScanEvent = {
     label?: string;
     detections?: Detection[];
     frameCount?: number;
-    points?: [number, number][]; // path: [x, z] in metres
+    points?: [number, number][]; // path: [x, z] in metres, in the walk frame
     area?: number | "all"; // model: which area; the whole basement's files use ?room=all
-    files?: { surfels: string; scan: string; mesh?: string };
+    files?: { surfels: string; scan: string; mesh?: string }; // mesh: BRM1 (src/three/RealScan.tsx parseMesh)
+    place?: { angle: number; scale: number; x: number; z: number }; // model, an area: its own frame into the walk frame
+    path?: [number, number][]; // model, the whole basement: the walk again, in the final frame
     n?: number; // photo
     url?: string;
     title?: string;
@@ -477,7 +479,12 @@ async function withSampleViews(events: ScanEvent[]): Promise<ScanEvent[]> {
   const views: ScanEvent[] = points.length
     ? [
         { at: at + 0.5, type: "path", text: "Your walk", data: { points } },
-        { at: at + 4, type: "model", text: "Your basement in 3D", data: { area: "all", files: { surfels: "/samples/sample/3d/surfels-lite.bin", scan: "/samples/sample/3d/scan.json" } } },
+        {
+          at: at + 4,
+          type: "model",
+          text: "Your basement in 3D",
+          data: { area: "all", files: { surfels: "/samples/sample/3d/surfels-lite.bin", mesh: "/samples/sample/3d/mesh.bin", scan: "/samples/sample/3d/scan.json" }, path: points },
+        },
       ]
     : [];
   const photos: ScanEvent[] = ((result?.concepts?.items ?? []) as Concept[]).map((c, i) => ({

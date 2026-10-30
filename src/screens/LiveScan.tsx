@@ -15,9 +15,9 @@ import {
   type ScanEvent,
   type WaitAsk,
 } from "../api";
-import type { AreaModel } from "../components/Assembling";
 import { Logo } from "../components/Logo";
 import "../styles/ask.css";
+import { modelsFrom, walkFrom } from "./assembly";
 import { leftWords, secondsLeft } from "./waitTime";
 
 // three.js only loads once there's a basement to draw.
@@ -168,17 +168,8 @@ export function LiveScan({ scanId, onDone }: Props) {
   const lastLog = events.filter((e) => e.type === "log").slice(-1)[0];
 
   // The basement assembling: the walk, then each area as its 3D is ready.
-  const path = useMemo(() => [...events].reverse().find((e) => e.type === "path" && (e.data?.points?.length ?? 0) > 1)?.data?.points ?? null, [events]);
-  const models = useMemo(() => {
-    const byKey = new Map<string, AreaModel>();
-    for (const e of events) {
-      const f = e.data?.files;
-      if (e.type !== "model" || !f?.surfels) continue;
-      const area = e.data?.area === "all" || /room=all/.test(f.surfels) ? "all" : Number(e.data?.area ?? 0);
-      byKey.set(String(area), { key: `${area}:${f.surfels}`, area, surfels: f.surfels, mesh: f.mesh });
-    }
-    return [...byKey.values()];
-  }, [events]);
+  const path = useMemo(() => walkFrom(events), [events]);
+  const models = useMemo(() => modelsFrom(events), [events]);
   const has3d = Boolean(path) || models.length > 0;
   const [front, setFront] = useState<"3d" | "video">("3d");
   const areaCount = events.map((e) => (e.type === "log" ? /Measuring area \d+ of (\d+)/.exec(e.text) : null)).filter(Boolean).at(-1)?.[1];
