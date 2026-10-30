@@ -68,7 +68,7 @@ try {
   } else {
     if (!baseURL) {
       log(`Starting the app (${args.web === "build" ? "production build" : "Vite dev"}, replay mode, no Meta key)…`);
-      servers = await startServers(runDir, args.web);
+      servers = await startServers(runDir, args.web, { takes: args.takes.length > 0 });
       baseURL = servers.baseURL;
     }
     const claims: unknown[] = [];
@@ -89,7 +89,7 @@ try {
     // The plan model each scan's drawings come from, for the cross-screen check.
     for (const scan of scans) {
       try {
-        const r = await fetch(`${baseURL}/api/scans/${scan}/model`);
+        const r = await fetch(`${baseURL}/api/scans/${scan}/model`, { headers: claims.length ? { "x-claims": encodeURIComponent(JSON.stringify(claims)) } : {} });
         if (r.ok) facts[scan] = (await r.json()).model?.existing ?? null;
       } catch {
         facts[scan] = null;
