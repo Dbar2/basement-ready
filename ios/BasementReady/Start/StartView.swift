@@ -75,8 +75,8 @@ struct StartView: View {
               }
               onStart(StartAnswers(address: picked, who: who))
             } label: { Text("Start filming") }
-              .buttonStyle(MintButton(enabled: who != nil))
-            Text("Start at the top of the stairs. Walk slowly along every wall. Up to 5 minutes.")
+              .buttonStyle(PrimaryButton(enabled: who != nil))
+            Text("Start at the stairs. Sweep each wall slowly, and pan into rooms from the door. Up to 5 minutes.")
               .font(Brand.body(15))
               .foregroundStyle(Brand.inkMuted)
               .multilineTextAlignment(.center)

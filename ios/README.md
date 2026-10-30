@@ -2,12 +2,17 @@
 
 Film the basement with ARKit world tracking: the camera's real position for every frame, at true scale. The app sends the take to the same server as the web, then opens the web's wait screen and result. What it sends is in [CAPTURE.md](CAPTURE.md).
 
+- **Opening:** the logo animates (the B forms the house). The first time, a four-page guide shows how to film: start at the stairs, sweep each wall slowly, pan into a room from its door, point back at what glows. "How to film" on the start screen opens it again. Reduce Motion gets still pictures.
 - **Start:** the address (type-ahead from the server) and who it's for. Nothing else.
-- **Filming:** a big live map of the basement from ARKit's own planes and points.
-  - Floor, walls found, where you are and where you've been.
-  - Bright dashes where nobody has looked yet; hatching where the ceiling isn't filmed.
-  - The camera picture as an inset, and one line of guidance.
-  - The guide's voice clips (`public/voice`), up to 5 minutes, and live finds from SAM every 2.5 s.
+- **Filming:** the camera fills the screen, and the basement assembles on top of it as it's filmed (`Overlay/`, Metal, 60 fps), from ARKit's own planes and feature points:
+  - floor tiles as the floor is found, and the filmed ceiling overhead
+  - walls painting in once ARKit finds them
+  - ARKit's feature points, coloured from the camera picture
+  - a soft mint glow wherever nothing has been filmed yet: a curtain at the edge of the known floor, or a patch of ceiling. Point at it and it fills in.
+  - a gentle arrow toward the nearest glow when it's off screen (left, right, behind, or up at the ceiling)
+  - **Scan only** (top right) swaps the camera for a dark void, so only what's been captured shows.
+  - A room seen only from its doorway counts: looks reach 6 m, and the guide says to pan from the door, never to walk into every corner.
+  - One line of guidance, the guide's voice clips (`public/voice`), up to 5 minutes, and live finds from SAM every 2.5 s.
 - **After:** a look at the take, then a background upload, then `/scans/<id>` in a web view. A take the server turns away (today's limit, no connection) stays on the phone to send again.
 - **Your last scan:** the start screen opens the last answer this phone sent.
 
@@ -41,7 +46,36 @@ cd ios && make test
 cd ios && make build-device
 ```
 
-`make run-sim` runs it in the simulator. The simulator has no ARKit, so Debug builds play a pretend walk round an 8 × 6 m basement instead. It exercises the map, guide, voice and upload; it doesn't replace a real take.
+`make test` runs the unit tests and the UI test (below), and starts the free test server for it if it isn't running. `make test-unit` skips the UI test.
+
+`make run-sim` runs it in the simulator. The simulator has no ARKit, so Debug builds play a pretend walk round an 8 × 6 m basement instead. For anything closer to a real take, replay one (next section).
+
+## Test it without a basement
+
+Debug builds can **replay a recorded take** as if it were ARKit: the camera picture, the camera's position for every frame, and their timing. Everything downstream is the real thing: the overlay, coverage, the guide and its voice, live finds, the video writer and the upload.
+
+```bash
+cd ios && make build-sim && scripts/replay.sh Fixtures/b2-finished-family
+```
+
+- **A take** is a folder with a video (`.mp4` or `.mov`) and its `capture.json` (CAPTURE.md). What ARKit would have seen comes from:
+  - `sensors.jsonl`, which the app writes beside every real take: ARKit's own points and planes, five times a second. It isn't uploaded.
+  - or, for a Blender test basement, its room boxes, `Fixtures/<id>/geometry.json` (exported from `scripts/eval/generate.py`). Points are rays cast from the true camera path, coloured from the video, and walls are "found" once enough rays hit them.
+- **Fixtures:**
+  - `Fixtures/b2-finished-family` is a small copy of the Blender basement b2 (360 × 640, 825 KB), so the UI test needs nothing else.
+  - The full-size test basements are in `media/eval/<id>/` (on the SSD): `scripts/replay.sh "media/eval/b3-three-rooms-bulkhead"` picks up `Fixtures/b3-three-rooms-bulkhead/geometry.json` by itself.
+  - A real take from the phone: Debug builds keep the last three sent takes. Copy one off with `xcrun devicectl device copy from --device <phone> --domain-type appDataContainer --domain-identifier com.davidbarry.basementready --source "Library/Application Support/Kept" --destination <folder>`, then replay its folder.
+- **Options** (after the folder): the speed (`scripts/replay.sh <take> 2`), then any launch arguments, e.g. `-BRScanOnly` to start in Scan only, `-BRReplayLoop` to play it again and again. It talks to the free test server (below); `SERVER=<url>` points it at another, but a server with real keys makes real, paid calls (live finds every 2.5 s). `LOG=<file>` keeps the app's once-a-second `BRPERF` line (frame rate, lag, frame handler and map times, video frames kept and dropped, memory).
+- **The test server**, `scripts/test-server.sh`: the API on 8797 and the web on 5183, beside any `pnpm dev`. It's the web end-to-end tests' replay mode: Meta and the 3D are answered from saved recordings or fail, and nothing else leaves the Mac, so it costs nothing. A new take has no saved answers, so its scan stops at the first model call; the upload and the result page still run.
+- **The UI test** (`BasementReadyUITests`): start → "Not sure" → Start filming → the replayed b2 at 2× → Scan only → Done after 30 s → Send it → the web result, with screenshots in the result bundle. About 50 s. `BR_REPLAY_TAKE` films another take.
+- **Debug launch arguments:** `-BRFilmNow` (straight to filming), `-BRReplay <folder>`, `-BRReplayGeometry <file>`, `-BRReplaySpeed <n>`, `-BRReplayLoop`, `-BRScanOnly`, `-BRDemoWalk`, `-BRSkipIntro`, `-BRShowGuide`, `-BRGuidePage <n>`, `-BRResetGuide`, `-BRFreezeAt <s>`, and `-serverURL <url>`.
+
+### What the tests check
+
+- **The freeze at 0:06** (fixed Oct 30): the frame handler did the coverage map's work and gave ARKit's own camera buffers to the video encoder, so ARKit ran out of buffers and stopped sending frames. `CapturePipelineTests` feeds 60 frames a second from a pool that refuses a seventh buffer, like ARKit's camera, with the map slowed to 300 ms. The frame handler must stay under 8 ms (p99) and give every buffer straight back. It also samples memory every 10 s of take, which must stay flat.
+- On David's iPhone 15 (Oct 30), an 83 s take ran at a steady 60 fps with the frame handler at 0.4 ms on average, no video frames dropped, and memory flat at about 250 MB.
+- `ProjectionTests`: the overlay lands exactly on the camera picture, for ARKit's sideways picture and an upright one.
+- `ReplayTests`: rays hit the test basement's walls, floor and ceiling, through doorways; walls are found once seen enough; a sensor log plays back.
 
 ## Put it on your iPhone
 
@@ -72,8 +106,8 @@ The gear on the start screen picks the server:
 These can't be checked in the simulator:
 
 - ARKit tracking and the video's pixels.
-- Planes and points growing into the map on a real walk.
-- Dropped frames over 5 minutes.
+- How dense ARKit's points are on a real basement's plain walls (the replay's are denser).
+- Dropped frames over a full 5 minutes (83 s checked on an iPhone 15).
 - The voice through the loudspeaker in a basement.
 - LiDAR depth on a Pro phone.
 - A background upload with the screen locked.

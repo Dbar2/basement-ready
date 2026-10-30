@@ -103,7 +103,7 @@ export const keys = {
   scan3d: (scanId: string, file: Scan3dFile, room = 0) =>
     room > 0 ? `scans/${scanId}/3d/room-${room}/${file}` : `scans/${scanId}/3d/${file}`,
   // The whole basement put together from its rooms: surface points, the solid surface and where the camera stood.
-  basement3d: (scanId: string, file: "surfels.bin" | "mesh.bin" | "scan.json") => `scans/${scanId}/3d/basement/${file}`,
+  basement3d: (scanId: string, file: "surfels.bin" | "mesh.bin" | "scan.json" | "plan.png") => `scans/${scanId}/3d/basement/${file}`,
   // Each area as it's measured, for the wait screen (areas are renumbered into rooms afterwards).
   area3d: (scanId: string, area: number, file: "surfels.bin" | "mesh.bin" | "scan.json") => `scans/${scanId}/3d/areas/${area}/${file}`,
 };

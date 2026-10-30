@@ -7,6 +7,7 @@ import { Answered, Questions } from "../components/Questions";
 import { SaveCta } from "../auth";
 import { ScanViews } from "../components/ScanViews";
 import { StagedViews } from "../components/StagedViews";
+import type { Design, Existing } from "../../server/model/types";
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const range = (lo: number | null | undefined, hi: number | null | undefined) =>
@@ -43,7 +44,8 @@ export type Changes = { before: string; after: string; lines: string[] } | null;
 // Their answer to "What would you like it to be?" on the wait screen (server/plans.ts).
 const PLANS_SAID: Record<string, string> = { family_suite: "A suite for family", rental: "A rental suite", rec_room: "A rec room", unsure: "Not sure yet" };
 
-export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string | null; changes: Changes; answerError: string | null; readOnly?: boolean; onAnswer: (ruleId: string, value: AnyAnswer | null) => void }) {
+// `design`: the chosen design of their model, drawn in the 3D scan behind "With the design".
+export function PlanTab(props: { r: ScanResult; scanId: string; design?: { existing: Existing; design: Design } | null; busyRule: string | null; changes: Changes; answerError: string | null; readOnly?: boolean; onAnswer: (ruleId: string, value: AnyAnswer | null) => void }) {
   const { r, scanId, busyRule, changes, answerError, readOnly } = props;
   const sample = scanId === "sample";
   const plansSaid = r.plans ? (PLANS_SAID[r.plans] ?? r.plans) : null;
@@ -217,7 +219,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
         </section>
       )}
 
-      <ScanViews scanId={scanId} plan={r.plan ?? null} has3d={Boolean(r.has3d)} rooms={r.rooms} mainRoom={r.mainRoom} layout={r.layout ?? null} />
+      <ScanViews scanId={scanId} plan={r.plan ?? null} has3d={Boolean(r.has3d)} rooms={r.rooms} mainRoom={r.mainRoom} layout={r.layout ?? null} design={props.design ?? null} photos={Boolean(r.capture?.photos)} />
       {rooms.length > 1 && <p className="note">{rooms.length} rooms scanned, each on its own.</p>}
 
       <section className="block">

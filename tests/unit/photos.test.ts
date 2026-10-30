@@ -62,7 +62,8 @@ describe("photos: all at once, each announced as it lands", () => {
   });
 
   it("renders every pick in parallel and announces each the moment it's done", async () => {
-    const { work, log } = fakeWork({ editMs: (f) => (f === 100 ? 120 : f === 200 ? 30 : 70) });
+    // Rooms with no window or stairs, and none added.
+    const { work, log } = fakeWork({ editMs: (f) => (f === 100 ? 120 : f === 200 ? 30 : 70), boxes: () => [] });
     const started = Date.now();
     const out = await renderPicks([pick(100), pick(200), pick(300), pick(400)], () => [], () => "prompt", work(async () => {}));
     expect(log.maxRunning).toBe(4);
@@ -86,7 +87,14 @@ describe("photos: all at once, each announced as it lands", () => {
     const [c] = await renderPicks([pick(100)], anchors, () => "prompt", work(async () => {}));
     expect(log.maxSam).toBe(2);
     expect(log.edits).toBe(2);
-    expect(c).toMatchObject({ kept: true, checked: "Windows and Stairs kept where they are · checked by SAM 3.1" });
+    expect(c).toMatchObject({ kept: true, checked: "Windows and Stairs kept where they are, nothing added · checked by SAM 3.1" });
+  });
+
+  it("retries a photo that grew a window the room doesn't have, and labels it if it does it again", async () => {
+    const { work, log } = fakeWork({ editMs: () => 5, boxes: (concept) => (concept === "basement window" ? [{ x: 0.7, y: 0.1, w: 0.1, h: 0.1 }] : []) });
+    const [c] = await renderPicks([pick(100)], () => [], () => "prompt", work(async () => {}));
+    expect(log.edits).toBe(2);
+    expect(c).toMatchObject({ kept: false, checked: "A window or stairs appeared that aren't there: treat it as a mood, not a plan" });
   });
 
   it("keeps the other photos when one fails, and only fails when they all do", async () => {
