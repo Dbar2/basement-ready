@@ -659,9 +659,14 @@ export function furnitureProblems(design: Design): string[] {
 export function designHash(design: Pick<Design, "proposed" | "finishes">): string {
   const { walls, openings, rooms, furniture } = design.proposed;
   // Only what a picture can show: where each wall stands, not whether the scan was sure of it or what
-  // it's rated, so confirming the plan as it is keeps every picture made of it.
+  // it's rated, so confirming the plan as it is keeps every picture made of it. Each thing is written
+  // out field by field in the schema's order (server/model/schema.ts), so a design fresh from the seed
+  // and the same design read back from a save hash alike.
   const shown = walls.map((w) => [w.id, w.a, w.b, w.kind, w.thicknessM]);
-  const text = JSON.stringify([shown, openings, rooms.map((r) => [r.id, r.kind, r.polygon]), furniture, design.finishes]);
+  const doors = openings.map((o) => ({ id: o.id, wallId: o.wallId, kind: o.kind, offsetM: o.offsetM, widthM: o.widthM, heightM: o.heightM, sillM: o.sillM, status: o.status, swing: o.swing, rating: o.rating, detectionId: o.detectionId }));
+  const pieces = furniture.map((f) => ({ id: f.id, kind: f.kind, at: f.at, rotDeg: f.rotDeg, sizeM: f.sizeM, colour: f.colour, roomId: f.roomId }));
+  const { style, floor, walls: wallFinish, kitchen, bath } = design.finishes;
+  const text = JSON.stringify([shown, doors, rooms.map((r) => [r.id, r.kind, r.polygon]), pieces, { style, floor, walls: wallFinish, kitchen, bath }]);
   // cyrb53: 53 bits, the same in Node and the browser.
   let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
   for (let i = 0; i < text.length; i++) {
