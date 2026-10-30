@@ -16,7 +16,7 @@ export type Plan = {
   openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
   fixtures: { kind: "furnace" | "panel"; x: number; z: number; detectionId: string }[];
-  scaleSource: "model" | "user_measurement" | "door";
+  scaleSource: "model" | "user_measurement" | "door" | "arkit";
   trusted: boolean;
 };
 
@@ -129,7 +129,7 @@ export function buildPlan(s3: Scan3d, detections: Detection[], trusted: boolean)
     openings,
     stairs,
     fixtures,
-    scaleSource: s3.scan.scaleSource === "user_measurement" ? "user_measurement" : "model",
+    scaleSource: s3.scan.scaleSource === "user_measurement" || s3.scan.scaleSource === "arkit" ? s3.scan.scaleSource : "model",
     trusted,
   };
 }

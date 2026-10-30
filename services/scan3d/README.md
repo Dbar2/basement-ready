@@ -57,16 +57,19 @@ URLs must be `http(s)` and reachable from Modal. Each frame is capped at 10 MB.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `maxFrames` | 48 | Frames to reconstruct. Clamped to 2–64 on Modal and 2–48 locally. When more frames are sent, the capture is cut into `maxFrames` equal slices and the sharpest frame (variance of the Laplacian) is kept from each |
+| `maxFrames` | 48 | Frames to reconstruct. Clamped to 2–150 on Modal and 2–48 locally. When more frames are sent, the capture is cut into `maxFrames` equal slices and the sharpest frame (variance of the Laplacian) is kept from each |
 | `known.floorToJoistsM` | none | One tape measurement, floor to the underside of the joists or ceiling, in metres (1.0–4.0). Sets the scale; see [Scale](#scale) |
+| `maxFaces` | 300000 | Triangles in the solid surface (`mesh`), 20k–300k; `0` for none (the whole-walk rough pass skips it) |
 
-**Response `200`:** `multipart/form-data` with three parts:
+**Response `200`:** `multipart/form-data` with these parts (`surfels` and `mesh` only when depth was asked for):
 
 | Part | Filename | Content |
 |---|---|---|
 | `scan` | `scan.json` | everything below |
 | `points` | `points.ply` | binary little-endian PLY, ≤300k points: `x y z` float32 (m, room frame), `red green blue` uint8, `frame` uint16 (index into `scan.frames`, for a capture-order fly-in). Sorted by `frame` |
 | `depth` | `depth.bin` | float16 little-endian, shape `[frames, H, W]` (in `files.depth.shape`), metres after scaling, `0` = no depth. The pixel-to-3D lookup |
+| `surfels` | `surfels.bin` | `BRS1`: dense surface points for the photo-like view (`export.surfel_bytes`) |
+| `mesh` | `mesh.bin` | `BRM1`: the solid surface fused from every depth map (`mesh.py`): uint32 counts, faces uint32 ×3, positions int16 ×3 in mm (room frame), colours uint8 ×3 (`export.mesh_bytes`). Pixels on depth edges and voxels only one frame saw are left out, so smears don't become fins |
 
 ```ts
 const res = await fetch(`${SCAN3D_URL}/scan`, { method: "POST", body: form, headers: { Authorization: `Bearer ${SCAN3D_TOKEN}` } });
@@ -284,23 +287,25 @@ cd services/scan3d
 .venv/bin/modal token new                                   # once, opens the browser
 TOKEN=$(openssl rand -hex 32)
 .venv/bin/modal secret create scan3d-token SCAN3D_TOKEN=$TOKEN
-echo "SCAN3D_TOKEN=$TOKEN" >> ../../.env                    # the Node worker sends the same token
+echo "SCAN3D_MODAL_TOKEN=$TOKEN" >> ../../.env              # kept for production; `pnpm dev` uses the Mac runner
 .venv/bin/modal run app.py::download_weights                # once: 4.9 GB into the scan3d-weights Volume
-.venv/bin/modal deploy app.py                               # prints https://<you>--basement-ready-scan3d-scan3d-web.modal.run
-echo "SCAN3D_URL=https://…modal.run" >> ../../.env
+.venv/bin/modal deploy app.py                               # prints https://<you>--basement-ready-scan3d-scan3d-web.us-east.modal.run
 SCAN3D_TOKEN=$TOKEN .venv/bin/python run_local.py post "$SCAN3D_URL" path/to/frames --out out/modal --preview   # smoke test
 ```
+
+Production sets `SCAN3D_URL` (the printed endpoint), `SCAN3D_TOKEN` (the same token) and `SCAN3D_PARALLEL=3`, so a basement's areas run side by side.
 
 `modal deploy` builds the CUDA image in Modal's cloud, so nothing heavy runs on the Mac. The image has torch 2.14.1 for CUDA 12.6, MapAnything at the pinned commit and the DINOv2 hub code. Weights load from the Volume with `HF_HUB_OFFLINE=1`, so a missing download fails fast rather than pulling 4.9 GB on a cold start.
 
 Knobs live in `app.py`:
 - `scaledown_window=60`: idle seconds before scaling to zero.
-- `max_containers=3`.
+- `max_containers=3`: one container per area at once.
+- `cpu=8.0`, `memory=32768`: the solid surface is fused on the CPU.
 - `timeout=600`.
 
 ## Cost per scan
 
-L40S on Modal is $0.000542/s ($1.95/h), checked Oct 28, 2026. CPU and RAM are billed on top; expect roughly 10–15% more (unverified, see modal.com/pricing). These are **estimates**: there's no Modal account yet, so nothing has been measured on an L40S.
+L40S on Modal is $0.000542/s ($1.95/h), checked Oct 28, 2026. CPU and RAM are billed on top; expect roughly 10–15% more (unverified, see modal.com/pricing). These are **estimates** from the list price; the timings are now measured (see [Measured on Modal](#measured-on-modal-l40s-oct-29)), the bill is not.
 
 | Phase | Time (est.) | Cost |
 |---|---|---|
@@ -311,6 +316,17 @@ L40S on Modal is $0.000542/s ($1.95/h), checked Oct 28, 2026. CPU and RAM are bi
 | **Back-to-back scans while warm** | | **≈ $0.01 each** |
 
 Keeping a container warm all day costs $1.95/h, which isn't worth it for judging, since the sample basement is precomputed. To cut the idle tail, lower `scaledown_window`. To cut cold starts, Modal memory snapshots are the next step (not set up).
+
+## Measured on Modal (L40S, Oct 29)
+
+| | Time |
+|---|---|
+| Cold start (container + weights from the Volume) | 28 s |
+| One real area, 48 frames, warm: in the service | 19–21 s (model 8.5 s, fit 3 s, points 2 s, solid surface 6–7 s) |
+| Same, round trip from the Mac (uploading 120 frames) | 27–28 s |
+| The sample basement end to end (rough pass + area) | 75 s |
+
+The Mac takes about 67 s for the model alone on the same area, and gives the same room size (7.56 × 3.72 m against 7.58 × 3.73 m).
 
 ## Measured locally (M3 Pro, 36 GB, MPS, torch 2.14.1, Oct 28)
 

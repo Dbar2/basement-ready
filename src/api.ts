@@ -54,7 +54,7 @@ export type Measurements = {
   ceilingHeightM: number | null;
   widthM: number | null;
   depthM: number | null;
-  scaleSource: "model" | "user_measurement" | "door";
+  scaleSource: "model" | "user_measurement" | "door" | "arkit";
   confidence: string;
   expectedErrorPct: number;
   trusted?: boolean;
@@ -75,7 +75,7 @@ export type Plan = {
   openings: { kind: "window" | "door"; side: PlanSide; atM: number; widthM: number; detectionId: string }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
   fixtures: { kind: "furnace" | "panel"; x: number; z: number; detectionId: string }[];
-  scaleSource: "model" | "user_measurement" | "door";
+  scaleSource: "model" | "user_measurement" | "door" | "arkit";
   trusted: boolean;
 };
 

@@ -162,13 +162,14 @@ def _contiguous(along: np.ndarray, gap: float = 0.3) -> np.ndarray:
     return mask
 
 
-def fit_room(pts, frame_ids, n_frames, cam_centers, cam_rots, seed=0) -> RoomFit:
+def fit_room(pts, frame_ids, n_frames, cam_centers, cam_rots, seed=0, up_hint=None) -> RoomFit:
     rng = np.random.default_rng(seed)
     warnings = []
     min_inl = max(300, int(0.02 * len(pts)))
 
-    # 1. Up: people hold phones roughly upright, so start from the cameras' average -Y.
-    up = -cam_rots[:, :, 1].mean(0)
+    # 1. Up: the phone's tracking knows it; otherwise people hold phones roughly upright, so start from
+    #    the cameras' average -Y.
+    up = np.asarray(up_hint, float) if up_hint is not None else -cam_rots[:, :, 1].mean(0)
     up /= np.linalg.norm(up)
 
     # 2. Floor: the lowest big horizontal plane with the cameras above it. A loose first pass

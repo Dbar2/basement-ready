@@ -1,5 +1,6 @@
 // Client for the MapAnything 3D service (services/scan3d). Optional: without SCAN3D_URL the
 // scan runs exactly as before. Locally it's the Mac runner; in production, Modal.
+import type { KnownCamera } from "./capture";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Detection } from "./pipeline";
@@ -10,6 +11,9 @@ const TOKEN = process.env.SCAN3D_TOKEN;
 const MAX_FRAMES = Number(process.env.SCAN3D_MAX_FRAMES ?? 48);
 // Send at most this many frames; the service keeps the sharpest in each slice.
 const SEND_FRAMES = 120;
+// The whole basement's solid surface stays around 600k triangles, so a phone draws it smoothly.
+const MESH_FACES = 600_000;
+export const meshFaces = (areas: number) => Math.round(Math.min(300_000, Math.max(100_000, MESH_FACES / Math.max(1, areas))));
 
 export const scan3dEnabled = Boolean(URL_ && TOKEN);
 
@@ -18,6 +22,7 @@ export type Scan3d = {
   ply: ArrayBuffer;
   depth: ArrayBuffer;
   surfels?: ArrayBuffer; // dense surface points for the photo-like view (services/scan3d export.py)
+  mesh?: ArrayBuffer; // the solid surface, BRM1 (services/scan3d export.py mesh_bytes)
   sentFrames: number[]; // our frame index for each request position (scan.frames[i].sourceIndex → this)
 };
 
@@ -32,7 +37,14 @@ export async function scan3dReady(timeoutMs = 3000) {
 }
 
 // One room's frames, [from, to) in our frame numbers.
-export async function runScan3d(work: string, range: { from: number; to: number }, known: { floorToJoistsM?: number }, maxFrames = MAX_FRAMES): Promise<Scan3d> {
+// `cameraFor`: the phone's known camera for one of our frames (server/capture.ts), when the app filmed it.
+// `maxFaces`: triangles in the solid surface; 0 for none.
+export async function runScan3d(
+  work: string,
+  range: { from: number; to: number },
+  known: { floorToJoistsM?: number },
+  { maxFrames = MAX_FRAMES, cameraFor, maxFaces }: { maxFrames?: number; cameraFor?: (n: number) => KnownCamera | null; maxFaces?: number } = {},
+): Promise<Scan3d> {
   const step = Math.max(1, Math.ceil((range.to - range.from) / SEND_FRAMES));
   const sentFrames: number[] = [];
   const form = new FormData();
@@ -41,7 +53,9 @@ export async function runScan3d(work: string, range: { from: number; to: number 
     form.append("frames", new Blob([readFileSync(join(work, "frames", name))], { type: "image/jpeg" }), name);
     sentFrames.push(n);
   }
-  form.append("options", JSON.stringify({ maxFrames, ...(known.floorToJoistsM ? { known } : {}) }));
+  form.append("options", JSON.stringify({ maxFrames, ...(maxFaces != null ? { maxFaces } : {}), ...(known.floorToJoistsM ? { known } : {}) }));
+  const cameras = cameraFor ? sentFrames.map(cameraFor) : [];
+  if (cameras.some(Boolean)) form.append("cameras", JSON.stringify(cameras));
   const res = await fetch(`${URL_}/scan`, {
     method: "POST",
     body: form,
@@ -52,13 +66,32 @@ export async function runScan3d(work: string, range: { from: number; to: number 
   const parts = await res.formData();
   const scan = JSON.parse(await (parts.get("scan") as File).text());
   const surfels = parts.get("surfels") as File | null;
+  const mesh = parts.get("mesh") as File | null;
   return {
     scan,
     ply: await (parts.get("points") as File).arrayBuffer(),
     depth: await (parts.get("depth") as File).arrayBuffer(),
     surfels: surfels ? await surfels.arrayBuffer() : undefined,
+    mesh: mesh ? await mesh.arrayBuffer() : undefined,
     sentFrames,
   };
+}
+
+// ---- One floor plan for the whole basement (services/scan3d/scan3d/floorplan.py) ----
+
+export type FloorPlanRoom = { box: [number, number, number, number]; outline: [number, number][]; areaM2: number; cameras: number; sides: Record<"minX" | "maxX" | "minZ" | "maxZ", "wall" | "extent"> };
+// rotation: world (x, z) turned by -rotation is the plan frame.
+export type FloorPlanResult = { rotation: number; floorY: number; ceilingY: number | null; footprintM2: number; rooms: FloorPlanRoom[] };
+
+// The plan read from every area's points at once: only for areas in one tracked world (the app's).
+export async function runFloorPlan(scans: Scan3d[], cameras: number[][]): Promise<FloorPlanResult> {
+  const form = new FormData();
+  form.append("areas", JSON.stringify(scans.map((s3) => ({ world: s3.scan.world, factor: s3.scan.scale?.factor ?? 1 }))));
+  form.append("cameras", JSON.stringify(cameras));
+  scans.forEach((s3, i) => form.append("points", new Blob([s3.ply], { type: "application/octet-stream" }), `area-${i}.ply`));
+  const res = await fetch(`${URL_}/floorplan`, { method: "POST", body: form, headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(120_000) });
+  if (!res.ok) throw new Error(`floorplan ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  return res.json();
 }
 
 // ---- Surface points for the photo-like view (services/scan3d/scan3d/export.py surfel_bytes) ----
@@ -207,7 +240,7 @@ export type Measurements = {
   ceilingHeightM: number | null;
   widthM: number | null;
   depthM: number | null;
-  scaleSource: "model" | "user_measurement" | "door";
+  scaleSource: "model" | "user_measurement" | "door" | "arkit";
   confidence: "low" | "medium" | "high";
   expectedErrorPct: number;
   pass: Record<string, boolean | null> | null;
@@ -229,7 +262,7 @@ export function summarize(s3: Scan3d, detections: Detection[]): Measurements {
     ceilingHeightM: room.ceilingHeightM ?? null,
     widthM: room.widthM ?? null,
     depthM: room.depthM ?? null,
-    scaleSource: s3.scan.scaleSource === "user_measurement" ? "user_measurement" : "model",
+    scaleSource: s3.scan.scaleSource === "user_measurement" || s3.scan.scaleSource === "arkit" ? s3.scan.scaleSource : "model",
     confidence: scale.confidence ?? "low",
     expectedErrorPct: scale.expectedErrorPct ?? 20,
     pass: s3.scan.quality?.pass ?? null,

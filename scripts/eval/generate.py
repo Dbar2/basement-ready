@@ -1587,6 +1587,25 @@ def render(scene, cfg, out_dir, frames_n, scale, preview, at=()):
     return video
 
 
+def write_capture(out_dir, frames):
+    """The camera path as the iPhone app would send it (docs/capture-contract.md): ARKit-style
+    camera-to-world, column-major, in a +Y-up world, with the lens in pixels. Blender's camera looks down
+    -Z with +Y up like ARKit's; only the world turns (Blender is Z-up)."""
+    to_y_up = Matrix(((1, 0, 0, 0), (0, 0, 1, 0), (0, -1, 0, 0), (0, 0, 0, 1)))
+    f = (max(RES) / 2) / math.tan(math.radians(68) / 2)
+    records = []
+    for i, p in enumerate(frames):
+        m = to_y_up @ cam_matrix(p)
+        records.append({
+            "t": round(i / FPS, 4),
+            "transform": [round(m[r][c], 6) for c in range(4) for r in range(4)],
+            "intrinsics": [round(f, 3), round(f, 3), RES[0] / 2, RES[1] / 2],
+            "tracking": "normal",
+        })
+    capture = {"version": 1, "device": "blender", "lens": "wide", "imageResolution": list(RES), "rotationCW": 0, "frames": records}
+    (out_dir / "capture.json").write_text(json.dumps(capture))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--only", default="")
@@ -1604,6 +1623,7 @@ def main():
         out_dir = Path(args.out) / cfg["id"]
         out_dir.mkdir(parents=True, exist_ok=True)
         scene, cam, frames, total, windows_info = build(cfg)
+        write_capture(out_dir, frames)
         setup_render(scene, cfg, args.scale if not args.preview else 0.5 * args.scale, args.samples)
         wboxes = window_boxes(scene, cam, frames, windows_info)
         t = truth(cfg, frames, total, windows_info, wboxes)

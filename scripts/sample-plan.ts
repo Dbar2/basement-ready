@@ -2,13 +2,14 @@
 // "See an example" shows the plan, the layout, the photo-like walk-through and the staging.
 // Runs the local 3D service on the sample video's frames, builds each area's plan from the sample's SAM
 // finds, writes rooms, plan, layout and measurements into public/samples/sample/result.json, and the 3D
-// files into public/samples/sample/3d/ (surfels.bin, a phone-sized surfels-lite.bin, scan.json).
+// files into public/samples/sample/3d/ (the solid mesh.bin, surfels.bin and a phone-sized surfels-lite.bin
+// for viewers without the mesh, scan.json).
 // Usage: SCAN3D_URL=http://127.0.0.1:8790 SCAN3D_TOKEN=dev tsx scripts/sample-plan.ts
 import { execFile } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { basementViewpoints, mergeSurfels, scanBasement } from "../server/basement";
+import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement } from "../server/basement";
 import { suggestLayout } from "../server/layout";
 import { buildPlan } from "../server/plan";
 import { mainRoom, type Room } from "../server/rooms";
@@ -57,6 +58,9 @@ writeFileSync(`${SAMPLE}/3d/surfels.bin`, liteSurfels(surfels, 800_000));
 writeFileSync(`${SAMPLE}/3d/surfels-lite.bin`, liteSurfels(surfels));
 writeFileSync(`${SAMPLE}/3d/scan.json`, JSON.stringify(basementViewpoints(files)));
 console.log(`3D: ${surfels.readUInt32LE(4)} points, ${(surfels.length / 1e6).toFixed(1)} MB`);
+const mesh = mergeMesh(b.scans.flatMap((s3, i) => (s3.mesh ? [{ mesh: s3.mesh, placement: b.placements[i], rect: b.rects[i] }] : [])), b.rects);
+writeFileSync(`${SAMPLE}/3d/mesh.bin`, mesh);
+console.log(`Solid: ${mesh.readUInt32LE(8)} triangles, ${(mesh.length / 1e6).toFixed(1)} MB`);
 
 writeFileSync(
   RESULT,
