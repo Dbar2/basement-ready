@@ -22,7 +22,8 @@ const FLOORS = ["light oak vinyl plank", "warm wood plank"];
 const WALLS = ["warm white", "soft sage", "pale greige", "cool light grey"];
 const EDIT_SETTLE_MS = 500;
 
-type Shown = { url: string; kind: "photo" | "render"; checked: string; hash: string };
+// `made`: the server's picture of this design from this angle (not the render shown while it's made).
+type Shown = { url: string; kind: "photo" | "render"; checked: string; hash: string; made?: boolean };
 type Selected = { angleId: string; id: string };
 
 const storeKey = (scanId: string) => `br-views-design:${scanId}`;
@@ -97,6 +98,8 @@ export function DesignPictures({
   const [view, setView] = useState(initialView);
   const [renders, setRenders] = useState<Map<string, Rendered>>(new Map());
   const [shown, setShown] = useState<Map<string, Shown>>(new Map());
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
   const [making, setMaking] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Selected | null>(null);
   const [snap, setSnap] = useState<{ fn: Snap; hash: string } | null>(null);
@@ -115,7 +118,7 @@ export function DesignPictures({
         setData(d);
         if (!controlled && d.design) setOwn(loadStored(scanId, d.designHash) ?? d.design);
         // Pictures already made of the seeded design show at once.
-        setShown(new Map(d.pictures.map((p) => [p.angleId, { url: p.url, kind: p.kind, checked: p.checked, hash: p.designHash }])));
+        setShown(new Map(d.pictures.map((p) => [p.angleId, { url: p.url, kind: p.kind, checked: p.checked, hash: p.designHash, made: true }])));
         return Promise.all([fetch(d.meshUrl).then((r) => (r.ok ? r.arrayBuffer() : null)), import("../three/RealScan")]).then(([buf, { parseMesh }]) => !gone && buf && setSolid(parseMesh(buf)));
       })
       .catch((err) => !gone && setFailed(err instanceof Error ? err.message : String(err)));
@@ -150,6 +153,9 @@ export function DesignPictures({
         const r = await snap.fn(a, frame);
         if (stop) return;
         setRenders((m) => new Map(m).set(a.id, r));
+        // Its picture is made already (the example's are committed): drawn only for tap-to-change.
+        const had = shownRef.current.get(a.id);
+        if (had?.made && had.hash === r.hash) continue;
         // Nothing to show yet: the render shows while the photo is made.
         setShown((m) => (m.has(a.id) ? m : new Map(m).set(a.id, { url: r.url, kind: "render", checked: "Making it look real…", hash: r.hash })));
         setMaking((s) => new Set(s).add(a.id));
@@ -157,7 +163,7 @@ export function DesignPictures({
           .then((p: Picture) => {
             if (hashRef.current !== p.designHash) return;
             // Nothing kept on the server (the example, past its committed pictures): the render stays.
-            setShown((m) => new Map(m).set(a.id, p.url ? { url: p.url, kind: p.kind, checked: p.checked, hash: p.designHash } : { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", hash: r.hash }));
+            setShown((m) => new Map(m).set(a.id, p.url ? { url: p.url, kind: p.kind, checked: p.checked, hash: p.designHash, made: true } : { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", hash: r.hash }));
           })
           .catch(() => setShown((m) => new Map(m).set(a.id, { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", hash: r.hash })))
           .finally(() => hashRef.current === r.hash && setMaking((s) => {
