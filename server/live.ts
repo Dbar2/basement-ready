@@ -7,22 +7,36 @@ import { parseSam } from "./sam";
 export const LIVE_CONCEPTS: Record<string, { prompt: string; label: string }> = {
   stairs: { prompt: "staircase", label: "Stairs" },
   window: { prompt: "basement window", label: "Window" },
-  furnace: { prompt: "furnace", label: "Furnace" },
   panel: { prompt: "electrical panel", label: "Electrical panel" },
   door: { prompt: "door", label: "Door" },
   duct: { prompt: "ceiling duct", label: "Duct" },
   beam: { prompt: "support beam", label: "Beam" },
-  // Where a bathroom can go, what sits by the furnace, and where to mind your head.
+  // Where a bathroom can go, and what sits by the furnace.
   drain: { prompt: "floor drain", label: "Floor drain" },
-  roughin: { prompt: "plumbing rough-in", label: "Plumbing rough-in" },
   heater: { prompt: "water heater", label: "Water heater" },
-  bulkhead: { prompt: "ceiling bulkhead", label: "Bulkhead" },
 };
+// Keys SAM never matched by name (scripts/practice): the scan finds a furnace, a rough-in and a bulkhead by
+// pointing (server/pointFinds.ts). An older app may still ask for them; it hears nothing back, at no cost.
+export const RETIRED = new Set(["furnace", "roughin", "bulkhead"]);
+
+// The keys a request may ask SAM for (at most three), from its JSON list. `retiredOnly`: it asked only for
+// retired keys, so it gets no finds and no error.
+export function liveKeys(raw: unknown): { keys: string[]; retiredOnly: boolean } {
+  let asked: unknown;
+  try {
+    asked = JSON.parse(String(raw ?? "[]"));
+  } catch {
+    asked = [];
+  }
+  const list = Array.isArray(asked) ? asked.filter((k): k is string => typeof k === "string") : [];
+  const keys = list.filter((k) => k in LIVE_CONCEPTS).slice(0, 3);
+  return { keys, retiredOnly: !keys.length && list.some((k) => RETIRED.has(k)) };
+}
 
 const MIN_CONFIDENCE = 0.45;
 // Things that aren't on the checklist need to be surer before they show up as a card.
 // Ducts at 0.55: on practice photos and real takes that finds a quarter more of them for few false finds.
-const MIN_CONFIDENCE_EXTRA: Partial<Record<string, number>> = { duct: 0.55, beam: 0.7, drain: 0.55, roughin: 0.6, bulkhead: 0.6 };
+const MIN_CONFIDENCE_EXTRA: Partial<Record<string, number>> = { duct: 0.55, beam: 0.7, drain: 0.55 };
 // The same bar by SAM prompt, for a photo take's finds (server/photoFinds.ts): one look, like a live frame.
 export function minConfidence(prompt: string): number {
   const key = Object.keys(LIVE_CONCEPTS).find((k) => LIVE_CONCEPTS[k].prompt === prompt);
