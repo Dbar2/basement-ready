@@ -1,0 +1,42 @@
+# Every push to main and every pull request: typecheck, the unit tests and the build for the app, and
+# the 3D service's tests. No keys are needed: nothing here calls a Meta model or the GPU.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      # A few tests turn photos and video upright with ffmpeg, like the server does.
+      - run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsc --noEmit -p .
+      - run: pnpm exec vitest run
+      - run: pnpm build
+
+  scan3d:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/scan3d
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/scan3d/requirements.txt
+      # Everything but MapAnything itself (and torch): the floor plan, mesh, room-fit and assembly tests
+      # run on numpy alone. The HTTP contract test imports the model package, so it runs where the model does.
+      - run: grep -v -E '^(mapanything|#)|^$' requirements.txt > ci-requirements.txt && pip install -q -r ci-requirements.txt pytest httpx
+      - run: python -m pytest -q --ignore=tests/test_contract.py
