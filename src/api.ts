@@ -280,10 +280,10 @@ export type ScanResult = {
 export const localVideos = new Map<string, File>();
 
 // The example, everywhere it shows: a real scan, recorded once and replayed, nothing sent.
-export const EXAMPLE_LABEL = "The example: a real basement, filmed and scanned once, replayed here. Nothing you do is sent.";
+export const EXAMPLE_LABEL = "A real basement, filmed and scanned once, replayed here. Nothing you do is sent.";
 export const EXAMPLE_HOUSEHOLD = "The example household's answers";
 // The demo house, for anyone outside Ontario: Waterloo's rules for a house that isn't real.
-export const DEMO_LABEL = "Demo house: Waterloo's rules, no real address. For trying it outside Ontario.";
+export const DEMO_LABEL = "Waterloo's rules, no real address. For trying it outside Ontario.";
 
 // This browser's claim tokens and, when signed in, the Clerk session: what the server checks before
 // anything is changed or anything private is shown.

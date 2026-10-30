@@ -65,7 +65,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
           {r.verdict === "no" ? "Not likely" : "Likely"} · {r.city ?? "Waterloo"} rules checked {checkedOn(r.compiledAt)}
           {p && ` · ${p.address}`}
         </p>
-        {r.demo && <p className="note-inline">{DEMO_LABEL}</p>}
+        {r.demo && <p className="note-inline">Demo house: {DEMO_LABEL}</p>}
         {r.coverage === "provincial" && <p className="note-inline">We haven't researched your city's own rules yet, so this uses Ontario's building code. Confirm zoning with your city.</p>}
         {changes && (
           <div className="changed" role="status" key={changes.after + changes.lines.join()}>

@@ -34,3 +34,10 @@
 .read-only { margin: 0 0 16px; padding: 8px 12px; border-left: 2px solid var(--color-ink); }
 .wish-said { display: flex; gap: 10px; flex-wrap: wrap; align-items: baseline; margin: 0 0 12px; }
 .wish-said .mono { color: var(--color-ink-muted); font-size: 13px; }
+
+/* On phones the footer's buttons share one line; with a notice above them they wrap under it. */
+.sheet-foot.sheet-actions:has(.sheet-limit, .sheet-kept) { flex-wrap: wrap; }
+@media (max-width: 719px) {
+  .sheet-foot.sheet-actions:has(.sheet-limit, .sheet-kept) { flex-wrap: wrap; }
+  .sheet-foot.sheet-actions:has(.sheet-limit, .sheet-kept) .btn { flex: 1 1 40%; }
+}

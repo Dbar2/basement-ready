@@ -214,6 +214,9 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
   const work = join(tmpdir(), "basement-ready", scanId);
   rmSync(work, { recursive: true, force: true });
   mkdirSync(join(work, "frames"), { recursive: true });
+  // Work still reading the folder when something fails: the folder goes only once it's settled, and a
+  // failure in it never goes unhandled (that would take the whole server down).
+  const inflight: Promise<unknown>[] = [];
 
   try {
     await emit("stage", "prepare");
@@ -223,6 +226,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     if (!frameCount) throw new Error("ffmpeg: no frames in the video");
     await emit("log", `Reading ${frameCount} frames from your video`, { frameCount });
     const uploads = Promise.all([storage.putFile(keys.analysis(scanId), analysis, "video/mp4"), uploadFrames(scanId, work, frameCount)]);
+    inflight.push(uploads.catch(() => {}));
 
     // One retry, and a failure is logged rather than passed off as "you didn't talk".
     const transcriptP = wav
@@ -240,6 +244,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
             return { transcript: "", turns: [] };
           })
       : Promise.resolve({ transcript: "", turns: [] });
+    inflight.push(transcriptP);
 
     // The 3D scan only needs the frames, so it runs alongside SAM: one room at a time, in filming order.
     const inputs = (scan.inputs ?? {}) as { floorToJoistsM?: number; rooms?: RoomMark[]; ideas?: Idea[]; spoken?: Span[]; lens?: "ultrawide" | "wide"; wideAt?: number };
@@ -252,6 +257,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
           return null;
         })
       : Promise.resolve(null);
+    inflight.push(basementP);
 
     await emit("stage", "find");
     const fileId = await uploadFile(analysis, "video/mp4", "basement.mp4");
@@ -302,6 +308,8 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     await emit("log", "Checking your city's second-unit rules");
     const ctx = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
     const sparkP = readWithSpark(ctx, detections, transcript.transcript, transcript.turns);
+    // Awaited after the 3D; a Spark failure meanwhile is still this scan's error, never an unhandled one.
+    inflight.push(sparkP.catch(() => {}));
 
     const basement3d = await basementP;
     // The 3D service bills by the GPU second: an estimate per area, plus the rough pass over the walk.
@@ -385,6 +393,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     }
     throw err;
   } finally {
+    await Promise.allSettled(inflight);
     rmSync(work, { recursive: true, force: true });
   }
 }

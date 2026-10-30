@@ -1,0 +1,72 @@
+{
+  "bright": {
+    "style": "bright",
+    "status": "done",
+    "items": [
+      {
+        "n": 1,
+        "frame": 0,
+        "title": "A bedroom for your parent",
+        "kept": true,
+        "checked": "Windows and stairs kept where they are · checked by SAM 3.1"
+      }
+    ],
+    "at": ""
+  },
+  "warm": {
+    "style": "warm",
+    "status": "done",
+    "items": [
+      {
+        "n": 1,
+        "frame": 0,
+        "title": "A bedroom for your parent",
+        "kept": true,
+        "checked": "Windows and stairs kept where they are · checked by SAM 3.1"
+      }
+    ],
+    "at": ""
+  },
+  "green": {
+    "style": "green",
+    "status": "done",
+    "items": [
+      {
+        "n": 1,
+        "frame": 0,
+        "title": "A bedroom for your parent",
+        "kept": true,
+        "checked": "Windows and stairs kept where they are · checked by SAM 3.1"
+      }
+    ],
+    "at": ""
+  },
+  "cottage": {
+    "style": "cottage",
+    "status": "done",
+    "items": [
+      {
+        "n": 1,
+        "frame": 0,
+        "title": "A bedroom for your parent",
+        "kept": true,
+        "checked": "Windows and stairs kept where they are · checked by SAM 3.1"
+      }
+    ],
+    "at": ""
+  },
+  "modern": {
+    "style": "modern",
+    "status": "done",
+    "items": [
+      {
+        "n": 1,
+        "frame": 0,
+        "title": "A bedroom for your parent",
+        "kept": true,
+        "checked": "Windows and stairs kept where they are · checked by SAM 3.1"
+      }
+    ],
+    "at": ""
+  }
+}

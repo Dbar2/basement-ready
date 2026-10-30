@@ -3,7 +3,7 @@
 // the server turns away is never lost: it stays on this page to send again, or to save to the phone.
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { DEMO_LABEL, getAllowance, startScan, type AddressHit, type Allowance, type Household, type Who } from "../api";
+import { getAllowance, startScan, type AddressHit, type Allowance, type Household, type Who } from "../api";
 import type { CaptureMeta } from "../capture/Capture";
 import { AddressField, PropertyCard } from "../components/AddressStep";
 import { Capture } from "../capture";
@@ -132,7 +132,7 @@ export function StartSheet({ onClose }: { onClose: () => void }) {
                 <p className="sheet-lede">No address needed: the demo house uses the City of Waterloo's rules.</p>
                 <div className="demo-card" role="note">
                   <span className="tag-mono">Demo house</span>
-                  <p>{DEMO_LABEL} Film any room you like: the camera, the finds and the 3D work anywhere.</p>
+                  <p>No real address, nothing sent anywhere. Film any room you like: the camera, the finds and the 3D work anywhere.</p>
                   <button className="link-quiet" onClick={() => setDemo(false)}>Use a real Ontario address instead</button>
                 </div>
               </>
