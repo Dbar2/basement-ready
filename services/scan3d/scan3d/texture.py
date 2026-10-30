@@ -37,9 +37,28 @@ BLEND_POWER = 5.0  # how strongly the best frame wins where several see a spot (
 # How sure a texel's paint is, 0..1: from its best frame's quality (far, grazing, blurry or at a frame's
 # edge is poor) and from whether the frames blended there agree (clutter and misplaced paint look
 # different from each side). Unsure paint fades into a soft plain version of the surface.
-SURE_Q = (0.12, 0.30)  # best frame quality: unsure below the first, sure above the second
-SURE_SPREAD = (14.0, 40.0)  # colour spread between the frames, 0-255: sure below, unsure above
-PLAIN_BLUR_M = 0.2  # the plain version keeps the surface's light and shade at this scale
+SURE_Q = (0.2, 0.45)  # best frame quality: unsure below the first, sure above the second
+SURE_SPREAD = (10.0, 26.0)  # colour spread between the frames, 0-255: sure below, unsure above
+SURE_SMOOTH_M = 0.1  # sure and unsure meet softly, not in blotches
+PLAIN_BLUR_M = 0.3  # the plain version keeps the surface's light and shade at this scale
+# How much of the plain version is the surface's own flat colour, against its blurred light and shade.
+# A floor is the most cluttered and the most seen at eye level: nearly flat.
+PLAIN_FLAT = {"floor": 0.85}
+PLAIN_FLAT_DEFAULT = 0.7
+# A floor is painted only from frames looking down at it steeply (cos of the angle to its normal):
+# seen from standing height at a shallow angle, it streaks.
+MIN_COS = {"floor": 0.45}
+# One frame's pixel may cover at most this many texels along the surface's most foreshortened
+# direction: past it, the paint is that pixel stretched into a streak.
+MAX_STRETCH = 3.0
+# A floor is painted only where it looks like floor: close to its own main colour (in Lab: lightness
+# counts half). Bins, bags and shoes on it aren't, and their depth is too close to the floor's to tell.
+FLOOR_LIKE = (18.0, 34.0)  # colour distance: floor below the first, not floor above the second
+# A floor where more than this share of what was seen isn't floor-coloured is a cluttered floor: drawn
+# plain all over in its own colour, rather than as islands of paint among cut-out clutter.
+CLUTTERED_FLOOR = 0.25
+SHARP_POWER = 2.0  # motion blur reads as streaks: blurrier frames count for much less
+SHARP_NEIGHBOURS = 3  # frames either side, in filming order, a frame's sharpness is judged against
 # How far a wall's paint may move to where the depth says the wall is: back a fair way (the plan put
 # the wall a little into the room), forward only a little (in front of a wall is usually a shelf).
 MAX_SHIFT_M = 0.35
@@ -220,7 +239,9 @@ def score(cam: Camera, surf: Surf, P: np.ndarray, N: np.ndarray, planes, boxes, 
     cos = -(rel * N).sum(1) / np.maximum(dist, 1e-6)
     with np.errstate(invalid="ignore"):
         edge = np.nan_to_num(np.minimum.reduce([x, W - 1 - x, y, H - 1 - y]) / (0.06 * max(W, H)), nan=-1.0)
-    ok = front & (cos > 0.1) & (edge > 0)
+    # Pixels per texel along the surface's most foreshortened direction.
+    stretch_ok = fx / np.maximum(z, 0.1) * np.maximum(cos, 0) / ppm >= 1 / MAX_STRETCH
+    ok = front & (cos > MIN_COS.get(surf.kind, 0.1)) & (edge > 0) & stretch_ok
     if not ok.any():
         return q, z
     if cam.buf is None:
@@ -240,12 +261,13 @@ def score(cam: Camera, surf: Surf, P: np.ndarray, N: np.ndarray, planes, boxes, 
             # How far the measured point is off the surface, along its normal (+: towards the camera).
             with np.errstate(invalid="ignore"):
                 off = (zm / z - 1) * (rel * N).sum(1)
-            tol = 0.06 + 0.015 * z
+            # A floor's tighter: what lies on it (bags, clothes, shoes) isn't the floor.
+            tol = 0.04 + 0.01 * z if surf.kind == "floor" else 0.06 + 0.015 * z
             bad = (off - on > tol) if surf.kind == "ceiling" else (np.abs(off - on) > tol)
             ok &= ~(np.isfinite(zm) & bad)
     # Pixels per metre of surface, against what the texture holds: closer and squarer is sharper.
     res = fx / np.maximum(z, 0.1) * np.sqrt(np.maximum(cos, 0)) / ppm
-    q[ok] = (cos[ok] ** 0.5) * (res[ok] / (res[ok] + 1.0)) * np.minimum(1.0, edge[ok]) * cam.sharp
+    q[ok] = (cos[ok] ** 0.5) * (res[ok] / (res[ok] + 1.0)) * np.minimum(1.0, edge[ok]) * cam.sharp**SHARP_POWER
     return q, z
 
 
@@ -416,7 +438,9 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
     cams: list[Camera] = [cam for _, cam in pairs]
     if not surfs or not cams:
         raise ValueError("nothing to paint: send surfaces and at least one camera")
-    # Sharper frames count for more, relative to this take's own.
+    # Motion blur: a frame blurrier than the ones filmed just before and after it (which see much the
+    # same thing) counts for less. Against the whole take instead, a frame of a plain floor would read
+    # as blurry beside one of a busy shelf.
     sharp = []
     for c, cam in pairs:
         s = c.get("sharpness")
@@ -424,9 +448,9 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
             g = cv2.cvtColor(cv2.resize(cam.image, None, fx=0.25, fy=0.25, interpolation=cv2.INTER_AREA), cv2.COLOR_BGR2GRAY)
             s = float(cv2.Laplacian(g, cv2.CV_32F).var())
         sharp.append(max(1e-3, float(s)))
-    mid = float(np.median(sharp))
-    for cam, s in zip(cams, sharp):
-        cam.sharp = float(np.clip(s / mid, 0.35, 1.4))
+    for i, cam in enumerate(cams):
+        near = float(np.median(sharp[max(0, i - SHARP_NEIGHBOURS) : i + SHARP_NEIGHBOURS + 1]))
+        cam.sharp = float(np.clip(sharp[i] / near, 0.3, 1.3))
 
     page, ppm = layout(surfs, ppm_target, max_page)
     log(f"atlas {page}px at {ppm:.0f} texels/m for {len(surfs)} surfaces, {len(cams)} frames")
@@ -583,9 +607,33 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
             sure_q = np.clip((p["qbest"] - lo) / (hi - lo), 0, 1)
             lo, hi = SURE_SPREAD
             sure_c = np.clip((hi - p["spread"]) / (hi - lo), 0, 1)
-            sure = (sure_q * sure_c)[..., None]
-            plain = cv2.GaussianBlur(smooth.astype(np.float32), (0, 0), sigmaX=max(1.0, PLAIN_BLUR_M * ppm)) * 0.6 + own[None, None] * 0.4
-            tile = np.clip(mix * (alpha * sure) + plain * (alpha * (1 - sure)) + smooth * (1 - alpha), 0, 255).astype(np.uint8)
+            sure_raw = sure_q * sure_c
+            flat = PLAIN_FLAT.get(p["s"].kind, PLAIN_FLAT_DEFAULT)
+            shade = cv2.GaussianBlur(smooth.astype(np.float32), (0, 0), sigmaX=max(1.0, PLAIN_BLUR_M * ppm))
+            if p["s"].kind == "floor" and seen.sum() > 200:
+                lab = cv2.cvtColor(np.clip(mix, 0, 255).astype(np.uint8), cv2.COLOR_BGR2LAB).astype(np.float32)
+                main = np.median(lab[seen][:: max(1, int(seen.sum()) // 20000)], axis=0)
+                d = np.sqrt((((lab - main[None, None]) * np.array([0.5, 1, 1], np.float32)[None, None]) ** 2).sum(axis=2))
+                lo, hi = FLOOR_LIKE
+                floor_like = np.clip((hi - d) / (hi - lo), 0, 1)
+                sure_raw = sure_raw * floor_like
+                like = seen & (floor_like > 0.5)
+                if like.sum() > 100:
+                    # Its own colour from the parts that look like floor, and its light and shade from them too.
+                    own = np.median(mix[like][:: max(1, int(like.sum()) // 20000)], axis=0)
+                    _, lit = fill(np.clip(mix, 0, 255).astype(np.uint8), like, field=True)
+                    lum = cv2.GaussianBlur(lit.astype(np.float32) @ np.array([0.114, 0.587, 0.299], np.float32), (0, 0), sigmaX=max(1.0, 0.5 * ppm))
+                    shade = own[None, None] * np.clip(0.85 + 0.15 * lum / max(1.0, float(np.median(lum))), 0.75, 1.15)[..., None]
+                    flat = 0.0
+                if float(floor_like[seen].mean()) < 1 - CLUTTERED_FLOOR:
+                    sure_raw = np.zeros_like(sure_raw)
+                    p["plain"] = True
+            sure = cv2.GaussianBlur(sure_raw.astype(np.float32), (0, 0), sigmaX=max(1.0, SURE_SMOOTH_M * ppm))
+            sure = np.clip(sure * 1.25 - 0.1, 0, 1)[..., None]
+            plain = shade * (1 - flat) + own[None, None] * flat
+            # Seen and sure: the photo. Everything else, seen or not: the same plain version.
+            a = alpha * sure
+            tile = np.clip(mix * a + plain * (1 - a), 0, 255).astype(np.uint8)
             p["sure"] = float((sure[..., 0] * seen).sum() / max(1, seen.sum()))
             coverage = p["coverage"]
         else:
@@ -601,6 +649,8 @@ def paint(job: dict, images: list[np.ndarray], depths: list[np.ndarray] | None =
             "coverage": round(coverage, 3),
             # Of what was seen, the share painted with confidence (the rest is drawn plain).
             **({"sure": round(p["sure"], 3)} if "sure" in p else {}),
+            # A cluttered floor, drawn plain in its own colour.
+            **({"plain": True} if p.get("plain") else {}),
             "frames": [int(i) for i in p["chosen"]],
             **({"shiftM": round(p["shift"], 3)} if p["shift"] else {}),
         }

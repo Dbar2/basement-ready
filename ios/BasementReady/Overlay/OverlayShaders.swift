@@ -14,6 +14,7 @@ struct Uniforms {
 
 constant float3 MINT = float3(0.294, 0.890, 0.541);
 constant float3 LIGHT = float3(0.957, 0.965, 0.949);
+constant float3 INK = float3(0.059, 0.165, 0.118);
 
 // ---------- the camera picture ----------
 
@@ -102,10 +103,15 @@ fragment float4 surface_fragment(SurfaceOut in [[stage_in]], constant Uniforms &
     float d = distance(in.world, in.extra.xyz);
     float painted = smoothstep(r, r - 0.35, d);
     float edge = smoothstep(0.3, 0.0, abs(d - r)) * step(d, r + 0.3) * saturate(2.5 - (t - in.extra.w));
+    // Drawn like a plan wall: hairlines every 50 cm (ink on the camera, light on the void) over a
+    // faint mint wash, with mint where the paint is still spreading.
     float lines = grid(in.world, 0.5);
-    float a = (mix(0.10, 0.20, voidView) + lines * mix(0.22, 0.38, voidView)) * painted;
-    float3 c = mix(LIGHT, MINT, 0.25 + 0.75 * edge);
-    return float4(c, saturate(a + edge * 0.5) * fade);
+    float3 line = mix(INK, LIGHT, voidView);
+    float wash = mix(0.10, 0.16, voidView);
+    float lineA = lines * mix(0.55, 0.4, voidView);
+    float3 c = mix(MINT, line, lineA / max(lineA + wash, 1e-3));
+    c = mix(c, MINT, edge);
+    return float4(c, saturate((wash + lineA) * painted + edge * 0.5) * fade);
   }
   if (kind == 1 || kind == 2) {
     // Floor and filmed ceiling: rounded tiles with a small gap between them.

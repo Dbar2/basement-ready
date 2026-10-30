@@ -2,14 +2,16 @@
 
 Film the basement with ARKit world tracking: the camera's real position for every frame, at true scale. The app sends the take to the same server as the web, then opens the web's wait screen and result. What it sends is in [CAPTURE.md](CAPTURE.md).
 
-- **Opening:** the logo animates (the B forms the house). The first time, a four-page guide shows how to film: start at the stairs, sweep each wall slowly, pan into a room from its door, point back at what glows. "How to film" on the start screen opens it again. Reduce Motion gets still pictures.
+- **Look:** the Drawing Set (brand/ui.md): an architect's sheet, hairlines instead of cards, one mint rectangle button per screen, Hanken Grotesk and Geist Mono (bundled in `Resources/Fonts`, OFL; mono only for figures). Tokens and button styles live in `Brand/Brand.swift`.
+- **Opening:** the logo draws itself in ink on the light sheet (the B forms the house). The first time, a four-page guide shows how to film: start at the stairs, sweep each wall slowly, pan into a room from its door, point back at what glows. "How to film" on the start screen opens it again. Reduce Motion gets still pictures.
 - **Start:** the address (type-ahead from the server) and who it's for. Nothing else.
 - **Filming:** the camera fills the screen, and the basement assembles on top of it as it's filmed (`Overlay/`, Metal, 60 fps), from ARKit's own planes and feature points:
   - floor tiles as the floor is found, and the filmed ceiling overhead
   - walls painting in once ARKit finds them
   - ARKit's feature points, coloured from the camera picture
-  - a soft mint glow wherever nothing has been filmed yet: a curtain at the edge of the known floor, or a patch of ceiling. Point at it and it fills in.
-  - a gentle arrow toward the nearest glow when it's off screen (left, right, behind, or up at the ceiling)
+  - a still mint glow wherever nothing has been filmed yet: a curtain at the edge of the known floor, or a patch of ceiling. Point at it and it fills in. (David chose to keep it, Oct 30, though the Drawing Set rules out glows.)
+  - a mint tag with an ink arrow at the edge of the screen toward the nearest glow when it's off screen (left, right, behind, or up at the ceiling)
+  - a light sheet at the bottom: the one instruction, the figures in mono, and the record button (an ink ring; tapping it is Done). No map: the camera is the map.
   - **Scan only** (top right) swaps the camera for a dark void, so only what's been captured shows.
   - A room seen only from its doorway counts: looks reach 6 m, and the guide says to pan from the door, never to walk into every corner.
   - One line of guidance, the guide's voice clips (`public/voice`), up to 5 minutes, and live finds from SAM every 2.5 s.

@@ -8,34 +8,37 @@ struct ReviewView: View {
   let onRetake: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 24) {
-      Text("Got it.").font(Brand.display(44)).kerning(-1.4).foregroundStyle(Brand.ink)
+    VStack(alignment: .leading, spacing: Space.s4) {
+      Text("Got it.").display(40).foregroundStyle(Brand.ink)
       if let note { Text(note).font(Brand.body(17)).foregroundStyle(Brand.inkMuted) }
-      VStack(alignment: .leading, spacing: 12) {
+      // A schedule on the sheet: an ink rule on top, hairlines between rows, no card.
+      VStack(alignment: .leading, spacing: 0) {
+        Rectangle().fill(Brand.ink).frame(height: 1)
         row("Filmed", FilmingModel.clock(take.duration))
         row("Floor mapped", "\(Int(take.floorAreaM2.rounded())) m²")
         row("Walls found", "\(take.wallsFound)")
         row("Ceiling filmed", "\(Int((take.ceilingCovered * 100).rounded()))%")
         if take.depth != nil { row("Depth", "LiDAR") }
       }
-      .padding(18)
-      .background(Brand.card, in: RoundedRectangle(cornerRadius: 16))
-      .overlay(RoundedRectangle(cornerRadius: 16).stroke(Brand.border))
       Text("Next we measure it and check the rules. It takes a few minutes; you can watch it come together.")
         .font(Brand.body(17)).foregroundStyle(Brand.ink)
       Spacer()
-      Button("Send it", action: onSend).buttonStyle(MintButton())
-      Button("Film again", action: onRetake).buttonStyle(OutlineButton())
+      Button("Send it", action: onSend).buttonStyle(PrimaryButton())
+      Button("Film again", action: onRetake).buttonStyle(TextLink()).frame(maxWidth: .infinity)
     }
-    .padding(20)
+    .padding(Space.s3)
     .background(Brand.bg.ignoresSafeArea())
   }
 
   private func row(_ label: String, _ value: String) -> some View {
-    HStack {
-      Text(label).font(Brand.body(17)).foregroundStyle(Brand.inkMuted)
-      Spacer()
-      Text(value).font(Brand.mono(17)).foregroundStyle(Brand.ink)
+    VStack(spacing: 0) {
+      HStack {
+        Text(label).font(Brand.body(17)).foregroundStyle(Brand.inkMuted)
+        Spacer()
+        Text(value).font(Brand.mono(15)).foregroundStyle(Brand.ink)
+      }
+      .frame(minHeight: 44)
+      Rectangle().fill(Brand.border).frame(height: 1)
     }
   }
 }
@@ -50,20 +53,20 @@ struct SendingView: View {
       Spacer()
       switch uploader.state {
       case .failed(let why):
-        Text("It didn't send.").font(Brand.display(40)).kerning(-1.2).foregroundStyle(Brand.ink)
+        Text("It didn't send.").display(34).foregroundStyle(Brand.ink)
         Text(why).font(Brand.body(17)).foregroundStyle(Brand.ink)
         Spacer()
-        Button("Try again", action: onRetry).buttonStyle(MintButton())
-        Button("Back to start", action: onCancel).buttonStyle(OutlineButton())
+        Button("Try again", action: onRetry).buttonStyle(PrimaryButton())
+        Button("Back to start", action: onCancel).buttonStyle(TextLink()).frame(maxWidth: .infinity)
       default:
-        Text("Sending your video").font(Brand.display(40)).kerning(-1.2).foregroundStyle(Brand.ink)
+        Text("Sending your video").display(34).foregroundStyle(Brand.ink)
         ProgressView(value: fraction).tint(Brand.mintLine).scaleEffect(x: 1, y: 2.4, anchor: .center).padding(.vertical, 8)
         Text(fraction > 0 ? "\(Int((fraction * 100).rounded()))%" : "Getting it ready…").font(Brand.mono(17)).foregroundStyle(Brand.inkMuted)
         Text("You can lock your phone. It keeps sending.").font(Brand.body(17)).foregroundStyle(Brand.inkMuted)
         Spacer()
       }
     }
-    .padding(20)
+    .padding(Space.s3)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(Brand.bg.ignoresSafeArea())
   }

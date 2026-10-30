@@ -1,4 +1,4 @@
-// How to film, in four pages: each a small drawing of the live map that moves, a title and one line.
+// How to film, in four sheets: each a line drawing that strokes in once, a title and one sentence.
 // It opens by itself on the first launch, and again from the start screen.
 import SwiftUI
 
@@ -39,23 +39,24 @@ struct FilmingGuide: View {
   var body: some View {
     VStack(spacing: 0) {
       topBar
+      // The sheet's top edge.
+      Rectangle()
+        .fill(Brand.ink)
+        .frame(height: 1)
+        .padding(.horizontal, Space.s3)
       TabView(selection: $page) {
         ForEach(pages) { p in
-          GuidePageView(page: p, count: pages.count, playing: playing && p.id == page, freezeAt: freezeAt)
+          GuideSheet(page: p, playing: playing && p.id == page, freezeAt: freezeAt)
             .tag(p.id)
         }
       }
       .tabViewStyle(.page(indexDisplayMode: .never))
-
-      VStack(spacing: 18) {
-        PageDots(count: pages.count, page: $page)
-        Button(isLast ? "Got it" : "Next") { next() }
-          .buttonStyle(MintButton())
-          .accessibilityHint(isLast ? "Closes the guide" : "")
-      }
-      .padding(.horizontal, 20)
-      .padding(.top, 10)
-      .padding(.bottom, 12)
+      Button(isLast ? "Got it" : "Next") { next() }
+        .buttonStyle(PrimaryButton())
+        .accessibilityHint(isLast ? "Closes the guide" : "")
+        .padding(.horizontal, Space.s3)
+        .padding(.top, Space.s2)
+        .padding(.bottom, Space.s3)
     }
     .background(Brand.bg.ignoresSafeArea())
     .environment(\.colorScheme, .light)
@@ -63,31 +64,33 @@ struct FilmingGuide: View {
   }
 
   private var topBar: some View {
-    HStack(spacing: 10) {
-      BrandMark()
-        .fill(Brand.ink, style: FillStyle(eoFill: true))
-        .frame(width: 20, height: 24)
-        .accessibilityHidden(true)
-      Text("How to film")
-        .font(Brand.body(16, .semibold))
+    HStack {
+      Text("\(page + 1) / \(pages.count)")
+        .font(Brand.mono(15))
         .foregroundStyle(Brand.ink)
-        .accessibilityAddTraits(.isHeader)
+        .frame(minHeight: 44)
+        .accessibilityLabel("Page \(page + 1) of \(pages.count)")
+        .accessibilityAdjustableAction { direction in
+          switch direction {
+          case .increment: if page < pages.count - 1 { page += 1 }
+          case .decrement: if page > 0 { page -= 1 }
+          @unknown default: break
+          }
+        }
       Spacer()
-      Button("Skip") { onDone() }
-        .font(Brand.body(17, .semibold))
-        .foregroundStyle(Brand.ink)
-        .padding(.horizontal, 12)
-        .frame(minWidth: 44, minHeight: 44)
-        .contentShape(Rectangle())
-        .opacity(isLast ? 0 : 1)
-        .disabled(isLast)
-        .accessibilityHidden(isLast)
-        .accessibilityHint("Closes the guide")
+      Button { onDone() } label: {
+        Text("Skip").padding(.horizontal, Space.s2)
+      }
+      .buttonStyle(TextLink())
+      .padding(.trailing, -Space.s2) // the text lines up with the margin; the padding is only there to tap
+      .opacity(isLast ? 0 : 1)
+      .disabled(isLast)
+      .accessibilityHidden(isLast)
+      .accessibilityHint("Closes the guide")
     }
-    .padding(.leading, 20)
-    .padding(.trailing, 8)
+    .padding(.horizontal, Space.s3)
     .frame(height: 52)
-    .animation(.easeOut(duration: 0.2), value: isLast)
+    .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: isLast)
   }
 
   private func next() {
@@ -96,69 +99,35 @@ struct FilmingGuide: View {
   }
 }
 
-private struct GuidePageView: View {
+/// One sheet: the drawing, a hairline, the title and one sentence.
+private struct GuideSheet: View {
   let page: GuidePage
-  let count: Int
   let playing: Bool
   let freezeAt: Double?
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      // As big as fits, up to a little taller than wide; any height left over goes under the words.
       GuideVisual(kind: page.visual, playing: playing, freezeAt: freezeAt)
-        .background(Brand.ink, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .aspectRatio(0.9, contentMode: .fit)
-        .frame(maxWidth: .infinity)
-        .layoutPriority(1)
-      Text("\(page.id + 1) of \(count)")
-        .font(Brand.mono(13))
-        .foregroundStyle(Brand.accentText)
-        .padding(.top, 26)
-        .accessibilityHidden(true)
-      Text(page.title)
-        .font(Brand.display(32))
-        .kerning(-0.9)
-        .foregroundStyle(Brand.ink)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 8)
-        .accessibilityAddTraits(.isHeader)
-      Text(page.line)
-        .font(Brand.body(17))
-        .foregroundStyle(Brand.inkMuted)
-        .fixedSize(horizontal: false, vertical: true)
-        .padding(.top, 10)
-      Spacer(minLength: 0)
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 20)
-    .padding(.top, 4)
-    .padding(.bottom, 8)
-  }
-}
-
-/// Which page this is: a dot for each, the current one long.
-private struct PageDots: View {
-  let count: Int
-  @Binding var page: Int
-
-  var body: some View {
-    HStack(spacing: 6) {
-      ForEach(0..<count, id: \.self) { i in
-        Capsule()
-          .fill(i == page ? Brand.ink : Brand.ink.opacity(0.18))
-          .frame(width: i == page ? 22 : 8, height: 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      Rectangle()
+        .fill(Brand.border)
+        .frame(height: 1)
+      VStack(alignment: .leading, spacing: Space.s2) {
+        Text(page.title)
+          .display(34)
+          .foregroundStyle(Brand.ink)
+          .fixedSize(horizontal: false, vertical: true)
+          .accessibilityAddTraits(.isHeader)
+        Text(page.line)
+          .font(Brand.body(17))
+          .foregroundStyle(Brand.ink)
+          .fixedSize(horizontal: false, vertical: true)
       }
+      // The same height on every sheet, so the drawing and the hairline don't jump between pages.
+      .frame(maxWidth: .infinity, minHeight: 132, alignment: .topLeading)
+      .padding(.top, Space.s4)
     }
-    .animation(.easeOut(duration: 0.25), value: page)
-    .accessibilityElement()
-    .accessibilityLabel("Page \(page + 1) of \(count)")
-    .accessibilityAdjustableAction { direction in
-      switch direction {
-      case .increment: if page < count - 1 { page += 1 }
-      case .decrement: if page > 0 { page -= 1 }
-      @unknown default: break
-      }
-    }
+    .padding(.horizontal, Space.s3)
+    .padding(.bottom, Space.s3)
   }
 }
