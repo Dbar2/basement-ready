@@ -52,6 +52,28 @@ export function outputText(resp: any): string {
     .join("");
 }
 
+// Each message's text, in order. A model sometimes sends a message cut off partway, then a whole one.
+export function outputMessages(resp: any): string[] {
+  const messages = (resp.output ?? [])
+    .filter((o: any) => o.type === "message")
+    .map((o: any) => (o.content ?? []).filter((c: any) => c.type === "output_text").map((c: any) => c.text).join(""));
+  return messages.length ? messages : typeof resp.output_text === "string" ? [resp.output_text] : [];
+}
+
+// The answer in a reply: its last message that `read` accepts, then any earlier one, then all of its text
+// together. Throws what the last try threw.
+export function readReply<T>(resp: any, read: (text: string) => T): T {
+  let err: unknown = new Error("The reply had no text");
+  for (const text of [...outputMessages(resp).reverse(), outputText(resp)]) {
+    try {
+      return read(text);
+    } catch (e) {
+      err = e;
+    }
+  }
+  throw err;
+}
+
 export async function uploadFile(path: string, mime: string, name: string): Promise<string> {
   const form = new FormData();
   form.append("purpose", "user_data");
