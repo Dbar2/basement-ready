@@ -6,7 +6,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { conceptPrompt, keptInPlace } from "../concepts";
+import { addedTo, conceptPrompt, keptInPlace } from "../concepts";
 import { museEdit, samImage } from "../meta";
 import type { Detection } from "../pipeline";
 import { parseSam } from "../sam";
@@ -83,14 +83,14 @@ export async function renderLook(scanId: string, style: string, sources: Source[
       try {
         const px = jpegSize(src.jpeg) ?? { w: 1280, h: 720 };
         const img = await toJpeg(await museEdit(src.jpeg, "image/jpeg", conceptPrompt(src.space, feel), `${px.w}x${px.h}`), px.w, px.h);
-        let kept = true;
-        let checked = "Room shape kept";
-        if (src.anchors.length) {
-          const kinds = [...new Set(src.anchors.map((x) => x.kind))];
-          const found = await Promise.all(kinds.map(async (k) => ({ k, b: await boxes(img, k === "window" ? "basement window" : "staircase") })));
-          kept = kinds.every((k) => keptInPlace(src.anchors.filter((x) => x.kind === k).map((x) => x.box), found.find((f) => f.k === k)!.b));
-          checked = kept ? "Windows and stairs kept where they are · checked by SAM 3.1" : "A window or the stairs moved: treat it as a mood, not a plan";
-        }
+        // Every window and stair kept, and none added (server/concepts.ts addedTo).
+        const kinds = [...new Set(src.anchors.map((x) => x.kind))];
+        const found = await Promise.all((["window", "stairs"] as const).map(async (k) => ({ k, b: await boxes(img, k === "window" ? "basement window" : "staircase") })));
+        const was = (k: string) => src.anchors.filter((x) => x.kind === k).map((x) => x.box);
+        const moved = !kinds.every((k) => keptInPlace(was(k), found.find((f) => f.k === k)?.b ?? []));
+        const added = found.some((f) => addedTo(was(f.k), f.b));
+        const kept = !moved && !added;
+        const checked = moved ? "A window or the stairs moved: treat it as a mood, not a plan" : added ? "A window or stairs appeared that aren't there: treat it as a mood, not a plan" : "Windows and stairs kept where they are, nothing added · checked by SAM 3.1";
         await storage.put(lookKey(scanId, style, src.n), img, "image/jpeg");
         return { n: src.n, frame: src.frame, title: src.title, kept, checked };
       } catch {

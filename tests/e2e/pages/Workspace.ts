@@ -1,12 +1,11 @@
-// The workspace once the answer is in: five tabs, one page object each. A new journey piece (the swipe
-// deck, the plan confirm, the layout picker, the studio, the pictures, the quote, permit readiness,
-// booking) gets its own class here or in its own file, and a step in the journeys (see README.md).
+// The workspace, the flow's last step (src/screens/Workspace.tsx): five tabs, one page object each. The
+// steps before it (the plan check, the layouts, the studio, the pictures) are in Flow.ts.
 import type { Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { expect } from "../support/fixtures";
 import { readPdf } from "../support/pdf";
 
-export type TabName = "Your plan" | "Ideas" | "Permit" | "Money" | "Build";
+export type TabName = "Your book" | "The answer" | "Permit" | "Money" | "Build";
 
 export class Workspace {
   constructor(readonly page: Page) {}
@@ -17,7 +16,7 @@ export class Workspace {
 
   async expectOpen() {
     await expect(this.tabs).toBeVisible({ timeout: 30_000 });
-    await expect(this.tabs.getByRole("tab")).toHaveText(["Your plan", "Ideas", "Permit", "Money", "Build"]);
+    await expect(this.tabs.getByRole("tab")).toHaveText(["Your book", "The answer", "Permit", "Money", "Build"]);
   }
 
   async open(tab: TabName) {
@@ -25,11 +24,11 @@ export class Workspace {
     await expect(this.tabs.getByRole("tab", { name: tab, exact: true })).toHaveAttribute("aria-selected", "true");
   }
 
-  plan() {
-    return new PlanTab(this.page);
+  book() {
+    return new BookTab(this.page);
   }
-  ideas() {
-    return new IdeasTab(this.page);
+  answer() {
+    return new AnswerTab(this.page);
   }
   permit() {
     return new PermitTab(this.page);
@@ -56,7 +55,29 @@ export class Workspace {
   }
 }
 
-export class PlanTab {
+// The book: the design they made, its pictures, the quote, the timeline.
+export class BookTab {
+  constructor(readonly page: Page) {}
+
+  get cover() {
+    return this.page.locator(".book-cover");
+  }
+
+  async expectOpen() {
+    await expect(this.cover).toBeVisible({ timeout: 60_000 });
+  }
+
+  // "The design", "Hired out", "Built yourself", "Permit": what the cover says.
+  async facts() {
+    const rows = this.cover.locator(".book-facts > div");
+    const out: Record<string, string> = {};
+    for (const row of await rows.all()) out[((await row.locator("dt").textContent()) ?? "").trim()] = ((await row.locator("dd").textContent()) ?? "").trim();
+    return out;
+  }
+}
+
+// The answer: the decision, what has to change, the scan in 3D and its floor plan.
+export class AnswerTab {
   constructor(readonly page: Page) {}
 
   get verdict() {
@@ -83,25 +104,17 @@ export class PlanTab {
   }
 }
 
-export class IdeasTab {
-  constructor(readonly page: Page) {}
-
-  async expectOpen() {
-    await expect(this.page.getByRole("heading", { name: "Make it yours" })).toBeVisible();
-  }
-
-  // The finished-basement photos (virtually staged).
-  photos() {
-    return this.page.locator("main img[alt*='staged' i], main img[alt*='virtually' i]");
-  }
-}
-
 export class PermitTab {
   constructor(readonly page: Page) {}
 
   // "Your permit set" until its readiness loads, then "3 things left before you can submit" or "Ready to submit".
   get heading() {
     return this.page.getByRole("heading", { level: 2, name: /^(Your permit set|\d+ things? left before you can submit|Ready to submit)$/ });
+  }
+
+  // The same heading, by the name the flow's journeys use.
+  get count() {
+    return this.heading;
   }
 
   async expectOpen() {

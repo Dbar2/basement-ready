@@ -486,10 +486,15 @@ describe("the chosen design in the older layout shape", () => {
 
 describe("furniture in the model", () => {
   const m = seedModel(sampleResult(), {}, NOW)!;
-  const d = chosen(m);
+  const furnished = chosen(m);
+  // The edits below start from the design with nothing in it.
+  const d: Design = { ...furnished, proposed: { ...furnished.proposed, furniture: [] } };
   const bed = room(d, "bedroom");
-  it("is seeded empty until it's placed, and saves", () => {
-    expect(d.proposed.furniture).toEqual([]);
+  it("is seeded furnished, every piece in a room of the design, and saves", () => {
+    expect(furnished.proposed.furniture.length).toBeGreaterThan(3);
+    const rooms = new Set(furnished.proposed.rooms.map((r) => r.id));
+    expect(furnished.proposed.furniture.every((f) => f.roomId && rooms.has(f.roomId))).toBe(true);
+    expect(furnished.proposed.furniture.some((f) => f.kind === "bed" && f.roomId === bed.id)).toBe(true);
     expect(ModelSchema.safeParse(m).success).toBe(true);
     // A model saved before furniture joined still opens.
     const old = { ...m, designs: m.designs.map((x) => ({ ...x, proposed: { ...x.proposed, furniture: undefined } })) };

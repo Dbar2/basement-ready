@@ -1,15 +1,18 @@
 // What the pictures of a scan are made from, read from storage: the best angles (server/views/angles.ts),
-// the design to draw (server/views/seed.ts until the shared model has one), and what SAM saw in each
-// angle's frame. The example reads the same things from its committed files.
+// the design to draw (the model's: saved on the workspace, or seeded from the scan, server/model/current.ts),
+// and what SAM saw in each angle's frame. The example reads the same things from its committed files.
+// The style deck uses the same angles, from each area's 3D while the scan is still measuring.
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { db, schema } from "../db";
+import { currentModel } from "../model/current";
+import { chosenDesign } from "../model/legacy";
 import type { Detection } from "../pipeline";
 import { keys, storage } from "../storage";
+import { basementFor, loadWorkspace } from "../workspace";
 import { assumedIntrinsics, pickAngles, pickDesignAngles, poseAt, viewsFromArea, viewsFromMesh, type Angle, type Spot, type View } from "./angles";
-import { designFromScan } from "./seed";
-import type { Design, Furniture } from "../model/types";
+import type { Design, Furniture, Model } from "../model/types";
 
 export const SAMPLE = "sample";
 
@@ -63,9 +66,9 @@ function sampleViews(result: any): View[] {
   return viewsFromMesh(at, pos, boxes, assumedIntrinsics(1280, 720));
 }
 
-// Every candidate view of a scan, with the design they're judged against. Cached per process: once a
-// scan is done its frames and 3D never change.
-const cache = new Map<string, Promise<{ views: View[]; furniture: Furniture[]; mainRoom: number | null } | null>>();
+// Every candidate view of a finished scan. Cached per process: once a scan is done its frames and 3D
+// never change.
+const cache = new Map<string, Promise<{ views: View[]; mainRoom: number | null } | null>>();
 function viewsOf(scanId: string) {
   if (!cache.has(scanId)) {
     cache.set(
@@ -73,8 +76,7 @@ function viewsOf(scanId: string) {
       (async () => {
         const result = await scanResult(scanId);
         if (!result) return null;
-        const furniture = designFromScan(result)?.proposed.furniture ?? [];
-        if (scanId === SAMPLE) return { views: sampleViews(result), furniture, mainRoom: result.mainRoom ?? null };
+        if (scanId === SAMPLE) return { views: sampleViews(result), mainRoom: result.mainRoom ?? null };
         const views: View[] = [];
         for (const room of (result.rooms ?? []) as { index: number; has3d: boolean; placement?: any }[]) {
           if (!room.has3d) continue;
@@ -82,7 +84,7 @@ function viewsOf(scanId: string) {
           if (!json) continue;
           views.push(...viewsFromArea({ room: room.index, scan: JSON.parse(json.toString("utf8")), depth, placement: room.placement ?? null, hasFrame: (n) => n < (result.frameCount ?? Infinity) }));
         }
-        return { views, furniture, mainRoom: result.mainRoom ?? null };
+        return { views, mainRoom: result.mainRoom ?? null };
       })().catch((err) => {
         cache.delete(scanId);
         throw err;
@@ -92,25 +94,62 @@ function viewsOf(scanId: string) {
   return cache.get(scanId)!;
 }
 
+type Pieces = Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[];
+
 // The best angles of every measured room of a scan, 4 to 6 each (perRoom), the design's room first.
-// Judged against the scan's design: none from inside its furniture, the ones that show it first.
-export async function bestAngles(scanId: string, perRoom = 5): Promise<Angle[]> {
+// Judged against a design when one is given: none from inside its furniture, the ones that show it first.
+export async function bestAngles(scanId: string, perRoom = 5, furniture: Pieces = []): Promise<Angle[]> {
   const v = await viewsOf(scanId);
   if (!v) return [];
-  const angles = pickAngles(v.views, perRoom, v.furniture);
+  const angles = pickAngles(v.views, perRoom, furniture);
   return angles.sort((a, b) => Number(b.room === v.mainRoom) - Number(a.room === v.mainRoom) || a.room - b.room);
 }
 
-// The design's own pictures: the `n` angles, from any room, that show it best, each piece in two or more.
-export async function designAngles(scanId: string, n = 5): Promise<Angle[]> {
-  const v = await viewsOf(scanId);
-  return v ? pickDesignAngles(v.views, n, v.furniture) : [];
+// Every candidate view for the style deck, which starts while the scan is still measuring: each area's
+// 3D as it's saved (no depth yet, so how much a frame sees is judged from the area's box); once the scan
+// is done, the rooms' own. Pick from them with pickAngles.
+export async function deckViews(scanId: string, areas: number): Promise<View[]> {
+  const result = await scanResult(scanId);
+  if (result?.rooms?.some((r: { has3d: boolean }) => r.has3d)) return (await viewsOf(scanId))?.views ?? [];
+  const views: View[] = [];
+  for (let i = 0; i < areas; i++) {
+    const json = await readStored(keys.area3d(scanId, i, "scan.json"));
+    if (json) views.push(...viewsFromArea({ room: i, scan: JSON.parse(json.toString("utf8")), depth: null, placement: null }));
+  }
+  return views;
 }
 
-// The design to picture: the scan's suggested layout, furnished, until the shared model holds one.
-export async function designFor(scanId: string): Promise<Design | null> {
-  const result = await scanResult(scanId);
-  return result ? designFromScan(result) : null;
+// One view of the scan by its angle id ("room-frame"), whether or not it was picked.
+export async function angleById(scanId: string, angleId: string): Promise<Angle | null> {
+  const v = await viewsOf(scanId);
+  const view = v?.views.find((x) => `${x.room}-${String(x.frame).padStart(4, "0")}` === angleId);
+  if (!view) return null;
+  const { depth: _, ...rest } = view;
+  return { ...rest, id: angleId, score: 0, why: "", shows: [] };
+}
+
+// The design's own pictures: the `n` angles, from any room, that show it best, each piece in two or more.
+export async function designAngles(scanId: string, n: number, furniture: Pieces): Promise<Angle[]> {
+  const v = await viewsOf(scanId);
+  return v ? pickDesignAngles(v.views, n, furniture) : [];
+}
+
+// The scan's model, as every page sees it: saved on its workspace, or seeded from the scan.
+export async function modelOf(scanId: string): Promise<Model | null> {
+  if (scanId === SAMPLE) {
+    const result = await scanResult(scanId);
+    return currentModel(result, {}, SAMPLE)?.model ?? null;
+  }
+  const a = await basementFor(scanId, { userId: null, claims: [] });
+  if (!a.basement || !a.result) return null;
+  const w = await loadWorkspace(a.basement.id);
+  return currentModel(a.result, w.state, scanId)?.model ?? null;
+}
+
+// The design to picture: one of the model's by id, or the chosen one.
+export async function designFor(scanId: string, designId?: string | null): Promise<Design | null> {
+  const model = await modelOf(scanId);
+  return (designId && model?.designs.find((d) => d.id === designId)) || chosenDesign(model);
 }
 
 type Box = { x: number; y: number; w: number; h: number };
