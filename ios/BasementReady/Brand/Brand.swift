@@ -1,7 +1,7 @@
 // Drawing Set (brand/ui.md): every screen is a sheet of an architect's drawing set. Forest ink on a
 // light sheet, hairlines instead of cards, one mint rectangle button per screen, mint as a fill only.
-// Type is Hanken Grotesk and Geist Mono (mono only for figures: 2.10 m, Wall 2 of 4, 0:42); until
-// their font files are in the app, the system's own sans and mono stand in.
+// Type is Hanken Grotesk and Geist Mono (mono only for figures: 2.10 m, Wall 2 of 4, 0:42), bundled in
+// Resources/Fonts; if a font ever fails to load, the system's own sans and mono stand in.
 import SwiftUI
 import UIKit
 
