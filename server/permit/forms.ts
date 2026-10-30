@@ -34,6 +34,11 @@ export type FormValues = {
 type FieldValue = string | boolean | { pick: string } | null;
 type FieldMap = Record<string, (v: FormValues) => FieldValue>;
 
+// Schedule 1, Section D, third declaration: the basis is "Homeowner" (the City of Waterloo's
+// declaration adds the 2024 Code's clause).
+export const HOMEOWNER_BASIS = "Homeowner: Building Code, Div. C 3.2.5.1.(3)(b)";
+const DESIGN_WORK = "Drawings for an additional residential unit in the basement of my own house (sheets A0 to A7).";
+
 const first = (v: FormValues) => v.owners[0]?.first ?? "";
 const last = (v: FormValues) => v.owners[0]?.last ?? "";
 const sqft = (v: FormValues) => (v.areaM2 ? String(Math.round(v.areaM2 * 10.7639)) : null);
@@ -62,8 +67,8 @@ export const FIELD_MAPS: Record<string, FieldMap> = {
     "Designer Email": (v) => v.email,
     "Designer Telephone number": (v) => v.phone,
     "Design Activities: House": () => true,
-    "Description of designers work": () => "Drawings for an additional residential unit in the basement of my own house (sheets A0 to A7).",
-    "For design work, Basis for exemption from registration and qualification": () => "Owner designing their own house: Building Code, Div. C 3.2.5.1.(3)(b)",
+    "Description of designers work": () => DESIGN_WORK,
+    "For design work, Basis for exemption from registration and qualification": () => HOMEOWNER_BASIS,
     "Designer Name for Declaration": (v) => v.ownerNames,
     "Date Signed by Designer": (v) => v.date,
   },
@@ -118,9 +123,9 @@ export const FIELD_MAPS: Record<string, FieldMap> = {
     "Designer Email": (v) => (v.ownerDraws ? v.email : null),
     "Designer Telephone number": (v) => (v.ownerDraws ? v.phone : null),
     "Design Activities": (v) => (v.ownerDraws ? true : null),
-    "Description of designers work": (v) => (v.ownerDraws ? "Drawings for an additional residential unit in the basement of my own house (sheets A0 to A7)." : null),
+    "Description of designers work": (v) => (v.ownerDraws ? DESIGN_WORK : null),
     "Declaration of Designer": (v) => (v.ownerDraws ? ({ pick: "The design work is exempt" }) : null),
-    "For design work, Basis for exemption from registration and qualification": (v) => (v.ownerDraws ? "Owner designing their own house: Building Code, Div. C 3.2.5.1.(3)(b)" : null),
+    "For design work, Basis for exemption from registration and qualification": (v) => (v.ownerDraws ? HOMEOWNER_BASIS : null),
     "Designer Name for Declaration": (v) => (v.ownerDraws ? v.ownerNames : null),
     "Date Signed by Designer": (v) => (v.ownerDraws ? v.date : null),
   },
@@ -247,6 +252,6 @@ export function permitRows(v: FormValues): [string, string | null][] {
     ["Proposed use", "Single detached dwelling with a second unit (2 units)"],
     ["Area of the new unit", v.areaM2 ? `${v.areaM2.toFixed(1)} m² (${Math.round(v.areaM2 * 10.7639)} sq ft)` : null],
     ["Bedrooms in the new unit", String(v.bedrooms)],
-    ["Designer", `${v.ownerNames}, owner, exempt under Div. C 3.2.5.1.(3)(b)`],
+    ["Designer", v.ownerDraws ? `Homeowner (${v.ownerNames}), exempt under Div. C 3.2.5.1.(3)(b)` : "Your BCIN designer fills in Schedule 1"],
   ];
 }

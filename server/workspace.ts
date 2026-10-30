@@ -25,6 +25,22 @@ export type Profile = z.infer<typeof ProfileSchema>;
 
 const point = z.tuple([z.number().min(0).max(1), z.number().min(0).max(1)]);
 const mm = z.number().min(0).max(5000).nullable().optional();
+const longMm = z.number().min(0).max(200_000).nullable().optional();
+
+// What the permit set needs that only the owner can give: tape numbers for the main walls and each
+// window, how far a wall with a new window is from the lot line, where the bedrooms are upstairs,
+// which sheets they've looked over, and a designer's details when one signs the drawings.
+const PermitSchema = z.object({
+  submittedAt: optText(30),
+  permitNumber: optText(40),
+  signer: z.enum(["owner", "designer"]).nullable().optional(),
+  walls: z.array(z.object({ id: text(60), mm: longMm })).max(20).optional(),
+  windows: z.array(z.object({ id: text(60), widthMm: mm, heightMm: mm, sillMm: mm })).max(20).optional(),
+  lotLines: z.array(z.object({ id: text(60), mm: longMm })).max(20).optional(),
+  upstairs: z.object({ bedrooms: z.array(z.object({ floor: z.number().int().min(1).max(3), at: point })).max(12), none: z.boolean().nullable().optional() }).optional(),
+  reviewed: z.array(z.object({ sheet: text(12), key: text(40) })).max(40).optional(),
+  designer: z.object({ name: optText(100), bcin: optText(12), firm: optText(120), firmBcin: optText(12), email: optText(120), phone: optText(30) }).optional(),
+});
 
 // Each section is replaced whole when the client saves it.
 export const StateSchema = z.object({
@@ -69,7 +85,7 @@ export const StateSchema = z.object({
     })
     .optional(),
   apply: z.record(z.string().max(80), z.object({ sentAt: optText(30) })).optional(),
-  permit: z.object({ submittedAt: optText(30), permitNumber: optText(40), signer: z.enum(["owner", "designer"]).nullable().optional() }).optional(),
+  permit: PermitSchema.optional(),
 });
 export type WorkspaceState = z.infer<typeof StateSchema>;
 
