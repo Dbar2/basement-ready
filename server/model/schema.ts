@@ -69,7 +69,13 @@ export const ModelSchema = z.object({
   version: z.literal(1),
   existing: ExistingSchema,
   designs: z.array(DesignSchema).max(8),
-  mood: z.object({ liked: z.array(id).max(200), disliked: z.array(id).max(200), style: z.string().max(40).nullable(), finishes: FinishesSchema.partial() }),
+  mood: z.object({
+    liked: z.array(id).max(200),
+    disliked: z.array(id).max(200),
+    style: z.string().max(40).nullable(),
+    finishes: FinishesSchema.partial(),
+    colours: z.record(z.string().max(20), z.string().max(40)).optional(),
+  }),
 });
 
 export const EditSchema = z.discriminatedUnion("op", [

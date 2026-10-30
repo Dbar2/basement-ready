@@ -3,6 +3,7 @@
 // services; replayed, it must come out exactly as it did then.
 import { readFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { Flow } from "./pages/Flow";
 import { Home } from "./pages/Home";
 import { WaitScreen } from "./pages/WaitScreen";
 import { Workspace } from "./pages/Workspace";
@@ -26,6 +27,7 @@ for (const take of TAKES) {
     journey.allowConsole(/ERR_FILE_NOT_FOUND @ blob:|WebKitBlobResource error/);
     const home = new Home(page);
     const wait = new WaitScreen(page);
+    const flow = new Flow(page);
     const ws = new Workspace(page);
 
     // ---- In: the start sheet and an upload, or a post the way the iPhone app sends a take ----
@@ -80,35 +82,62 @@ for (const take of TAKES) {
     // In record mode, only the calls that really went out make the times real-service times.
     journey.timing({ kind: "scan", take: take.id, mode, scanId, frames, uploadS, toAnswerS, realCalls: realCalls(started).length, milestones: milestones(events) });
 
-    // ---- Your plan: the verdict and the measured rooms ----
-    await journey.step("your plan", () => wait.seePlan());
-    await ws.expectOpen();
+    // ---- The flow: the plan check, a layout, the studio, the pictures, the book ----
     const scan = await api(page, `/api/scans/${scanId}`);
     const r = scan.result;
-    await expect(ws.plan().verdict).toHaveText(r.headline);
+    await journey.step("is this your basement?", async () => {
+      await wait.checkPlan();
+      await flow.plan().expectOpen();
+    });
+    if (r.capture?.photos) await journey.step("one tape number", () => flow.plan().tapeIfAsked("7.3"));
+    await journey.step("plan confirmed", () => flow.plan().confirm());
+    const layouts = flow.layouts();
+    await journey.step("layouts, with the decision", async () => {
+      await layouts.expectOpen();
+      await expect(layouts.decision).toContainText(r.headline);
+    });
+    await journey.step("a picture of each layout", () => layouts.pictures());
+    const picked = (await layouts.names())[0];
+    await journey.step(`${picked} picked`, () => layouts.pick(picked));
+    await journey.step("studio", async () => {
+      await layouts.designIt();
+      await flow.studio().expectOpen();
+    });
+    expect(await flow.studio().chosen()).toBe(picked);
+    await journey.step("pictures", async () => {
+      await flow.studio().toPictures();
+      await flow.pictures().expectOpen();
+    });
+    await journey.step("book", async () => {
+      await flow.pictures().toBook();
+      await ws.expectOpen();
+      await ws.book().expectOpen();
+    });
+    expect((await ws.book().facts())["The design"]).toBe(picked);
     await expect(page.locator("main.workspace")).toHaveAttribute("data-verdict", r.verdict);
+
+    // ---- The answer: the verdict and the measured rooms ----
     const withPlans = (r.rooms ?? []).filter((x: any) => x.plan);
     expect(withPlans.length, "rooms measured in 3D").toBeGreaterThan(0);
-    const floor = (await journey.step("floor plan", () => ws.plan().floorPlan()))!;
-    expect(floor.label).toMatch(new RegExp(`^Floor plan of the basement, ${withPlans.length} rooms?, `));
-
-    // ---- Ideas: the photos of what it could look like, once they've landed ----
-    await journey.step("ideas", async () => {
-      await ws.open("Ideas");
-      await ws.ideas().expectOpen();
+    await journey.step("the answer", async () => {
+      await ws.open("The answer");
+      await expect(ws.answer().verdict).toHaveText(r.headline);
     });
+    const floor = (await journey.step("floor plan", () => ws.answer().floorPlan()))!;
+    expect(floor.label).toMatch(new RegExp(`^Floor plan of the basement, ${withPlans.length} rooms?, `));
+    // The photos of what it could look like, once they've landed.
     await expect.poll(async () => (await api(page, `/api/scans/${scanId}`)).result?.concepts?.status, { timeout: mode === "record" ? 10 * 60_000 : 2 * 60_000 }).not.toBe("pending");
     const concepts = (await api(page, `/api/scans/${scanId}`)).result?.concepts;
 
-    // ---- Permit: the owner once, then the package, opened ----
+    // ---- Permit: the owner once, the readiness count, then the review copy, opened ----
     await journey.step("permit, owner asked once", async () => {
       await ws.open("Permit");
       await ws.fillProfileIfAsked();
       await ws.permit().expectOpen();
     });
-    const pdf = (await journey.step("permit package downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-${take.id}-permit.pdf`))))!;
+    const pdf = (await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-${take.id}-permit.pdf`))))!;
     expect(pdf.pageCount).toBeGreaterThanOrEqual(8);
-    expect(pdf.index).toMatchObject({ A0: "Cover and key plan", A2: "Existing basement plan", A3: "Proposed basement plan" });
+    expect(pdf.index).toMatchObject({ A0: "Cover, key plan and project data", A2: "Basement plan: unit 2", A3: "Main floor: unit 1 (schematic)" });
     expect(pdf.sheets.map((s) => s.number)).toEqual(Object.keys(pdf.index));
 
     await journey.step("money", async () => {

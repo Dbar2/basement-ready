@@ -20,7 +20,8 @@ import { photoSpaces, type PhotoSpaces } from "../plans";
 import type { Household } from "../rules";
 import { keys, storage } from "../storage";
 import { cardId, planDeck, type Card, type Deck, type Slot, type View } from "./deck";
-import { pickAngles, storedShots, type Shot } from "./angles";
+import { deckViews } from "../views/load";
+import { pickAngles, type Angle, type View as AngleView } from "../views/angles";
 import { boxes, toJpeg, type Box } from "./looks";
 import { cardPrompt } from "./styles";
 
@@ -108,10 +109,18 @@ export function pickViews(f: ViewInputs, max = MAX_VIEWS): ViewPick[] {
   return picks;
 }
 
-// The views from the 3D's best angles (server/ideas/angles.ts), keeping the window corner and the pipes
-// in the deck when the video saw them. Named by room when the rooms are known.
-export function anglePicks(shots: Shot[], detections: Find[], names: Map<number, string> = new Map(), max = MAX_VIEWS): ViewPick[] {
-  const chosen: { shot: Shot; title: string | null }[] = pickAngles(shots, max).map((shot) => ({ shot, title: null }));
+// The views from the 3D's best angles (server/views/angles.ts, the same picker as the design's pictures),
+// every room's best first, then another direction in the same rooms, keeping the window corner and the
+// pipes in the deck when the video saw them. Named by room when the rooms are known.
+export function deckAngles(views: AngleView[], max: number): Angle[] {
+  const byRoom = new Map<number, Angle[]>();
+  for (const a of pickAngles(views, 2)) byRoom.set(a.room, [...(byRoom.get(a.room) ?? []), a]);
+  const ranked = [...byRoom.values()].sort((a, b) => b[0].score - a[0].score);
+  return [0, 1].flatMap((round) => ranked.flatMap((r) => (r[round] ? [r[round]] : []))).slice(0, max);
+}
+
+export function anglePicks(views: AngleView[], detections: Find[], names: Map<number, string> = new Map(), max = MAX_VIEWS): ViewPick[] {
+  const chosen: { shot: Angle; title: string | null }[] = deckAngles(views, max).map((shot) => ({ shot, title: null }));
   const must: [string, (d: Find) => boolean][] = [
     ["By the window", (d) => d.kind === "window"],
     ["On your pipes", (d) => /rough-in|drain/i.test(d.label)],
@@ -125,7 +134,7 @@ export function anglePicks(shots: Shot[], detections: Find[], names: Map<number,
       already.title = title;
       continue;
     }
-    const alt = pickAngles(shots.filter((s) => seen.has(s.frame) && chosen.every((c) => c.shot.frame !== s.frame)), 1)[0];
+    const alt = deckAngles(views.filter((v) => seen.has(v.frame) && chosen.every((c) => c.shot.frame !== v.frame)), 1)[0];
     if (!alt) continue;
     const spare = [...chosen].reverse().find((c) => !c.title);
     if (chosen.length >= max && spare) chosen.splice(chosen.indexOf(spare), 1);
@@ -395,15 +404,14 @@ export async function runCards(scanId: string, opts: { lastAttempt: boolean; wor
   await db.delete(schema.scanEvents).where(and(eq(schema.scanEvents.scanId, scanId), inArray(schema.scanEvents.type, ["card", "cards"])));
   // The best angles come from the 3D. Its first area lands about a minute in: worth the wait, unless
   // there's no 3D this time.
-  const rooms = (f.rooms ?? []).filter((r) => r.has3d).map((r) => r.index);
   const wait3d = Date.now() + (opts.wait3dMs ?? 60_000);
-  let shots = await storedShots(scanId, rooms, MAX_ROOMS);
-  while (!shots.length && Date.now() < wait3d && (await threeDComing(scanId))) {
+  let fromThe3d = await deckViews(scanId, MAX_ROOMS);
+  while (!fromThe3d.length && Date.now() < wait3d && (await threeDComing(scanId))) {
     await sleep(2000);
-    shots = await storedShots(scanId, rooms, MAX_ROOMS);
+    fromThe3d = await deckViews(scanId, MAX_ROOMS);
   }
   const names = new Map(((scan.result as { rooms?: { index: number; name: string }[] } | null)?.rooms ?? []).map((r) => [r.index, r.name]));
-  const angled = shots.length ? anglePicks(shots, f.detections, names) : [];
+  const angled = fromThe3d.length ? anglePicks(fromThe3d, f.detections, names) : [];
   // Without the 3D (or too little of it), the frames themselves: the sharpest in each stretch.
   const detail = angled.length >= 3 ? new Map<number, number>() : await detailOf(scanId, f.frameCount, work);
   const views = await frameViews(scanId, f.rooms).catch(() => null);
@@ -427,21 +435,6 @@ export async function runCards(scanId: string, opts: { lastAttempt: boolean; wor
     if (!opts.lastAttempt) throw err;
     await event(scanId, scan.startedAt, "cards", "Cards failed", { status: "failed", slots: [] });
   }
-}
-
-// ---- A layout's real corner, finished the way their board reads ----
-
-export const cornerKey = (scanId: string, hash: string) => `scans/${scanId}/corners/${hash}.jpg`;
-
-// The same check as a card: up to two tries, kept only when SAM finds the windows, stairs and doors
-// where they were. Null when it never passes: the layout card then shows the real frame, unstaged.
-export async function makeCorner(scanId: string, frameN: number, tags: Slot["tags"], hash: string, work = realCardWork(scanId, null)): Promise<{ kept: boolean; checked: string } | null> {
-  const frame = await work.frame(frameN);
-  if (!frame) return null;
-  const { anchors } = await lookAt(frame, work);
-  const slot: Slot = { n: 0, frame: frameN, view: "", title: "", aspect: 1, tags };
-  const card = await makeCard(scanId, slot, frame, anchors, { ...work, save: (_n, jpeg) => storage.put(cornerKey(scanId, hash), jpeg, "image/jpeg") });
-  return card ? { kept: true, checked: card.checked } : null;
 }
 
 // ---- The example's deck, made once and shipped (scripts/sample-cards.ts) ----
