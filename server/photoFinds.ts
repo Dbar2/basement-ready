@@ -5,6 +5,7 @@
 // the room's 3D puts it. The finds keep the video's Detection shape: one photo is one frame.
 import { minConfidence } from "./live";
 import type { Detection } from "./pipeline";
+import { withoutNamed } from "./pointFinds";
 import { parseSam, type SamBox } from "./sam";
 
 type Concept = { concept: string; kind: string; label: string };
@@ -59,17 +60,20 @@ export function photoFinds(frame: number, c: Concept, raw: string, min = minConf
 
 // Every photo read for every thing, a few looks at a time, photo by photo, so each photo's finds land
 // together and in order. `landed` hears a photo's finds as soon as its last look is back. A look that
-// fails counts as nothing found, as a failed video concept does.
+// fails counts as nothing found, as a failed video concept does. `point` finds what SAM can't find by name
+// (server/pointFinds.ts), every photo at once from the start; its finds land with the photo's others, after them.
 export async function findInPhotos(
   count: number,
   concepts: Concept[],
   look: (concept: string, photo: number) => Promise<string>,
   landed: (photo: number, found: Detection[]) => Promise<void> = async () => {},
   atOnce = 8,
+  point?: (photo: number) => Promise<Detection[]>,
 ): Promise<Detection[]> {
   const tasks = Array.from({ length: count }, (_, n) => concepts.map((c, k) => ({ n, c, k }))).flat();
   const found: { k: number; d: Detection }[][] = Array.from({ length: count }, () => []);
   const left = new Array<number>(count).fill(concepts.length);
+  const pointed = Array.from({ length: count }, (_, n) => (point ? point(n).catch(() => []) : Promise.resolve([])));
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(atOnce, tasks.length) }, async () => {
@@ -78,6 +82,8 @@ export async function findInPhotos(
         const raw = await look(c.concept, n).catch(() => "");
         found[n].push(...photoFinds(n, c, raw).map((d) => ({ k, d })));
         if (--left[n] === 0) {
+          const named = found[n].map((x) => x.d);
+          found[n].push(...withoutNamed(await pointed[n], named).map((d) => ({ k: concepts.length, d })));
           const kept = new Set(withoutBeamsInside(found[n].map((x) => x.d)));
           found[n] = found[n].filter((x) => kept.has(x.d)).sort((a, b) => a.k - b.k);
           await landed(n, found[n].map((x) => x.d));
