@@ -20,6 +20,10 @@ for (const take of TAKES) {
     // Without the file in this tab (the app path), the wait screen asks for the server's copy of the video
     // every 2 s until it's saved (src/screens/LiveScan.tsx): those 404s are expected.
     journey.allowConsole(/status of 404 .*@ .*\/api\/scans\/[0-9a-f-]+\/video$/);
+    // Known, dev only: after an upload the wait screen plays the file through a blob URL that it makes in
+    // useMemo and revokes in an effect cleanup, which React's StrictMode runs once on mount
+    // (src/screens/LiveScan.tsx), so the video is blank under `pnpm dev`. Production builds don't do that.
+    journey.allowConsole(/ERR_FILE_NOT_FOUND @ blob:|WebKitBlobResource error/);
     const home = new Home(page);
     const wait = new WaitScreen(page);
     const ws = new Workspace(page);

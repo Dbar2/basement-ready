@@ -25,7 +25,8 @@ export type Take = {
 const media = (...p: string[]) => join(MEDIA_ROOT, ...p);
 
 // Same answers every time: the model's answers were recorded for exactly these. Any other question gets
-// its first option.
+// its first option. Every take uses the start sheet's own example address ("e.g. 120 Avondale"), so the
+// city's public data is the same for each.
 
 export const TAKES: Take[] = [
   {

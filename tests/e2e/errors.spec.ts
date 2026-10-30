@@ -13,6 +13,7 @@ test("a video it can't read: the wait screen says so", async ({ page, journey },
   mkdirSync(join(runDir, "inputs"), { recursive: true });
   writeFileSync(broken, "this is not a video\n".repeat(64));
   // The wait screen plays the video it was given; this one can't play, and the server never makes a copy.
+  // (WebKit also reports the dev-only revoked blob URL noted in takes.spec.ts.)
   journey.allowConsole(/Failed to load resource: the server responded with a status of 404|404 \(Not Found\)|WebKitBlobResource error/);
 
   const home = new Home(page);
@@ -25,12 +26,13 @@ test("a video it can't read: the wait screen says so", async ({ page, journey },
   }))!;
   const scanId = (await journey.step("broken video uploaded", () => sheet.upload(broken)))!;
   await journey.step("wait screen", () => wait.expectOpen());
+  // The test server runs one scan at a time, so this may wait behind a recorded take: the server's word
+  // first, then the screen must say it promptly.
+  await expect.poll(async () => (await api(page, `/api/scans/${scanId}`)).status, { timeout: 5 * 60_000, intervals: [2_000] }).toBe("error");
   await journey.step("error shown", async () => {
-    await expect(page.locator(".live-caption").first()).toHaveText(/Something went wrong reading your video/, { timeout: 90_000 });
+    await expect(page.locator(".live-caption").first()).toHaveText(/Something went wrong reading your video/, { timeout: 15_000 });
   });
-  const scan = await api(page, `/api/scans/${scanId}`);
-  expect(scan.status).toBe("error");
-  expect(scan.error).toBe("We couldn't read this video.");
+  expect((await api(page, `/api/scans/${scanId}`)).error).toBe("We couldn't read this video.");
 });
 
 // Session A ("journey and limits") adds a daily scan limit and its own screen. When it merges: lower the

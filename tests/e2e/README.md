@@ -8,7 +8,8 @@ pnpm test:e2e
 
 This runs `pnpm dev`'s two servers on their own ports (API 47873, web 47173, so a running `pnpm dev` is left alone), with a fresh database and storage under `tmp/e2e/<run>/`. Every call to Meta's models, the 3D service and public data is **replayed** from saved answers. A replay run makes no network calls, costs nothing, and comes out the same every time.
 
-- **Pacing:** each saved answer arrives after a quarter of the time it took when recorded. Whichever finished first then (the 3D or the photos) finishes first again, and the wait screen moves as it would. `E2E_PACE=0 pnpm test:e2e` answers at once, which times only our own work (ffmpeg, storage, the database, the browser).
+- **Pacing:** each saved answer arrives after a quarter of the time it took when recorded. Whichever finished first then (the 3D or the photos) finishes first again, and the wait screen moves as it would. `E2E_PACE=0 pnpm test:e2e` answers at once, which times only our own work (ffmpeg, storage, the database, the browser). It's for timing only: with instant answers the 3D lands before the photos start, the photos stage other frames, and those Muse calls show up as misses.
+- **3D areas:** the test server measures three at a time, as Modal did when the takes were recorded (`E2E_SCAN3D_PARALLEL=1` for a take recorded on the Mac runner).
 - **Chromium:** it runs the full Chromium build on the Mac's GPU. The headless shell draws WebGL in software, and the 3D views then block clicks for seconds.
 
 Each run writes to `tmp/e2e/<run>/`:
@@ -35,6 +36,16 @@ Each run writes to `tmp/e2e/<run>/`:
 Saved answers live in two folders:
 - `tests/fixtures/replay/`: committed and small. Right now it holds the two Waterloo permit forms the sample's package fills in.
 - `media/private/replay/` (gitignored, in the main checkout): recordings of real takes, including David's own footage. Each take's `takes/<id>.json` holds what it came out as when it was recorded (verdict, rooms and sizes, finds, questions, permit sheets, photo count). Replay must match it.
+
+## What's recorded (Oct 30)
+
+| Take | How it's sent | Where its answers live | Recorded outcome |
+|---|---|---|---|
+| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 1 fix", 3 rooms, 14-page permit set, 1 photo |
+| `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (43 MB, too big to commit) | "Looks like yes", 2 rooms (6.2 × 4.17 and 2.93 × 4.17 m; true 6.4 × 4.6 and 4.6 × 3.08), 14 pages, 2 photos |
+| Sample basement | The app's own sample | Needs only the two committed city forms | — |
+
+Both takes cost about $2.49 to record, together. The 3D ran on Modal.
 
 ## The journeys
 

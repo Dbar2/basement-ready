@@ -93,6 +93,8 @@ export function apiEnv(): Record<string, string> {
     // (the 3D or the photos, say) then goes the way it went when recorded, and the wait screen moves as
     // it would. E2E_PACE=0 answers at once, to time only our own work.
     REPLAY_PACE: process.env.E2E_PACE ?? "0.25",
+    // Areas measured side by side, as on Modal when the takes were recorded (1 for Mac-runner recordings).
+    SCAN3D_PARALLEL: process.env.E2E_SCAN3D_PARALLEL ?? "3",
     // Never used to reach anything: replay answers before a request is made.
     SCAN3D_URL: "http://scan3d.replay.invalid",
     SCAN3D_TOKEN: "replay",
