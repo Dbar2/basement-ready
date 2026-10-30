@@ -14,18 +14,23 @@ final class VoicePlayer: NSObject, AVAudioPlayerDelegate {
 
   var clipCount: Int { library.clips.count }
 
+  // The audio session is switched on and off away from the main thread: it can block for a moment.
+  private static let session = DispatchQueue(label: "audio-session", qos: .userInitiated)
+
   func activate() {
-    let audio = AVAudioSession.sharedInstance()
-    // Playback ignores the silent switch: the guide has to be heard in the basement.
-    try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
-    try? audio.setActive(true)
+    Self.session.async {
+      let audio = AVAudioSession.sharedInstance()
+      // Playback ignores the silent switch: the guide has to be heard in the basement.
+      try? audio.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+      try? audio.setActive(true)
+    }
   }
 
   func deactivate() {
     player?.stop()
     player = nil
     speaking = nil
-    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    Self.session.async { try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation) }
   }
 
   func request(_ cue: Cue, at t: Double) {

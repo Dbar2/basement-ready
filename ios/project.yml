@@ -48,6 +48,11 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+      configs:
+        # The phone runs Debug builds (no TestFlight), so they're optimised like Release: unoptimised Swift
+        # made the map and the camera handler several times slower.
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
     postCompileScripts:
       # Debug builds only: the Mac's Wi-Fi address at build time, so "Mac (dev)" points at this Mac.
       - name: Dev server address
@@ -65,16 +70,29 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.davidbarry.basementready.tests
         GENERATE_INFOPLIST_FILE: YES
+  # start → film (a replayed take) → send → result, with no person. Needs scripts/test-server.sh (make test starts it).
+  BasementReadyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [BasementReadyUITests]
+    dependencies:
+      - target: BasementReady
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.davidbarry.basementready.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: BasementReady
 schemes:
   BasementReady:
     build:
       targets:
         BasementReady: all
         BasementReadyTests: [test]
+        BasementReadyUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
-      targets: [BasementReadyTests]
+      targets: [BasementReadyTests, BasementReadyUITests]
     archive:
       config: Release

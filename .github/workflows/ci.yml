@@ -22,6 +22,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec tsc --noEmit -p .
       - run: pnpm exec tsc --noEmit -p tsconfig.e2e.json
+      - run: pnpm exec tsc --noEmit -p tsconfig.qa.json
       - run: pnpm exec vitest run
       - run: pnpm build
 

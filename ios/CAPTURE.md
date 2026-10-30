@@ -75,6 +75,10 @@ The web view keeps the scan's claim token (`ResultView.swift`), so the answers t
 - **`orientation`:** always `portrait`: the app is portrait-only, and the video is written with the 90° clockwise turn.
 - **Bad frames:** a record with a non-finite number is left out.
 
+## `sensors.jsonl` (kept on the phone, never sent)
+
+Five times a second, ARKit's feature points (`{"t":…,"p":[x,y,z,…]}`), and each plane as it's found, grows or goes (`{"t":…,"plane":"<id>","v":true,"m":[16],"b":[x,y,z,…]}`, `{"t":…,"gone":"<id>"}`), in ARKit's world. It lets the replay harness play a real take back exactly as the phone saw it (README.md). It isn't uploaded.
+
 ## `depth.bin` (LiDAR phones only)
 
 The phone's own `sceneDepth` maps (`ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)`), in a plain file:
@@ -112,7 +116,7 @@ The guide plays clips from `public/voice/<id>.mp3`, which are bundled at build t
 | Got a wall. | `wall_found` *new* |
 | The walls look good. | `walls_done` |
 | Got the ceiling. | `ceiling_done` |
-| New space. Take it slow. | `new_space` *new* |
+| New space. Take it slow. | `new_space` (that take only: the others ask to walk the walls again) |
 | That's looking good. | `looking_good` *new* |
 | Step back into a corner and hold still. | `wide` |
 | Got the wide shot. | `wide_done` |
@@ -122,7 +126,7 @@ The guide plays clips from `public/voice/<id>.mp3`, which are bundled at build t
 | Found a window. | `window_found` |
 | Found the furnace. | `furnace_found` |
 | Found the electrical panel. | `panel_found` *new* |
-| A door. Film what's through it too. | `door_found` *new* |
+| A door. Pan slowly through it from here. | `door_found` |
 | A duct / a beam. Mind your head. | `mind_head` *new* |
 | One minute left. / 30 seconds left. | `one_minute` *new* / `thirty_seconds` *new* |
 

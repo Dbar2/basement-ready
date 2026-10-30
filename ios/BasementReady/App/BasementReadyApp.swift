@@ -10,6 +10,7 @@ struct BasementReadyApp: App {
   var body: some Scene {
     WindowGroup {
       RootView()
+        .onAppear { OverlayRenderer.warmUp() }
     }
   }
 }
@@ -39,6 +40,10 @@ final class AppModel: ObservableObject {
     // An upload still going from last time.
     uploader.resume()
     if case .sending = uploader.state { stage = .sending(retry: nil) }
+    #if DEBUG
+    // Straight to filming (with "not sure" and no address), for the replay harness and screenshots.
+    if ProcessInfo.processInfo.arguments.contains("-BRFilmNow") { film(StartAnswers(address: nil, who: .unsure)) }
+    #endif
   }
 
   func film(_ answers: StartAnswers) {
@@ -87,5 +92,6 @@ struct RootView: View {
     .onChange(of: uploader.state) { _, state in
       if case .done(let scan) = state { app.stage = .result(scan) }
     }
+    .introFlow() // the launch animation, and the filming guide on the first launch
   }
 }

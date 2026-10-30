@@ -125,7 +125,8 @@ final class Uploader: ObservableObject {
     UserDefaults.standard.removeObject(forKey: Self.pendingKey)
     UserDefaults.standard.set(try? JSONEncoder().encode(created), forKey: ScanCreated.lastKey)
     // Sent: the take doesn't need to stay on the phone. Who it's for (and so the rent) went with it.
-    if let pending { try? FileManager.default.removeItem(at: pending.folder) }
+    // Debug builds keep the last few, so a real take can be copied off and replayed (ios/README.md).
+    if let pending { Take.sent(pending.folder) }
     state = .done(created)
   }
 }

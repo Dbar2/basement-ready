@@ -2,10 +2,11 @@
 // what SAM found. They fix what's off (drag a wall, name a room, add a wall we missed, drag a duct to
 // where it runs), can lock the scale with one tape number, and say yes. That plan is the model every
 // design is drawn on; then they pick a layout. A photo take's sizes are rough, so it asks for the one
-// tape number up front.
+// tape number up front. Muse Wonder's check of the plan against the take (server/planCheck.ts) lands a
+// little after the answer; its questions sit at the top of the side panel.
 import { useParams, useRouter } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { getScan } from "../api";
+import { getScan, type ScanResult } from "../api";
 import { FlowFoot, FlowHead, FlowLink } from "../flow/FlowNav";
 import { stepUrl } from "../flow/flow";
 import { editExisting, withTape } from "../../server/model/edit";
@@ -35,13 +36,29 @@ export function PlanConfirm() {
   const { scanId } = useParams({ from: "/scans/$scanId/plan" });
   const [model, setModel] = useState<Model | null>(null);
   const [photos, setPhotos] = useState(false);
+  const [check, setCheck] = useState<ScanResult["planCheck"]>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     document.title = "Is this your basement? | Basement Ready";
     loadModel(scanId)
       .then((r) => setModel(r.model))
       .catch((e) => setError(e instanceof Error ? e.message : "We couldn't open your plan."));
-    void getScan(scanId).then((s) => setPhotos(Boolean(s.result?.capture?.photos))).catch(() => {});
+    let stop = false;
+    let tries = 0;
+    const look = () =>
+      getScan(scanId)
+        .then((s) => {
+          if (stop) return;
+          setPhotos(Boolean(s.result?.capture?.photos));
+          setCheck(s.result?.planCheck ?? null);
+          // The check lands a little after the answer, when the take was watched: look again for a minute.
+          if (s.result?.watch && s.result.planCheck === undefined && ++tries < 15) setTimeout(look, 4000);
+        })
+        .catch(() => {});
+    void look();
+    return () => {
+      stop = true;
+    };
   }, [scanId]);
   return (
     <div className="flow-page studio-page">
@@ -53,7 +70,7 @@ export function PlanConfirm() {
           <FlowLink className="btn btn-primary" href={`/scans/${scanId}?tab=decision`}>See the answer</FlowLink>
         </div>
       ) : model ? (
-        <Confirm scanId={scanId} model={model} photos={photos} />
+        <Confirm scanId={scanId} model={model} photos={photos} check={check} />
       ) : (
         <>
           <div className="studio-wait flow-body" aria-busy="true">
@@ -66,7 +83,7 @@ export function PlanConfirm() {
   );
 }
 
-function Confirm({ scanId, model, photos }: { scanId: string; model: Model; photos: boolean }) {
+function Confirm({ scanId, model, photos, check }: { scanId: string; model: Model; photos: boolean; check: ScanResult["planCheck"] }) {
   const router = useRouter();
   const hist = useHistory<Existing>(model.existing);
   const e = hist.shown;
@@ -90,6 +107,10 @@ function Confirm({ scanId, model, photos }: { scanId: string; model: Model; phot
   // outside wall fixes them all.
   const longest = useMemo(() => [...e.walls].filter((w) => w.kind === "foundation").sort((a, b) => wallLength(b) - wallLength(a))[0] ?? null, [e.walls]);
   const askTape = photos && !taped && longest !== null;
+  // The plan check's questions still open: not answered, and about a room that's still there.
+  const [answered, setAnswered] = useState<number[]>([]);
+  const answer = (i: number) => setAnswered((a) => [...a, i]);
+  const questions = (check?.questions ?? []).map((q, i) => ({ q, i })).filter(({ q, i }) => !answered.includes(i) && (!q.roomId || e.rooms.some((r) => r.id === q.roomId)));
 
   const confirm = async () => {
     setBusy(true);
@@ -168,6 +189,35 @@ function Confirm({ scanId, model, photos }: { scanId: string; model: Model; phot
           <p className="muted">Ceiling {e.ceilingM ? <span className="mono">{fmtLength(e.ceilingM, units)}</span> : "not measured"}</p>
           <p className="side-eyebrow">{taped ? "Scaled to your tape." : e.scale.source === "arkit" ? "Measured by the iPhone app." : photos ? "From your photos, give or take a fifth." : "From the video, give or take a little."}</p>
         </div>
+
+        {questions.length > 0 && (
+          <div className="side-card plan-check" aria-live="polite">
+            <p className="mono side-eyebrow">Checked against your {photos ? "photos" : "video"}</p>
+            <h2>{questions.length === 1 ? "One thing to look at" : `${questions.length} things to look at`}</h2>
+            <ul className="plan-questions">
+              {questions.map(({ q, i }) => (
+                <li key={i}>
+                  <p>
+                    {q.question}
+                    {q.atS != null && <span className="mono muted"> {clock(q.atS)}</span>}
+                  </p>
+                  <div className="ws-chips">
+                    {q.kind === "name" && q.name && q.roomId ? (
+                      <button className="chip" onClick={() => (edit({ op: "set_room", roomId: q.roomId!, name: q.name! }), answer(i))}>Call it {q.name}</button>
+                    ) : q.kind === "missing_room" || q.kind === "merged_rooms" ? (
+                      <button className="chip" onClick={() => (setDrawing(true), answer(i))}>Yes, add a wall</button>
+                    ) : q.kind === "extra_room" && q.roomId ? (
+                      <button className="chip" onClick={() => (edit({ op: "remove_room", roomId: q.roomId! }), answer(i))}>Yes, take it out</button>
+                    ) : q.roomId ? (
+                      <button className="chip" onClick={() => setPicked({ kind: "room", id: q.roomId! })}>Show me</button>
+                    ) : null}
+                    <button className="link-quiet" onClick={() => answer(i)}>No, it's right</button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {askTape && !wall && (
           <div className="side-card tape-ask" key="tape">
@@ -258,6 +308,9 @@ function Confirm({ scanId, model, photos }: { scanId: string; model: Model; phot
     </>
   );
 }
+
+// 52 -> "0:52": where in the video to look.
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
 
 // A beam or duct turned to run the other way, across the room it's in.
 function turnAcross(e: Existing, f: Fixture): Edit {

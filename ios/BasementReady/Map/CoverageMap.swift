@@ -7,7 +7,7 @@
 // - Gaps: edges of the known floor with nothing behind them. Bright until the camera has looked at
 //   that spot at wall height; then quiet (seen, but open or too plain to find).
 // - Ceiling: a floor cell's ceiling counts as filmed once its spot on the ceiling was in the picture
-//   within 4 m, or feature points were found up there.
+//   within 6 m, or feature points were found up there.
 import Foundation
 import simd
 
@@ -75,6 +75,8 @@ struct MapSnapshot: Sendable {
   var pins: [MapPin] = []
   var boundsMin = SIMD2<Float>(-2.5, -2.5)
   var boundsMax = SIMD2<Float>(2.5, 2.5)
+  var floorY: Float? // world height of the floor and ceiling, once known
+  var ceilingY: Float?
   var stats = CoverageStats()
 }
 
@@ -87,7 +89,8 @@ final class CoverageMap {
     var edgesViewed: UInt8 = 0
   }
   private static let maxHeights = 24
-  private static let viewRange: Float = 4
+  // A room seen from its doorway counts, so a look reaches across a whole room.
+  private static let viewRange: Float = 6
   private static let wallHeightAboveFloor: Float = 1.0
   private static let wallReach = 3
 
@@ -312,6 +315,8 @@ final class CoverageMap {
 
   func snapshot() -> MapSnapshot {
     var s = MapSnapshot(cellSize: cellSize)
+    s.floorY = floorY
+    s.ceilingY = ceilingY
     s.trail = trail
     s.pins = pins
     s.walls = wallSegments.values.filter { $0.length >= 0.3 }

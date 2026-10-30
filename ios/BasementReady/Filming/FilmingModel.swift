@@ -1,10 +1,11 @@
-// One take: the camera, the map, the guide's line, the voice and the live finds, wired together.
+// One take: the camera, the coverage, the guide's line, the voice and the live finds, wired together.
 import Foundation
+import os
 import QuartzCore
 import UIKit
 import simd
 
-// Carries capture events from the capture queue to the model on the main actor.
+// Carries capture events from the capture queues to the model on the main actor.
 private final class EventRelay: @unchecked Sendable {
   weak var model: FilmingModel?
   func send(_ e: CaptureEvent) {
@@ -20,51 +21,62 @@ final class FilmingModel: ObservableObject {
     case stopped(String) // too short to keep, or the camera failed
   }
 
+  enum Source: Equatable {
+    case camera, replay, demo
+  }
+
   @Published private(set) var phase: Phase = .recording
   @Published private(set) var map: MapSnapshot?
   @Published private(set) var elapsed: Double = 0
+  @Published private(set) var cue: Cue = .start
   @Published private(set) var line: String = Cue.start.line
   @Published private(set) var tracking: Tracking = .initializing
   @Published private(set) var lidar = false
 
   let capture: CaptureSource
-  let arCapture: ARCapture? // the real camera, for the picture inset
+  let source: Source
   private let voice = VoicePlayer()
   private let live = LiveFinds()
   private var guide = Guide()
-  private var stateLine: Cue = .start
   private var shortNote: (Cue, Double)? // a line shown for a moment (a tap too early)
   private let server: URL
   private let onDone: (Take, String?) -> Void
+  private static let log = Logger(subsystem: "com.davidbarry.basementready", category: "take")
 
   init(server: URL, onDone: @escaping (Take, String?) -> Void) {
     self.server = server
     self.onDone = onDone
     let relay = EventRelay()
     #if DEBUG
-    if DemoCapture.requested || !ARCapture.isSupported {
+    if let take = ReplayCapture.requested {
+      capture = ReplayCapture(take: take) { e in relay.send(e) }
+      source = .replay
+    } else if DemoCapture.requested || !ARCapture.isSupported {
       capture = DemoCapture { e in relay.send(e) }
-      arCapture = nil
+      source = .demo
     } else {
-      let ar = ARCapture { e in relay.send(e) }
-      capture = ar
-      arCapture = ar
+      capture = ARCapture { e in relay.send(e) }
+      source = .camera
     }
     #else
-    let ar = ARCapture { e in relay.send(e) }
-    capture = ar
-    arCapture = ar
+    capture = ARCapture { e in relay.send(e) }
+    source = .camera
     #endif
     relay.model = self
   }
 
   var canFinish: Bool { elapsed >= Guide.minTake }
   var timeText: String { Self.clock(elapsed) + " / " + Self.clock(Guide.maxTake) }
-  var isDemo: Bool { arCapture == nil }
 
   static func clock(_ s: Double) -> String {
     let n = max(0, Int(s))
     return "\(n / 60):" + String(format: "%02d", n % 60)
+  }
+
+  // Which way the nearest spot nobody has filmed is, from where the camera faces (degrees, − is left).
+  var gapBearing: Float? {
+    guard let s = map?.stats, s.unseenGapM > 0.5, let b = s.unseenBearingDeg else { return nil }
+    return b
   }
 
   func start() {
@@ -90,7 +102,7 @@ final class FilmingModel: ObservableObject {
       lidar = u.depth
       map = u.map
       let (cue, say) = guide.step(GuideInput(elapsed: u.elapsed, tracking: u.tracking, stats: u.map.stats, still: u.still))
-      stateLine = cue
+      self.cue = cue
       let now = voice.now()
       for c in say { voice.request(c, at: now) }
       let speaking = voice.tick(at: now)
@@ -102,8 +114,10 @@ final class FilmingModel: ObservableObject {
       }
       if u.elapsed >= Guide.maxTake { finish() }
     case .interrupted:
+      Self.log.notice("BRTAKE interrupted at \(self.elapsed, privacy: .public) s")
       if canFinish { finish(note: "Filming stopped early, but there's enough to use.") } else { abandon("Filming stopped. The camera was interrupted before 30 seconds.") }
     case .failed(let why):
+      Self.log.error("BRTAKE failed at \(self.elapsed, privacy: .public) s: \(why, privacy: .public)")
       abandon(why)
     }
   }
@@ -133,6 +147,7 @@ final class FilmingModel: ObservableObject {
 
   private func finish(note: String? = nil) {
     guard phase == .recording else { return }
+    Self.log.notice("BRTAKE finished at \(self.elapsed, privacy: .public) s")
     phase = .saving
     live.stop()
     voice.deactivate()
@@ -162,6 +177,7 @@ final class FilmingModel: ObservableObject {
   }
 
   func discard() {
+    Self.log.notice("BRTAKE thrown away at \(self.elapsed, privacy: .public) s")
     abandon("")
   }
 }

@@ -12,7 +12,7 @@ final class LiveFindsTests: XCTestCase {
     let mark = CIImage(color: .white).cropped(to: CGRect(x: 0, y: 1140, width: 300, height: 300)) // sensor top-left
     CIContext().render(mark.composited(over: base), to: try XCTUnwrap(buffer))
 
-    let jpeg = try XCTUnwrap(ARCapture.jpeg(try XCTUnwrap(buffer), context: CIContext()))
+    let jpeg = try XCTUnwrap(ImageSampler.jpeg(try XCTUnwrap(buffer), rotationCW: 90, context: CIContext()))
     XCTAssertLessThan(jpeg.count, 400 * 1024)
     let source = try XCTUnwrap(CGImageSourceCreateWithData(jpeg as CFData, nil))
     let image = try XCTUnwrap(CGImageSourceCreateImageAtIndex(source, 0, nil))

@@ -76,11 +76,19 @@ struct StartView: View {
               onStart(StartAnswers(address: picked, who: who))
             } label: { Text("Start filming") }
               .buttonStyle(MintButton(enabled: who != nil))
-            Text("Start at the top of the stairs. Walk slowly along every wall. Up to 5 minutes.")
+            Text("Start at the stairs. Sweep each wall slowly, and pan into rooms from the door. Up to 5 minutes.")
               .font(Brand.body(15))
               .foregroundStyle(Brand.inkMuted)
               .multilineTextAlignment(.center)
               .frame(maxWidth: .infinity)
+            Button { IntroFlow.shared.openGuide() } label: {
+              Label("How to film", systemImage: "questionmark.circle")
+                .font(Brand.body(16, .semibold))
+                .foregroundStyle(Brand.accentText)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .accessibilityHint("Four short tips before you start")
             if let last, last.resultURL != nil {
               Button { onOpenLast(last) } label: {
                 Text("Your last scan")
