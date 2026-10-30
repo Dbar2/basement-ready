@@ -216,11 +216,12 @@ describe("price refresh", () => {
     expect(typeX.best?.sku).toBe("1000123456");
     expect(typeX.offers.map((o) => o.storeId).sort()).toEqual(["7011", "7105"]);
     const cat = clone(catalog) as any;
+    cat.items = cat.items.filter((i: any) => i.id !== "mixing_valve"); // as it was before the first refresh
     const before = cat.items.find((i: any) => i.id === "drywall_typex_58");
     apply(cat, picks, "2026-10-30");
     const after = cat.items.find((i: any) => i.id === "drywall_typex_58");
     expect([after.priceCAD, after.url, after.retailer]).toEqual([before.priceCAD, before.url, before.retailer]);
-    expect(after.offers.map((o: any) => o.priceCAD).sort()).toEqual([24.98, 25.48]);
+    expect(after.offers.filter((o: any) => o.retailer === "Home Depot Canada").map((o: any) => o.priceCAD).sort()).toEqual([24.98, 25.48]);
     // A new item with no match goes on the missing list, unpriced.
     expect(cat.missing.some((m: any) => m.id === "mixing_valve")).toBe(true);
     expect(cat.items.some((i: any) => i.id === "mixing_valve")).toBe(false);
