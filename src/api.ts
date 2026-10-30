@@ -86,7 +86,7 @@ export type Plan = {
   depthM: number;
   areaM2: number;
   ceilingHeightM: number | null;
-  openings: { kind: "window" | "door"; side: PlanSide; atM: number; widthM: number; detectionId: string }[];
+  openings: { kind: "window" | "door"; side: PlanSide; atM: number; widthM: number; detectionId: string; guess?: boolean }[];
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
   fixtures: { kind: "furnace" | "panel" | "water_heater" | "plumbing"; x: number; z: number; detectionId: string }[];
   scaleSource: "model" | "user_measurement" | "door" | "arkit";

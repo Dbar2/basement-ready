@@ -66,3 +66,54 @@ describe("plan labels", () => {
     expect(out.get("b")!.y).toBe(480);
   });
 });
+
+describe("each thing once, on a video take", () => {
+  const withFinds = (stairsId: string, extra: Partial<Plan>): Plan => ({ ...area(stairsId), ...extra });
+
+  it("keeps one of each mechanical, but a rough-in and a floor drain are two things", async () => {
+    const { oneOfEach } = await import("../../server/model/seed");
+    const f = (id: string, kind: "panel" | "plumbing" | "water_heater", detectionId: string) => ({ id, kind, at: [0, 0] as [number, number], detectionId });
+    const kept = oneOfEach(
+      [f("a", "panel", "panel-1"), f("b", "panel", "panel-2"), f("c", "plumbing", "rough-1"), f("d", "plumbing", "drain-1"), f("e", "water_heater", "wh-1")],
+      [
+        { id: "panel-1", label: "Electrical panel", framesSeen: 3 },
+        { id: "panel-2", label: "Electrical panel", framesSeen: 20 },
+        { id: "rough-1", label: "Plumbing rough-in", framesSeen: 5 },
+        { id: "drain-1", label: "Floor drain", framesSeen: 5 },
+        { id: "wh-1", label: "Water heater", framesSeen: 9 },
+      ],
+    );
+    expect(kept.map((x) => x.id).sort()).toEqual(["b", "c", "d", "e"]);
+  });
+
+  it("counts a beam seen twice at the same headroom once, but not two placed by the 3D", async () => {
+    const { oneOfEach } = await import("../../server/model/seed");
+    const beam = (id: string, heightM: number, guess: boolean) => ({ id, kind: "beam" as const, at: [0, 0] as [number, number], heightM, guess });
+    expect(oneOfEach([beam("a", 1.8, true), beam("b", 1.79, true), beam("c", 2.2, true)]).map((x) => x.id)).toEqual(["b", "c"]);
+    expect(oneOfEach([beam("a", 1.8, false), beam("b", 1.79, false)])).toHaveLength(2);
+  });
+
+  it("puts the same door seen from two areas in once, and a partly seen door's width is a guess", () => {
+    const door = { kind: "door" as const, side: "maxX" as const, atM: 1.5, widthM: 0.76, detectionId: "door-1", guess: true };
+    const e = existingFromScan({ rooms: [room(0, withFinds("s", { openings: [door] }), 0), room(1, withFinds("t", { openings: [{ ...door, side: "minX" }] }), 6.4)], mainRoom: 0 })!;
+    const doors = e.openings.filter((o) => o.kind === "door");
+    expect(doors).toHaveLength(1);
+    expect(doors[0].guess).toBe(true);
+  });
+
+  it("draws a wall two areas share once, though each area's box is a little off", () => {
+    // Room 1 runs to x = 3; room 2 starts 25 cm further on (its own box, placed by the rough pass).
+    const e = existingFromScan({ rooms: [room(0, area("s"), 0), room(1, area("t"), 6.25)], mainRoom: 0 })!;
+    const atThree = e.walls.filter((w) => Math.abs(w.a[0] - w.b[0]) < 1e-6 && w.a[0] > 2.5 && w.a[0] < 3.5);
+    expect(atThree).toHaveLength(1);
+  });
+
+  it("puts a window the video showed, but SAM missed, on the room's outside wall as a guess", () => {
+    const e = existingFromScan({ rooms: [room(0, area("s"), 0)], mainRoom: 0, watch: { rooms: [{ name: "Room 1", windows: [{ atS: 44, note: "high on the wall" }] }] } })!;
+    const win = e.openings.find((o) => o.kind === "window")!;
+    expect(win).toMatchObject({ guess: true, widthM: 0.8 });
+    expect(e.walls.find((w) => w.id === win.wallId)!.kind).toBe("foundation");
+    // Dragged into place, it's no longer a guess.
+    expect(editExisting(e, { op: "move_opening", openingId: win.id, offsetM: win.offsetM + 0.5 }).openings.find((o) => o.id === win.id)!.guess).toBe(false);
+  });
+});
