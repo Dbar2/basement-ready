@@ -76,7 +76,7 @@ export function useDesignCovers(scanId: string, designs: Design[]): { covers: Re
           const frame = await loadImage(angle.frameUrl);
           const r = await snap(angle, frame);
           set(id, { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", making: true });
-          postPicture(scanId, angle.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, finishes: current.finishes })
+          postPicture(scanId, angle.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, doors: r.doors, finishes: current.finishes })
             .then((p) => set(id, p.url ? { url: p.url, kind: p.kind, checked: p.checked, making: false } : { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", making: false }))
             .catch(() => set(id, { url: r.url, kind: "render", checked: "The 3D design drawn over your frame", making: false }));
         } catch {
@@ -93,7 +93,7 @@ export function useDesignCovers(scanId: string, designs: Design[]): { covers: Re
   const renderer =
     current && angle && solid !== null ? (
       <Suspense fallback={null}>
-        <AngleRenderer key="covers" design={current} solid={solid === "none" ? null : solid} ceilingM={ceilingM} size={[angle.intrinsics.width, angle.intrinsics.height]} onReady={onReady} scanId={scanId} />
+        <AngleRenderer key="covers" design={current} solid={solid === "none" ? null : solid} ceilingM={ceilingM} size={[angle.intrinsics.width, angle.intrinsics.height]} onReady={onReady} />
       </Suspense>
     ) : null;
   return { covers, renderer };

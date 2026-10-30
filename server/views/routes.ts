@@ -184,6 +184,7 @@ export function mountViews(app: Hono) {
         anchors: keep,
         known,
         hidden: cleanBoxes(meta.walls),
+        doors: cleanBoxes(meta.doors),
         finishes,
       },
       {
