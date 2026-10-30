@@ -113,6 +113,15 @@ export function pickFrames(
       .sort((a, b) => Number(inMain(b[0])) - Number(inMain(a[0])) || b[1].size - a[1].size)[0];
     if (still != null) picks.push({ frame: still, ...spaces.living });
     if (wide) picks.push(still != null ? { frame: wide[0], title: "Another angle", space: spaces.living.space } : { frame: wide[0], ...spaces.living });
+    // A photo take's photos are each a view, found things in them or not, and they come room by room:
+    // the open photo furthest from the picks so far (the later one, on a tie) is most likely another room.
+    if (gap < PICK_GAP && picks.length < MAX_PHOTOS) {
+      const away = (f: number) => Math.min(...picks.map((p) => Math.abs(p.frame - f)));
+      const other = Array.from({ length: frameCount }, (_, f) => f)
+        .filter((f) => !busy.has(f) && far(f))
+        .sort((a, b) => (picks.length ? away(b) - away(a) : 0) || Number(inMain(b)) - Number(inMain(a)) || b - a)[0];
+      if (other != null) picks.push(picks.length ? { frame: other, title: "Another angle", space: spaces.living.space } : { frame: other, ...spaces.living });
+    }
   }
   return picks.slice(0, MAX_PHOTOS);
 }

@@ -43,22 +43,30 @@
 .photo-remove:hover { background: rgb(15 42 30 / 0.8); }
 .photo-tools {
   position: absolute; left: 0; right: 0; bottom: 0;
-  display: flex; align-items: center; gap: 2px; padding: 18px 4px 4px;
-  background: linear-gradient(transparent, rgb(15 42 30 / 0.6));
+  padding: 18px 5px 5px;
+  background: linear-gradient(transparent, rgb(15 42 30 / 0.55));
 }
+/* The room chip: which room the photo is in, and a way to move it to another. */
 .photo-chip {
-  flex: 1 1 auto; min-width: 0; height: 28px; padding: 0 6px;
+  width: 100%; height: 28px; padding: 0 22px 0 9px;
   border: 0; border-radius: var(--radius-pill);
-  background: var(--color-card); color: var(--color-ink);
-  font: 600 12px/1 var(--font-body); text-overflow: ellipsis;
+  background: var(--color-card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%230f2a1e' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat right 8px center / 9px 6px;
+  color: var(--color-ink);
+  font: 600 12px/1 var(--font-body);
+  text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  appearance: none; -webkit-appearance: none;
 }
+/* Earlier and later in the room: small round buttons on the photo's sides. */
 .photo-move {
-  flex: none; width: 26px; height: 28px; padding: 0;
-  border: 0; border-radius: 6px; background: none; color: #fff;
+  position: absolute; top: calc(50% - 18px);
+  display: grid; place-items: center; width: 28px; height: 28px; padding: 0 0 2px;
+  border: 0; border-radius: 50%;
+  background: rgb(15 42 30 / 0.55); color: #fff;
   font-size: 20px; line-height: 1;
 }
-.photo-move:disabled { opacity: 0.3; cursor: default; }
-.photo-move:not(:disabled):hover { background: rgb(255 255 255 / 0.18); }
+.photo-move[data-side="earlier"] { left: 5px; }
+.photo-move[data-side="later"] { right: 5px; }
+.photo-move:hover { background: rgb(15 42 30 / 0.8); }
 .photo-add {
   width: 100%; aspect-ratio: 1; display: grid; place-content: center; gap: 2px;
   border: 1.5px dashed var(--color-border); border-radius: var(--radius-1);
@@ -69,10 +77,16 @@
 .photo-another { justify-self: start; }
 .photo-foot .photo-count { flex: 1 1 auto; margin: 0; color: var(--color-ink-muted); }
 .photo-foot .btn-primary { margin-left: auto; }
-@media (max-width: 720px) {
+@media (max-width: 719px) {
   .photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .photo-foot .photo-count { flex-basis: 100%; }
-  .photo-foot .btn-primary { flex: 1 1 auto; margin-left: 0; justify-content: center; }
+  .photo-chip { font-size: 11.5px; padding: 0 18px 0 7px; background-position: right 6px center; }
+  /* Three ways in: filming leads on its own row; the video and the photos share the next. */
+  .sheet .sheet-actions:has(> .btn:nth-of-type(3)) { flex-wrap: wrap; }
+  .sheet .sheet-actions:has(> .btn:nth-of-type(3)) > .btn-primary { flex-basis: 100%; }
+  .sheet .sheet-actions:has(> .btn:nth-of-type(3)) > .btn-ghost { flex: 1 1 0; }
+  .sheet .photo-foot { flex-wrap: wrap; gap: 8px; }
+  .sheet .photo-foot .photo-count { flex-basis: 100%; }
+  .sheet .photo-foot .btn-primary { flex: 1 1 100%; margin-left: 0; }
 }
 
 /* ---------- wait screen: the photos, each with its finds ---------- */
@@ -114,7 +128,7 @@
 .live-main:has(> .live-video[data-photos="true"][data-role="main"]) > .live-tile[data-role="inset"] { bottom: 84px; }
 .live-main > .live-tile[data-role="inset"] .photo-thumbs,
 .live-main > .live-tile[data-role="inset"] .photo-boxes b { display: none; }
-@media (max-width: 720px) {
+@media (max-width: 719px) {
   .photo-thumbs button { width: 44px; height: 44px; }
   .live-video[data-photos="true"] .live-caption { bottom: 64px; }
 }

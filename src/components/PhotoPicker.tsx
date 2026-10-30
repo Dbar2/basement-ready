@@ -115,6 +115,12 @@ export function PhotoPicker({ take, onChange, onAdd, onRemove, onBack, note }: P
                   <button className="photo-remove" aria-label={`Remove photo ${number.get(p.id)}`} onClick={() => onRemove(p)}>
                     <svg viewBox="0 0 24 24" aria-hidden><path d="M7 7l10 10M17 7L7 17" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" /></svg>
                   </button>
+                  {i > 0 && (
+                    <button className="photo-move" data-side="earlier" aria-label={`Move photo ${number.get(p.id)} earlier`} onClick={() => move(p, -1)}>‹</button>
+                  )}
+                  {i < mine.length - 1 && (
+                    <button className="photo-move" data-side="later" aria-label={`Move photo ${number.get(p.id)} later`} onClick={() => move(p, 1)}>›</button>
+                  )}
                   <div className="photo-tools">
                     <select className="photo-chip" value={r} aria-label={`Room for photo ${number.get(p.id)}`} onChange={(e) => setRoom(p, e.target.value)}>
                       {take.rooms.map((n, k) => (
@@ -122,8 +128,6 @@ export function PhotoPicker({ take, onChange, onAdd, onRemove, onBack, note }: P
                       ))}
                       {take.rooms.length < MAX_ROOMS && <option value="new">New room</option>}
                     </select>
-                    <button className="photo-move" aria-label={`Move photo ${number.get(p.id)} earlier`} disabled={i === 0} onClick={() => move(p, -1)}>‹</button>
-                    <button className="photo-move" aria-label={`Move photo ${number.get(p.id)} later`} disabled={i === mine.length - 1} onClick={() => move(p, 1)}>›</button>
                   </div>
                 </li>
               ))}

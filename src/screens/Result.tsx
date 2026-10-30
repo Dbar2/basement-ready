@@ -23,15 +23,17 @@ export const STATUS = {
   designer_checks: "your designer checks",
 } as const;
 
-function Proof({ scanId, d }: { scanId: string; d: Detection }) {
+// Where SAM saw it: a second of the video, or one of a photo take's photos.
+function Proof({ scanId, d, photos }: { scanId: string; d: Detection; photos?: boolean }) {
+  const where = photos ? `photo ${d.frame + 1}` : `${d.seconds.toFixed(1)} s`;
   return (
     <figure className="proof">
-      <img src={frameUrl(scanId, d.frame)} alt={`${d.label} in your video at ${d.seconds.toFixed(1)} seconds`} loading="lazy" />
+      <img src={frameUrl(scanId, d.frame)} alt={photos ? `${d.label} in your photo ${d.frame + 1}` : `${d.label} in your video at ${d.seconds.toFixed(1)} seconds`} loading="lazy" />
       <span
         className="proof-box"
         style={{ left: `${d.box.x * 100}%`, top: `${d.box.y * 100}%`, width: `${d.box.w * 100}%`, height: `${d.box.h * 100}%` }}
       />
-      <figcaption className="mono">{d.label} · {d.seconds.toFixed(1)} s</figcaption>
+      <figcaption className="mono">{d.label} · {where}</figcaption>
     </figure>
   );
 }
@@ -146,7 +148,7 @@ export function PlanTab(props: { r: ScanResult; scanId: string; busyRule: string
                   </p>
                 </div>
                 <div className="fix-proof">
-                  {g.evidence.slice(0, 2).map((id) => byId.get(id)).filter(Boolean).map((d) => <Proof key={d!.id} scanId={scanId} d={d!} />)}
+                  {g.evidence.slice(0, 2).map((id) => byId.get(id)).filter(Boolean).map((d) => <Proof key={d!.id} scanId={scanId} d={d!} photos={Boolean(r.capture?.photos)} />)}
                 </div>
                 <span className="cost mono">{range(g.costLow, g.costHigh) ?? "Price on quote"}</span>
               </li>
