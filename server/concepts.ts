@@ -1,13 +1,18 @@
 // "What it could look like" as photos: up to four of the homeowner's own frames, finished by Muse
-// Image, then checked by SAM 3.1 so a window or the stairs never move in the picture. Runs as its
-// own job after the answer, so nobody waits for it. Every picture is labelled "virtually staged".
+// Image, then checked by SAM 3.1 so a window or the stairs never move in the picture. Every picture is
+// labelled "virtually staged".
+//
+// All of them render at once, each is checked on its own, and each is announced the moment it lands.
+// The job that starts them early, as soon as SAM's finds are in, is server/photos.ts.
 import { execFile } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { museEdit, samImage } from "./meta";
 import type { Detection } from "./pipeline";
+import { photoSpaces, type PhotoSpaces } from "./plans";
+import type { Household } from "./rules";
 import { parseSam } from "./sam";
 import { half } from "./scan3d";
 import { keys, storage } from "./storage";
@@ -16,6 +21,7 @@ const run = promisify(execFile);
 const FPS = 5;
 
 export type Concept = { n: number; frame: number; title: string; kept: boolean; checked: string };
+export type Concepts = { status: "pending" | "done" | "failed"; items: Concept[] };
 
 type Box = { x: number; y: number; w: number; h: number };
 type FramePick = { frame: number; title: string; space: string };
@@ -25,10 +31,12 @@ export type FrameView = { depthM: number; tilt: number; area: number };
 
 export const MAX_PHOTOS = 4;
 const LEVEL = 0.35; // |forward.y| under this: a normal photo, not the ceiling or the floor
+const WIDE_S = 1.5; // the still wide shot: frames this close to it
 
 // Which frames to finish: where they said what they want, the room with the window as a bedroom, a wide
 // view of the main living space, and another room or angle. With the 3D, each pick is the widest level
-// frame near it (the one that sees farthest), so photos show the room, not a close-up.
+// frame near it (the one that sees farthest), so photos show the room, not a close-up. `spaces` says
+// what each photo shows, from what they said they want it to be.
 export function pickFrames(
   detections: Pick<Detection, "kind" | "frame" | "framesSeen" | "box" | "track">[],
   vision: { rooms: { room: string; atSeconds: number | null }[] } | null | undefined,
@@ -37,6 +45,7 @@ export function pickFrames(
   mainRoom: { startS: number; endS: number } | null = null,
   views: Map<number, FrameView> | null = null,
   wideAt: number | null = null, // seconds: when they held still in a corner for a wide shot
+  spaces: PhotoSpaces = photoSpaces(null, household as Household),
 ): FramePick[] {
   const picks: FramePick[] = [];
   const far = (f: number) => picks.every((p) => Math.abs(p.frame - f) >= 25);
@@ -59,10 +68,7 @@ export function pickFrames(
       (views && widest(whole.map((t) => t[0]).filter((f) => views.has(f)))) ??
       [...whole].sort((a, b) => a[3] * a[4] - b[3] * b[4]).find((t) => far(t[0]) && t[3] > 0.06)?.[0] ??
       window.frame;
-    if (far(frame)) {
-      const forParent = household === "relative";
-      picks.push({ frame, title: forParent ? "A bedroom for your parent" : "The bedroom", space: forParent ? "calm bedroom for an older parent" : "bedroom" });
-    }
+    if (far(frame)) picks.push({ frame, ...spaces.bedroom });
   }
   const inMain = (f: number) => !mainRoom || (f / FPS >= mainRoom.startS && f / FPS < mainRoom.endS);
   // Frames with the furnace or panel in them stay a service room; frames with something filling the
@@ -78,31 +84,37 @@ export function pickFrames(
   if (views) {
     const open = [...views.keys()].filter((f) => !busy.has(f));
     // The still wide shot from a corner is made for this photo.
-    const still = wideAt == null ? null : widest(open.filter((f) => Math.abs(f / FPS - wideAt) <= 1.5));
+    const still = wideAt == null ? null : widest(open.filter((f) => Math.abs(f / FPS - wideAt) <= WIDE_S));
     const living = still ?? widest(open.filter(inMain)) ?? widest(open);
-    if (living != null) picks.push({ frame: living, title: "Living and kitchen", space: "open living room with a small modern kitchen" });
+    if (living != null) picks.push({ frame: living, ...spaces.living });
     // Another area if there is one, else the main room from another side.
     const areas = new Set(picks.map((p) => views.get(p.frame)?.area));
     const other = widest(open.filter((f) => !areas.has(views.get(f)!.area))) ?? widest(open);
     if (other != null) {
       const elsewhere = !areas.has(views.get(other)!.area);
-      picks.push(
-        elsewhere
-          ? { frame: other, title: "The other room", space: "cosy den with a small home office" }
-          : { frame: other, title: "Another angle", space: "open living room with a small modern kitchen" },
-      );
+      picks.push(elsewhere ? { frame: other, title: "The other room", space: "cosy den with a small home office" } : { frame: other, title: "Another angle", space: spaces.living.space });
     }
   } else if (picks.length < MAX_PHOTOS) {
-    // Without the 3D: several things in view, none of them filling the frame, in the main room first.
+    // Without the 3D: the still wide shot when there is one, the frame nearest the middle of the hold.
+    const at = wideAt == null ? null : Math.round(wideAt * FPS);
+    const still =
+      at == null
+        ? undefined
+        : Array.from({ length: 2 * WIDE_S * FPS + 1 }, (_, i) => at + (i % 2 ? (i + 1) / 2 : -i / 2))
+            .filter((f) => f >= 0 && f < frameCount)
+            .find((f) => !busy.has(f) && far(f));
+    // Else several things in view, none of them filling the frame, in the main room first.
     const wide = [...kinds.entries()]
-      .filter(([f]) => !busy.has(f) && far(f))
+      .filter(([f]) => !busy.has(f) && far(f) && (still == null || Math.abs(f - still) >= 25))
       .sort((a, b) => Number(inMain(b[0])) - Number(inMain(a[0])) || b[1].size - a[1].size)[0];
-    if (wide) picks.push({ frame: wide[0], title: "Living and kitchen", space: "open living room with a small modern kitchen" });
+    if (still != null) picks.push({ frame: still, ...spaces.living });
+    if (wide) picks.push(still != null ? { frame: wide[0], title: "Another angle", space: spaces.living.space } : { frame: wide[0], ...spaces.living });
   }
   return picks.slice(0, MAX_PHOTOS);
 }
 
-// How far each kept frame of the 3D sees and how level it is, from the stored scans.
+// How far each kept frame of the 3D sees and how level it is, from the stored scans. Areas whose 3D
+// isn't saved yet are skipped, so this also works part-way through a scan.
 export async function frameViews(scanId: string, rooms: { index: number; has3d: boolean }[]): Promise<Map<number, FrameView> | null> {
   const views = new Map<number, FrameView>();
   for (const room of rooms.filter((r) => r.has3d)) {
@@ -126,15 +138,18 @@ export async function frameViews(scanId: string, rooms: { index: number; has3d: 
   return views.size ? views : null;
 }
 
-export function conceptPrompt(space: string, style: string) {
+export function conceptPrompt(space: string, style: string, wants = "") {
   return [
     `Renovate this unfinished basement photo into a finished ${space}.`,
     "Keep the exact same camera angle, room shape and ceiling height.",
     "Keep every window, door and stair exactly where it is and the same size. Do not add, remove or move any window, door or stair.",
     "Finish with smooth drywall walls and ceiling in warm white, light oak vinyl plank floor, slim recessed lights, simple modern furniture.",
+    wants ? `The homeowner wants: "${wants.replace(/["\n]/g, " ")}".` : "",
     style ? `Feel: ${style}.` : "Feel: bright, calm and uncluttered.",
     "Photorealistic interior photo.",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 }
 
 const iou = (a: Box, b: Box) => {
@@ -165,51 +180,131 @@ async function read(key: string) {
   return Buffer.concat(parts);
 }
 
-export async function renderConcepts(scanId: string, result: any): Promise<Concept[]> {
-  const main = (result.rooms ?? []).find((r: { index: number }) => r.index === result.mainRoom) ?? null;
-  const views = await frameViews(scanId, result.rooms ?? []).catch(() => null);
-  const picks = pickFrames(result.detections ?? [], result.vision, result.household ?? "unsure", result.frameCount ?? 0, main, views, result.capture?.wideAt ?? null);
-  const work = join(tmpdir(), "basement-ready", `concepts-${scanId}`);
-  mkdirSync(work, { recursive: true });
-  const out: Concept[] = [];
+// A JPEG's width and height, from its frame header.
+export function jpegSize(jpeg: Buffer): [number, number] | null {
+  let o = 2;
+  while (o + 9 < jpeg.length && jpeg[o] === 0xff) {
+    const marker = jpeg[o + 1];
+    const len = jpeg.readUInt16BE(o + 2);
+    if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) return [jpeg.readUInt16BE(o + 7), jpeg.readUInt16BE(o + 5)];
+    o += 2 + len;
+  }
+  return null;
+}
+
+// Muse Image's picture back to the frame's own size, as a JPEG, so boxes line up and the page loads fast.
+async function toFrameJpeg(img: Buffer, w: number, h: number): Promise<Buffer> {
+  const work = mkdtempSync(join(tmpdir(), "br-photo-"));
   try {
-    for (const p of picks) {
-      const frame = await read(keys.frame(scanId, p.frame));
-      if (!frame) continue;
-      writeFileSync(join(work, "in.jpg"), frame);
-      const { stdout } = await run("ffprobe", ["-v", "error", "-show_entries", "stream=width,height", "-of", "csv=p=0", join(work, "in.jpg")]);
-      const [w, h] = stdout.trim().split(",").map(Number);
-      // What SAM saw in the original frame: these must survive the makeover.
-      const anchors = (result.detections as Detection[])
-        .filter((d) => d.kind === "window" || d.kind === "stairs")
-        .flatMap((d) => d.track.filter((t) => t[0] === p.frame).map((t) => ({ kind: d.kind, box: { x: t[1], y: t[2], w: t[3], h: t[4] } })));
-      let kept = false;
-      let checked = "Room shape kept";
-      for (let attempt = 0; attempt < 2 && !kept; attempt++) {
-        const img = await museEdit(frame, "image/jpeg", conceptPrompt(p.space, result.vision?.style ?? ""), `${w}x${h}`);
-        writeFileSync(join(work, "out.bin"), img);
-        // Back to the frame's own size, as a JPEG, so boxes line up and the page loads fast.
-        await run("ffmpeg", ["-y", "-loglevel", "error", "-i", join(work, "out.bin"), "-vf", `scale=${w}:${h}`, "-q:v", "3", join(work, "out.jpg")]);
-        const jpeg = readFileSync(join(work, "out.jpg"));
-        if (anchors.length === 0) {
-          kept = true;
-        } else {
-          const kinds = [...new Set(anchors.map((a) => a.kind))];
-          const found = await Promise.all(kinds.map(async (k) => ({ k, boxes: await boxesIn(jpeg, k === "window" ? "basement window" : "staircase") })));
-          kept = kinds.every((k) => keptInPlace(anchors.filter((a) => a.kind === k).map((a) => a.box), found.find((f) => f.k === k)!.boxes));
-          checked = kept
-            ? `${kinds.map((k) => (k === "window" ? "Windows" : "Stairs")).join(" and ")} kept where they are · checked by SAM 3.1`
-            : "A window or the stairs moved in this picture: treat it as a mood, not a plan";
-        }
-        if (kept || attempt === 1) {
-          const n = out.length + 1;
-          await storage.put(keys.concept(scanId, n), jpeg, "image/jpeg");
-          out.push({ n, frame: p.frame, title: p.title, kept, checked });
-        }
-      }
-    }
+    writeFileSync(join(work, "in.bin"), img);
+    await run("ffmpeg", ["-y", "-loglevel", "error", "-i", join(work, "in.bin"), "-vf", `scale=${w}:${h}`, "-q:v", "3", join(work, "out.jpg")]);
+    return readFileSync(join(work, "out.jpg"));
   } finally {
     rmSync(work, { recursive: true, force: true });
   }
-  return out;
+}
+
+export type PhotoWork = {
+  frame: (n: number) => Promise<Buffer | null>;
+  edit: (frame: Buffer, prompt: string, size: string) => Promise<Buffer>;
+  resize: (img: Buffer, w: number, h: number) => Promise<Buffer>;
+  boxes: (jpeg: Buffer, concept: string) => Promise<Box[]>;
+  save: (n: number, jpeg: Buffer) => Promise<void>;
+  landed: (c: Concept) => Promise<void>;
+};
+
+export const realWork = (scanId: string, landed: PhotoWork["landed"]): PhotoWork => ({
+  frame: (n) => read(keys.frame(scanId, n)),
+  edit: (frame, prompt, size) => museEdit(frame, "image/jpeg", prompt, size),
+  resize: toFrameJpeg,
+  boxes: boxesIn,
+  save: (n, jpeg) => storage.put(keys.concept(scanId, n), jpeg, "image/jpeg"),
+  landed,
+});
+
+type Anchor = { kind: string; box: Box };
+
+// Every pick at once. Each tries Muse Image up to twice until SAM finds its windows and stairs where
+// they were, and is saved and announced as soon as it's done, whatever the others are doing. One
+// photo failing never costs the others; only when every one fails is it an error (and retried).
+export async function renderPicks(picks: FramePick[], anchorsFor: (frame: number) => Anchor[], prompt: (space: string) => string, work: PhotoWork): Promise<Concept[]> {
+  const errors: unknown[] = [];
+  const done = await Promise.all(
+    picks.map(async (p, i): Promise<Concept | null> => {
+      try {
+        return await renderPick(p, i + 1, anchorsFor(p.frame), prompt, work);
+      } catch (err) {
+        errors.push(err);
+        console.error(`[concepts] photo ${i + 1}: ${err instanceof Error ? err.message : err}`);
+        return null;
+      }
+    }),
+  );
+  if (picks.length && errors.length === picks.length) throw errors[0];
+  return done.filter((c): c is Concept => c !== null);
+}
+
+async function renderPick(p: FramePick, n: number, anchors: Anchor[], prompt: (space: string) => string, work: PhotoWork): Promise<Concept | null> {
+  const frame = await work.frame(p.frame);
+  if (!frame) return null;
+  const [w, h] = jpegSize(frame) ?? [1280, 720];
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const jpeg = await work.resize(await work.edit(frame, prompt(p.space), `${w}x${h}`), w, h);
+    let kept = true;
+    let checked = "Room shape kept";
+    if (anchors.length) {
+      const kinds = [...new Set(anchors.map((a) => a.kind))];
+      const found = await Promise.all(kinds.map(async (k) => ({ k, boxes: await work.boxes(jpeg, k === "window" ? "basement window" : "staircase") })));
+      kept = kinds.every((k) => keptInPlace(anchors.filter((a) => a.kind === k).map((a) => a.box), found.find((f) => f.k === k)!.boxes));
+      checked = kept
+        ? `${kinds.map((k) => (k === "window" ? "Windows" : "Stairs")).join(" and ")} kept where they are · checked by SAM 3.1`
+        : "A window or the stairs moved in this picture: treat it as a mood, not a plan";
+    }
+    if (kept || attempt === 1) {
+      await work.save(n, jpeg);
+      const c = { n, frame: p.frame, title: p.title, kept, checked };
+      await work.landed(c);
+      return c;
+    }
+  }
+  return null;
+}
+
+// What the photos are made from. With the answer out, its own reading; before that, the scan's finds
+// as they were streamed, the still wide shot, who it's for and what they said they want.
+export type PhotoInputs = {
+  detections: Detection[];
+  vision: { rooms: { room: string; atSeconds: number | null }[]; style?: string } | null;
+  household: Household;
+  frameCount: number;
+  rooms: { index: number; has3d: boolean }[];
+  mainRoom: { startS: number; endS: number } | null;
+  wideAt: number | null;
+  plans: string | null;
+};
+
+const anchorsIn = (detections: Detection[]) => (frame: number): Anchor[] =>
+  detections
+    .filter((d) => d.kind === "window" || d.kind === "stairs")
+    .flatMap((d) => d.track.filter((t) => t[0] === frame).map((t) => ({ kind: d.kind, box: { x: t[1], y: t[2], w: t[3], h: t[4] } })));
+
+export async function renderConcepts(scanId: string, result: any, landed: PhotoWork["landed"] = async () => {}): Promise<Concept[]> {
+  const inputs: PhotoInputs = {
+    detections: result.detections ?? [],
+    vision: result.vision ?? null,
+    household: result.household ?? "unsure",
+    frameCount: result.frameCount ?? 0,
+    rooms: result.rooms ?? [],
+    mainRoom: (result.rooms ?? []).find((r: { index: number }) => r.index === result.mainRoom) ?? null,
+    wideAt: result.capture?.wideAt ?? null,
+    plans: result.plans ?? null,
+  };
+  return renderFrom(scanId, inputs, realWork(scanId, landed));
+}
+
+export async function renderFrom(scanId: string, f: PhotoInputs, work: PhotoWork) {
+  const views = await frameViews(scanId, f.rooms).catch(() => null);
+  const spaces = photoSpaces(f.plans, f.household);
+  const picks = pickFrames(f.detections, f.vision, f.household, f.frameCount, f.mainRoom, views, f.wideAt, spaces);
+  return renderPicks(picks, anchorsIn(f.detections), (space) => conceptPrompt(space, f.vision?.style ?? "", spaces.note), work);
 }

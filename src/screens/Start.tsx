@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { startScan, type AddressHit, type Household } from "../api";
+import { startScan, type AddressHit, type Household, type Who } from "../api";
 import type { CaptureMeta } from "../capture/Capture";
 import { AddressField, PropertyCard } from "../components/AddressStep";
 import { AccountNav } from "../auth";
@@ -9,12 +9,16 @@ import { HeroScan } from "../components/HeroScan";
 import { Logo } from "../components/Logo";
 import { SiteFooter } from "../marketing/parts";
 import { NAV, PATHS } from "../marketing/site";
+import "../styles/ask.css";
 
-// Stored as relative | renter | unsure, the same values the server and the money section read.
-const HOUSEHOLD: { id: Household; label: string }[] = [
-  { id: "relative", label: "Parent or relative" },
-  { id: "renter", label: "Rental" },
-  { id: "unsure", label: "Not sure yet" },
+// Who it's for, with the rent folded in: asked once, here, and never again. The server saves it as the
+// household (relative | renter | unsure) plus the rent answer the money reads (server/eligibility.ts
+// fromWho), so the wait screen and the result skip both.
+const WHO: { id: Who; label: string; household: Household }[] = [
+  { id: "family", label: "Family, no rent", household: "relative" },
+  { id: "rental_capped", label: "Rental, about $1,200/mo or less", household: "renter" },
+  { id: "rental_market", label: "Rental at market rent", household: "renter" },
+  { id: "unsure", label: "Not sure", household: "unsure" },
 ];
 
 const FEATURES = [
@@ -26,7 +30,7 @@ const FEATURES = [
 export function Start() {
   const navigate = useNavigate();
   const [asking, setAsking] = useState(false);
-  const [household, setHousehold] = useState<Household | null>(null);
+  const [who, setWho] = useState<(typeof WHO)[number] | null>(null);
   const [missing, setMissing] = useState(false);
   const [picked, setPicked] = useState<AddressHit | null>(null);
   const [upload, setUpload] = useState<{ progress: number; error: string | null } | null>(null);
@@ -54,7 +58,7 @@ export function Start() {
   const close = () => !uploading && setAsking(false);
   // Who it's for decides which grants fit, so it's asked before filming, not guessed later.
   const ready = () => {
-    if (household) return true;
+    if (who) return true;
     setMissing(true);
     requestAnimationFrame(showWho);
     return false;
@@ -66,7 +70,7 @@ export function Start() {
       const where = picked
         ? { address: picked.address, addressMunicipality: picked.municipality, municipality: picked.city ?? "other-on" }
         : { address: "", municipality: "other-on" };
-      const id = await startScan(video, { household: household ?? "unsure", ...where, ...meta }, (progress) =>
+      const id = await startScan(video, { who: who?.id ?? "unsure", household: who?.household ?? "unsure", ...where, ...meta }, (progress) =>
         setUpload({ progress, error: null }),
       );
       navigate({ to: "/scans/$scanId", params: { scanId: id } });
@@ -181,19 +185,21 @@ export function Start() {
                 help={!picked && "Outside Waterloo Region? Skip the address: we'll use Ontario's rules."}
               />
               {picked && <PropertyCard address={picked} onLoad={showWho} />}
-              <div className="field" ref={whoRef} role="group" aria-labelledby="who-label" aria-describedby={missing && !household ? "who-error" : undefined}>
+              <div className="field" ref={whoRef} role="group" aria-labelledby="who-label" aria-describedby={missing && !who ? "who-error" : "who-help"}>
                 <label id="who-label">Who's it for?</label>
-                <div className="chips">
-                  {HOUSEHOLD.map((h) => (
-                    <button key={h.id} className="chip" aria-pressed={household === h.id} onClick={() => setHousehold(h.id)}>
-                      {h.label}
+                <div className="who-options">
+                  {WHO.map((w) => (
+                    <button key={w.id} className="chip who-option" aria-pressed={who?.id === w.id} onClick={() => setWho(w)}>
+                      {w.label}
                     </button>
                   ))}
                 </div>
-                {missing && !household && (
+                {missing && !who ? (
                   <p className="field-error" id="who-error" role="alert">
-                    Pick one. Not sure yet is fine.
+                    Pick one. Not sure is fine.
                   </p>
+                ) : (
+                  <p className="field-help" id="who-help">Rent decides which grants fit. We won't ask again.</p>
                 )}
               </div>
             </div>
