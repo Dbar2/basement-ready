@@ -113,7 +113,7 @@
 .lp-still-copy p { margin: 0; font-size: 18px; line-height: 1.5; color: var(--color-ink-muted); max-width: 40ch; }
 .lp-still-copy .lp-lede { color: var(--color-ink); }
 .lp-still img,
-.lp-still-film video { display: block; width: 100%; height: auto; border-radius: var(--radius-2); background: var(--color-surface); }
+.lp-still-film video { display: block; width: 100%; height: auto; border-radius: var(--radius-1); background: var(--color-surface); }
 .lp-still img { aspect-ratio: 6 / 5; object-fit: cover; }
 .lp-still-film { margin: 0; display: grid; gap: 10px; }
 .lp-still-film video { aspect-ratio: 16 / 9; object-fit: cover; }
