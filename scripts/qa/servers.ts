@@ -2,7 +2,7 @@
 // server on ports `pnpm dev` and the end-to-end tests don't use. Recorded takes replay their saved
 // Meta and 3D answers (server/replay.ts, once the end-to-end tests are on main), so nothing is spent.
 import { spawn, type ChildProcess } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, MEDIA_ROOT } from "./paths";
 
@@ -89,7 +89,9 @@ export async function startServers(runDir: string, web: "dev" | "build"): Promis
         }
       }
     }
-    await new Promise((r) => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 500));
+    // The run's own throwaway database, storage and build (about 40 MB); the logs stay.
+    for (const d of ["pglite", "storage", "dist"]) rmSync(join(runDir, "server", d), { recursive: true, force: true });
   };
   try {
     const api = run("api", ["tsx", "server/index.ts"], apiEnv(runDir));
