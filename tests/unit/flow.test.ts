@@ -4,14 +4,18 @@
 import { readFileSync } from "node:fs";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync as read } from "node:fs";
 import { currentModel, savedModel } from "../../server/model/current";
+import { applyEdit } from "../../server/model/edit";
+import { mountModel } from "../../server/model/routes";
+import { ModelSchema } from "../../server/model/schema";
 import { designHash } from "../../server/model/furniture";
 import { chosenDesign, layoutOf } from "../../server/model/legacy";
 import type { Model } from "../../server/model/types";
 import { basementGeometry } from "../../server/permit/plans";
 import { permitModel } from "../../server/permit/model";
 import { modelFor } from "../../server/quote/fromScan";
-import { designFor } from "../../server/views/load";
+import { designAngles, designFor } from "../../server/views/load";
 import { mountViews } from "../../server/views/routes";
 import { StateSchema } from "../../server/workspace";
 import { isStep, neighbours, STEPS, stepUrl } from "../../src/flow/flow";
@@ -86,6 +90,51 @@ describe("the flow's steps", () => {
     expect(stepUrl("abc", "book")).toBe("/scans/abc?tab=book");
     expect(isStep("layouts")).toBe(true);
     expect(isStep("ideas")).toBe(false);
+  });
+});
+
+describe("the example's committed pictures", () => {
+  // What a fresh visitor's browser gets from the live site, exactly: the model route's JSON.
+  const served = async () => {
+    const app = new Hono();
+    mountModel(app, async () => null);
+    return ((await (await app.request("/api/scans/sample/model")).json()) as { model: Model }).model;
+  };
+
+  it("a design hashes the same fresh from the seed and read back from a save", async () => {
+    const model = await served();
+    const parsed = ModelSchema.parse(JSON.parse(JSON.stringify(model))) as Model;
+    expect(parsed.designs.map(designHash)).toEqual(model.designs.map(designHash));
+    // Keys in any order: the same design.
+    const shuffled = model.designs.map((d) => ({ ...d, finishes: { walls: d.finishes.walls, floor: d.finishes.floor, style: d.finishes.style }, proposed: { ...d.proposed, furniture: d.proposed.furniture.map(({ roomId, sizeM, rotDeg, at, kind, id }) => ({ roomId, sizeM, rotDeg, at, kind, id })) } }));
+    expect(shuffled.map(designHash)).toEqual(model.designs.map(designHash));
+  });
+
+  // The pictures step and the layout cards ask for a design's pictures by its hash; a design without
+  // committed ones falls back to the 3D render (and the example never makes new ones), so this fails as
+  // soon as the example's designs change without its pictures being made again (scripts in the
+  // round-3 notes: gen-sample.mjs with SAMPLE_VIEWS_WRITE=1).
+  it("cover every design a fresh visitor sees, in each of the studio's finishes, from every angle shown", async () => {
+    const model = await served();
+    const missing: string[] = [];
+    for (const d of model.designs) {
+      for (const style of ["light", "warm", "deep"]) {
+        const design = d.finishes.style === style ? d : applyEdit(d, { op: "set_finishes", finishes: { style } });
+        const hash = designHash(design);
+        const angles = [...(await designAngles("sample", 5, design.proposed.furniture)), ...(await designAngles("sample", 4, design.proposed.furniture)).slice(0, 1)];
+        expect(angles.length, `${d.id} has angles`).toBeGreaterThan(0);
+        for (const a of angles) {
+          const pointer = `public/samples/sample/views/${a.id}-d-${hash}.json`;
+          if (!existsSync(pointer)) {
+            missing.push(`${d.id} ${style} ${a.id} (${hash})`);
+            continue;
+          }
+          const { viewKey } = JSON.parse(read(pointer, "utf8")) as { viewKey: string };
+          for (const ext of ["jpg", "json"]) if (!existsSync(`public/samples/sample/views/${a.id}-${viewKey}.${ext}`)) missing.push(`${d.id} ${style} ${a.id} ${viewKey}.${ext}`);
+        }
+      }
+    }
+    expect(missing).toEqual([]);
   });
 });
 
