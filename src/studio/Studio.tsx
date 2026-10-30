@@ -187,6 +187,12 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
                 <button aria-pressed={layer === "built"} onClick={() => setLayer("built")}>As built</button>
                 <button aria-pressed={layer === "scan"} onClick={() => setLayer("scan")}>Scan</button>
               </div>
+              {design.proposed.walls.some((w) => w.rating) && (
+                // What the red on top of a wall means.
+                <p className="studio-key mono">
+                  <i aria-hidden /> 30-min fire separation
+                </p>
+              )}
             </div>
             <p className="viewer-hint mono">{view === "walk" ? "Drag to look · tap the floor to walk" : "Drag a wall or a green knob · drag elsewhere to turn"}</p>
           </div>

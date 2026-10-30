@@ -100,6 +100,8 @@
 .studio-panes > .pane-switch { display: none; }
 .studio-3d { position: relative; height: clamp(340px, 60vh, 620px); border-radius: var(--radius-2); overflow: hidden; background: var(--color-ink); }
 .studio-3d .stage-tools { justify-content: flex-start; }
+.studio-key { margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 4px; background: var(--color-card); color: var(--color-ink); font-size: 12px; }
+.studio-key i { width: 14px; height: 4px; border-radius: 1px; background: var(--color-stop); }
 .studio-3d .segmented { border-color: var(--color-card); }
 .studio-flag { background: var(--color-stop); color: var(--color-card); }
 
