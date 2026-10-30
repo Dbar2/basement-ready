@@ -39,7 +39,9 @@ function apiEnv(runDir: string, takes: boolean): NodeJS.ProcessEnv {
     REPLAY_DIR: replayDirs().join(":"),
     REPLAY_LOG: join(runDir, "server/replay-log.jsonl"),
     REPLAY_MISS_LOG: join(runDir, "server/replay-misses.jsonl"),
-    REPLAY_PACE: process.env.QA_PACE ?? "0",
+    // A take's saved answers arrive at a quarter of their recorded time, as in the end-to-end tests, so
+    // races (the 3D against the photos) go the way they went when recorded and every call is found.
+    REPLAY_PACE: process.env.QA_PACE ?? (takes ? "0.25" : "0"),
     SCAN3D_PARALLEL: "3",
     SCANS_PER_IP_PER_HOUR: "1000",
     SCANS_PER_DAY: "1000",
@@ -97,7 +99,10 @@ export async function startServers(runDir: string, web: "dev" | "build", opts: {
     for (const d of ["pglite", "storage", "dist"]) rmSync(join(runDir, "server", d), { recursive: true, force: true });
   };
   try {
-    const api = run("api", ["tsx", "server/index.ts"], apiEnv(runDir, Boolean(opts.takes)));
+    // The end-to-end tests' network guard, where the checkout has it: public data (city maps, the aerial
+    // photo, city forms) replays too, so a run makes no network calls at all.
+    const guard = join(ROOT, "tests/e2e/support/net-guard.ts");
+    const api = run("api", ["tsx", ...(existsSync(guard) ? ["--import", guard] : []), "server/index.ts"], apiEnv(runDir, Boolean(opts.takes)));
     const webEnv = { ...apiEnv(runDir, false), API_PORT: String(API_PORT) };
     if (web === "build") {
       const out = join(runDir, "server/dist");
