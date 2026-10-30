@@ -335,7 +335,7 @@ a { color: inherit; }
    list opens in place, pushing the rest down, with the footer out of the way until a pick. */
 @media (max-width: 719px) {
   .sheet-backdrop { place-items: end center; }
-  .sheet { height: 100svh; max-height: none; border-radius: 0; }
+  .sheet { height: 100svh; max-height: none; border: 0; border-radius: 0; box-shadow: none; }
   .sheet-body, .sheet-body:has(.addr[data-open="true"]) { overflow-y: auto; }
   .sheet-body { gap: 20px; padding: 24px 20px 28px; }
   .sheet h2 { font-size: 28px; }

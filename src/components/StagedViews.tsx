@@ -46,7 +46,7 @@ export function StagedViews(props: {
       {has3d && (
         <div hidden={shown !== "3d"}>
           <View3DBoundary>
-            <Suspense fallback={<p className="viewer-empty mono">Building your finished basement in 3D…</p>}>
+            <Suspense fallback={<p className="viewer-empty">Building your finished basement in 3D…</p>}>
               <StagedBasement plan={plan!} layout={layout!} />
             </Suspense>
           </View3DBoundary>
@@ -62,7 +62,7 @@ export function StagedViews(props: {
 
       <div hidden={shown !== "photos"}>
         {concepts?.status === "pending" && photos.length === 0 ? (
-          <p className="viewer-empty mono concepts-wait">Picturing your finished basement…</p>
+          <p className="viewer-empty concepts-wait">Picturing your finished basement…</p>
         ) : photos.length === 0 ? (
           <p className="muted">We couldn't make photos this time. The 3D view shows the same layout.</p>
         ) : (
@@ -70,7 +70,7 @@ export function StagedViews(props: {
             {photos.map((c) => (
               <figure key={c.n} className="concept">
                 <img src={conceptUrl(scanId, c.n)} alt={`${c.title}, virtually staged from your own video`} loading="lazy" />
-                <span className="concept-label mono">Virtually staged</span>
+                <span className="concept-label">Virtually staged</span>
                 <figcaption>
                   <b>{c.title}</b>
                   <span className={c.kept ? "concept-check" : "concept-check concept-check--warn"}>{c.checked}</span>

@@ -192,7 +192,7 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
 
         {questions.length > 0 && (
           <div className="side-card plan-check" aria-live="polite">
-            <p className="mono side-eyebrow">Checked against your {photos ? "photos" : "video"}</p>
+            <p className="side-eyebrow">Checked against your {photos ? "photos" : "video"}</p>
             <h2>{questions.length === 1 ? "One thing to look at" : `${questions.length} things to look at`}</h2>
             <ul className="plan-questions">
               {questions.map(({ q, i }) => (
