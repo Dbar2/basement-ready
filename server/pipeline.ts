@@ -10,7 +10,7 @@ import { finishAssessment, readWithSpark, type AssessContext, type SpeechTurn } 
 import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
 import { enqueuePhotos, photosSoFar, settlePhotos } from "./photos";
-import { findInPhotos, mergePhotoFinds } from "./photoFinds";
+import { findInPhotos, isLevel, mergePhotoFinds } from "./photoFinds";
 import { MIN_PHOTOS_3D, type PhotoTake } from "./photoInput";
 import { cleanPlans, plansWords, PLANS_ID } from "./plans";
 import { dataUrl, samImage, samVideo, transcribe, uploadFile } from "./meta";
@@ -304,8 +304,10 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   await Promise.all(
     CONCEPTS.map(async (c) => {
       const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
-      // Ignore flickers: an object must hold for half a second to count.
-      const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
+      // Ignore flickers: an object must hold for half a second to count. A beam lies level (server/photoFinds.ts).
+      const tracks = parseSam(raw)
+        .filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2) && (c.kind !== "beam" || isLevel(bestFrame(t).box)))
+        .slice(0, 6);
       const found: Detection[] = tracks.map((t, i) => {
         const b = bestFrame(t);
         const r = (n: number) => Math.round(n * 1000) / 1000;

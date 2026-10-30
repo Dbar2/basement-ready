@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildResult } from "../../server/assess";
+import { buildResult, parseJson } from "../../server/assess";
 import { coreRules, packFor } from "../../server/rules";
 
 const waterloo = packFor("waterloo-on");
@@ -99,5 +99,26 @@ describe("cleanVision", () => {
   });
   it("is empty when nothing was said", () => {
     expect(cleanVision(undefined)).toEqual({ rooms: [], style: "", mustHaves: [], forWhom: "" });
+  });
+});
+
+describe("parseJson: Spark's answer", () => {
+  const whole = JSON.stringify({ route: "second_unit", findings: [{ ruleId: "egress_window_bedroom_area", status: "needs_measurement", why: "A window {small}." }] });
+
+  it("reads a plain answer, with or without words around it", () => {
+    expect(parseJson(whole).route).toBe("second_unit");
+    expect(parseJson(`Here it is:\n${whole}\nDone.`).findings).toHaveLength(1);
+  });
+
+  it("reads the whole answer when a cut-off one came first in the same reply", () => {
+    const cut = whole.slice(0, 70);
+    expect(parseJson(cut + whole)).toEqual(JSON.parse(whole));
+  });
+
+  it("still fails on an answer that is only cut off, so the call is retried", () => {
+    // Cut after a whole finding: that finding alone is not the answer.
+    const cut = whole.replace(/\]\}$/, ',{"ruleId":"egress_window_well_clearance","status":"needs_me');
+    expect(() => parseJson(cut)).toThrow(SyntaxError);
+    expect(() => parseJson("no JSON here")).toThrow("Spark did not return JSON");
   });
 });
