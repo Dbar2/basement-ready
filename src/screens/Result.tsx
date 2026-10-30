@@ -90,14 +90,14 @@ export function PlanTab(props: { r: ScanResult; scanId: string; design?: { exist
           {upTo > 0 && (
             <div>
               <dt>You may be eligible for</dt>
-              <dd className="mono">up to {money(upTo)}</dd>
+              <dd>up to <span className="mono">{money(upTo)}</span></dd>
             </div>
           )}
           {/* A rough 3D reading isn't a headline fact: the designer confirms it below. */}
           {r.measurements?.ceilingHeightM != null && (r.measurements.trusted || r.measurements.scaleSource !== "model") && (
             <div>
               <dt>Ceiling{mainRoomName && `, ${mainRoomName}`}</dt>
-              <dd className="mono">about {r.measurements.ceilingHeightM.toFixed(1)} m</dd>
+              <dd>about <span className="mono">{r.measurements.ceilingHeightM.toFixed(1)} m</span></dd>
             </div>
           )}
         </dl>

@@ -17,7 +17,7 @@ export function CardDialog({ card, onClose, actions }: { card: Card; onClose: ()
     <dialog ref={ref} className="card-dialog" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} aria-labelledby="card-dialog-title">
       <figure>
         <img src={card.url} alt={`${card.title}, virtually staged from your own video`} style={{ aspectRatio: String(card.aspect) }} />
-        <figcaption className="mono">Virtually staged · {card.checked}</figcaption>
+        <figcaption>Virtually staged · {card.checked}</figcaption>
       </figure>
       <div className="card-dialog-body">
         <h2 id="card-dialog-title">{card.title}</h2>
