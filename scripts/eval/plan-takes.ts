@@ -18,7 +18,7 @@ import { runScan3d } from "../../server/scan3d";
 
 const run = promisify(execFile);
 const MAIN = process.env.BR_MAIN ?? join(process.cwd(), "..", "..", "..");
-const MEDIA = existsSync("media") ? "media" : join(MAIN, "media");
+const MEDIA = existsSync("media/eval") ? "media" : join(MAIN, "media");
 const OUT = "tmp/eval/plan";
 const FPS = 5;
 

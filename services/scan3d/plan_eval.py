@@ -38,7 +38,7 @@ import numpy as np
 from scan3d import plandraw
 from scan3d.export import lift_box, read_ply
 from scan3d.floorplan import floor_plan
-from scan3d.layout import find_floor, read_plan
+from scan3d.layout import area_axis, find_floor, read_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 PLAN = ROOT / "tmp" / "eval" / "plan"
@@ -545,14 +545,17 @@ def _side_by_side(a, b):
 # ---- Main ----
 
 
-def run(name: str, method: str, use_hints: bool = True, edits=None) -> dict:
+def run(name: str, method: str, use_hints: bool = True, edits=None, peek: int = 0) -> dict:
     t0 = time.perf_counter()
     take = load_take(name, depth=True)
     hints = lift_finds(take) if use_hints else {}
+    if peek:
+        hints["peek"] = peek  # what the whole-take watch says: rooms only seen from a doorway
     if method == "old":
         plan = boxes_plan(take["points"], take["cams"])
     else:
-        p = read_plan(take["points"], take["cams"], area=take["area"], hints=hints, edits=edits, views=take["views"])
+        prior = area_axis([a["scan"]["world"]["rotation"] for a in take["areas"]]) if take["bundle"]["kind"] == "tracked" else None
+        p = read_plan(take["points"], take["cams"], area=take["area"], hints=hints, edits=edits, views=take["views"], axis_prior=prior)
         plan = p.to_json()
         if method == "new+check":
             from scan3d.selfcheck import check_walls
@@ -581,6 +584,7 @@ def main():
     ap.add_argument("--method", default="old,new", help="old (boxes), new, new+check")
     ap.add_argument("--no-hints", action="store_true")
     ap.add_argument("--label", default="", help="a name for this run in results.json")
+    ap.add_argument("--peek", type=int, default=0, help="tell the plan, as the whole-take watch would, that this many rooms were only seen from a doorway")
     a = ap.parse_args()
     names = sorted(p.name for p in PLAN.iterdir() if (p / "bundle.json").exists())
     if a.take:
@@ -589,7 +593,7 @@ def main():
     results = json.loads(results_path.read_text()) if results_path.exists() else {}
     for n in names:
         for m in a.method.split(","):
-            s = run(n, m, not a.no_hints)
+            s = run(n, m, not a.no_hints, peek=a.peek)
             key = f"{n}:{m}" + (f":{a.label}" if a.label else "")
             results[key] = s
             print(f"\n== {key}")
