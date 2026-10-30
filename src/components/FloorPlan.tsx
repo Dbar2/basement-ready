@@ -152,7 +152,7 @@ function RoomShape(props: { plan: Plan; units: Units; name: string; X: (x: numbe
   );
 }
 
-function LayoutShapes({ layout, units, X, Z, s }: { layout: Layout; units: Units; X: (x: number) => number; Z: (z: number) => number; s: number }) {
+export function LayoutShapes({ layout, units, X, Z, s }: { layout: Layout; units: Units; X: (x: number) => number; Z: (z: number) => number; s: number }) {
   const wallW = Math.max(6, 0.12 * s);
   return (
     <g className="plan-layout">
