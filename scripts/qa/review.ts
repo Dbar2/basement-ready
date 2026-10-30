@@ -50,6 +50,8 @@ export async function review(opts: {
   concurrency: number;
   facts: unknown;
   log: (s: string) => void;
+  // Build and price every request, write them to requests.json, send nothing.
+  dryRun?: boolean;
 }): Promise<ReviewResult> {
   RUN_DIR = opts.runDir;
   const images = await Images.open();
@@ -62,6 +64,20 @@ export async function review(opts: {
     opts.log(`${units.length} review requests planned (budget $${opts.budget.cap.toFixed(2)})`);
     const consistency = consistencyUnit(opts.shots, opts.facts);
 
+    if (opts.dryRun) {
+      const rows = [consistency, ...units.sort((a, b) => a.priority - b.priority)].map((u) => ({
+        key: u.key,
+        screen: u.screen,
+        images: u.images.map((i) => ({ label: i.label, w: i.w, h: i.h, kb: Math.round(i.data.length / 1024) })),
+        textChars: u.text.length,
+        estimateUsd: Number(estimate(u.images, (u.key === "consistency" ? CONSISTENCY_SYSTEM : SYSTEM) + u.text, u.outputTokens).toFixed(4)),
+        cached: existsSync(join(CACHE_DIR, `${unitCacheKey(u, opts.effort)}.json`)),
+      }));
+      const total = rows.reduce((n, r) => n + (r.cached ? 0 : r.estimateUsd), 0);
+      writeFileSync(join(opts.runDir, "requests.json"), JSON.stringify({ effort: opts.effort, totalEstimateUsd: Number(total.toFixed(3)), requests: rows }, null, 1));
+      opts.log(`Dry run: ${rows.length} requests, ${rows.reduce((n, r) => n + r.images.length, 0)} images, about $${total.toFixed(2)} uncached (requests.json)`);
+      return out;
+    }
     const queue = [...units.sort((a, b) => a.priority - b.priority)];
     // The cross-screen pass goes right after the most important screens.
     queue.splice(Math.min(queue.length, 6), 0, consistency);
@@ -136,7 +152,9 @@ async function buildUnits(shots: Captured[], images: Images): Promise<Unit[]> {
       for (let i = 0; i < mine.length; i += 3) {
         const group = mine.slice(i, i + 3);
         const sent = [];
-        for (const s of group) sent.push(await fitShot(s, images, 1800, 1800, `PDF page ${s.page} of ${mine.length} (${doc} copy)`));
+        // Permit sheets carry small dimension text; book pages are set larger.
+        const px = screen.id === "permit-pdf" ? 1800 : 1400;
+        for (const s of group) sent.push(await fitShot(s, images, px, px, `PDF page ${s.page} of ${mine.length} (${doc} copy)`));
         units.push({ ...unit(`${key}.${doc}.p${group[0].page}-${group[group.length - 1].page}`, screen, group, sent, `${head}\nThis request: pages ${group[0].page}–${group[group.length - 1].page} of ${mine.length}.`), priority: screen.priority + i / 100 });
       }
     }
@@ -206,14 +224,19 @@ function consistencyUnit(shots: Captured[], facts: unknown): Unit {
 
 // ---- Running a request ----
 
+// Same prompt version, model, effort, instructions, text and image bytes: same answer, from the cache.
+function unitCacheKey(u: Unit, effort: Effort) {
+  const system = u.key === "consistency" ? CONSISTENCY_SYSTEM : SYSTEM;
+  return sha256(JSON.stringify({ v: PROMPT_VERSION, model: MODEL, effort, system: sha256(system), text: u.text, images: u.images.map((i) => sha256(i.data)) }));
+}
+
 type Ctx = { client: Anthropic; images: Images; budget: Budget; effort: Effort; runDir: string; out: ReviewResult; log: (s: string) => void };
 
 async function runUnit(u: Unit, ctx: Ctx) {
   const isText = u.key === "consistency";
   const system = isText ? CONSISTENCY_SYSTEM : SYSTEM;
   const schema = jsonSchema(isText ? ConsistencyReview : ScreenReview);
-  const cacheKey = sha256(JSON.stringify({ v: PROMPT_VERSION, model: MODEL, effort: ctx.effort, system: sha256(system), text: u.text, images: u.images.map((i) => sha256(i.data)) }));
-  const cacheFile = join(CACHE_DIR, `${cacheKey}.json`);
+  const cacheFile = join(CACHE_DIR, `${unitCacheKey(u, ctx.effort)}.json`);
   const est = estimate(u.images, system + u.text, u.outputTokens);
 
   let answer: unknown;
