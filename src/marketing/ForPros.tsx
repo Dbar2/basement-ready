@@ -1,23 +1,25 @@
+import { EXAMPLE } from "./example";
 import { Cited, MarketingPage, PageHead, Ref, Section, SourceList } from "./parts";
 import { PATHS } from "./site";
 import type { SourceId } from "./sources";
 
-const CITED: SourceId[] = ["quarts", "codePart9", "costKw", "costHeating"];
+const CITED: SourceId[] = ["quarts", "codePart9", "costLegalToronto"];
 
-// The example brief uses the app's sample basement (src/data/sampleBasement.ts),
-// not a real homeowner.
+// The example plan is the example basement anyone can try (public/samples/sample), with its own numbers
+// (./example.ts). No real homeowner's details.
+const opening = (kind: "window" | "door") => EXAMPLE.openings.find((o) => o.kind === kind)?.width ?? "To measure";
 const MEASURES = [
-  { label: "Ceiling, to joists", value: "2.10 m" },
-  { label: "Clear under duct", value: "1.88 m" },
-  { label: "Clear under beam", value: "1.94 m" },
-  { label: "Window openings (3)", value: "0.28 m²" },
-  { label: "Side door", value: "0.86 m" },
+  { label: "Basement, rough", value: EXAMPLE.size },
+  { label: "Floor area", value: EXAMPLE.area },
+  { label: "Ceiling", value: EXAMPLE.ceiling },
+  { label: "Window width", value: opening("window") },
+  { label: "Door width", value: opening("door") },
 ];
 
 const FIXES = [
-  { what: "Bedroom escape window", why: "0.28 m², needs 0.35 m²", cost: <>$3,000–$6,000<Ref id="costKw" /></> },
-  { what: "Separate the air", why: "Furnace shared with upstairs", cost: <>$6,000–$12,000<Ref id="costHeating" /></> },
-  { what: "Fire separation", why: "Ceiling not visible: confirm on site", cost: "Quote needed" },
+  ...(EXAMPLE.fix ? [{ what: "Fire and smoke separation", why: "Joists and ducts look exposed", cost: <>{EXAMPLE.fix.cost}<Ref id="costLegalToronto" /></> }] : []),
+  { what: "A safe way out", why: "Waiting on the homeowner's answer", cost: "Quote needed" },
+  { what: "Kitchen, bath, water shut-off", why: "Waiting on the homeowner's answer", cost: "Quote needed" },
 ];
 
 const INCLUDES = [
@@ -35,7 +37,7 @@ export function ForPros() {
       <Cited ids={CITED}>
         <PageHead
           title="For designers and builders."
-          lede="Basement Ready helps homeowners in Waterloo Region find out if their basement can become a legal second unit. When one wants help, they send their brief to pros nearby. You see the scan, the measurements, the fix list and a rough cost before you call them back."
+          lede="Basement Ready helps Ontario homeowners find out if their basement can become a legal second unit. When one wants help, they can hand you a one-page plan with the scan, the measurements, the fix list and a rough cost, so you see the job before you visit."
           actions={
             <>
               <a className="btn btn-primary" href={PATHS.proSignUp}>
@@ -46,11 +48,11 @@ export function ForPros() {
           }
         />
 
-        <Section id="lead" title="What a lead comes with." intro="Every lead is one homeowner, one basement and one brief. This example uses our sample basement.">
+        <Section id="lead" title="What a plan comes with." intro="One homeowner, one basement, one page. This example is the example basement anyone can try, with its own numbers.">
           <div className="mk-brief-wrap">
-            <figure className="mk-brief" data-reveal aria-label="Example brief for the sample basement">
+            <figure className="mk-brief" data-reveal aria-label="Example plan for the example basement">
               <header className="mk-brief-top">
-                <span className="mk-brief-title">Basement suite, Waterloo</span>
+                <span className="mk-brief-title">Basement suite, the example</span>
                 <span className="mk-brief-tag">Example</span>
               </header>
               <svg className="mk-art mk-plan" viewBox="0 0 320 170" aria-hidden>
@@ -67,7 +69,7 @@ export function ForPros() {
                   <rect className="mk-find-box" data-kind="mechanical" x="268" y="16" width="16" height="14" />
                 </g>
                 <text x="82" y="26" className="mk-plan-label">window</text>
-                <text x="150" y="86" className="mk-plan-label">duct 1.88 m clear</text>
+                <text x="150" y="86" className="mk-plan-label">duct</text>
                 <text x="18" y="62" className="mk-plan-label">stairs</text>
                 <text x="212" y="28" className="mk-plan-label">furnace</text>
               </svg>
@@ -90,7 +92,7 @@ export function ForPros() {
                   </li>
                 ))}
               </ol>
-              <figcaption>Rough costs from published price guides. Estimates, not quotes.</figcaption>
+              <figcaption>The drawing is for illustration. Rough costs from published price guides: estimates, not quotes.</figcaption>
             </figure>
 
             <ul className="mk-rows mk-includes">
@@ -108,12 +110,12 @@ export function ForPros() {
           </p>
         </Section>
 
-        <Section id="inbox" title="One inbox for your leads." intro="Briefs arrive in your lead inbox with the scan, frames and fix list together. Open one, look it over, and decide if it's a job for you.">
+        <Section id="inbox" title="Coming: one inbox for plans." intro="We're building a pro side where plans arrive with the scan, frames and fix list together. It isn't open yet. Founding pros get it first.">
           <div className="mk-inbox" data-reveal aria-hidden>
             <div className="mk-inbox-row" style={{ "--i": 0 } as React.CSSProperties}>
               <span className="mk-inbox-dot" />
-              <span className="mk-inbox-text">Basement suite, Waterloo</span>
-              <span className="mk-inbox-mono">3 fixes, 1 to confirm</span>
+              <span className="mk-inbox-text">Basement suite, the example</span>
+              <span className="mk-inbox-mono">1 fix, 2 to confirm</span>
               <span className="mk-inbox-mono">Example</span>
             </div>
             {[1, 2].map((i) => (
@@ -154,11 +156,11 @@ export function ForPros() {
             </li>
             <li>
               <strong>Homeowners choose</strong>
-              <span>A homeowner picks who gets their brief. Nobody pays to be ranked higher, and we don't label anyone "recommended."</span>
+              <span>When sending opens, a homeowner picks who gets their plan. Nobody pays to be ranked higher, and we don't label anyone "recommended."</span>
             </li>
             <li>
               <strong>You're independent</strong>
-              <span>You quote and contract with the homeowner directly. Use their details only for the job they sent you.</span>
+              <span>You quote and contract with the homeowner directly. Use their details only for the job they bring you.</span>
             </li>
             <li>
               <strong>Homeowners use it free</strong>
@@ -168,7 +170,7 @@ export function ForPros() {
         </Section>
 
         <section className="mk-cta" data-reveal>
-          <h2>Get the first briefs from your area.</h2>
+          <h2>Be first when plans start arriving.</h2>
           <p>Tell us what you do and where you work.</p>
           <a className="btn btn-primary" href={PATHS.proSignUp}>
             Join as a founding pro <span className="arrow" aria-hidden>→</span>

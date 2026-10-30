@@ -279,7 +279,7 @@ function evaluateProgram(g: any, f: Required<Pick<MoneyInput, "household" | "ans
     return program(g, {
       value: "savings",
       ...d,
-      reason: d.reason ?? `Your suite is home number ${f.homesAfter} on the lot, so the City and Region charge no development charges for it.`,
+      reason: d.reason ?? `Your suite is home number ${f.homesAfter} on the lot, so by Ontario law no development charges apply to it.`,
       commitments: [],
       note: "Nothing to apply for. Check the permit bill for any school-board charge.",
     });

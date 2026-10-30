@@ -10,11 +10,11 @@ ARKit tracking and LiDAR depth are phone sensors, not AI models. RoomPlan and AR
 
 | Part | Value |
 |---|---|
-| `household` | `relative`, `renter` or `unsure` |
+| `household` | `relative`, `renter` or `unsure` (for servers from before `who`) |
+| `who` | `family`, `rental_capped`, `rental_market` or `unsure` |
 | `address` | the picked address (`""` if none was picked) |
 | `addressMunicipality` | e.g. `Waterloo` (only with an address) |
 | `municipality` | the rules pack, e.g. `waterloo-on`; `other-on` without an address |
-| `rent` | `none`, `1200` or `market` (left out for "Not sure") |
 | `lens` | `wide` (ARKit uses the 1× camera) |
 | `wideAt` | seconds into the take of the still wide shot, one decimal (only if they held still) |
 | `capture` | `capture.json`, `application/json` |
@@ -23,14 +23,16 @@ ARKit tracking and LiDAR depth are phone sensors, not AI models. RoomPlan and AR
 
 The start screen's four answers map like this:
 
-| On screen | `household` | `rent` |
+| On screen | `household` | `who` |
 |---|---|---|
-| Family, no rent | `relative` | `none` |
-| Rental, about $1,200/mo or less | `renter` | `1200` |
-| Rental at market rent | `renter` | `market` |
-| Not sure | `unsure` | (none) |
+| Family, no rent | `relative` | `family` |
+| Rental, about $1,200/mo or less | `renter` | `rental_capped` |
+| Rental at market rent | `renter` | `rental_market` |
+| Not sure | `unsure` | `unsure` |
 
-Today's server ignores the `rent` form field. So after the upload succeeds, the app also saves it with `POST /api/scans/<id>/answers` `{ "ruleId": "rent", "value": "none" | 1200 | "market" }`, the way the wait screen saves money answers. Sending both is harmless once the server reads the field.
+The server saves who it's for and the rent from `who` (`server/eligibility.ts` `fromWho`): the rent is the city's own capped amount ($1,198 or $1,236 a month), or `none` / `market`, so the wait screen never asks either again. The app sends no separate rent answer.
+
+The web view keeps the scan's claim token (`ResultView.swift`), so the answers the wait screen saves are the owner's. The start screen's **Your last scan** opens the last take this phone sent (`lastScan` in the app's settings).
 
 ## The video
 

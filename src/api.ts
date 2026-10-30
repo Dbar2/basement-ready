@@ -188,10 +188,14 @@ export type Property = {
   lotAreaM2: number | null;
   building: { storeys: number | null; footprintM2: number | null; floorAreaM2: number | null } | null;
   unitsRegistered: number;
+  inRegion?: boolean; // Waterloo Region's open data covers this house (records and the aerial photo)
+  zoningMap?: { label: string; url: string } | null; // the City's own zoning map, where there's no open layer
   sources: string[];
 };
 
-export type AddressHit = { address: string; municipality: string; city: string | null; lon: number; lat: number; units: number };
+// "region": from Waterloo Region's open address list. "ontario": placed by NRCan, no records.
+export type AddressHit = { address: string; municipality: string; city: string | null; lon: number; lat: number; units: number; source?: "region" | "ontario" };
+export type AddressSearch = { results: AddressHit[]; notCovered: { where: string | null; message: string } | null };
 
 export type FixGroup = {
   category: string;
@@ -242,7 +246,9 @@ export type ScanResult = {
   id: string;
   household: Household;
   city?: string;
+  authority?: string; // who issues the permit: "City of Waterloo", "Township of Woolwich"
   coverage?: "full" | "provincial";
+  coverageNote?: string | null; // what Ontario-only coverage means for this municipality
   has3d?: boolean;
   plan?: Plan | null;
   rooms?: RoomResult[];
@@ -267,6 +273,8 @@ export type ScanResult = {
   layout?: Layout | null;
   concepts?: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
   plans?: string | null; // what they'd like it to be, from the wait screen
+  demo?: boolean; // the demo house: Waterloo's rules, no real address
+  disclaimer?: string | null; // the rules pack's own words: a screening aid, not a permit decision
   heldBack: number;
   cost: { low: number; high: number; fixesLow?: number; fixesHigh?: number; standardLow?: number; standardHigh?: number; pricedFixes: number; unpricedFixes: number };
   grants: Grant[];
@@ -283,6 +291,35 @@ export type ScanResult = {
 
 // Videos picked in this tab, so the scan screen can play them before the server has its copy.
 export const localVideos = new Map<string, File>();
+
+// The example, everywhere it shows: a real scan, recorded once and replayed, nothing sent.
+export const EXAMPLE_LABEL = "A real basement, filmed and scanned once, replayed here. Nothing you do is sent.";
+export const EXAMPLE_HOUSEHOLD = "The example household's answers";
+// The demo house, for anyone outside Ontario: Waterloo's rules for a house that isn't real.
+export const DEMO_LABEL = "Waterloo's rules, no real address. For trying it outside Ontario.";
+
+// This browser's claim tokens and, when signed in, the Clerk session: what the server checks before
+// anything is changed or anything private is shown.
+export async function authHeaders(json = false): Promise<Record<string, string>> {
+  const h: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
+  try {
+    const claims = localStorage.getItem("br-claims");
+    if (claims) h["x-claims"] = encodeURIComponent(claims);
+  } catch {
+    // Private mode: only a signed-in owner can change it.
+  }
+  const clerk = (window as unknown as { Clerk?: { session?: { getToken: () => Promise<string | null> } | null } }).Clerk;
+  const token = await clerk?.session?.getToken().catch(() => null);
+  if (token) h.Authorization = `Bearer ${token}`;
+  return h;
+}
+
+// Whether a real scan can run now (server/limits.ts), asked before anyone films.
+export type Allowance = { ok: boolean; reason: "no_key" | "spend" | "day" | "hour" | null; message: string | null; leftToday: number; perDay: number; resetsAt: string };
+export async function getAllowance(): Promise<Allowance | null> {
+  const res = await fetch("/api/scans/allowance", { cache: "no-store" }).catch(() => null);
+  return res?.ok ? res.json() : null;
+}
 
 // Anonymous basements this browser created. Claimed into an account after sign-up.
 export function rememberClaim(basementId: string, claimToken: string) {
@@ -309,6 +346,7 @@ export function startScan(
     spoken?: { id: string; startMs: number; endMs: number }[];
     lens?: "ultrawide" | "wide" | null; // which camera filmed it
     wideAt?: number | null; // seconds into the take of the still wide shot from a corner
+    demo?: boolean; // the demo house: Waterloo's rules, no address
   },
   onProgress: (fraction: number) => void,
 ): Promise<string> {
@@ -326,6 +364,7 @@ export function startScan(
     if (input.spoken?.length) form.append("spoken", JSON.stringify(input.spoken));
     if (input.lens) form.append("lens", input.lens);
     if (input.wideAt != null) form.append("wideAt", String(input.wideAt));
+    if (input.demo) form.append("demo", "true");
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/scans");
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
@@ -341,7 +380,7 @@ export function startScan(
         localVideos.set(body.id, video);
         rememberClaim(body.basementId, body.claimToken);
         resolve(body.id);
-      } else reject(new Error(body.error ?? "Upload failed. Check your connection and try again."));
+      } else reject(Object.assign(new Error(body.error ?? "Upload failed. Check your connection and try again."), { allowance: (body.allowance as Allowance | undefined) ?? null }));
     };
     xhr.onerror = () => reject(new Error("Upload failed. Check your connection and try again."));
     xhr.send(form);
@@ -359,9 +398,11 @@ export function subscribe(id: string, onEvent: (e: ScanEvent) => void): () => vo
 }
 
 // Address type-ahead, and what public data says about the house picked.
-export async function searchAddress(q: string): Promise<AddressHit[]> {
+export async function searchAddress(q: string): Promise<AddressSearch> {
   const res = await fetch(`/api/address?q=${encodeURIComponent(q)}`);
-  return res.ok ? (await res.json()).results : [];
+  if (!res.ok) return { results: [], notCovered: null };
+  const json = await res.json();
+  return { results: json.results ?? [], notCovered: json.notCovered ?? null };
 }
 export async function getProperty(a: Pick<AddressHit, "address" | "municipality">): Promise<Property | null> {
   const res = await fetch(`/api/property?address=${encodeURIComponent(a.address)}&municipality=${encodeURIComponent(a.municipality)}`);
@@ -391,7 +432,7 @@ export async function answerEarly(scanId: string, ruleId: string, value: AnyAnsw
     }
     return waitAsks(scanId);
   }
-  const res = await fetch(`/api/scans/${scanId}/answers`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ruleId, value }) });
+  const res = await fetch(`/api/scans/${scanId}/answers`, { method: "POST", headers: await authHeaders(true), body: JSON.stringify({ ruleId, value }) });
   return res.ok ? ((await res.json()).asks ?? null) : null;
 }
 
@@ -415,7 +456,7 @@ export async function setHousehold(scanId: string, household: Household): Promis
     await answerEarly(scanId, "household", household);
     return null;
   }
-  const res = await fetch(`/api/scans/${scanId}/household`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ household }) });
+  const res = await fetch(`/api/scans/${scanId}/household`, { method: "POST", headers: await authHeaders(true), body: JSON.stringify({ household }) });
   return res.ok ? ((await res.json()).result ?? null) : null;
 }
 
@@ -439,9 +480,10 @@ export async function answerQuestion(scanId: string, current: ScanResult, sample
   }
   const res = await fetch(`/api/scans/${scanId}/answers`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await authHeaders(true),
     body: JSON.stringify({ ruleId, value }),
   });
+  if (res.status === 403) throw new Error((await res.json().catch(() => ({}))).error ?? "Only the person who filmed this can change its answers.");
   if (!res.ok) throw new Error("We couldn't check that. Try again.");
   return (await res.json()).result as ScanResult;
 }
@@ -460,18 +502,32 @@ export async function openMoneyQuestions(scanId: string): Promise<MoneyQuestion[
 }
 
 // household and answers: who it's for and everything they told us (rule, money, who, plans), so nothing
-// is asked twice. asks: what's still worth asking.
-export async function getScan(id: string): Promise<{
+// is asked twice. asks: what's still worth asking. canEdit: this browser (or the signed-in owner) filmed
+// it; a shared link only reads. failure: why it stopped, and whether "Try again" can help.
+export type ScanStatus = {
   status: "queued" | "running" | "done" | "error";
   result: ScanResult | null;
+  error?: string | null;
+  failure?: { cause: string; retry: boolean } | null;
+  demo?: boolean;
+  canEdit?: boolean;
   household?: Household;
   answers?: Record<string, AnyAnswer>;
   asks?: WaitAsk[];
-}> {
-  if (id === "sample") return { status: "done", result: await (await fetch("/samples/sample/result.json")).json() };
-  const res = await fetch(`/api/scans/${id}`);
+};
+export async function getScan(id: string): Promise<ScanStatus> {
+  if (id === "sample") return { status: "done", result: await (await fetch("/samples/sample/result.json")).json(), canEdit: true };
+  const res = await fetch(`/api/scans/${id}`, { headers: await authHeaders() });
   if (!res.ok) throw new Error("not found");
   return res.json();
+}
+
+// "Try again": the stored video runs again. `waiting`: it's still in line, nothing to do yet.
+export async function retryScan(id: string): Promise<{ status: string; waiting?: boolean }> {
+  const res = await fetch(`/api/scans/${id}/retry`, { method: "POST", headers: await authHeaders(true) });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? "That didn't start. Try again in a moment.");
+  return body;
 }
 
 
