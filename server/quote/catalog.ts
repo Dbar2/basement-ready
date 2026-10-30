@@ -44,6 +44,17 @@ export type Rate = {
 
 export type PermitFee = { perUnitCAD?: number; perSqftCAD: number; minimumCAD?: number; extrasCAD?: number; estimate: boolean; title: string; url: string; checked: string };
 
+// A piece of furniture's price range: a budget and a mid-range listing, each read on the retailer's own
+// page. Some pieces are two buys (a bed frame and a mattress): the range adds them up, as `basis` says.
+export type FurniturePrice = {
+  id: string; // the model's furniture kind, or coffee_table / nightstand
+  item: string;
+  lowCAD: number;
+  highCAD: number;
+  basis: string;
+  listings: { role: "low" | "high"; product: string; retailer: string; priceCAD: number; url: string; checked: string; note?: string }[];
+};
+
 export type Catalog = {
   compiledAt: string;
   hstPct: number;
@@ -51,6 +62,7 @@ export type Catalog = {
   services: Rate[]; // pros a do-it-yourselfer still pays
   labour?: Rate[]; // trade labour, for the hired quote
   missing?: { id: string; item: string; searched: string; checked: string }[];
+  furniture?: FurniturePrice[]; // optional furnishings, never in the build totals
   fees?: {
     permit: Record<string, PermitFee>; // by municipality slug
     esa: { homeowner: { upTo: number | null; CAD: number }[]; contractor: Rate | null; title: string; url: string; checked: string };
@@ -62,7 +74,10 @@ export const catalog = data as unknown as Catalog;
 const items = new Map(catalog.items.map((i) => [i.id, i]));
 const rates = new Map([...catalog.services, ...(catalog.labour ?? [])].map((r) => [r.id, r]));
 
+const furniture = new Map((catalog.furniture ?? []).map((f) => [f.id, f]));
+
 export const item = (id: string) => items.get(id) ?? null;
+export const furniturePrice = (id: string) => furniture.get(id) ?? null;
 export const rate = (id: string) => rates.get(id) ?? null;
 
 // The cheapest and dearest shelf price found for an item, across stores.

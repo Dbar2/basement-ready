@@ -7,11 +7,10 @@ import { readFileSync } from "node:fs";
 import { PDFDocument } from "pdf-lib";
 import { afterAll, describe, expect, it } from "vitest";
 import { buildBook } from "../../server/book/book";
-import { renderIndex, renderKey, renderPrompt, reserveRender, restyleRender, type RenderWork } from "../../server/book/renders";
+import { picturesFor } from "../../server/book/pictures";
 import type { Design, Model, Wall } from "../../server/model/types";
 import { packFor } from "../../server/rules";
 import { permitFee } from "../../server/steps";
-import { storage } from "../../server/storage";
 import { catalog } from "../../server/quote/catalog";
 import { chosenDesign, modelFor } from "../../server/quote/fromScan";
 import { quote, type Quote } from "../../server/quote/quote";
@@ -134,6 +133,48 @@ describe("quote", () => {
     expect(unknown.missing).toContain("the fee");
   });
 
+  it("prices furniture on its own: optional, sourced, and never in the build, DIY or permit totals", () => {
+    const d = clone(design);
+    const at = (x: number, z: number): [number, number] => [x, z];
+    d.proposed.furniture = [
+      { id: "f-bed", kind: "bed", at: at(1.4, 1.6), rotDeg: 0, sizeM: [1.42, 2.02] },
+      { id: "f-sofa", kind: "sofa", at: at(0, -1), rotDeg: 0, sizeM: [2.2, 0.95] },
+      { id: "f-coffee-table", kind: "other", at: at(0, -0.2), rotDeg: 0, sizeM: [1.2, 0.6] },
+      { id: "f-nightstand-1", kind: "other", at: at(0.4, 2.4), rotDeg: 0, sizeM: [0.5, 0.42] },
+      { id: "f-nightstand-2", kind: "other", at: at(2.5, 2.4), rotDeg: 0, sizeM: [0.5, 0.42] },
+      { id: "f-kitchen", kind: "kitchen", at: at(1.2, -2.4), rotDeg: 0, sizeM: [3, 0.62] },
+      { id: "f-vanity", kind: "vanity", at: at(-1.4, 2.5), rotDeg: 0, sizeM: [0.6, 0.46] },
+      { id: "f-mystery", kind: "other", at: at(-3, 0), rotDeg: 0, sizeM: [0.6, 0.6] },
+    ];
+    const withFurniture = quote(model, d);
+    // The build, the DIY total and the permit fees are exactly as they were without it.
+    expect([withFurniture.totalLow, withFurniture.totalHigh, withFurniture.diy.low, withFurniture.diy.high]).toEqual([q.totalLow, q.totalHigh, q.diy.low, q.diy.high]);
+    expect(withFurniture.byTrade).toEqual(q.byTrade);
+    expect(q.furniture.lines).toEqual([]);
+    const f = withFurniture.furniture;
+    const ids = f.lines.map((l) => l.id);
+    expect(ids).toEqual(expect.arrayContaining(["bed", "sofa", "coffee_table", "nightstand"]));
+    expect(f.lines.find((l) => l.id === "nightstand")?.count).toBe(2);
+    // Fixtures stay with the trades, not here.
+    expect(ids).not.toContain("kitchen");
+    expect(ids).not.toContain("vanity");
+    expect(f.inBuild).toEqual(expect.arrayContaining(["Kitchen cabinets and counter", "Vanity"]));
+    // A piece nobody has a price for says so and adds nothing.
+    const mystery = f.lines.find((l) => l.id === "other")!;
+    expect(mystery.price).toBeNull();
+    expect(f.missing).toContain(mystery.label);
+    for (const l of f.lines) {
+      if (l.price) {
+        expect(l.sources.length, l.id).toBeGreaterThan(0);
+        for (const s of l.sources) expect(s.url).toMatch(/^https:\/\//);
+        expect([l.low, l.high]).toEqual([Math.round(l.count * l.price.low), Math.round(l.count * l.price.high)]);
+      } else expect([l.low, l.high]).toEqual([0, 0]);
+    }
+    expect(f.subtotal.low).toBe(f.lines.reduce((s, l) => s + l.low, 0));
+    expect(f.total.high).toBe(f.subtotal.high + f.hst.high);
+    expect(Math.abs(f.hst.low - f.subtotal.low * 0.13)).toBeLessThanOrEqual(1);
+  });
+
   it("runs in well under 50 ms on the example", () => {
     quote(model, design);
     const t = performance.now();
@@ -165,6 +206,20 @@ describe("price catalog", () => {
     }
     const ids = new Set(catalog.items.map((i) => i.id));
     for (const m of catalog.missing ?? []) expect(ids.has(m.id), m.id).toBe(false);
+  });
+
+  it("gives every furniture range its listings, read on the retailers' own pages", () => {
+    expect((catalog.furniture ?? []).length).toBeGreaterThan(0);
+    for (const f of catalog.furniture ?? []) {
+      expect(f.lowCAD, f.id).toBeLessThanOrEqual(f.highCAD);
+      expect(f.listings.some((l) => l.role === "low"), f.id).toBe(true);
+      expect(f.listings.some((l) => l.role === "high"), f.id).toBe(true);
+      for (const l of f.listings) {
+        expect(l.url, f.id).toMatch(/^https:\/\//);
+        expect(l.priceCAD, f.id).toBeGreaterThan(0);
+        expect(l.checked, f.id).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      }
+    }
   });
 
   it("cites every labour and pro rate", () => {
@@ -229,38 +284,16 @@ describe("price refresh", () => {
   });
 });
 
-describe("pictures of the design", () => {
-  const scanId = `test-renders-${process.pid}`;
-  afterAll(() => storage.removePrefix(`scans/${scanId}`));
-  const png = Buffer.from("89504e470d0a1a0a0000000d494844520000050000000002d0", "hex"); // a 1280 x 720 PNG header
-  const box = { x: 0.4, y: 0.3, w: 0.2, h: 0.3 };
-  const fake = (moved: boolean): RenderWork & { saved: Buffer[] } => {
-    const saved: Buffer[] = [];
-    return {
-      saved,
-      edit: async () => Buffer.from("restyled"),
-      boxes: async (img, _m, concept) => (concept === "basement window" ? [img.toString() === "restyled" && moved ? { ...box, x: 0.0 } : box] : []),
-      save: async (_k, img) => void saved.push(img),
-    };
-  };
-
-  it("keeps Muse Image's photo when SAM finds the window where the render had it", async () => {
-    const e = (await reserveRender(scanId, { title: "Living room", spot: 12, designId: design.id, at: "" }))!;
-    const work = fake(false);
-    const done = await restyleRender(scanId, e, png, "image/png", design.finishes, work);
-    expect(done.kept).toBe(true);
-    expect(work.saved[0].toString()).toBe("restyled");
-    expect((await renderIndex(scanId)).find((r) => r.n === e.n)?.status).toBe("done");
-  });
-
-  it("keeps the plain render when the photo moves a window", async () => {
-    const e = (await reserveRender(scanId, { title: "Bedroom", spot: 3, designId: design.id, at: "" }))!;
-    const work = fake(true);
-    const done = await restyleRender(scanId, e, png, "image/png", design.finishes, work);
-    expect(done.kept).toBe(false);
-    expect(work.saved[0]).toBe(png);
-    expect(renderKey(scanId, e.n)).toContain(`/renders/${e.n}`);
-    expect(renderPrompt(design.finishes)).toMatch(/exactly where they are/);
+describe("the book's pictures", () => {
+  it("are an input: the design's own pictures lead, then the example's committed looks and photos", async () => {
+    const design = [{ title: "Living room", kind: "design" as const, caption: "Checked by SAM 3.1", url: "/api/scans/sample/views/a1/x.jpg", load: async () => null }];
+    const { pictures } = await picturesFor("sample", sample, {}, model, design);
+    expect(pictures[0]).toMatchObject({ kind: "design", title: "Living room" });
+    const looks = pictures.filter((p) => p.kind === "look");
+    expect(looks.length).toBe(Object.keys(JSON.parse(readFileSync("public/samples/sample/looks/looks.json", "utf8"))).length);
+    for (const l of looks) expect(await l.load()).toBeInstanceOf(Buffer);
+    expect(pictures.at(-1)?.kind).toBe("concept");
+    expect(new Set(pictures.map((p) => p.url)).size).toBe(pictures.length);
   });
 });
 

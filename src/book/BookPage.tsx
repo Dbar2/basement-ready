@@ -91,12 +91,12 @@ export function BookPage() {
             {b.pictures.map((p) => (
               <figure key={p.url}>
                 <img src={p.url} alt={p.title} loading="lazy" />
-                <figcaption>{p.title}<span className="mono">{p.kind === "render" ? "Your design" : "Virtually staged"}</span></figcaption>
+                <figcaption>{p.title}<span className="mono">{p.kind === "design" ? `Your design · ${p.caption}` : p.caption}</span></figcaption>
               </figure>
             ))}
           </div>
         ) : (
-          <p className="muted">No pictures yet. Swipe your style, try a look, or render the design from the 3D studio.</p>
+          <p className="muted">No pictures yet. Swipe your style or try a look, and pictures of your design join them once it's drawn.</p>
         )}
       </section>
 
@@ -147,6 +147,30 @@ export function BookPage() {
             </tfoot>
           </table>
           {q.missing.length > 0 && <p className="book-missing">No price found, so not in the total: {q.missing.join(" · ")}</p>}
+          {q.furniture.lines.length > 0 && (
+            <div className="book-furniture">
+              <h3>Furniture, if you buy it</h3>
+              <p className="muted">Optional, and not in the build total or the permit.</p>
+              <table className="book-quote">
+                <tbody>
+                  {q.furniture.lines.map((l) => (
+                    <tr key={l.id}>
+                      <td>
+                        {l.count > 1 ? `${l.count} × ` : ""}
+                        {l.label}
+                        <p className="book-sources">{l.sources.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store}</a>)}</p>
+                      </td>
+                      <td>{l.price ? range(l.low, l.high) : <span className="book-missing">No price found</span>}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="book-total"><td>With HST</td><td>{range(q.furniture.total.low, q.furniture.total.high)}</td></tr>
+                </tfoot>
+              </table>
+              {q.furniture.inBuild.length > 0 && <p className="muted">Already in the build: {q.furniture.inBuild.join(", ").toLowerCase()}.</p>}
+            </div>
+          )}
           <p className="muted">Shelf prices checked {q.checked} and later, before HST. Labour from published rates; hours on hourly trades are our estimate.</p>
         </section>
       )}

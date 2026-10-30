@@ -1,6 +1,6 @@
 // "The book": what the homeowner walks away with, as one PDF. The decision on the cover, the chosen
-// design with the alternatives they weighed, the pictures (their design rendered, the looks and the
-// swipes they loved), the mood board, the quote by trade, how ready the permit is, the money they may
+// design with the alternatives they weighed, the pictures it's handed (the design from its best angles,
+// then the looks and the swipes they loved), the mood board, the quote by trade, how ready the permit is, the money they may
 // qualify for, a timeline from applying to moving in, and what to do next. Everything in it comes
 // from the model, the scan's answer and the dated catalog; nothing is made up on the way.
 import { PDFDocument, rgb } from "pdf-lib";
@@ -10,9 +10,10 @@ import { lookPage, localDate } from "../permit/package";
 import { embedFonts, LETTER, newDoc, Sheet, type Fonts } from "../permit/pdf";
 import { quote as priceDesign, type Quote } from "../quote/quote";
 import type { StoredState } from "../workspace";
+import type { PictureKind } from "./pictures";
 import { AMBER, drawDesign, FOREST, LEAF, LINE, MINT, MOSS, RED, SAGE } from "./plan";
 
-export type BookPicture = { title: string; jpeg: Buffer; kind: "render" | "favourite" | "look" | "concept" };
+export type BookPicture = { title: string; jpeg: Buffer; kind: PictureKind };
 export type ReadinessItem = { label: string; ok: boolean | null; detail?: string };
 
 export type BookInput = {
@@ -128,6 +129,9 @@ function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design 
     s.text(v.label, M + 10, y + 1, { size: 11, font: fonts.bold, color: rgb(1, 1, 1) });
     y -= 34;
   }
+  if (input.result?.demo) {
+    y = s.wrap("The demo house: the City of Waterloo's rules on a house that isn't real.", M, y, s.width - 2 * M, { size: 10, color: AMBER, font: fonts.bold }) - 10;
+  }
   if (input.result?.headline) y = s.wrap(input.result.headline, M, y, s.width - 2 * M, { size: 16, color: FOREST, leading: 21 }) - 26;
 
   const facts: [string, string][] = [];
@@ -194,17 +198,17 @@ function designPage(doc: PDFDocument, fonts: Fonts, input: BookInput, design: De
 // ---- Pictures and the mood board ----
 
 async function picturesPages(doc: PDFDocument, fonts: Fonts, input: BookInput, o: { address: string }, pages: string[]) {
-  const order = ["render", "favourite", "look", "concept"];
+  const order: PictureKind[] = ["design", "favourite", "look", "concept"];
   const pics = [...input.pictures].sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   if (!pics.length) {
     const { s, y } = page(doc, fonts, "Pictures", "Pictures of your basement", o);
     pages.push("Pictures");
-    s.wrap("No pictures yet. Swipe your style while it measures, try a look on the workspace, or render your design from the 3D studio, and they appear here.", M, y, s.width - 2 * M, { size: 10, color: MOSS });
+    s.wrap("No pictures yet. Swipe your style while it measures or try a look on the workspace, and they appear here, with pictures of your design once it's drawn.", M, y, s.width - 2 * M, { size: 10, color: MOSS });
     return;
   }
   // The permit package's look page, four to a page: their design first, then what they loved.
   for (let i = 0; i < pics.length && i < 12; i += 4) {
-    await lookPage(doc, pics.slice(i, i + 4).map((p) => ({ title: p.kind === "render" ? `Your design: ${p.title}` : p.title, jpeg: p.jpeg })), input.state ?? {});
+    await lookPage(doc, pics.slice(i, i + 4).map((p) => ({ title: p.kind === "design" ? `Your design: ${p.title}` : p.title, jpeg: p.jpeg })), input.state ?? {});
     pages.push(i ? "Pictures (continued)" : "Pictures");
   }
 }
@@ -286,6 +290,10 @@ function quotePages(doc: PDFDocument, fonts: Fonts, q: Quote, o: { address: stri
     y -= bold ? 26 : 18;
   }
   y = s.wrap("Built yourself: the materials, the fees, and only the pros the law still needs (engineer, concrete cutter, HVAC designer), with the homeowner rate for the electrical permit.", M, y, s.width - 2 * M, { size: 8, color: MOSS }) - 6;
+  if (q.furniture.lines.length) {
+    const fu = q.furniture;
+    y = s.wrap(`Furniture, if you buy it: ${range(fu.total.low, fu.total.high)} with HST, for ${fu.lines.map((l) => `${l.count > 1 ? `${l.count} × ` : ""}${l.label.toLowerCase().replace(/\btv\b/, "TV")}`).join(", ")}. Optional, and not in either total.`, M, y - 2, s.width - 2 * M, { size: 8.5, color: FOREST }) - 6;
+  }
   if (q.missing.length) {
     y -= 4;
     s.text("NO PRICE FOUND, SO NOT IN THE TOTAL", M, y, { size: 7.5, color: AMBER, font: fonts.bold });
@@ -314,6 +322,25 @@ function quotePages(doc: PDFDocument, fonts: Fonts, q: Quote, o: { address: stri
     }
     f.y -= 6;
   }
+
+  const fu = q.furniture;
+  if (!fu.lines.length) return;
+  f.need(90);
+  f.s.text("FURNITURE, IF YOU BUY IT: OPTIONAL, NOT IN THE BUILD OR THE PERMIT", M, f.y, { size: 8, color: LEAF, font: fonts.bold });
+  f.y -= 14;
+  for (const l of fu.lines) {
+    f.need(30);
+    f.s.text(`${l.count > 1 ? `${l.count} × ` : ""}${l.label}`, M, f.y, { size: 9, color: FOREST, font: fonts.bold });
+    f.s.text(l.price ? range(l.low, l.high) : "no price found", s.width - M, f.y, { size: 9, color: l.price ? FOREST : AMBER, align: "right" });
+    f.y = f.s.wrap(l.basis, M, f.y - 11, s.width - 2 * M - 160, { size: 7.5, color: MOSS }) - 6;
+  }
+  f.s.text(`HST ${q.hst.pct}%`, M, f.y, { size: 8.5, color: MOSS });
+  f.s.text(range(fu.hst.low, fu.hst.high), s.width - M, f.y, { size: 8.5, color: MOSS, align: "right" });
+  f.y -= 14;
+  f.s.text("Furniture total", M, f.y, { size: 10, color: FOREST, font: fonts.bold });
+  f.s.text(range(fu.total.low, fu.total.high), s.width - M, f.y, { size: 10, color: FOREST, font: fonts.bold, align: "right" });
+  f.y -= 16;
+  if (fu.inBuild.length) f.y = f.s.wrap(`Already in the build above: ${fu.inBuild.join(", ").toLowerCase()}.`, M, f.y, s.width - 2 * M, { size: 7.5, color: MOSS }) - 6;
 }
 
 // ---- Permit readiness ----
@@ -437,7 +464,7 @@ function nextStepsPage(doc: PDFDocument, fonts: Fonts, result: any, o: { address
 
 function sourcesPage(doc: PDFDocument, fonts: Fonts, q: Quote, o: { address: string }, pages: string[]) {
   const seen = new Map<string, { title: string; checked: string; store?: string; sku?: string | null }>();
-  for (const l of q.byTrade.flatMap((t) => t.lines)) for (const src of l.sources) if (!seen.has(src.url)) seen.set(src.url, src);
+  for (const l of [...q.byTrade.flatMap((t) => t.lines), ...q.furniture.lines]) for (const src of l.sources) if (!seen.has(src.url)) seen.set(src.url, src);
   const f = new Flow(doc, fonts, "Sources", "Where every price comes from", o, pages);
   for (const [url, src] of seen) {
     const head = `${src.title}${src.store ? `, ${src.store}` : ""}${src.sku ? `, SKU ${src.sku}` : ""} (checked ${src.checked})`;

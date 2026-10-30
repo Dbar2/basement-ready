@@ -262,3 +262,25 @@ No CAD rate was found for installing a dryer vent, so that line's labour stays m
 ESA notification:
 - Doing it yourself: the homeowner rate by outlet count (from `data/rules/ontario-diy.json`).
 - Hiring a contractor: $201 without service work, or $256 with it (ESA's 2026 Residential Fees Quick Reference Guide, https://esasafe.com/assets/files/esasafe/pdf/Fees/2026-Residential-Fees-Reference-Guide.pdf).
+
+## Furniture, if they buy it (optional; never in the build, DIY or permit totals)
+
+The quote prices the furniture placed in a design separately, as an optional extra. Each piece has a budget listing (low) and a mid-range one (high), each read on the retailer's own product page on **2026-10-30**, before tax. Where a piece is two buys (a bed frame and a mattress, a console and a TV, a washer and a dryer) the range adds them up. A sale is recorded at its regular price, with the sale price in the listing's note, as for the shelf prices above. The Brick's prices are for its Waterloo store and vary by region; Walmart.ca was not used because its pages answered with a bot check. The kitchen, vanity, toilet and shower are fixtures and stay in the build.
+
+| Piece | Low | High | Listings |
+|---|---|---|---|
+| Queen bed: frame and mattress | $698.00 | $1,098.95 | IKEA MALM frame $299 + VESTERÖY mattress $399; Structube BENA frame $399 + The Brick Serta Back Logic 2.0 mattress $699.95 |
+| Three-seat sofa | $649.00 | $799.00 | IKEA EKHOLMA $649; Structube TERESA $799 (on sale $749) |
+| Armchair | $199.00 | $299.00 | IKEA HERRÅKRA $199; Structube ROUSSEAU $299 |
+| Desk, about 120 x 60 cm | $199.00 | $419.95 | IKEA LAGKAPTEN / ALEX $199; The Brick Clayton $419.95 |
+| Dining table and 4 chairs | $249.00 | $665.95 | IKEA HÄGERNÄS set $249; The Brick Devon 5-piece set $665.95 |
+| Six-drawer dresser | $179.00 | $449.00 | IKEA RAST $179; Structube MONTANA $449 |
+| TV and console | $538.99 | $888.99 | IKEA LACK TV bench $99 + Canadian Tire Magnavox 55" $439.99 (plus a $22.95 environmental fee); Structube MONTANA media unit $239 + Best Buy LG 55" NU850 $649.99 |
+| Area rug, about 5 x 8 ft | $89.00 | $209.95 | IKEA VÄXELFEL 160x230 cm $89; The Brick Rene 5'x8' $209.95 |
+| Bookcase, about 80 cm wide | $90.00 | $269.00 | IKEA BILLY $90; Structube ELLINGTON $269 |
+| Fridge, 28" top-freezer | $728.00 | $1,199.99 | Home Depot Frigidaire FFHT1822UW $728; Best Buy GE GTE16DTNRWW $1,199.99 |
+| Washer and dryer, 24" compact stackable | $1,896.00 | $2,349.98 | Home Depot GE GFW148SSMWW $948 + GFD14JSINWW $948 (each on sale $898); Best Buy LG WM1455HWA $1,099.99 + DLHC1455W $1,249.99 (on sale $1,199.99) |
+| Coffee table, about 120 cm | $79.99 | $319.00 | IKEA LACK $79.99; Structube RENO $319 |
+| Nightstand | $69.99 | $139.00 | IKEA BRIMNES $69.99; Structube MONTANA $139 |
+
+Every listing's URL is in `prices-on.json` under `furniture`. Two were spot-checked against their pages (IKEA EKHOLMA $649; Structube MONTANA dresser $449).
