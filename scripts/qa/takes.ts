@@ -81,8 +81,16 @@ export async function runTake(id: string, baseURL: string, log: (s: string) => v
       await page.goto("/");
       await page.getByRole("button", { name: /Check my basement/ }).first().click();
       const sheet = page.getByRole("dialog");
-      await sheet.getByRole("combobox", { name: "Your address" }).fill(t.address);
-      await sheet.getByRole("option", { name: t.address }).first().click({ timeout: 30_000 });
+      // The address list comes from the city's (replayed) map service; type again if it's slow to show.
+      const box = sheet.getByRole("combobox", { name: "Your address" });
+      const option = sheet.getByRole("option", { name: t.address }).first();
+      for (let attempt = 0; ; attempt++) {
+        await box.fill("");
+        await box.pressSequentially(t.address, { delay: 40 });
+        if (await option.waitFor({ timeout: 20_000 }).then(() => true, () => false)) break;
+        if (attempt >= 2) throw new Error(`the start sheet never listed "${t.address}"`);
+      }
+      await option.click();
       await sheet.getByRole("button", { name: t.who }).click();
       const chooser = page.waitForEvent("filechooser");
       await sheet.getByRole("button", { name: "Upload a video" }).click();
