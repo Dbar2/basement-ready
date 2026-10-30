@@ -1,8 +1,11 @@
-// The basement and the chosen design as the permit set draws them, in the shape of the one shared
-// model (server/model/types.ts): the studio's saved model when there is one, otherwise the same
-// shape seeded here from the scan's rooms and the layout picked on the Ideas tab. The owner's tape
+// The basement and the chosen design as the permit set draws them, from the one shared model
+// (server/model/current.ts): the one they saved, else seeded from the scan; only a scan the model can't
+// be seeded from is drawn from the rooms and layout seeded here. The owner's tape
 // numbers then lock the sizes: the two main walls rescale the plan, and each window takes its taped
 // width, height and sill. Every sheet reads this, so no size on the drawings is placed by hand.
+import { openingsOn } from "../model/checks";
+import { currentModel } from "../model/current";
+import { chosenDesign } from "../model/legacy";
 import type { Alarm, Design, Existing, Fixture, FixtureKind, Model, Opening, Pt, Room, RoomKind, Wall } from "../model/types";
 import type { StoredState } from "../workspace";
 import { basementGeometry, type Geometry } from "./plans";
@@ -334,17 +337,30 @@ function rescale<T>(v: T, o: Pt, kx: number, kz: number): T {
 
 // ---- The model the sheets draw ------------------------------------------------------------------
 
+// Each bedroom's escape window: the biggest window in its outside walls, marked for the sheets.
+function markEscape(design: Design): Design {
+  if (design.proposed.openings.some((o) => (o as { escape?: boolean }).escape)) return design;
+  const escape = new Set(
+    design.proposed.rooms
+      .filter((r) => r.kind === "bedroom" && r.unit === 2)
+      .flatMap((r) => openingsOn(r, design, "window").sort((a, b) => b.widthM * (b.heightM ?? 0.5) - a.widthM * (a.heightM ?? 0.5)).slice(0, 1))
+      .map((o) => o.id),
+  );
+  return escape.size ? { ...design, proposed: { ...design.proposed, openings: design.proposed.openings.map((o) => (escape.has(o.id) ? { ...o, escape: true } : o)) } } : design;
+}
+
 export function permitModel(result: any, state: StoredState | null | undefined): PermitModel | null {
   const st = state ?? {};
   const geo = basementGeometry(result, st);
-  const saved = (st as { model?: Model }).model;
+  // The model every page works from: the one they saved, else seeded from the scan (server/model/current.ts).
+  const current = currentModel(result, st);
   let existing: PermitModel["existing"];
   let design: PermitModel["design"];
   let from: PermitModel["from"];
-  if (saved?.designs?.length) {
-    existing = saved.existing as PermitModel["existing"];
-    design = (saved.designs.find((x) => x.chosen) ?? saved.designs[0]) as PermitModel["design"];
-    from = "studio";
+  if (current?.model.designs.length) {
+    existing = current.model.existing as PermitModel["existing"];
+    design = markEscape(chosenDesign(current.model)!) as PermitModel["design"];
+    from = current.saved ? "studio" : "scan";
   } else {
     if (!geo) return null;
     ({ existing, design } = seed(geo, result));

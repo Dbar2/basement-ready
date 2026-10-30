@@ -1,9 +1,12 @@
-// The basement from the scan, for the drawings: the rooms where the scan placed them
-// (src/components/basementPlan.ts), the chosen layout moved into the same frame, and smoke and CO
-// alarms placed by the code's rules. server/permit/model.ts turns this into the shared model.
+// The basement from the scan, for the drawings and the materials list: the rooms where the scan placed
+// them (src/components/basementPlan.ts) and the chosen design of the shared model (server/model/current.ts)
+// as a layout in the same frame, with its alarms. A scan the model can't be seeded from gets the
+// suggested layout and alarms placed here by the code's rules.
 import type { Layout, LayoutZone, Plan, PlanSide, RoomResult } from "../../src/api";
 import { basementRooms, placeLayout } from "../../src/components/basementPlan";
 import { suggestLayout } from "../layout";
+import { currentModel } from "../model/current";
+import { chosenDesign, layoutOf } from "../model/legacy";
 import type { StoredState } from "../workspace";
 
 export type Box = { minX: number; maxX: number; minZ: number; maxZ: number };
@@ -81,17 +84,40 @@ export function placeAlarms(layout: Layout | null, main: Plan | null, fuelBurnin
   return out;
 }
 
+// The chosen design of the model every page works from (server/model/current.ts), as a layout in the
+// basement frame, with its own alarms, escape window and heights.
+function fromModel(result: any, state: StoredState | null | undefined) {
+  const current = currentModel(result, state);
+  const design = chosenDesign(current?.model);
+  const shapes = current && design ? layoutOf(current.model.existing, design) : null;
+  if (!current || !design || !shapes) return null;
+  const { existing } = current.model;
+  const win = shapes.layout.window;
+  const opening = win ? shapes.plan.openings.find((o) => o.kind === "window" && o.side === win.side && Math.abs(o.atM - win.atM) < 0.01) : null;
+  const status = design.proposed.openings.find((o) => o.id === opening?.detectionId)?.status ?? "existing";
+  const overhead = design.proposed.fixtures.filter((f) => (f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead") && f.heightM != null).map((f) => f.heightM as number);
+  return {
+    layout: shapes.layout,
+    alarms: design.proposed.alarms.map((a): Alarm => ({ kind: a.kind, x: a.at[0], z: a.at[1], why: a.why })),
+    egress: win ? { side: win.side, atM: win.atM, widthM: win.widthM, existing: status === "existing", ok: win.widthM >= 0.38 ? null : false } : null,
+    ceilingM: existing.ceilingM,
+    beamM: overhead.length ? Math.min(...overhead) : null,
+  };
+}
+
 export function basementGeometry(result: any, state: StoredState | null | undefined): Geometry | null {
   const placed = basementRooms(result?.rooms as RoomResult[] | undefined);
   const mainRoom: RoomResult | undefined = (result?.rooms ?? []).find((r: RoomResult) => r.index === result?.mainRoom);
   let rooms: { name: string; plan: Plan }[];
   let main: { name: string; plan: Plan } | null = null;
-  let layout = chosenLayout(result, state);
+  const model = fromModel(result, state);
+  let layout = model?.layout ?? chosenLayout(result, state);
   if (placed) {
     rooms = placed.map((p) => ({ name: p.room.name, plan: p.plan }));
     const m = placed.find((p) => p.room.index === result.mainRoom) ?? placed[0];
     main = { name: m.room.name, plan: m.plan };
-    if (layout && m.room.placement) layout = placeLayout(layout, m.room.placement);
+    // The model's layout is already in the basement frame.
+    if (layout && !model && m.room.placement) layout = placeLayout(layout, m.room.placement);
   } else if (result?.plan) {
     rooms = [{ name: mainRoom?.name ?? "Basement", plan: result.plan }];
     main = rooms[0];
@@ -122,11 +148,11 @@ export function basementGeometry(result: any, state: StoredState | null | undefi
     main,
     layout,
     box: union(rooms.map((r) => r.plan.box)),
-    ceilingM: tape.ceilingMm ? tape.ceilingMm / 1000 : scanCeiling,
-    beamM: tape.beamMm ? tape.beamMm / 1000 : clearances.length ? Math.min(...clearances) : null,
+    ceilingM: tape.ceilingMm ? tape.ceilingMm / 1000 : (model?.ceilingM ?? scanCeiling),
+    beamM: tape.beamMm ? tape.beamMm / 1000 : (model?.beamM ?? (clearances.length ? Math.min(...clearances) : null)),
     fuelBurning,
     estimated: !tape.ceilingMm && rooms.some((r) => r.plan.scaleSource !== "user_measurement" || !r.plan.trusted),
-    alarms: placeAlarms(layout, main?.plan ?? null, fuelBurning),
-    egress,
+    alarms: model?.alarms ?? placeAlarms(layout, main?.plan ?? null, fuelBurning),
+    egress: model ? (model.egress ?? egress) : egress,
   };
 }

@@ -1,18 +1,18 @@
-// /scans/:id/book: the book on screen, the same sections as the PDF (server/book/book.ts). The quote
-// is worked out here in the browser from the model, so picking another layout reprices it at once.
-import { useParams } from "@tanstack/react-router";
+// The book on screen, the workspace's first tab (step 6 of the flow): the same sections as the PDF
+// (server/book/book.ts). The quote is worked out here in the browser from the model, so picking another
+// layout reprices it at once.
 import { useEffect, useMemo, useState } from "react";
 import type { Design } from "../../server/model/types";
-import { Logo } from "../components/Logo";
 import { chosen, downloadBook, getBook, quote, type BookData } from "./bookApi";
 import "./book.css";
 
 const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const range = (lo: number, hi: number) => (lo === hi ? cad(lo) : `${cad(lo)}–${cad(hi)}`);
 const VERDICT = { yes: "Yes", fix: "Yes, after fixes", no: "Not as it is" } as const;
+// A line that buys two parts from the same listing names it once.
+const once = <T extends { url: string }>(sources: T[]) => [...new Map(sources.map((s) => [s.url, s])).values()];
 
-export function BookPage() {
-  const { scanId } = useParams({ from: "/scans/$scanId/book" });
+export function BookView({ scanId }: { scanId: string }) {
   const [b, setB] = useState<BookData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pick, setPick] = useState<string | null>(null);
@@ -29,8 +29,8 @@ export function BookPage() {
   const q = useMemo(() => (b?.model && design ? quote(b.model, design, { municipality: b.municipality }) : null), [b, design]);
   const layouts = useMemo(() => (b?.model ? b.model.designs.map((d) => ({ d, q: quote(b.model!, d, { municipality: b.municipality }) })) : []), [b]);
 
-  if (error) return <main className="book"><Logo /><p className="book-error">{error}</p></main>;
-  if (!b) return <main className="result-loading"><Logo /></main>;
+  if (error) return <div className="book"><p className="book-error">{error}</p></div>;
+  if (!b) return <div className="book" aria-busy="true"><div className="skeleton skeleton-plan" /></div>;
 
   const ready = b.readiness.filter((r) => r.ok === true).length;
   const download = async () => {
@@ -45,9 +45,9 @@ export function BookPage() {
   };
 
   return (
-    <main className="book">
+    <div className="book">
       <div className="book-actions">
-        <a className="link-quiet" href={`/scans/${scanId}`}>Back to your basement</a>
+        <span />
         <button className="btn btn-primary" onClick={() => void download()} disabled={busy}>
           {busy ? "Making the book…" : "Download the book (PDF)"}
         </button>
@@ -129,7 +129,7 @@ export function BookPage() {
                             <strong>{l.item}</strong> <span className="mono">{range(l.low, l.high)}</span>
                             <p>{l.qty.toLocaleString("en-CA")} {l.unit}. {l.basis}</p>
                             {l.missing.length > 0 && <p className="book-missing">No price found: {l.missing.join(", ")}</p>}
-                            <p className="book-sources">{l.sources.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store ?? s.title}</a>)}</p>
+                            <p className="book-sources">{once(l.sources).map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store ?? s.title}</a>)}</p>
                           </li>
                         ))}
                       </ul>
@@ -158,7 +158,7 @@ export function BookPage() {
                       <td>
                         {l.count > 1 ? `${l.count} × ` : ""}
                         {l.label}
-                        <p className="book-sources">{l.sources.map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store}</a>)}</p>
+                        <p className="book-sources">{once(l.sources).map((s) => <a key={s.url} href={s.url} target="_blank" rel="noreferrer">{s.store}</a>)}</p>
                       </td>
                       <td>{l.price ? range(l.low, l.high) : <span className="book-missing">No price found</span>}</td>
                     </tr>
@@ -229,7 +229,7 @@ export function BookPage() {
           ))}
         </ol>
       </section>
-    </main>
+    </div>
   );
 }
 

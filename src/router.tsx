@@ -1,17 +1,13 @@
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, Outlet, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Logo } from "./components/Logo";
 import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
 import { applyRouteMeta, marketingRoutes, type MarketingRoute } from "./marketing/routes";
 import { PATHS } from "./marketing/site";
-import { IdeasPage } from "./ideas/IdeasPage";
 import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
 import { ScanPage } from "./screens/ScanPage";
 import { Start } from "./screens/Start";
-import { PlanConfirm } from "./studio/PlanConfirm";
-import { Studio } from "./studio/Studio";
-import { PicturesPage } from "./views/PicturesPage";
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -22,16 +18,24 @@ export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/
 // The one-page plan to hand a designer, made to print or save as a PDF.
 const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
 
-// "Is this your basement?", then the design in 3D (src/studio).
+// The flow after the upload (src/flow/flow.ts): while it measures, /scans/:id is the wait screen with
+// the style deck; then each step has its own page, and the book is the workspace's first tab. Each
+// step loads with its page, so the home page stays light.
+const StylePage = lazyRouteComponent(() => import("./flow/StylePage"), "StylePage");
+const PlanConfirm = lazyRouteComponent(() => import("./studio/PlanConfirm"), "PlanConfirm");
+const LayoutsPage = lazyRouteComponent(() => import("./flow/LayoutsPage"), "LayoutsPage");
+const Studio = lazyRouteComponent(() => import("./studio/Studio"), "Studio");
+const PicturesPage = lazyRouteComponent(() => import("./views/PicturesPage"), "PicturesPage");
+const styleRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/style", component: StylePage });
+// "Is this your basement?", then the layouts, then the design in 3D (src/studio).
 const planRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/plan", component: PlanConfirm });
+const layoutsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/layouts", component: LayoutsPage });
 const studioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/studio", component: Studio });
 // Pictures of the design from the scan's best real angles, all agreeing (src/views/DesignPictures.tsx).
 const picturesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/pictures", component: PicturesPage });
-// Swipe your style, then pick a layout: on its own page until the wait screen deals the deck.
-const ideasRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/ideas", component: IdeasPage });
-// The book: the design, pictures, quote, permit readiness, money and timeline, with its PDF. Loaded
-// on its own, so the price catalog the quote carries stays out of the first page's download.
-const bookRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/book", component: lazyRouteComponent(() => import("./book/BookPage"), "BookPage") });
+// Older links: the ideas page is the style step now, and the book is the workspace's first tab.
+const ideasRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/ideas", beforeLoad: ({ params }) => { throw redirect({ href: `/scans/${params.scanId}/style` }); } });
+const bookRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/book", beforeLoad: ({ params }) => { throw redirect({ href: `/scans/${params.scanId}?tab=book` }); } });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -72,7 +76,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, styleRoute, planRoute, layoutsRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });

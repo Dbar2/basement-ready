@@ -42,6 +42,7 @@ export type WorkspaceState = {
   permit?: PermitInputs;
   looks?: Record<string, Look>;
   model?: Model; // the basement and its designs (server/model/types.ts)
+  flow?: { step: "style" | "plan" | "layouts" | "studio" | "pictures" | "book"; at?: string | null }; // where they left off (src/flow/flow.ts)
 };
 
 // What the owner adds for the permit set (server/workspace.ts PermitSchema).
