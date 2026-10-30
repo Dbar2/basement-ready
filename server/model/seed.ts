@@ -7,11 +7,13 @@ import type { BasementPlan, Plan as ScanPlan, RoomResult } from "../../src/api";
 import { basementRooms } from "../../src/components/basementPlan";
 import { suggestLayout, type Layout, type LayoutOptions } from "../layout";
 import type { Plan, Side } from "../plan";
+import { colourFurniture } from "../ideas/deck";
 import { burnsFuel, placeAlarms } from "./alarms";
 import { checkDesign } from "./checks";
 import { applyEdits, nextId } from "./edit";
+import { furnishDesign } from "./furniture";
 import { add, along, bounds, clamp, dist, inPolygon, mul, polygonArea, project, r2, r3, rectPoly, wallLength, wallNormal, type Box } from "./geometry";
-import type { Design, Edit, Existing, Finishes, Fixture, FixtureKind, Model, Opening, Pt, Room, RoomKind, Wall } from "./types";
+import type { Design, Edit, Existing, Finishes, Fixture, FixtureKind, Model, Mood, Opening, Pt, Room, RoomKind, Wall } from "./types";
 
 // Anything overhead has its underside well above furniture; below this SAM outlined a shelf
 // (server/scan3d.ts lowOverhead).
@@ -374,7 +376,7 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
     id: meta.id,
     name: meta.name,
     layout: meta.layout,
-    // Furniture: server/model/furniture.ts furnishDesign(design) places it, once that lands.
+    // Furniture is placed once the design is final (seedDesigns: furnishDesign after autofix).
     proposed: { walls, openings, rooms, fixtures, alarms: [], furniture: [] },
     finishes,
     chosen: false,
@@ -428,7 +430,9 @@ const DEFAULT_FINISHES: Finishes = { style: "light", floor: "Light oak laminate"
 
 // Every design worth showing for this basement: one bedroom on the window, a studio, the bedroom on
 // another wall, and two bedrooms where they fit. Each is checked and fixed before it's shown.
-export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finishes>; pick?: LayoutOptions | null; now?: string } = {}): Design[] {
+// Furnished after the fixes, so nothing stands where a fix moved a wall; each piece takes the colour
+// their board gave it (server/ideas/deck.ts colourFurniture).
+export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finishes>; colours?: Mood["colours"]; pick?: LayoutOptions | null; now?: string } = {}): Design[] {
   const main = mainRoom(existing);
   if (!main) return [];
   const now = opts.now ?? new Date().toISOString();
@@ -436,6 +440,10 @@ export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finis
   const finishes = { ...DEFAULT_FINISHES, ...(opts.finishes ?? {}) };
   const one = suggestLayout(plan, { kind: "one_bedroom" });
   const build = (meta: Meta, layout: Layout) => autofix(designFromLayout(existing, main, layout, meta, finishes, now), existing, now);
+  const furnish = (d: Design) => {
+    const f = furnishDesign(d);
+    return opts.colours ? { ...f, proposed: { ...f.proposed, furniture: colourFurniture(f.proposed.furniture, opts.colours) } } : f;
+  };
   const passes = (d: Design, ids: string[]) => checkDesign(d, existing).every((c) => !ids.includes(c.id) || c.ok !== false);
   const kept: Design[] = [build({ id: "one_bedroom", name: "One bedroom", layout: "one_bedroom" }, one), build({ id: "studio", name: "Studio", layout: "studio" }, suggestLayout(plan, { kind: "studio" }))];
   // The bedroom on another wall: the next window first, then the longest walls. Only one that still
@@ -459,20 +467,22 @@ export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finis
   }
   const pick = opts.pick;
   const chosen = (pick?.kind === "studio" && kept.find((d) => d.id === "studio")) || (pick?.side && kept.find((d) => d.id === `bedroom_${pick.side}`)) || kept[0];
-  return kept.map((d) => ({ ...d, chosen: d === chosen }));
+  return kept.map((d) => ({ ...furnish(d), chosen: d === chosen }));
 }
 
 export function emptyMood(): Model["mood"] {
   return { liked: [], disliked: [], style: null, finishes: {} };
 }
 
-// The whole model for a scan. `ideas`: what they picked on the old Ideas tab, so the same design is chosen.
+// The whole model for a scan. `ideas`: what they picked on the old Ideas tab, so the same design is
+// chosen. `mood`: what their board reads so far, which finishes and colours the designs.
 export function seedModel(
   result: ScanResultLike,
-  state: { tape?: Tape; ideas?: { kind?: "one_bedroom" | "studio" | null; side?: Side | null } } = {},
+  state: { tape?: Tape; ideas?: { kind?: "one_bedroom" | "studio" | null; side?: Side | null }; mood?: Mood | null } = {},
   now = new Date().toISOString(),
 ): Model | null {
   const existing = existingFromScan(result, state.tape ?? {});
   if (!existing) return null;
-  return { version: 1, existing, designs: seedDesigns(existing, { pick: state.ideas ?? null, now }), mood: emptyMood() };
+  const mood = state.mood ?? emptyMood();
+  return { version: 1, existing, designs: seedDesigns(existing, { pick: state.ideas ?? null, finishes: mood.finishes, colours: mood.colours, now }), mood };
 }
