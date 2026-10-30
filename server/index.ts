@@ -40,6 +40,7 @@ import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger,
 import { startSweeps } from "./sweep";
 import { DEMO_MUNICIPALITY, isDemo, labelled } from "./demo";
 import { mountViews } from "./views/routes";
+import { mountBook } from "./book/routes";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
 const UUID = /^[0-9a-f-]{36}$/;
@@ -539,6 +540,8 @@ mountViews(app);
 
 // Swipe your style, then pick a layout (server/ideas/routes.ts).
 mountIdeas(app, currentUser);
+
+mountBook(app, currentUser);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {

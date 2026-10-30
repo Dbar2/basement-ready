@@ -1,4 +1,4 @@
-import { createRootRoute, createRoute, createRouter, Link, Outlet } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, Outlet } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Logo } from "./components/Logo";
 import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
@@ -29,6 +29,9 @@ const studioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans
 const picturesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/pictures", component: PicturesPage });
 // Swipe your style, then pick a layout: on its own page until the wait screen deals the deck.
 const ideasRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/ideas", component: IdeasPage });
+// The book: the design, pictures, quote, permit readiness, money and timeline, with its PDF. Loaded
+// on its own, so the price catalog the quote carries stays out of the first page's download.
+const bookRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/book", component: lazyRouteComponent(() => import("./book/BookPage"), "BookPage") });
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -69,7 +72,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, picturesRoute, ideasRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, planRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
