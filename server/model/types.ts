@@ -30,6 +30,7 @@ export type Opening = {
   swing?: "left" | "right" | null; // doors: the hinge side, looking from `a` to `b`
   rating?: "20min" | null; // a door in a fire separation: closer, positive latch
   detectionId?: string; // the SAM find it came from
+  guess?: boolean; // its width (or for a window only seen on video, its place) is a guess until they check it
 };
 
 export type RoomKind = "bedroom" | "bathroom" | "kitchen" | "living" | "mechanical" | "stairs" | "closet" | "storage" | "laundry" | "hall" | "other";
