@@ -31,29 +31,31 @@ Each run writes to `tmp/e2e/<run>/`:
 - **The key:** a hash of the service, route, model and request body, with image, video and audio bytes hashed.
 - **The saved file:** `<key>.json` holds the status, content type, the body (or `<key>.body.gz` beside it), the time the call took, and a short copy of the request.
 - **Never saved:** headers and keys. Auth is added only when a call really goes out.
+- **No real key in replay:** the start sheet refuses uploads when the server has no Meta key, so the replay server gets the placeholder `replay-only-not-a-key`. Replay never sends it, and Meta's address points nowhere.
 - **Public data:** on the test server, `tests/e2e/support/net-guard.ts` does the same for public data (`PUBLIC_CACHE`), such as city maps, the aerial photo and the city's forms.
 
 Saved answers live in two folders:
-- `tests/fixtures/replay/`: committed and small. Right now it holds the two Waterloo permit forms the sample's package fills in.
-- `media/private/replay/` (gitignored, in the main checkout): recordings of real takes, including David's own footage. Each take's `takes/<id>.json` holds what it came out as when it was recorded (verdict, rooms and sizes, finds, questions, permit sheets, photo count). Replay must match it.
+- `tests/fixtures/replay/`: committed and small. Right now it holds Meta's model list (the server asks for it at boot) and the two Waterloo permit forms the sample's package fills in.
+- `media/private/replay/` (gitignored, in the main checkout): recordings of real takes, including David's own footage. Each take's `takes/<id>.json` holds what it came out as when it was recorded: verdict, rooms and sizes, finds, questions, permit sheets and things left, photo and card counts. Replay must match it.
+- **When the product changes on purpose** (new wording, a new model call, a changed Spark prompt): replay shows named misses or a changed outcome. Record the take again with `E2E_TAKES=…` (only what's new costs anything) and the outcome file is rewritten.
 
-## What's recorded (Oct 30)
+## What's recorded (Oct 30, re-checked against main the same evening)
 
 | Take | How it's sent | Where its answers live | Recorded outcome |
 |---|---|---|---|
-| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 1 fix", 3 rooms, 14-page permit set, 1 photo |
-| `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (43 MB, too big to commit) | "Looks like yes", 2 rooms (6.2 × 4.17 and 2.93 × 4.17 m; true 6.4 × 4.6 and 4.6 × 3.08), 14 pages, 2 photos |
-| Sample basement | The app's own sample | Needs only the two committed city forms | — |
+| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 1 fix", 3 rooms, 15 cards in the deck, a 15-page set (A2 over two sheets) with 13 things left, 1 photo |
+| `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (too big to commit) | "Looks like yes", 2 rooms (6.2 × 4.17 and 2.93 × 4.17 m; true 6.4 × 4.6 and 4.6 × 3.08), 8 cards, 14 pages with 18 left, 2 photos |
+| Sample basement | The app's own sample (its deck cards are in the repo) | The committed Meta model list and two city forms | — |
 
-Both takes cost about $2.49 to record, together. The 3D ran on Modal.
+Recording cost about $2.49 for both takes on Oct 30, with the 3D on Modal. The top-up for main's swipe deck and new Spark read was $0.73 more. `media/private/replay` holds 135 MB.
 
 ## The journeys
 
 | File | What it covers |
 |---|---|
-| `sample.spec.ts` | The sample basement: wait screen and its questions, verdict, floor plan, Ideas, Permit (profile, then the package downloaded and opened: page count and sheet titles), Money, Build. Needs no recordings. |
-| `takes.spec.ts` | Each recorded take, from filming to the permit. It goes through the start sheet (address, who) and an upload, or posts the way the iPhone app does with its tracked camera path. Then the wait screen, every tab, the timing, and the recorded outcome. A take that isn't recorded on this machine is skipped, with the reason. |
-| `errors.spec.ts` | A video it can't read. The over-limit path is a placeholder until session A's limits merge. |
+| `sample.spec.ts` | The sample basement: wait screen, its questions and its deck, verdict, floor plan, Ideas, Permit (profile, readiness count, then the review copy downloaded and opened: a cover first and a page for every listed sheet), Money, Build. Needs no recordings. |
+| `takes.spec.ts` | Each recorded take, from filming to the permit. It goes through the start sheet (address, who) and an upload, or posts the way the iPhone app does with its tracked camera path. Then the wait screen (questions, then swiping the deck: two loved, one passed, both on the board), every tab, the permit's readiness count, the timing, and the recorded outcome. A take that isn't recorded on this machine is skipped, with the reason. |
+| `errors.spec.ts` | A video it can't read. A day's scans used up: it starts its own API with `SCANS_PER_DAY=0` (the other journeys get 1000) and checks the start sheet's message and the server's 503. |
 
 Every journey fails on any console error, any page error, or any replay miss.
 
@@ -74,7 +76,7 @@ Add a take in `support/takes.ts`.
 
 ## Adding a journey piece
 
-Each screen has a page object in `pages/`: `Home` and `StartSheet`, `WaitScreen`, and `Workspace` with one class per tab. When a new piece lands (the swipe deck, plan confirm, the layout picker, the studio, pictures, the quote, permit readiness, booking):
+Each screen has a page object in `pages/`: `Home` and `StartSheet`, `WaitScreen`, `StyleDeck` (the swipe deck and board), and `Workspace` with one class per tab. When a new piece lands (plan confirm, the layout picker, the studio, pictures, the quote, booking):
 
 1. Add a page object for its screen in `pages/`, with role- and label-based locators and one method per thing a homeowner does there.
 2. Add a `journey.step("…", () => …)` where it falls in `sample.spec.ts` and `takes.spec.ts`. Each step gets a screenshot in the report.

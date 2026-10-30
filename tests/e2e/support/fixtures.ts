@@ -1,7 +1,7 @@
 // What every journey gets: named steps with a screenshot each, console errors caught, the browser kept
 // off the internet, and replay misses checked. Journeys import `test` and `expect` from here.
 import { test as base, expect, type Page } from "@playwright/test";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { join, relative } from "node:path";
 import { files, runDir } from "./run";
 
@@ -24,7 +24,9 @@ export const test = base.extend<{ journey: Journey }>({
     async ({ page }, use, info) => {
       mkdirSync(runDir, { recursive: true });
       const errors: string[] = [];
-      const allowed: RegExp[] = [];
+      // Headless WebKit drops a WebGL context now and then when several pages draw at once; it says so in
+      // the console. The page itself carries on.
+      const allowed: RegExp[] = [/^WebGL: context lost\./];
       const external = new Set<string>();
       const started = Date.now();
       const misses = missCount();
@@ -71,6 +73,26 @@ export const test = base.extend<{ journey: Journey }>({
 });
 
 export { expect };
+
+// One at a time across workers: a recorded take replays its races (the 3D against the photos and the
+// deck) the way they went when it was recorded, alone on the server, so two takes never share it.
+export async function oneAtATime<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  const lock = join(runDir, "locks", name);
+  mkdirSync(join(runDir, "locks"), { recursive: true });
+  for (;;) {
+    try {
+      mkdirSync(lock);
+      break;
+    } catch {
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    rmSync(lock, { recursive: true, force: true });
+  }
+}
 
 // The JSON a page fetched from the API, for asserting real outcomes beside what's on screen.
 export async function api<T = any>(page: Page, path: string): Promise<T> {
