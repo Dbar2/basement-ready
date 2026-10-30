@@ -10,6 +10,9 @@ pnpm qa --only studio,3d      # just some screens (ids, groups: journey 3d docs 
 pnpm qa:capture               # capture and free checks only, no model calls
 pnpm qa:review                # review the latest capture again (new prompt, more budget)
 pnpm qa --budget 1 --browsers chromium --viewports desktop
+pnpm qa --dry-run             # build and price every review request, send nothing
+pnpm qa --take b2-family      # add a recorded take (replays its Meta and 3D answers for free)
+pnpm qa --base-url http://localhost:5174   # check another checkout's running dev server
 pnpm qa --help
 ```
 
@@ -27,7 +30,7 @@ The review reads `ANTHROPIC_API_KEY` from the environment or from the checkout's
 - The 3D views (home story, the starting layout, the raw scan, studio, pictures) from three fixed cameras: eye level, straight down with the ceiling cut away, and a corner. `three.ts` does this without touching the app: three.js announces its renderers to `window.__THREE_DEVTOOLS__`, and the hook puts the camera where we want it.
 - The plan over the scan: the confirmed plan's walls, openings and fixtures drawn over a top-down render of the raw scan, cut at about 1.2 m.
 - Every page of the permit set (review copy) and the book PDF, drawn with macOS `sips`.
-- A recorded take with `--take b2-family`, once the end-to-end tests (`server/replay.ts`) are on main. It replays the recorded Meta and 3D answers.
+- A recorded take with `--take b2-family`. It's posted the way the iPhone app sends a take, and the recorded Meta and 3D answers replay (`server/replay.ts`). Only then does the server get a placeholder Meta key, because uploads are refused without one. The placeholder can't reach anything: Meta's address is set to one that doesn't exist, and replay answers first.
 
 ## What it checks
 
@@ -41,3 +44,8 @@ The review reads `ANTHROPIC_API_KEY` from the environment or from the checkout's
 - Images are cut to screen-tall pieces. The first two go sharp and the rest at half detail. PDF pages go at 1800 px. Safari goes only where it differs.
 - Cache: a request whose images and text are unchanged (same prompt version, model and effort) reuses its earlier answer from `tmp/qa/cache` for free. Bump `PROMPT_VERSION` in `prompts.ts` when the checklist changes.
 - `--effort` (default medium) trades depth for output tokens.
+- On the full capture of main (Oct 30): 30 requests, 188 images, about $3.10 by the dry run's deliberately high output estimate. A real run should land around $2–3. Re-runs cost only what changed.
+
+## Without a key
+
+`--notes <file>` merges findings written by hand, or by a Claude Code session reading the shots, into the report (shape: `Notes` in `schema.ts`). They're labelled "notes", never "Opus".
