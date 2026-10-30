@@ -1,4 +1,4 @@
-// A design from the model, drawn in 3D in the basement frame: its new walls (with their doorways), the
+// A design from the model, drawn in 3D in the basement frame: its new walls (finished, with their doors), the
 // new floor in each room and every piece of furniture where the model put it. The pictures draw this
 // from real camera angles (AngleRender.tsx); the studio can draw it too. Every piece carries its id
 // (userData.objectId), so a second render can say which piece each pixel is.
@@ -6,6 +6,7 @@ import { useGLTF } from "@react-three/drei";
 import { useContext, useMemo, type ReactNode } from "react";
 import * as THREE from "three";
 import { lookOf, SPECS } from "../../server/model/furniture";
+import { finishKeyFor as finishKey, finishWords, wallPaint } from "../../server/views/finishWords";
 import { colourHex } from "./fabrics";
 import type { Design, Furniture, Wall } from "../../server/model/types";
 import { B, Bed, BedsideLamp, DiningChair, DiningTable, FINISHES, Kitchen, makeMats, MatsCtx, Model, Sofa, Toilet, Tub, useMaps, Vanity, type FinishKey, type Mats } from "../three/StagedBasement";
@@ -14,13 +15,8 @@ const DOOR_H = 2.03;
 const WALL_T = 0.1;
 const useMats = () => useContext(MatsCtx)!;
 
-// The design's floor finish -> one of the staging finishes.
-export function finishKeyFor(design: Pick<Design, "finishes">): FinishKey {
-  const f = `${design.finishes.floor} ${design.finishes.style}`.toLowerCase();
-  if (/green|deep|dark/.test(f)) return "deep";
-  if (/warm|walnut|wood floor|hardwood|brown/.test(f)) return "warm";
-  return "light";
-}
+// The design's floor finish -> one of the staging finishes (the words its pictures ask for say the same).
+export const finishKeyFor = (design: Pick<Design, "finishes">): FinishKey => finishKey(design.finishes);
 
 
 // The shared finishes with one fabric swapped for this piece's colour.
@@ -197,29 +193,77 @@ export function FurnitureMesh({ f }: { f: Furniture }) {
   );
 }
 
-// A new wall, with gaps for its doors.
-function NewWall({ w, design, h }: { w: Wall; design: Design; h: number }) {
-  const mats = useMats();
+// What a finished wall has that the studio's blocks don't: painted trim (baseboards and door casing),
+// a painted door, a dark handle. Shared by every picture; never disposed.
+const TRIM = new THREE.MeshStandardMaterial({ color: "#FAF9F5", roughness: 0.55 });
+const DOOR_LEAF = new THREE.MeshStandardMaterial({ color: "#F1EFE9", roughness: 0.5 });
+const HANDLE = new THREE.MeshStandardMaterial({ color: "#2A2D2B", roughness: 0.35, metalness: 0.7 });
+const BASE_H = 0.09, TRIM_T = 0.015, CASING_W = 0.07;
+
+// A new wall as it will be built, so the photo pass reads it as a wall and not a slab: drywall from the
+// floor to the ceiling, baseboards on both faces, and in each doorway a closed painted door in its
+// casing, with a handle.
+function NewWall({ w, design, h, paint }: { w: Wall; design: Design; h: number; paint: THREE.Material }) {
   const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
   const yaw = Math.atan2(-(w.b[1] - w.a[1]), w.b[0] - w.a[0]);
   const doors = design.proposed.openings.filter((o) => o.wallId === w.id && o.kind === "door").sort((a, b) => a.offsetM - b.offsetM);
+  const doorH = Math.min(DOOR_H, h - 0.05);
   const pieces: [number, number, number, number][] = [];
+  const runs: [number, number][] = []; // the stretches of wall down to the floor, for the baseboards
   let t = 0;
   for (const o of doors) {
+    runs.push([t, o.offsetM - o.widthM / 2]);
     pieces.push([t, o.offsetM - o.widthM / 2, 0, h]);
-    pieces.push([o.offsetM - o.widthM / 2, o.offsetM + o.widthM / 2, Math.min(DOOR_H, h), h]);
+    pieces.push([o.offsetM - o.widthM / 2, o.offsetM + o.widthM / 2, doorH, h]);
     t = o.offsetM + o.widthM / 2;
   }
+  runs.push([t, len]);
   pieces.push([t, len, 0, h]);
+  const face = WALL_T / 2 + TRIM_T / 2;
   return (
     <group position={[w.a[0], 0, w.a[1]]} rotation={[0, yaw, 0]} userData={{ objectId: `wall:${w.id}` }}>
       {pieces.map(([t0, t1, y0, y1], i) =>
         t1 - t0 > 0.01 && y1 - y0 > 0.01 ? (
-          <mesh key={i} position={[(t0 + t1) / 2, (y0 + y1) / 2, 0]} material={mats.walls} castShadow receiveShadow>
+          <mesh key={i} position={[(t0 + t1) / 2, (y0 + y1) / 2, 0]} material={paint} castShadow receiveShadow>
             <boxGeometry args={[t1 - t0, y1 - y0, WALL_T]} />
           </mesh>
         ) : null,
       )}
+      {runs.flatMap(([t0, t1], i) =>
+        t1 - t0 > 0.05
+          ? [-1, 1].map((side) => (
+              <mesh key={`b${i}${side}`} position={[(t0 + t1) / 2, BASE_H / 2, side * face]} material={TRIM}>
+                <boxGeometry args={[t1 - t0, BASE_H, TRIM_T]} />
+              </mesh>
+            ))
+          : [],
+      )}
+      {doors.map((o) => {
+        const x0 = o.offsetM - o.widthM / 2, x1 = o.offsetM + o.widthM / 2;
+        return (
+          <group key={o.id}>
+            <mesh position={[o.offsetM, doorH / 2, 0]} material={DOOR_LEAF} castShadow receiveShadow>
+              <boxGeometry args={[o.widthM - 0.02, doorH - 0.01, 0.04]} />
+            </mesh>
+            {[-1, 1].map((side) => (
+              <group key={side}>
+                <mesh position={[x1 - 0.09, 1.0, side * 0.035]} material={HANDLE}>
+                  <boxGeometry args={[0.12, 0.022, 0.03]} />
+                </mesh>
+                <mesh position={[x0 - CASING_W / 2, doorH / 2, side * face]} material={TRIM}>
+                  <boxGeometry args={[CASING_W, doorH + CASING_W, TRIM_T]} />
+                </mesh>
+                <mesh position={[x1 + CASING_W / 2, doorH / 2, side * face]} material={TRIM}>
+                  <boxGeometry args={[CASING_W, doorH + CASING_W, TRIM_T]} />
+                </mesh>
+                <mesh position={[o.offsetM, doorH + CASING_W / 2, side * face]} material={TRIM}>
+                  <boxGeometry args={[o.widthM + 2 * CASING_W, CASING_W, TRIM_T]} />
+                </mesh>
+              </group>
+            ))}
+          </group>
+        );
+      })}
     </group>
   );
 }
@@ -258,12 +302,11 @@ export function roomBoxes(design: Pick<Design, "proposed">): FloorBox[] {
 }
 
 // The new floor: planks running along the room's long side.
-function RoomFloor({ box, finishKey, id }: { box: FloorBox; finishKey: FinishKey; id: string }) {
+function RoomFloor({ box, light, id }: { box: FloorBox; light: boolean; id: string }) {
   const t = useMaps();
   const { x0, x1, z0, z1 } = box;
   const w = x1 - x0, d = z1 - z0;
   const mat = useMemo(() => {
-    const light = FINISHES[finishKey].floor === "laminate_floor_02";
     const set = (x: THREE.Texture) => {
       const c = x.clone();
       c.rotation = w >= d ? 0 : Math.PI / 2;
@@ -273,7 +316,7 @@ function RoomFloor({ box, finishKey, id }: { box: FloorBox; finishKey: FinishKey
       return c;
     };
     return new THREE.MeshStandardMaterial({ map: set(light ? t.lightFloor : t.warmFloor), normalMap: set(light ? t.lightFloorN : t.warmFloorN), roughnessMap: set(light ? t.lightFloorR : t.warmFloorR), roughness: 0.8, polygonOffset: true, polygonOffsetFactor: -1 });
-  }, [finishKey, t, w, d, x0, z0]);
+  }, [light, t, w, d, x0, z0]);
   return (
     <mesh position={[(x0 + x1) / 2, 0.003, (z0 + z1) / 2]} rotation={[-Math.PI / 2, 0, 0]} material={mat} receiveShadow userData={{ objectId: `floor:${id}` }}>
       <planeGeometry args={[w, d]} />
@@ -294,12 +337,19 @@ export function DesignScene({ design, ceilingM = 2.3, floors = true }: { design:
   const maps = useMaps();
   const finishKey = finishKeyFor(design);
   const mats = useMemo(() => makeMats(FINISHES[finishKey], maps), [finishKey, maps]);
-  const h = Math.min(2.6, Math.max(2.0, ceilingM));
+  // New walls go up into the joists, as built (the measured ceiling is the clear height under them, and
+  // the real ceiling hides what's above it), painted the colour picked for the walls. A wall that stops
+  // short of the joists reads as a tall box, and Muse Image makes it a fridge.
+  const h = Math.min(3.2, Math.max(2.0, ceilingM) + 0.45);
   const boxes = useMemo(() => roomBoxes(design), [design]);
+  // The floor they picked, as the 3D's light or warm planks.
+  const light = finishWords(design.finishes).floorTone === "light";
+  const hex = wallPaint(design.finishes.walls);
+  const paint = useMemo(() => (hex ? new THREE.MeshStandardMaterial({ color: hex, roughness: 0.95 }) : mats.wall), [hex, mats]);
   return (
     <MatsCtx.Provider value={mats}>
-      {floors && boxes.map((b, i) => <RoomFloor key={i} box={b} finishKey={finishKey} id={String(i + 1)} />)}
-      {design.proposed.walls.filter((w) => w.kind === "new").map((w) => <NewWall key={w.id} w={w} design={design} h={h} />)}
+      {floors && boxes.map((b, i) => <RoomFloor key={i} box={b} light={light} id={String(i + 1)} />)}
+      {design.proposed.walls.filter((w) => w.kind === "new").map((w) => <NewWall key={w.id} w={w} design={design} h={h} paint={paint} />)}
       {design.proposed.furniture.map((f) => <FurnitureMesh key={f.id} f={f} />)}
     </MatsCtx.Provider>
   );

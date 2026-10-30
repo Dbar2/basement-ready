@@ -93,7 +93,7 @@ export function useDesignCovers(scanId: string, designs: Design[]): { covers: Re
   const renderer =
     current && angle && solid !== null ? (
       <Suspense fallback={null}>
-        <AngleRenderer key="covers" design={current} solid={solid === "none" ? null : solid} ceilingM={ceilingM} size={[angle.intrinsics.width, angle.intrinsics.height]} onReady={onReady} scanId={scanId} />
+        <AngleRenderer key="covers" design={current} solid={solid === "none" ? null : solid} ceilingM={ceilingM} size={[angle.intrinsics.width, angle.intrinsics.height]} onReady={onReady} />
       </Suspense>
     ) : null;
   return { covers, renderer };
