@@ -167,5 +167,8 @@ describe("free checks on PDF text", () => {
     const rules = lintText("Money you may get\nMultigenerational home tax credit   You qualify\nArea NaN m²\n80% confidence").map((i) => i.rule);
     expect(rules).toEqual(expect.arrayContaining(["you-qualify", "leaked-value", "internal-stats"]));
     expect(lintText("Looks eligible if the suite is for your mom.")).toEqual([]);
+    // Approval claims, not products or lenders that are "approved".
+    expect(lintText("Only CMHC-approved lenders offer it. CGSB Approved Vapour Barrier.")).toEqual([]);
+    expect(lintText("Your permit is approved.").map((i) => i.rule)).toEqual(["approved"]);
   });
 });

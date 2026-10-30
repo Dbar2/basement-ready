@@ -6,6 +6,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, symlinkSync, 
 import { join, resolve } from "node:path";
 import { parseArgs, USAGE } from "./args";
 import { capture, type CaptureResult } from "./capture";
+import { stillHolds } from "./lint";
 import { Budget, MODEL } from "./cost";
 import { anthropicKey, QA_DIR, ROOT } from "./paths";
 import { buildPlan, matches, screenById } from "./plan";
@@ -59,7 +60,7 @@ try {
       const def = screenById(screen);
       return !def || matches(def, args.only, args.all);
     };
-    cap = { ...cap, shots: cap.shots.filter((s) => keep(s.screen)), auto: cap.auto.filter((a) => keep(a.screen)) };
+    cap = { ...cap, shots: cap.shots.filter((s) => keep(s.screen)), auto: cap.auto.filter((a) => keep(a.screen) && stillHolds(a)) };
     facts = saved.facts ?? {};
     baseURL = saved.baseURL;
     scans = saved.scans;
