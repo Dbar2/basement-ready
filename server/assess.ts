@@ -24,9 +24,13 @@ export type AssessContext = { dir: string; household: Household; municipality: s
 const SPARK_IN = 1.25 / 1e6;
 const SPARK_OUT = 4.25 / 1e6;
 
-const instructions = (city: string) => `You are the assessment agent for Basement Ready. It helps homeowners in ${city}, Ontario learn whether their basement can become a legal second unit.
+// Where the house is, for the model: "Toronto, Ontario", or "Ontario" when we don't know.
+const where = (c: Pick<Coverage, "city" | "coverage" | "authority">) => (c.city === "Ontario" ? "Ontario" : `${c.city}, Ontario`);
+const rulesName = (c: Pick<Coverage, "city" | "coverage">) => (c.coverage === "full" ? `compiled ${c.city} rules` : "compiled Ontario rules that apply across the province");
 
-You get: what SAM 3.1 detected in their basement video (each detection has an id, a kind and the frame where it is clearest), proof frames with each detection boxed in green, what the homeowner said while filming, who the unit is for, and the compiled ${city} rules (core rules only).
+export const instructions = (c: Pick<Coverage, "city" | "coverage" | "authority">) => `You are the assessment agent for Basement Ready. It helps homeowners in ${where(c)} learn whether their basement can become a legal second unit.
+
+You get: what SAM 3.1 detected in their basement video (each detection has an id, a kind and the frame where it is clearest), proof frames with each detection boxed in green, what the homeowner said while filming, who the unit is for, and the ${rulesName(c)} (core rules only).
 
 Trust rules, follow them exactly:
 1. Only claim something about the basement if a detection supports it, and cite the detection ids in "evidence".
@@ -71,14 +75,14 @@ function parseJson(text: string): any {
 
 export type SpeechTurn = { startMs: number; endMs: number; transcript: string };
 
-async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detections: Detection[], transcript: string, turns: SpeechTurn[]) {
+async function askSpark(ctx: AssessContext, place: Coverage, rules: Rule[], detections: Detection[], transcript: string, turns: SpeechTurn[]) {
   const proofs = await proofFrames(ctx.dir, detections);
   const content: any[] = [
     {
       type: "input_text",
       text: JSON.stringify({
         unitIsFor: ctx.household,
-        city,
+        municipality: place.authority === "your municipality" ? "somewhere in Ontario" : `${place.authority}, Ontario`,
         homeownerSaid: transcript || "(no speech)",
         timedSpeech: turns.map((t) => ({ atSeconds: Math.round(t.startMs / 100) / 10, text: t.transcript })),
         detections: detections.map((d) => ({ id: d.id, kind: d.kind, label: d.label, seconds: d.seconds, framesSeen: d.framesSeen })),
@@ -97,7 +101,7 @@ async function askSpark(ctx: AssessContext, city: string, rules: Rule[], detecti
       const r = await responses({
         model: "muse-spark-1.3",
         input: [
-          { role: "developer", content: instructions(city) },
+          { role: "developer", content: instructions(place) },
           { role: "user", content },
         ],
       });
@@ -124,7 +128,7 @@ export async function assess(
 // the 3D is still measuring. finishAssessment then applies the measurements in code.
 export async function readWithSpark(ctx: AssessContext, detections: Detection[], transcript: string, turns: SpeechTurn[] = []) {
   const coverage = packFor(ctx.municipality);
-  return { coverage, ...(await askSpark(ctx, coverage.city, coreRules(coverage.pack), detections, transcript, turns)) };
+  return { coverage, ...(await askSpark(ctx, coverage, coreRules(coverage.pack), detections, transcript, turns)) };
 }
 
 export function finishAssessment(
@@ -260,7 +264,7 @@ type Triageable = { ruleId: string; check: Rule["check"]; status: Status; why: s
 
 // Who answers each rule (server/triage.ts). Public records first, then what the video proved; what's
 // left becomes standard work, a designer check, or one of the few plain questions.
-export function triage<F extends Triageable>(f: F, rule: Rule, property?: Property | null) {
+export function triage<F extends Triageable>(f: F, rule: Rule, property?: Property | null, confirms = "The City") {
   const t = TRIAGE[f.ruleId];
   if (t?.who === "records") {
     const r = fromRecords(f.ruleId, f.check, property);
@@ -276,7 +280,7 @@ export function triage<F extends Triageable>(f: F, rule: Rule, property?: Proper
         records: { value: r.value },
       };
     }
-    return { ...f, status: "designer_checks" as Status, question: null, why: "The City confirms this for your lot." };
+    return { ...f, status: "designer_checks" as Status, question: null, why: `${confirms} confirms this for your lot.` };
   }
   // Proof in the video beats any default.
   if (f.status === "likely_ok" || f.status === "likely_fix") return f;
@@ -289,7 +293,7 @@ export function triage<F extends Triageable>(f: F, rule: Rule, property?: Proper
 // Pure: turns Spark's reading into the answer. The trust rule, grouping and money all live here.
 export function buildResult(
   ctx: Pick<AssessContext, "household" | "municipality" | "property">,
-  { pack, city, coverage }: Coverage,
+  { pack, city, coverage, authority, note }: Coverage,
   model: { route?: string; wants?: string; summary?: string; vision?: any; findings?: ModelFinding[] },
   detections: Pick<Detection, "id">[],
   measurements?: Measurements | null,
@@ -336,14 +340,18 @@ export function buildResult(
     };
   });
 
-  const triaged = findings.map((f) => triage(f, rules.find((r) => r.id === f.ruleId)!, ctx.property));
+  // Who confirms what public records couldn't: "The City", or "The Township of Woolwich".
+  const confirms = coverage === "full" ? "The City" : authority === "your municipality" ? "Your municipality" : `The ${authority}`;
+  const triaged = findings.map((f) => triage(f, rules.find((r) => r.id === f.ruleId)!, ctx.property, confirms));
   const { fixGroups, standard, cost, verdict, headline } = verdictFrom(triaged);
 
   return {
     vision: cleanVision(model.vision),
     municipality: ctx.municipality,
     city,
+    authority,
     coverage,
+    coverageNote: note,
     verdict,
     headline,
     route: model.route === "basement_finish" ? "basement_finish" : "second_unit",
@@ -356,7 +364,7 @@ export function buildResult(
     heldBack,
     cost,
     // Money and the road to it. Answers arrive later through recheck, which redoes this part.
-    ...moneyAndSteps({ household: ctx.household, property: ctx.property, city, plan: null }, { fixGroups, standard, cost }, {}, pack),
+    ...moneyAndSteps({ household: ctx.household, property: ctx.property, city, authority, plan: null }, { fixGroups, standard, cost }, {}, pack),
     process: pack.process,
     pros: pack.pros,
     compiledAt: pack.compiledAt,

@@ -1,0 +1,2753 @@
+{
+  "schemaVersion": "1.0",
+  "jurisdiction": {
+    "city": "Ontario",
+    "province": "ON",
+    "country": "CA",
+    "region": null,
+    "level": "province"
+  },
+  "compiledAt": "2026-10-30",
+  "scope": "A basement additional residential unit (ARU) inside an existing detached, semi-detached or row house anywhere in Ontario, using the rules that apply across the province. Your municipality's own zoning by-law, fees, grants and forms are not in this pack.",
+  "disclaimer": "Screening aid only. Not legal, building-code, tax or financial advice, and not a permit decision. These are Ontario's province-wide rules; your municipality's zoning by-law and building department decide for your lot. Costs are estimates, not quotes.",
+  "codeInForce": {
+    "name": "Ontario's Building Code, 2024 edition",
+    "regulation": "O. Reg. 163/24 (Building Code) under the Building Code Act, 1992. Section 1 adopts the National Building Code of Canada 2020 (First Printing) as amended by the MMAH document 'Ontario Amendments to the National Building Code of Canada 2020' dated October 1, 2026 (date set by O. Reg. 325/26, filed 2026-10-02).",
+    "effective": "2025-01-01",
+    "transition": "O. Reg. 332/12 (the 2012 Code, as it read on 2024-12-31) still applies to construction with a permit issued on or before 2024-12-31, or with drawings substantially complete by then and a permit application by 2025-03-31, but only if construction starts within 6 months of the permit (O. Reg. 163/24, s. 2). A permit applied for now uses the 2024 Code.",
+    "textUsed": "Section numbers were read in the MMAH 2024 Building Code Compendium (HTML), which says it reflects amendments up to and including O. Reg. 242/26 (July 22, 2026). The full Code text is no longer printed on e-Laws because the regulation adopts documents by reference.",
+    "source": {
+      "title": "O. Reg. 163/24: Building Code (e-Laws, consolidation from 2026-10-02)",
+      "url": "https://www.ontario.ca/laws/regulation/240163",
+      "section": "ss. 1-2",
+      "retrieved": "2026-10-28"
+    },
+    "relatedSources": [
+      {
+        "title": "O. Reg. 325/26 (amends s. 1 date to October 1, 2026)",
+        "url": "https://www.ontario.ca/laws/regulation/r26325",
+        "section": "s. 1",
+        "retrieved": "2026-10-28"
+      },
+      {
+        "title": "O. Reg. 247/25 (re-made s. 1, in force 2025-11-03)",
+        "url": "https://www.ontario.ca/laws/regulation/r25247",
+        "section": "s. 1",
+        "retrieved": "2026-10-28"
+      },
+      {
+        "title": "2024 Building Code Compendium",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium",
+        "section": null,
+        "retrieved": "2026-10-28"
+      },
+      {
+        "title": "Revisions to the Building Code (compendium)",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/volume-1-revisions",
+        "section": null,
+        "retrieved": "2026-10-28"
+      }
+    ],
+    "existingBuildings": {
+      "rule": "Part 11 (Renovation) applies to buildings, or parts of buildings, that have been in existence for at least five years. Its compliance alternatives (Table 11.5.1.1.-C for residential) may replace Part 9 requirements without the chief building official having to find compliance impracticable.",
+      "check": {
+        "metric": "houseAgeYears",
+        "operator": ">=",
+        "value": 5,
+        "unit": "years"
+      },
+      "source": {
+        "title": "2024 Building Code Compendium, Division A Part 1",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-compliance",
+        "section": "Division A 1.3.3.3B.(1)-(2)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "11.5.1.1.(2)",
+          "retrieved": "2026-10-28"
+        }
+      ]
+    },
+    "secondarySuiteDefinition": {
+      "text": "A secondary suite is a self-contained dwelling unit in a building of only residential occupancy that contains only one other dwelling unit and common spaces, where both units form a single real estate entity (one title).",
+      "implication": "The Code's 'house with a secondary suite' provisions used in this pack apply only when the house has exactly two dwelling units. A third unit inside the house (which the Planning Act allows) takes the building outside that definition; the pack does not cover the three-unit case.",
+      "source": {
+        "title": "2024 Building Code Compendium, Division A Part 1",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-compliance",
+        "section": "Division A 1.4.1.2. 'Secondary suite'; Note A-1.4.1.2.(1)",
+        "retrieved": "2026-10-28"
+      }
+    },
+    "verified": true,
+    "notes": "Not reviewed: what the October 1, 2026 amendment document (O. Reg. 325/26) changed, because the compendium HTML is current only to O. Reg. 242/26. Ontario's 'Add a second unit to your house' guide (updated 2023-01-30) still cites 2012 Code numbers (e.g. C.A. 102, 136, 147, 195); this pack uses the 2024 numbers."
+  },
+  "routes": [
+    {
+      "id": "basement_finish",
+      "summary": "Finish the basement as more living space for the existing home. It stays one dwelling unit, so the two-household rules (fire separation between units, interconnected alarms between units, sound, HVAC separation) don't apply; the normal Part 9 rules for one home do, such as a bedroom escape window, a smoke alarm on every storey and ceiling heights.",
+      "permit": "A building permit from your municipality; the fee is set by its fees by-law.",
+      "appliesRules": [
+        "ceiling_height_basement_finish",
+        "egress_window_bedroom_area",
+        "egress_window_min_dimension",
+        "egress_window_well_clearance",
+        "egress_window_sill_height"
+      ],
+      "sources": [
+        {
+          "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+          "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+          "section": "Getting a building permit",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "verified": true
+    },
+    {
+      "id": "second_unit",
+      "summary": "Create an additional residential unit: a separate home with its own kitchen, bathroom and living and sleeping space. Ontario's Planning Act s. 35.1 stops zoning from banning up to 3 homes in the house on a serviced residential lot, from asking for more than one parking space per additional home, or from setting a minimum unit size. It needs a building permit, the Code's 'house with a secondary suite' rules and an ESA permit.",
+      "permit": "A building permit from your municipality on Ontario's application form; the fee is set by its fees by-law. The Code gives 15 business days to decide a complete application for a house with one home above another (Div. C Table 1.3.1.3).",
+      "appliesRules": "all rules whose route includes second_unit",
+      "sources": [
+        {
+          "title": "Planning Act, R.S.O. 1990, c. P.13 (consolidation from 2026-07-01)",
+          "url": "https://www.ontario.ca/laws/statute/90p13",
+          "section": "s. 35.1",
+          "retrieved": "2026-10-30"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division C Part 1",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-general-0",
+          "section": "Division C 1.3.1.3.",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "verified": true
+    }
+  ],
+  "rules": [
+    {
+      "id": "zoning_max_units",
+      "route": [
+        "second_unit"
+      ],
+      "category": "zoning",
+      "priority": "core",
+      "severity": "required",
+      "title": "Up to three homes in the house",
+      "plain": "Ontario stops zoning from banning a second or third home inside a detached, semi-detached or row house, on a lot with municipal water and sewer where houses are allowed. Your municipality may allow more.",
+      "check": {
+        "metric": "totalDwellingUnitsInHouseAfterProject",
+        "operator": "<=",
+        "value": 3,
+        "unit": "units"
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": null,
+        "question": "How many separate homes (each with its own kitchen and bathroom) are in the house now, and is there one in a garage or backyard building?"
+      },
+      "fix": {
+        "description": "If the house already has three homes, or two plus one out back, Ontario's rule doesn't cover another one. Ask your municipality, or finish the basement as part of an existing home.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "Planning Act, R.S.O. 1990, c. P.13 (consolidation from 2026-07-01)",
+        "url": "https://www.ontario.ca/laws/statute/90p13",
+        "section": "s. 35.1(1)(a)-(b), (1.3)",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "O. Reg. 299/19: Additional Residential Units (consolidation from 2024-11-20)",
+          "url": "https://www.ontario.ca/laws/regulation/190299",
+          "section": "s. 1(2) paras 1-2; s. 2 para 5 (any date of construction)",
+          "retrieved": "2026-10-30"
+        },
+        {
+          "title": "List of Ontario municipalities (Government of Ontario, updated 2026-06-03)",
+          "url": "https://www.ontario.ca/page/list-ontario-municipalities",
+          "section": "Which municipality you're in",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "verified": true,
+      "notes": "Applies on a 'parcel of urban residential land' (Planning Act s. 1(1)): in a settlement area, where houses are allowed, served by municipal sewage works and a municipal drinking water system. The Building Code's 'house with a secondary suite' rules cover a house with exactly two units."
+    },
+    {
+      "id": "zoning_municipal_services",
+      "route": [
+        "second_unit"
+      ],
+      "category": "zoning",
+      "priority": "core",
+      "severity": "required",
+      "title": "On municipal water and sewer",
+      "plain": "Ontario's three-unit rule covers lots on municipal sewers and a municipal water system. On a well or a septic system, your municipality's zoning decides.",
+      "check": {
+        "metric": "connectedToMunicipalWaterAndSewer",
+        "operator": "==",
+        "value": true,
+        "unit": null
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": null,
+        "question": "Is the house on municipal water and sewer (not a private well or septic system)?"
+      },
+      "fix": {
+        "description": "On a well or septic system the provincial rule doesn't apply. Ask your municipality whether its zoning allows a second unit on your lot.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "Planning Act, R.S.O. 1990, c. P.13 (consolidation from 2026-07-01)",
+        "url": "https://www.ontario.ca/laws/statute/90p13",
+        "section": "s. 1(1) definition of 'parcel of urban residential land'",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "Planning Act, R.S.O. 1990, c. P.13 (consolidation from 2026-07-01)",
+          "url": "https://www.ontario.ca/laws/statute/90p13",
+          "section": "s. 35.1(1)",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "verified": true,
+      "notes": "Not a ban: off municipal services, the Planning Act simply doesn't guarantee the units, so the local zoning by-law decides."
+    },
+    {
+      "id": "zoning_parking",
+      "route": [
+        "second_unit"
+      ],
+      "category": "zoning",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "At most one parking space for the new home",
+      "plain": "Zoning can't ask for more than one parking space for each additional home, and that space may be one behind another in the driveway. Where the main house needs no space, the new home needs none.",
+      "check": {
+        "metric": "onSiteParkingSpacesForAdditionalUnit",
+        "operator": ">=",
+        "value": 1,
+        "unit": "spaces",
+        "appliesWhen": "the zoning by-law requires a space for the main home and doesn't waive it for additional units"
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": null,
+        "question": "Is there room for one more car on your driveway, even parked one behind another?"
+      },
+      "fix": {
+        "description": "Ask your municipality whether its zoning needs a space for the new home; if it does, one tandem space in the driveway is enough.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "O. Reg. 299/19: Additional Residential Units (consolidation from 2024-11-20)",
+        "url": "https://www.ontario.ca/laws/regulation/190299",
+        "section": "s. 2 paras 1-3; s. 3 (a by-law that requires no space prevails)",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "Planning Act, R.S.O. 1990, c. P.13 (consolidation from 2026-07-01)",
+          "url": "https://www.ontario.ca/laws/statute/90p13",
+          "section": "s. 35.1(1.1) (no more than one space per additional unit)",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "verified": true,
+      "notes": "O. Reg. 299/19 also says anyone may live in either home, related or not, and the owner doesn't have to live there (s. 2 para 4), and zoning can't set a minimum size for the unit (Planning Act s. 35.1(1.2))."
+    },
+    {
+      "id": "ceiling_height_suite",
+      "route": [
+        "second_unit"
+      ],
+      "category": "height",
+      "priority": "core",
+      "severity": "required",
+      "title": "Ceiling height in the suite: 1.95 m",
+      "plain": "Ceilings in the new suite must be at least 1.95 m high, and the areas that meet the height must connect to each room's entrance.",
+      "check": {
+        "metric": "minFinishedCeilingHeightInSuite",
+        "operator": ">=",
+        "value": 1.95,
+        "unit": "m"
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "scan_measurement",
+        "samConcept": "ceiling",
+        "scanMeasurement": "Finished floor to finished ceiling in every room of the planned suite; flag areas under 1.95 m and check they are not between the entrance and the rest of the room.",
+        "question": "What is the lowest floor-to-ceiling height in the rooms you plan for the suite, after flooring and drywall?"
+      },
+      "fix": {
+        "description": "Lower the floor (underpinning or bench footings, needs an engineer) or reduce finishes; ceiling-height fixes were not priced in this pack.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.5.3.1.(2) and (4)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.5.1.1.(1) (measure between finished surfaces)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.5.5.1.(2) (suite doorways may be 1,890 mm high)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "Part 11 compliance alternative C105 (1,950 mm / 2,030 mm) expressly excludes secondary suites, because 9.5.3.1.(2)-(3) already set lower heights for suites, so no further relaxation applies to existing houses. A scan of an unfinished basement measures to the joists: subtract planned flooring and the 15.9 mm Type X ceiling."
+    },
+    {
+      "id": "clearance_beams_ducts_suite",
+      "route": [
+        "second_unit"
+      ],
+      "category": "height",
+      "priority": "core",
+      "severity": "required",
+      "title": "Clearance under beams and ducts: 1.85 m",
+      "plain": "Under beams and ductwork inside the suite, the clear height must be at least 1.85 m.",
+      "check": {
+        "metric": "minClearHeightUnderBeamsAndDucts",
+        "operator": ">=",
+        "value": 1.85,
+        "unit": "m"
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "ceiling duct",
+        "alsoFind": [
+          "steel beam",
+          "wood beam",
+          "bulkhead"
+        ],
+        "scanMeasurement": "Finished floor to the underside of each beam, duct or bulkhead after finishes.",
+        "question": "What is the lowest clearance under any beam or duct in the planned suite?"
+      },
+      "fix": {
+        "description": "Reroute or flatten ductwork into joist spaces, or relocate the suite's main paths away from low beams; not priced in this pack.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.5.3.1.(3)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [],
+      "verified": true,
+      "notes": ""
+    },
+    {
+      "id": "ceiling_height_basement_finish",
+      "route": [
+        "basement_finish"
+      ],
+      "category": "height",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "Ceiling height if it stays part of the house",
+      "plain": "Finishing the basement as part of the main home: basement space needs 2.1 m over at least 75% of its area (1.95 m under beams and ducts); in a house 5+ years old, finished rooms may instead have 1.95 m over the required floor area and exit paths, or 2.03 m over at least half of it.",
+      "check": {
+        "metric": "ceilingHeightOver75PctOfBasementArea",
+        "operator": ">=",
+        "value": 2.1,
+        "unit": "m"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C105 (for Article 9.5.3.1.)",
+        "check": {
+          "metric": "minRoomHeightOverRequiredAreaAndEgressPath",
+          "operator": ">=",
+          "value": 1.95,
+          "unit": "m"
+        },
+        "orCheck": {
+          "metric": "roomHeightOverHalfOfRequiredArea",
+          "operator": ">=",
+          "value": 2.03,
+          "unit": "m",
+          "note": "floor under 1,400 mm high is not counted in the required area"
+        },
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C105",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "scan_measurement",
+        "samConcept": "ceiling",
+        "scanMeasurement": "Finished ceiling height across the basement; share of area at or above 2.1 m; clearance under beams and ducts.",
+        "question": "Roughly how high is the basement ceiling, and how low are the beams and ducts?"
+      },
+      "fix": {
+        "description": "Usually none needed for an existing house that meets 1.95 m; otherwise see ceiling_height_suite fixes.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "Table 9.5.3.1. 'Basement space' row; 9.5.3.1.(1)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [],
+      "verified": true,
+      "notes": "Finished rooms such as bedrooms and living rooms follow their own rows of Table 9.5.3.1. C105 says 'Except for secondary suites', so it is the basement-finish route that uses it. For houses 5+ years old, the suite (1.95 m, 1.85 m under beams) and the basement finish (1.95 m) end up close."
+    },
+    {
+      "id": "egress_window_bedroom_area",
+      "route": [
+        "second_unit",
+        "basement_finish"
+      ],
+      "category": "egress",
+      "priority": "core",
+      "severity": "required",
+      "title": "Bedroom escape window: 0.35 m² opening",
+      "plain": "Every floor level with a bedroom needs at least one outside window that opens from inside without tools, stays open by itself and gives an unobstructed opening of at least 0.35 m², unless that level has a door straight to the outside.",
+      "check": {
+        "metric": "bedroomLevelEgressWindowClearOpeningArea",
+        "operator": ">=",
+        "value": 0.35,
+        "unit": "m2"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C140 (for Article 9.9.10.1.)",
+        "text": "In a single dwelling unit or a house with a secondary suite, existing [bedroom egress] acceptable, where there is direct access to the exterior.",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C140",
+          "retrieved": "2026-10-28"
+        },
+        "interpretationNote": "The Code does not say whether 'direct access to the exterior' is from the bedroom, the floor level or the suite. Treat as 'ask the building department'; do not auto-pass."
+      },
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "basement window",
+        "scanMeasurement": "Clear opening width and height of the openable sash (not the frame), multiplied for area.",
+        "question": "For each window on the bedroom level: what type is it (casement, slider, awning, hopper) and how wide and tall is the opening when fully open?"
+      },
+      "fix": {
+        "description": "Cut and enlarge the foundation opening and install an egress-size window with a code-compliant window well.",
+        "costLowCAD": 3000,
+        "costHighCAD": 6000,
+        "costUnit": "each",
+        "costSource": {
+          "title": "Basement Renovation Cost Guide: Kitchener-Waterloo & Cambridge 2026",
+          "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+          "publisher": "Caliber Contracting",
+          "pageDate": "2026-04",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28"
+        },
+        "costNote": "Estimate, not a quote. Waterloo Region contractor guide. HomeStars (Canada) gives $3,500-$8,000 for a new opening with window and well; a Toronto source gives $7,500-$17,000. See costs[]."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.9.10.1.(1)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium, Appendix A",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/appendix-a-explanatory-material",
+          "section": "Note A-9.9.10.1.(1)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "Passing needs both this rule and egress_window_min_dimension: a 380 x 380 mm opening meets the dimension but fails the area (Note A-9.9.10.1.(1)). The rule is per floor level containing a bedroom in a suite. The wording 'except where a door on the same floor level as the bedroom provides direct access to the exterior' means a walkout door on that level satisfies it."
+    },
+    {
+      "id": "egress_window_min_dimension",
+      "route": [
+        "second_unit",
+        "basement_finish"
+      ],
+      "category": "egress",
+      "priority": "core",
+      "severity": "required",
+      "title": "Bedroom escape window: no side under 380 mm",
+      "plain": "The escape window's clear opening must be at least 380 mm in every direction; for sliders, measure only the part that opens.",
+      "check": {
+        "metric": "egressWindowMinClearDimension",
+        "operator": ">=",
+        "value": 380,
+        "unit": "mm"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C140 (for Article 9.9.10.1.)",
+        "text": "In a single dwelling unit or a house with a secondary suite, existing [bedroom egress] acceptable, where there is direct access to the exterior.",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C140",
+          "retrieved": "2026-10-28"
+        },
+        "interpretationNote": "The Code does not say whether 'direct access to the exterior' is from the bedroom, the floor level or the suite. Treat as 'ask the building department'; do not auto-pass."
+      },
+      "evidence": {
+        "type": "scan_measurement",
+        "samConcept": "basement window",
+        "scanMeasurement": "Smaller of clear opening width and height of the openable portion.",
+        "question": "When the window is fully open, how wide and how tall is the clear gap?"
+      },
+      "fix": {
+        "description": "Same as egress_window_bedroom_area (larger window, possibly a casement).",
+        "costLowCAD": 3000,
+        "costHighCAD": 6000,
+        "costUnit": "each",
+        "costSource": {
+          "title": "Basement Renovation Cost Guide: Kitchener-Waterloo & Cambridge 2026",
+          "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+          "publisher": "Caliber Contracting",
+          "pageDate": "2026-04",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28"
+        },
+        "costNote": "Estimate, not a quote; shared with the window enlargement fix."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.9.10.1.(1)(b) and (6)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [],
+      "verified": true,
+      "notes": ""
+    },
+    {
+      "id": "egress_window_well_clearance",
+      "route": [
+        "second_unit",
+        "basement_finish"
+      ],
+      "category": "egress",
+      "priority": "core",
+      "severity": "required",
+      "title": "Window well: 550 mm clear in front",
+      "plain": "If the escape window opens into a window well, keep at least 550 mm clear in front of it (beyond any outward-opening sash), and any well cover must open from inside without keys or tools.",
+      "check": {
+        "metric": "windowWellClearanceInFrontOfEgressWindow",
+        "operator": ">=",
+        "value": 550,
+        "unit": "mm"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C140 (for Article 9.9.10.1.)",
+        "text": "In a single dwelling unit or a house with a secondary suite, existing [bedroom egress] acceptable, where there is direct access to the exterior.",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C140",
+          "retrieved": "2026-10-28"
+        },
+        "interpretationNote": "The Code does not say whether 'direct access to the exterior' is from the bedroom, the floor level or the suite. Treat as 'ask the building department'; do not auto-pass."
+      },
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "window well",
+        "scanMeasurement": "Horizontal distance from the window (or the outer edge of an outward-opening sash) to the inside face of the well.",
+        "question": "Does the bedroom window open into a window well? How far is it from the glass to the well wall, and is there a cover?"
+      },
+      "fix": {
+        "description": "Replace the well with a deeper/wider one (usually done with the window enlargement) and use an inside-openable cover.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null,
+        "costNote": "Included in the egress window enlargement ranges in costs[]; no separate price found."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.9.10.1.(3), (4) and (5)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium, Appendix A",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/appendix-a-explanatory-material",
+          "section": "Note A-9.9.10.1.(3)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "Note A-9.9.10.1.(3) advises allowing for snow in the well and says hopper (bottom-hinged) windows should not be used where occupants must climb over the glass."
+    },
+    {
+      "id": "egress_window_sill_height",
+      "route": [
+        "second_unit",
+        "basement_finish"
+      ],
+      "category": "egress",
+      "priority": "supporting",
+      "severity": "advisory",
+      "title": "Escape window sill height (advice for basements)",
+      "plain": "There is no maximum sill height for basement escape windows, but the Code's explanatory note recommends a sill no higher than 1.5 m above the floor, or built-in furniture or a step below it. Above-grade bedroom levels must have a sill at most 1,000 mm high.",
+      "check": {
+        "metric": "egressWindowSillHeightAboveFloor",
+        "operator": "<=",
+        "value": 1.5,
+        "unit": "m"
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "scan_measurement",
+        "samConcept": "basement window",
+        "scanMeasurement": "Floor to the bottom of the clear opening.",
+        "question": "How high is the bottom of the window opening above the floor?"
+      },
+      "fix": {
+        "description": "Add a fixed step or built-in furniture under the window, or lower the opening during enlargement.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.9.10.1.(2)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium, Appendix A",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/appendix-a-explanatory-material",
+          "section": "Note A-9.9.10.1.(2)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "Advisory only for basements: 9.9.10.1.(2) exempts basement areas from the 1,000 mm maximum; the 1.5 m figure is a recommendation in Appendix A, not a requirement."
+    },
+    {
+      "id": "fire_separation_between_units",
+      "route": [
+        "second_unit"
+      ],
+      "category": "fire",
+      "priority": "core",
+      "severity": "required",
+      "title": "Fire/smoke separation between the two homes",
+      "plain": "Separate the suite from the rest of the house with a 45-minute fire separation, or with a continuous smoke-tight barrier of 15.9 mm (5/8 in.) Type X drywall on both sides of dividing walls and under the floor/ceiling framing. The rating can be waived if the house is sprinklered.",
+      "check": {
+        "metric": "suiteSeparationTypeXGypsumThickness",
+        "operator": ">=",
+        "value": 15.9,
+        "unit": "mm"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C156 (for 9.10.9.16.(1) and (3); 9.10.9.17.(1))",
+        "options": [
+          "30 min fire separation is acceptable",
+          "In a house with a secondary suite, a 15 min horizontal fire separation is acceptable where smoke alarms are installed in every dwelling unit and in common areas in conformance with Subsection 9.10.19. and are interconnected",
+          "In a house with a secondary suite, the fire-resistance rating of the fire separation is waived where the building is sprinklered throughout"
+        ],
+        "dependsOnRule": "smoke_alarms_interconnected",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C156",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": "exposed ceiling joists",
+        "alsoFind": [
+          "drywall ceiling",
+          "door"
+        ],
+        "question": "Is the basement ceiling open (joists visible) or drywalled? If drywalled, do you know the type and thickness (e.g. 1/2 in. regular or 5/8 in. Type X)? Is there a door between the basement and the upstairs home?"
+      },
+      "fix": {
+        "description": "Install 5/8 in. Type X drywall on the suite ceiling and on both sides of dividing walls, keep it continuous and seal joints and penetrations; add self-closing doors where the separation has openings.",
+        "costLowCAD": 3000,
+        "costHighCAD": 6000,
+        "costUnit": "job",
+        "costSource": {
+          "title": "Cost to Make a Basement Legal in Toronto",
+          "url": "https://renohouse.ca/blog/basement-apartment-conversion-toronto-cost",
+          "publisher": "RenoHouse",
+          "pageDate": "2026-03-06 (updated 2026-06-26)",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28"
+        },
+        "costNote": "Estimate, not a quote (Toronto, 2026, 'fire separation' line). Ceiling drywall installed and finished is $4.00-$6.50/sq ft before the Type X upgrade (see costs[])."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.9.16.(1), (4) and (5)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.10.9.2.(2), (5), (6) (continuity of smoke-tight barriers)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.10.8.10.(1)(b)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C160 (existing 45 mm solid-core doors acceptable)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "The 15 min option for existing houses only works together with interconnected smoke alarms in both units and common areas. Lath-and-plaster or existing drywall may already give 15 minutes; that needs the building department or a designer to confirm."
+    },
+    {
+      "id": "structural_support_protection",
+      "route": [
+        "second_unit"
+      ],
+      "category": "fire",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "Protect beams and posts that hold up the floor between units",
+      "plain": "Light-frame walls, columns and beams, and loadbearing steel, that support the floor between the two units must be covered with 15.9 mm (5/8 in.) Type X drywall.",
+      "check": {
+        "metric": "supportMembersProtectedWithTypeXGypsum",
+        "operator": ">=",
+        "value": 15.9,
+        "unit": "mm"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C150 (for 9.10.8.1., 9.10.8.3., 9.10.8.8.)",
+        "options": [
+          "30 min rating is acceptable",
+          "In a house with a secondary suite, 15 min horizontal fire separation is acceptable where smoke alarms are installed in every dwelling unit and in common areas and are interconnected",
+          "In a house with a secondary suite, the fire-resistance rating is waived where the building is sprinklered throughout"
+        ],
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C150",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "steel beam",
+        "alsoFind": [
+          "support column",
+          "wood beam"
+        ],
+        "question": "Are the main basement beam and posts steel or wood, and are they exposed?"
+      },
+      "fix": {
+        "description": "Box in the beam and posts with 5/8 in. Type X drywall (usually done with the fire-separation ceiling).",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null,
+        "costNote": "No separate price found; normally part of the fire separation job."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.8.3.(2)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium, Appendix A",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/appendix-a-explanatory-material",
+          "section": "Note A-9.10.8.3.(2) (light-frame excludes heavy timber, masonry, concrete)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": ""
+    },
+    {
+      "id": "service_room_separation",
+      "route": [
+        "second_unit"
+      ],
+      "category": "fire",
+      "priority": "core",
+      "severity": "required",
+      "title": "Furnace room separation",
+      "plain": "If the furnace or water heater serves both units, put it in a service room lined with 15.9 mm (5/8 in.) Type X drywall on both sides of its walls and on the underside of the ceiling framing; otherwise fuel-fired appliances need a 1-hour fire separation.",
+      "check": {
+        "metric": "serviceRoomTypeXGypsumThickness",
+        "operator": ">=",
+        "value": 15.9,
+        "unit": "mm",
+        "appliesWhen": "a fuel-fired appliance serves both dwelling units"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C157 (for 9.10.10.3.)",
+        "options": [
+          "30 min fire separation is acceptable",
+          "In a house with a secondary suite, the fire-resistance rating of the vertical fire separation is waived where smoke alarms are installed in every dwelling unit and in common areas and are interconnected",
+          "In a house with a secondary suite, the fire-resistance rating of the vertical fire separation is waived where service rooms are sprinklered"
+        ],
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C157",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "furnace",
+        "alsoFind": [
+          "water heater",
+          "service room door"
+        ],
+        "question": "Is the furnace or water heater in its own enclosed room? Will it serve both homes, and which unit would the room open into?"
+      },
+      "fix": {
+        "description": "Enclose the furnace/water heater in its own room and line its walls (both sides) and ceiling with 5/8 in. Type X drywall.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null,
+        "costNote": "No separate price found; usually part of the fire separation work."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.10.4.(1) and (2)(b)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.10.10.3.(1)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "C157 waives only the vertical (wall) rating; the ceiling still needs separation. 9.10.10.4.(2)(a) also exempts appliances that serve only one room or suite."
+    },
+    {
+      "id": "smoke_alarms_interconnected",
+      "route": [
+        "second_unit"
+      ],
+      "category": "fire",
+      "priority": "core",
+      "severity": "required",
+      "title": "Interconnected smoke alarms in both homes",
+      "plain": "Put smoke alarms on every storey, in every bedroom and outside sleeping areas of each unit, and in shared exits and common areas, then interconnect them (hard-wired or wireless) so any one alarm sounds all alarms in both homes.",
+      "check": {
+        "metric": "smokeAlarmsInterconnectedAcrossUnits",
+        "operator": "==",
+        "value": true,
+        "unit": null
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C179 (for 9.10.19.4.)",
+        "text": "Smoke alarms may be battery operated.",
+        "note": "Interconnection under 9.10.19.5.(2) is still required; wireless interconnection is allowed.",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C179",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "smoke alarm",
+        "question": "Is there a smoke alarm on every level and in each bedroom? When you test one, do all the others sound, including in the other home?"
+      },
+      "fix": {
+        "description": "Install interconnected smoke alarms (hard-wired or wireless) with a visual (strobe) signal in both units and common areas.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null,
+        "costNote": "No standalone Ontario price found; one Toronto source bundles alarms into a $4,000-$8,000 electrical line (see costs[])."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.10.19.5.(2)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.10.19.1.(1)-(4)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.10.19.3.(1), (1.1) and (4)-(6)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.10.19.4.(1)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium, Appendix A",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/appendix-a-explanatory-material",
+          "section": "Note A-9.10.19.5.(2)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "The 2024 Code also requires a visual signalling component (NFPA 72 s. 18.5.3; at least 175 cd in sleeping rooms). Part 11 gives no specific alternative for the strobe; how building departments apply it to conversions was not confirmed. Note A-9.10.19.5.(2): units with separate electrical services can interconnect wirelessly."
+    },
+    {
+      "id": "co_alarms_interconnected",
+      "route": [
+        "second_unit"
+      ],
+      "category": "fire",
+      "priority": "core",
+      "severity": "required",
+      "title": "Interconnected carbon monoxide alarms",
+      "plain": "If the house has a fuel-burning appliance (such as a gas furnace or water heater) or an attached garage, put CO alarms next to the sleeping rooms in each unit and in the service room, interconnected so one alarm sounds all CO alarms in the house.",
+      "check": {
+        "metric": "coAlarmsInterconnectedAcrossUnits",
+        "operator": "==",
+        "value": true,
+        "unit": null,
+        "appliesWhen": "fuelBurningAppliance == true or attachedGarage == true"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C200 (for 9.32.3.9C.)",
+        "text": "Carbon monoxide alarms may be battery operated or plugged into an electrical outlet.",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C200",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "furnace",
+        "alsoFind": [
+          "carbon monoxide alarm",
+          "water heater"
+        ],
+        "question": "Is the furnace or water heater gas, oil or propane? Are there CO alarms near the bedrooms in both homes, and do they sound together?"
+      },
+      "fix": {
+        "description": "Add CO alarms beside each sleeping area in both units and in the furnace room, interconnected across the house.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null,
+        "costNote": "No standalone Ontario price found."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.32.3.9C.(1) (interconnection within a house with a secondary suite)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.32.3.9.(1)-(2)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.32.3.9A. (locations in suites)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.32.3.9B. (service rooms)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "The compendium HTML does not show clause letters for 9.32.3.9C., so the citation is at Sentence level. 9.32.3.9C. also requires a visual signalling component."
+    },
+    {
+      "id": "exit_from_suite",
+      "route": [
+        "second_unit"
+      ],
+      "category": "exit",
+      "priority": "core",
+      "severity": "required",
+      "title": "A safe way out of the suite",
+      "plain": "Best: the suite has its own door to the outside. A shared exit is allowed if it is separated by a 30-minute fire separation, does not pass through the other home or a service room, and both homes have interconnected smoke alarms. Leaving through the other home is only allowed with an extra escape window and interconnected alarms, or if the house is sprinklered.",
+      "check": {
+        "metric": "suiteHasCompliantExitOption",
+        "operator": "==",
+        "value": true,
+        "unit": null,
+        "acceptedOptions": [
+          "own_exterior_door",
+          "shared_exit_30min_separated",
+          "through_other_unit_plus_escape_window",
+          "sprinklered"
+        ]
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C139 (for Subsection 9.9.9.)",
+        "options": [
+          "(a) own_exterior_door: a door (including a sliding door) that opens directly to the exterior from the dwelling unit, serves only that unit, has reasonable access to ground level, and the units have smoke alarms per 9.10.19",
+          "(b) shared_exit_30min_separated: an exit accessible to more than one unit that is the only means of egress, separated from the rest of the building and common areas by a 30 min fire separation; access to it may not pass through another unit, a service room or another occupancy; both units and common areas have interconnected smoke alarms",
+          "(c) through_other_unit_plus_escape_window: access to exit leads through the other unit and an extra escape window is provided: sill not more than 1,000 mm above or below adjacent ground, openable without tools, opening at least 0.38 m2 with no dimension under 460 mm, sill not more than 900 mm above the floor or fixed steps, and at least 1,000 mm clear in a window well; interconnected smoke alarms in every unit and common area",
+          "(c-alt) upper-floor escape window: casement at least 1,060 mm high and 560 mm wide, sill not more than 900 mm above the inside floor and not more than 5 m above ground; interconnected smoke alarms",
+          "(d) sprinklered: the building is sprinklered and the units have smoke alarms per 9.10.19"
+        ],
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C139",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": "exterior door",
+        "alsoFind": [
+          "staircase",
+          "basement walkout door"
+        ],
+        "question": "In a fire, how would someone leave the basement home: its own door to the outside, a shared stair or hall to an outside door, or only through the upstairs home?"
+      },
+      "fix": {
+        "description": "Add a separate entrance (side or rear walk-up/walk-out), or enclose the shared stair with a 30-minute fire separation and self-closing door.",
+        "costLowCAD": 12000,
+        "costHighCAD": 30000,
+        "costUnit": "job",
+        "costSource": {
+          "title": "Basement Apartment Legalization Toronto: 2026 Code, Egress, Ceiling Height, Fire Separation",
+          "url": "https://renohouse.ca/blog/basement-apartment-legalization-toronto",
+          "publisher": "RenoHouse",
+          "pageDate": "2026-05-05",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28"
+        },
+        "costNote": "Estimate, not a quote (Toronto, separate side entry). A simpler at-grade door is $5,000-$10,000+ (RenoQuotes). See costs[]."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium, Division B Part 11",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+        "section": "Table 11.5.1.1.-C, C139",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.9.9.2.(1) and 9.9.9.3.(1)-(2) (house with a secondary suite exempt from the second-and-separate-egress triggers)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Add a second unit to your house",
+          "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+          "section": "Exits",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "Option labels (a)-(d) are this pack's names for the C139 conditions in the order printed. For houses under 5 years old the base Part 9 exit rules apply and are not mapped in this pack; ask the building department."
+    },
+    {
+      "id": "hvac_separate_systems",
+      "route": [
+        "second_unit"
+      ],
+      "category": "hvac",
+      "priority": "core",
+      "severity": "required",
+      "title": "No shared air between the homes",
+      "plain": "Each home's air ducts may not be directly connected to the other home, and air from one suite may not be recirculated to the other. In a house 5+ years old, one existing forced-air system may serve both if each unit has smoke alarms and a duct smoke detector shuts off the furnace's fuel and power when it detects smoke.",
+      "check": {
+        "metric": "ductSystemsInterconnectedBetweenUnits",
+        "operator": "==",
+        "value": false,
+        "unit": null
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternatives C201 (for 9.33.1.1.) and C97 (for 6.3.2.7.(1)); C172 (for 9.10.13.13.(1))",
+        "text": "In a building containing not more than four dwelling units, the existing heating or air-conditioning system may be altered to serve more than one dwelling unit, provided smoke alarms are installed in each dwelling unit and a smoke detector is installed in the supply or return air duct system serving the entire building which would turn off the fuel supply and electrical power to the heating system upon activation of such detector.",
+        "fireDampers": "C172: in houses with a secondary suite, existing [duct penetrations without fire dampers] acceptable.",
+        "check": {
+          "metric": "ductSmokeDetectorShutsOffFurnace",
+          "operator": "==",
+          "value": true,
+          "unit": null
+        },
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C97, C172, C201",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "furnace",
+        "alsoFind": [
+          "return air grille",
+          "ductwork",
+          "supply register"
+        ],
+        "question": "Does one furnace heat both floors? Are there return-air grilles in the basement that pull air back to the shared furnace?"
+      },
+      "fix": {
+        "description": "Existing house: add a duct-type smoke detector interlocked to shut the furnace's fuel and power. Or give the suite its own heating (separate furnace or ductless heat pump) and seal the duct connections between units.",
+        "costLowCAD": 6000,
+        "costHighCAD": 12000,
+        "costUnit": "job",
+        "costSource": {
+          "title": "How Much Does Basement Development Cost in Canada in 2026?",
+          "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-development-cost",
+          "publisher": "HomeStars",
+          "pageDate": "2026-08-21",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28",
+          "note": "Read via the r.homestars.com mirror of the same path."
+        },
+        "costNote": "Estimate, not a quote, for an independent heating system. Ductless mini-split $3,500-$7,000; firestop and fire dampers $1,000-$3,000. No price found for a duct smoke detector. See costs[]."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.33.1.1.(3)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-6-heating-ventilating-and-air-conditioning",
+          "section": "6.3.2.7.(1)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.33.1.1.(2) (systems serving more than one dwelling unit designed to Part 6)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Add a second unit to your house",
+          "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+          "section": "Heating and ventilation (duct-type smoke detector to UL 268A)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "The UL 268A detector standard comes from Ontario's 2023 guide (written for the 2012 Code)."
+    },
+    {
+      "id": "sound_separation",
+      "route": [
+        "second_unit"
+      ],
+      "category": "sound",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "Sound separation between the homes",
+      "plain": "Between the two homes, new construction needs STC 50 (or ASTC 47). In a house 5+ years old you can instead meet STC 43 or ASTC 40, or build 150 mm sound-absorbing insulation in the joists, filled stud spaces, resilient channel on one side and at least 12.7 mm drywall on ceilings and both sides of walls.",
+      "check": {
+        "metric": "separationSTC",
+        "operator": ">=",
+        "value": 50,
+        "unit": "STC"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C181 (for 9.11.1.1.)",
+        "check": {
+          "metric": "separationSTC",
+          "operator": ">=",
+          "value": 43,
+          "unit": "STC"
+        },
+        "options": [
+          "Construction with joist spaces filled with at least 150 mm nominal sound-absorbing material, stud spaces filled with sound-absorbing material, resilient channel on one side at 400 or 600 mm o.c., and at least 12.7 mm gypsum board on ceilings and both sides of walls",
+          "Construction providing an STC rating of at least 43",
+          "A separating assembly and adjoining constructions together providing an ASTC rating of at least 40"
+        ],
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C181",
+          "retrieved": "2026-10-28"
+        }
+      },
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": "exposed ceiling joists",
+        "question": "Is there insulation between the basement ceiling joists now? Are you planning mineral wool, resilient channel and drywall on the ceiling?"
+      },
+      "fix": {
+        "description": "Fill joist and stud cavities with mineral wool, add resilient channel on one side, then drywall (5/8 in. Type X also covers the fire rule).",
+        "costLowCAD": 3,
+        "costHighCAD": 5,
+        "costUnit": "sqft",
+        "costSource": {
+          "title": "Soundproofing Cost Toronto: 2026 Comparison Across Tiers",
+          "url": "https://renohouse.ca/blog/soundproofing-cost-toronto-comparison",
+          "publisher": "RenoHouse",
+          "pageDate": "2026-05-05",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28"
+        },
+        "costNote": "Estimate, not a quote. Another source quotes $15-$25/sq ft for a full mineral-wool wall assembly; sources disagree widely (see costs[])."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.11.1.1.(1)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [],
+      "verified": true,
+      "notes": "Sentence 9.11.1.1.(2) is 'Reserved' in the Ontario text and 9.11 has no secondary-suite exception, so a house under 5 years old needs STC 50/ASTC 47."
+    },
+    {
+      "id": "stair_headroom",
+      "route": [
+        "second_unit"
+      ],
+      "category": "exit",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "Stair headroom: 1,950 mm (1,850 mm under suite beams/ducts)",
+      "plain": "Stairs serving a house with a secondary suite need at least 1,950 mm clear headroom, measured straight up from the line of the nosings; under beams and ducts in the suite, 1,850 mm.",
+      "check": {
+        "metric": "stairClearHeadroom",
+        "operator": ">=",
+        "value": 1950,
+        "unit": "mm"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C112 (for 9.8.1. to 9.8.4.)",
+        "text": "Replacement or extension of existing stair systems shall be exempt from the provisions of these Subsections, except that they shall have a minimum width between wall faces of 700 mm and a minimum clear height over tread nosing or landing of 1,800 mm.",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C112",
+          "retrieved": "2026-10-28"
+        },
+        "interpretationNote": "C112 covers replacing or extending a stair. Whether an existing stair left unaltered is accepted as-is falls under Div. A 1.3.3.3C (only altered parts must comply) and is the building department's call.",
+        "check": {
+          "metric": "stairClearHeadroom",
+          "operator": ">=",
+          "value": 1800,
+          "unit": "mm"
+        }
+      },
+      "evidence": {
+        "type": "scan_measurement",
+        "samConcept": "staircase",
+        "alsoFind": [
+          "ceiling duct",
+          "steel beam"
+        ],
+        "scanMeasurement": "Vertical clearance from a line through the stair nosings to the lowest point above, over the stair width.",
+        "question": "What is the lowest point above the basement stairs, measured straight up from the front edge of the steps?"
+      },
+      "fix": {
+        "description": "Reframe the opening or bulkhead above the stair or move ducts; not priced in this pack.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.8.2.2.(1), (3) and (4)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [],
+      "verified": true,
+      "notes": ""
+    },
+    {
+      "id": "stair_width",
+      "route": [
+        "second_unit"
+      ],
+      "category": "exit",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "Exit stair width: 860 mm",
+      "plain": "Exit stairs serving a house with a secondary suite must be at least 860 mm wide.",
+      "check": {
+        "metric": "exitStairWidth",
+        "operator": ">=",
+        "value": 860,
+        "unit": "mm"
+      },
+      "existingBuildingAlternative": {
+        "appliesIf": "houseAgeYears >= 5",
+        "ref": "Table 11.5.1.1.-C, compliance alternative C112 (for 9.8.1. to 9.8.4.)",
+        "text": "Replacement or extension of existing stair systems shall be exempt from the provisions of these Subsections, except that they shall have a minimum width between wall faces of 700 mm and a minimum clear height over tread nosing or landing of 1,800 mm.",
+        "source": {
+          "title": "2024 Building Code Compendium, Division B Part 11",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-11-renovation",
+          "section": "Table 11.5.1.1.-C, C112",
+          "retrieved": "2026-10-28"
+        },
+        "interpretationNote": "C112 covers replacing or extending a stair. Whether an existing stair left unaltered is accepted as-is falls under Div. A 1.3.3.3C (only altered parts must comply) and is the building department's call.",
+        "check": {
+          "metric": "stairWidthBetweenWallFaces",
+          "operator": ">=",
+          "value": 700,
+          "unit": "mm"
+        }
+      },
+      "evidence": {
+        "type": "scan_measurement",
+        "samConcept": "staircase",
+        "scanMeasurement": "Clear width of the stair between wall faces (and handrails if they project).",
+        "question": "How wide is the basement stair between the walls?"
+      },
+      "fix": {
+        "description": "Usually only fixable by rebuilding the stair; not priced in this pack.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.8.2.1.(2)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [],
+      "verified": true,
+      "notes": ""
+    },
+    {
+      "id": "electrical_esa_permit",
+      "route": [
+        "second_unit"
+      ],
+      "category": "electrical",
+      "priority": "core",
+      "severity": "required",
+      "title": "Separate ESA electrical permit and inspection",
+      "plain": "Electrical work for the suite needs its own Electrical Safety Authority (ESA) permit and inspection, separate from the building permit; Ontario recommends a licensed electrical contractor.",
+      "check": {
+        "metric": "esaPermitForSuiteElectricalWork",
+        "operator": "exists",
+        "value": true,
+        "unit": null
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": "electrical panel",
+        "question": "Will a licensed electrical contractor take out the ESA permit? Will the suite get its own panel or meter?"
+      },
+      "fix": {
+        "description": "Hire a licensed electrical contractor to file the ESA notification and wire the suite (circuits, alarms, 3-way stair switches).",
+        "costLowCAD": 8000,
+        "costHighCAD": 15000,
+        "costUnit": "job",
+        "costSource": {
+          "title": "How Much Does Basement Development Cost in Canada in 2026?",
+          "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-development-cost",
+          "publisher": "HomeStars",
+          "pageDate": "2026-08-21",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28",
+          "note": "Read via the r.homestars.com mirror of the same path."
+        },
+        "costNote": "Estimate, not a quote, for a secondary suite with separate metering ('or more'). The ESA permit fee alone is $201-$399 depending on contractor status and service work (ESA 2026 guide). See costs[]."
+      },
+      "source": {
+        "title": "Add a second unit to your house (Government of Ontario, updated 2023-01-30)",
+        "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+        "section": "Electrical facilities and lighting",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "O. Reg. 164/99 Electrical Safety Code",
+          "url": "https://www.ontario.ca/laws/regulation/990164",
+          "section": "ss. 1-2",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.34.2.3.(2) (3-way switches at stairs with 4+ risers in houses with a secondary suite)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": false,
+      "notes": "Unverified because the 'separate electrical permit' statement comes from Ontario's 2023 guide (written for the 2012 Building Code) and ESA's own permit rules were not read on a listed source. O. Reg. 164/99 confirms all electrical work must comply with the Electrical Safety Code."
+    },
+    {
+      "id": "plumbing_fixtures_and_shutoff",
+      "route": [
+        "second_unit"
+      ],
+      "category": "plumbing",
+      "priority": "core",
+      "severity": "required",
+      "title": "Kitchen, bathroom, hot water and its own water shut-off",
+      "plain": "The suite needs a kitchen sink, a bathroom sink, a toilet and a tub or shower with hot water, access to laundry (it can be shared), a floor drain in its basement, and its own water shut-off valve where the supply enters the unit.",
+      "check": {
+        "metric": "suiteHasKitchenSinkLavatoryToiletAndTubOrShower",
+        "operator": "==",
+        "value": true,
+        "unit": null
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "video_object",
+        "samConcept": "toilet",
+        "alsoFind": [
+          "sink",
+          "floor drain",
+          "bathroom rough-in",
+          "water shut-off valve"
+        ],
+        "question": "Is there an existing bathroom or a rough-in (capped pipes in the floor) in the basement? Where does the water line enter the house?"
+      },
+      "fix": {
+        "description": "Add a bathroom (rough-in if none) and a kitchenette, plus a shut-off valve where the supply enters the suite.",
+        "costLowCAD": 15000,
+        "costHighCAD": 30000,
+        "costUnit": "job",
+        "costSource": {
+          "title": "Basement Renovation Cost Guide: Kitchener-Waterloo & Cambridge 2026",
+          "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+          "publisher": "Caliber Contracting",
+          "pageDate": "2026-04",
+          "sourceType": "non-government",
+          "retrieved": "2026-10-28"
+        },
+        "costNote": "Estimate, not a quote, for a full basement bathroom (Waterloo Region). Rough-in alone $8,000-$15,000; kitchenette $7,000-$15,000 (one Toronto source says $20,000-$35,000). See costs[]."
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.31.4.1.(1)",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.31.4.1A. (laundry)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.31.4.2.(1) (hot water)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.31.4.3.(1) (floor drain)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium, Division B Part 7",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-7-plumbing",
+          "section": "7.6.1.3.(5) (shut-off valve for each dwelling unit)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium, Division B Part 7",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-7-plumbing",
+          "section": "7.4.6.4.(3) (backwater valve where fixtures are below the street/sewer level)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": ""
+    },
+    {
+      "id": "min_room_sizes",
+      "route": [
+        "second_unit"
+      ],
+      "category": "size",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "Minimum room sizes (no minimum unit size in zoning)",
+      "plain": "Rooms need minimum areas: a bachelor with living, dining, bedroom and kitchen combined at least 13.5 m²; bedrooms 7 m² (one bedroom 9.8 m²) without built-in cabinets; kitchen 4.2 m² (3.7 m² for up to 2 people); living area 13.5 m² (11 m² when combined with kitchen/dining for up to 2 people). Smaller is allowed if shown adequate, for example with built-ins.",
+      "check": {
+        "metric": "bachelorCombinedLivingSleepingKitchenArea",
+        "operator": ">=",
+        "value": 13.5,
+        "unit": "m2"
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "scan_measurement",
+        "samConcept": "room",
+        "scanMeasurement": "Net floor area of each planned room between finished walls (closets excluded).",
+        "question": "How many bedrooms do you want in the suite, and roughly how large is the space?"
+      },
+      "fix": {
+        "description": "Re-plan the layout, combine spaces (combination rooms, 9.5.1.2.) or use built-ins (9.5.1.3.).",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division B",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.5.3E.1.",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.5.3A.1., 9.5.3C.1., 9.5.3D.1., 9.5.3D.2.",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "2024 Building Code Compendium (MMAH), Division B",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+          "section": "9.5.1.3.(1)",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Planning Act, R.S.O. 1990, c. P.13",
+          "url": "https://www.ontario.ca/laws/statute/90p13",
+          "section": "s. 35.1(1.2) (zoning may not set a minimum ARU floor area)",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "No maximum suite size appears in the Code's 'secondary suite' definition. The education development charge exemption has a size condition (see grants: dc_exemption_aru)."
+    },
+    {
+      "id": "fire_code_two_unit_existing",
+      "route": [
+        "second_unit"
+      ],
+      "category": "fire",
+      "priority": "supporting",
+      "severity": "required",
+      "title": "Already a second home in the house: the Fire Code's minimum",
+      "plain": "If the house already has two homes, Ontario's Fire Code sets the least it needs: a 30-minute fire separation, or 15 minutes with interconnected smoke alarms, and a safe way out of each home. Plaster or drywall in place on July 14, 1994 counts as 30 minutes.",
+      "check": {
+        "metric": "existingTwoUnitHouseMeetsFireCodeSection98",
+        "operator": "==",
+        "value": true,
+        "unit": null
+      },
+      "existingBuildingAlternative": null,
+      "evidence": {
+        "type": "ask_user",
+        "samConcept": null,
+        "question": "Is there already a basement apartment in the house?"
+      },
+      "fix": {
+        "description": "A unit that already exists must at least meet Fire Code Section 9.8. A new unit you build now needs a building permit and follows the Building Code.",
+        "costLowCAD": null,
+        "costHighCAD": null,
+        "costSource": null
+      },
+      "source": {
+        "title": "O. Reg. 213/07: Fire Code (consolidation from 2026-01-01)",
+        "url": "https://www.ontario.ca/laws/regulation/070213",
+        "section": "Div. B, 9.8.1.1, 9.8.1.2 ('existing' means in existence on July 14, 1994), 9.8.2.1(3), 9.8.2.2, 9.8.3",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "O. Reg. 213/07: Fire Code (consolidation from 2026-01-01)",
+          "url": "https://www.ontario.ca/laws/regulation/070213",
+          "section": "Div. B, 9.1.1.1 (Part 9 is for existing buildings), 9.1.2.2(2) (not for a building that meets the Building Code's fire safety requirements)",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "verified": true,
+      "notes": "Section 9.8 covers a detached, semi-detached or row house with two units, 3 storeys or less and up to 600 m2, where one unit is above the other or they share an interior way out (9.8.1.1). Existing 45 mm solid-core doors with closers are accepted (9.8.2.5(2))."
+    }
+  ],
+  "grants": [
+    {
+      "id": "dc_exemption_aru",
+      "name": "Development charge exemption for a second or third unit in an existing house",
+      "level": "provincial",
+      "kind": "fee_exemption",
+      "status": "open",
+      "amount": "Municipal development charges are not charged for a 2nd or 3rd home in an existing detached, semi-detached or row house, or for one home in a building out back.",
+      "conditions": {
+        "existingHouse": true,
+        "unitNumberInHouse": [
+          2,
+          3
+        ],
+        "requiresOwnerOccupied": false,
+        "occupantRelation": "any",
+        "rentCap": null,
+        "tenantIncomeLimit": null,
+        "educationDCs": {
+          "value": null,
+          "note": "School boards' education development charges follow O. Reg. 20/98, s. 3, which exempts up to 2 additional units in an existing single detached house (1 in a semi or row house) when their gross floor area is no more than the existing unit's."
+        }
+      },
+      "fitsPlans": {
+        "family_suite": "fits",
+        "rental": "fits"
+      },
+      "nextStep": "Nothing to apply for. Check the permit bill for any school-board charge.",
+      "source": {
+        "title": "Development Charges Act, 1997, S.O. 1997, c. 27 (consolidation from 2026-06-02)",
+        "url": "https://www.ontario.ca/laws/statute/97d27",
+        "section": "s. 2(3.2) paras 1-3",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "O. Reg. 20/98 Education Development Charges - General",
+          "url": "https://www.ontario.ca/laws/regulation/980020",
+          "section": "s. 3",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+          "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+          "section": "'Did you know?': development charges are not collected for a second unit in an existing house",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "verified": true,
+      "notes": "Read on the Act on 2026-10-30. The education charge is the school board's; it was not checked per board.",
+      "shortName": "No development charges"
+    },
+    {
+      "id": "federal_mhrtc",
+      "name": "Multigenerational Home Renovation Tax Credit (MHRTC), line 45355",
+      "level": "federal",
+      "kind": "refundable_tax_credit",
+      "status": "open",
+      "amount": "14% of up to $50,000 of qualifying costs, so up to $7,000, for a suite finished in 2026 or later (the rate follows the lowest federal tax rate, now 14%; the CRA page still shows 2025's 14.5% and $7,250).",
+      "conditions": {
+        "occupantRelation": "relative65plus|disabled",
+        "qualifyingIndividual": "65 or older at the end of the tax year, or 18-64 and eligible for the disability tax credit",
+        "qualifyingRelation": "18+; parent, grandparent, child, grandchild, brother, sister, aunt, uncle, niece or nephew of the qualifying individual or their spouse/partner",
+        "unitMustHave": [
+          "private entrance",
+          "kitchen",
+          "bathroom",
+          "sleeping area"
+        ],
+        "mustMeetLocalPermitsAndCodes": true,
+        "renovationCompletedInClaimYear": true,
+        "bothMoveInWithinMonths": 12,
+        "lifetimeClaimsPerQualifyingIndividual": 1,
+        "maxQualifyingExpensesCAD": 50000,
+        "eligibleExpenses": [
+          "materials and fixtures",
+          "professional labour",
+          "building plans",
+          "permits",
+          "equipment rental"
+        ],
+        "ineligibleExpenses": [
+          "own labour",
+          "household appliances",
+          "financing costs",
+          "routine maintenance",
+          "non-arm's-length work unless GST/HST registered"
+        ],
+        "rentCap": null,
+        "tenantIncomeLimit": null,
+        "requiresOwnerOccupied": false,
+        "ratePct": 14
+      },
+      "fitsPlans": {
+        "family_suite": "fits",
+        "rental": "no"
+      },
+      "fitsPlansNote": "Only for a suite that lets a senior (65+) or an adult eligible for the disability tax credit live with a qualifying relative. Not for a rental to an unrelated tenant.",
+      "nextStep": "Keep all receipts and the permit; claim on line 45355 of the tax return for the year the renovation is completed.",
+      "source": {
+        "title": "Line 45355 - Multigenerational home renovation tax credit (CRA)",
+        "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc.html",
+        "section": "Overview; page date 2026-01-20",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "Who can claim (CRA)",
+          "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc/who-claim-mhrt.html",
+          "section": null,
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Expenses you can claim (CRA)",
+          "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc/expenses-claim-mhrtc.html",
+          "section": null,
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Delivering a middle-class tax cut (Finance Canada, 2025-05-27)",
+          "url": "https://www.canada.ca/en/department-finance/news/2025/05/delivering-a-middle-class-tax-cut.html",
+          "section": "lowest rate 14.5% for 2025, 14% for 2026 and later",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "The 2025 figures are verified on the CRA page. The 2026 rate (14%) is inferred from Finance Canada's statement that the lowest rate is 14% for 2026 and later; the CRA MHRTC page did not yet show a 2026 rate.",
+      "maxCAD": 7000,
+      "shortName": "Multigenerational home tax credit",
+      "apply": {
+        "when": "tax_time",
+        "who": "You, on your tax return",
+        "detail": "Line 45355, for the year the suite is finished.",
+        "where": [
+          {
+            "label": "CRA: line 45355",
+            "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc.html"
+          }
+        ],
+        "bring": [
+          "Every receipt for the work"
+        ]
+      }
+    },
+    {
+      "id": "cmhc_refinance_secondary_suite",
+      "name": "CMHC-insured refinance for building a secondary suite",
+      "level": "federal",
+      "kind": "insured_financing",
+      "status": "open",
+      "amount": "Refinance up to 90% of the as-improved home value (value under $2,000,000), amortization up to 30 years; money must go to building the suite.",
+      "conditions": {
+        "requiresOwnerOccupied": true,
+        "ownerOrCloseRelativeLivesThere": true,
+        "maxUnitsIncludingExisting": 4,
+        "maxLTVPct": 90,
+        "maxAsImprovedValueCAD": 2000000,
+        "maxAmortizationYears": 30,
+        "equityTakeOutAllowed": false,
+        "shortTermRentalAllowed": false,
+        "minRentalTermDays": 90,
+        "cmhcApprovalBeforeConstruction": true,
+        "minCreditScore": 600,
+        "maxGDSPct": 39,
+        "maxTDSPct": 44,
+        "premiumAt85to90LTV": "3.10% of total loan or 6.25% of the increase, whichever is less",
+        "occupantRelation": "any",
+        "rentCap": null,
+        "tenantIncomeLimit": null
+      },
+      "fitsPlans": {
+        "family_suite": "fits",
+        "rental": "fits"
+      },
+      "fitsPlansNote": "Financing, not free money: it lets you borrow against the finished value. Ask your lender, since only CMHC Approved Lenders offer it.",
+      "nextStep": "Ask your mortgage lender about the CMHC Refinance for secondary suites before starting construction.",
+      "source": {
+        "title": "CMHC Refinance for Building Secondary Suites",
+        "url": "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/refinance",
+        "section": "Product terms",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Fall Economic Statement: Making it easier for homeowners to build secondary suites (Finance Canada, 2024-12-10)",
+          "url": "https://www.canada.ca/en/department-finance/news/2024/12/2024-fall-economic-statement-making-it-easier-for-homeowners-to-build-secondary-suites.html",
+          "section": "effective 2025-01-15",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "The CMHC page shows no publish date; it presents the product as current. Start date 2025-01-15 is from the Finance Canada release.",
+      "shortName": "CMHC refinance",
+      "apply": {
+        "when": "before_work",
+        "who": "You, through your lender",
+        "detail": "Ask your mortgage lender. Only CMHC-approved lenders offer it, and CMHC must approve it before construction.",
+        "where": [
+          {
+            "label": "CMHC: refinance for a secondary suite",
+            "url": "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/refinance"
+          }
+        ],
+        "bring": [
+          "Quotes for the work: the lender adds them to your home's value today"
+        ]
+      }
+    },
+    {
+      "id": "canada_secondary_suite_loan_program",
+      "name": "Canada Secondary Suite Loan Program",
+      "level": "federal",
+      "kind": "low_interest_loan",
+      "status": "cancelled",
+      "amount": "Was announced as up to $80,000 at 2% over 15 years (raised from $40,000 in Dec 2024). Never launched.",
+      "conditions": {
+        "requiresOwnerOccupied": null,
+        "occupantRelation": null,
+        "rentCap": null,
+        "tenantIncomeLimit": null
+      },
+      "fitsPlans": {
+        "family_suite": "no",
+        "rental": "no"
+      },
+      "fitsPlansNote": "Cancelled. Show it only to correct older articles that still mention it.",
+      "nextStep": "Not available. Consider the CMHC-insured refinance instead.",
+      "source": {
+        "title": "Budget 2025, Annex 3: Comprehensive expenditure review (page modified 2025-11-04)",
+        "url": "https://budget.canada.ca/2025/report-rapport/anx3-en.html",
+        "section": "Housing, Infrastructure and Communities > Canada Mortgage and Housing Corporation",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "2024 Fall Economic Statement: Making it easier for homeowners to build secondary suites (2024-12-10)",
+          "url": "https://www.canada.ca/en/department-finance/news/2024/12/2024-fall-economic-statement-making-it-easier-for-homeowners-to-build-secondary-suites.html",
+          "section": "loan terms as announced",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "notes": "Budget 2025 says the program 'is not yet operational' and 'will not be implemented' because it overlaps with the insured-mortgage refinance changes. Cancellation date recorded as the Budget 2025 page date, 2025-11-04.",
+      "shortName": "Canada Secondary Suite Loan"
+    }
+  ],
+  "process": [
+    {
+      "step": 1,
+      "title": "Pick the route",
+      "detail": "Basement finish (still one home) or a second unit (a new home with its own kitchen, bathroom and bedroom). Only the second-unit route brings in the two-household rules: fire separation, interconnected alarms, exits and separate heating.",
+      "source": {
+        "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+        "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+        "section": "What is a second unit?",
+        "retrieved": "2026-10-30"
+      },
+      "phase": null
+    },
+    {
+      "step": 2,
+      "title": "Check zoning",
+      "detail": "Ontario stops zoning from banning a second unit on a serviced residential lot, but your municipality's zoning by-law still sets things like parking, entrances and setbacks, and some municipalities license or register second units. Ask its planning or zoning office to confirm in writing.",
+      "source": {
+        "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+        "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+        "section": "Municipal zoning and other by-laws",
+        "retrieved": "2026-10-30"
+      },
+      "phase": "before",
+      "task": "Ask your municipality to confirm zoning",
+      "who": "You",
+      "where": [
+        {
+          "label": "Find your municipality",
+          "url": "https://www.ontario.ca/page/list-ontario-municipalities"
+        }
+      ]
+    },
+    {
+      "step": 3,
+      "title": "Confirm house age",
+      "detail": "If the house has existed for at least 5 years, Part 11 compliance alternatives (Table 11.5.1.1.-C) can be used instead of some Part 9 rules; newer houses must meet new-construction rules.",
+      "source": {
+        "title": "2024 Building Code Compendium",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-compliance",
+        "section": "Division A 1.3.3.3B.(1); Division B 11.5.1.1.(2)",
+        "retrieved": "2026-10-28"
+      },
+      "phase": "drawings"
+    },
+    {
+      "step": 4,
+      "title": "Line up money before building",
+      "detail": "CMHC must approve insured financing before construction starts, and most grant programs turn down work that has already begun. Apply first.",
+      "source": {
+        "title": "CMHC Refinance for Building Secondary Suites",
+        "url": "https://www.cmhc-schl.gc.ca/professionals/project-funding-and-mortgage-financing/mortgage-loan-insurance/mortgage-loan-insurance-homeownership-programs/refinance",
+        "section": "Product terms",
+        "retrieved": "2026-10-28"
+      },
+      "phase": "before"
+    },
+    {
+      "step": 5,
+      "title": "Get drawings",
+      "detail": "Construction drawings go with the permit application. An owner may design their own house without registering (Div. C 3.2.5.1.(3)(b)), but ask your building department whether it accepts owner-drawn plans; otherwise a BCIN-registered designer, an architect or an engineer draws them.",
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division C Part 3",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications",
+        "section": "Division C 3.2.4.1. and 3.2.5.1.(3)(b)",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+          "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+          "section": "Getting a building permit",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "phase": "drawings"
+    },
+    {
+      "step": 6,
+      "title": "Apply and pay",
+      "detail": "Apply to your municipality's building department on Ontario's Application for a Permit to Construct or Demolish (the Code requires the Minister's form), with the drawings and the fee your municipality sets. Once the application is complete, the Code gives it 15 business days to issue or refuse a permit for a house with one home above another.",
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division C Part 1",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-general-0",
+        "section": "Division C 1.3.1.2.(2); 1.3.1.3. and Table 1.3.1.3., item 2 (15 days, not counting Saturdays and holidays)",
+        "retrieved": "2026-10-30"
+      },
+      "relatedSources": [
+        {
+          "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+          "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+          "section": "Getting a building permit",
+          "retrieved": "2026-10-30"
+        }
+      ],
+      "phase": "permit",
+      "task": "Apply to your building department",
+      "who": "You or your designer",
+      "time": "15 business days once complete",
+      "where": [
+        {
+          "label": "Ontario's permit application (PDF)",
+          "url": "https://www.ontario.ca/files/2026-01/mmah-building-development-application-for-a-permit-to-construct-or-demolish-2026-en-2026-01-27.pdf"
+        },
+        {
+          "label": "Find your municipality",
+          "url": "https://www.ontario.ca/page/list-ontario-municipalities"
+        }
+      ],
+      "bring": [
+        "Your drawings",
+        "Ontario's permit application, with Schedule 1",
+        "The permit fee"
+      ],
+      "notes": "Ontario's 2023 guide says applicants hear back within 10 business days; the Code's table gives 10 days only for a house with no unit above another. The pack uses the Code."
+    },
+    {
+      "step": 7,
+      "title": "ESA electrical permit",
+      "detail": "Electrical work needs a separate ESA permit and inspection, usually filed by a licensed electrical contractor.",
+      "source": {
+        "title": "Add a second unit to your house (Government of Ontario)",
+        "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+        "section": "Electrical facilities and lighting",
+        "retrieved": "2026-10-28"
+      },
+      "verified": false,
+      "notes": "Guide last updated 2023-01-30.",
+      "phase": "build"
+    },
+    {
+      "step": 8,
+      "title": "Build and book inspections",
+      "detail": "Tell the building department when each stage is ready, before it's covered: footings, framing and ductwork, insulation and vapour barrier, air barrier, fire separations, the plumbing, and completion for occupancy.",
+      "source": {
+        "title": "2024 Building Code Compendium (MMAH), Division C Part 1",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-general-0",
+        "section": "Division C 1.3.5.1. Prescribed notices",
+        "retrieved": "2026-10-30"
+      },
+      "phase": "build",
+      "task": "Book each inspection",
+      "where": []
+    },
+    {
+      "step": 9,
+      "title": "Move in",
+      "detail": "Before you rent, ask whether your municipality licenses or registers second units. The building department signs off after the final inspection.",
+      "source": {
+        "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+        "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+        "section": "Municipal zoning and other by-laws: 'whether your second unit will need to be licensed or registered'",
+        "retrieved": "2026-10-30"
+      },
+      "phase": "after",
+      "task": "Ask about a rental licence, if you rent it out",
+      "where": [
+        {
+          "label": "Find your municipality",
+          "url": "https://www.ontario.ca/page/list-ontario-municipalities"
+        }
+      ]
+    },
+    {
+      "step": 10,
+      "title": "Claim credits",
+      "detail": "For a family suite for a senior or a relative with a disability, claim the MHRTC for the year the work is completed.",
+      "source": {
+        "title": "Line 45355 - Multigenerational home renovation tax credit (CRA)",
+        "url": "https://www.canada.ca/en/revenue-agency/services/tax/individuals/topics/about-your-tax-return/tax-return/completing-a-tax-return/deductions-credits-expenses/line-45355-mhrtc.html",
+        "section": null,
+        "retrieved": "2026-10-28"
+      },
+      "phase": null
+    }
+  ],
+  "pros": {
+    "registry": {
+      "name": "QuARTS Public Search Registry (Ministry of Municipal Affairs and Housing)",
+      "url": "https://www.search.quarts.mah.gov.on.ca/en",
+      "searchable": "Yes. Search by BCIN, organization name or individual name, or filter by Registration Type (e.g. Design Firms, Independent Designers), Classes of Registration (e.g. House, Small Buildings) and Principal Authority/Location; list or map view. Lists everyone with an active registration.",
+      "suggestedSearch": {
+        "registrationType": [
+          "Design Firms",
+          "Independent Designers"
+        ],
+        "classOfRegistration": [
+          "House"
+        ],
+        "location": null,
+        "principalAuthority": null
+      },
+      "termsNote": "No registry-specific terms of use were found; the page carries Crown copyright (King's Printer for Ontario). Ontario's copyright page allows non-commercial reproduction with credit and no changes, and says material 'may only be reproduced for commercial purposes under a licence.' The bulk BCIN dataset on the Ontario Data Catalogue is marked as not available for privacy reasons. Safest approach: deep-link the user to the registry search with suggested filters, show only what the user looks up, and don't scrape or store listings.",
+      "source": {
+        "title": "QuARTS Public Search Registry",
+        "url": "https://www.search.quarts.mah.gov.on.ca/en",
+        "section": "Welcome page and search filters",
+        "retrieved": "2026-10-28"
+      },
+      "relatedSources": [
+        {
+          "title": "Become a registered building practitioner (Government of Ontario)",
+          "url": "https://www.ontario.ca/page/become-registered-building-practitioner",
+          "section": "QuARTS",
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Copyright information (Government of Ontario)",
+          "url": "https://www.ontario.ca/page/copyright-information-c-queens-printer-ontario",
+          "section": null,
+          "retrieved": "2026-10-28"
+        },
+        {
+          "title": "Building Code Identification Number (BCIN) files (Ontario Data Catalogue)",
+          "url": "https://data.ontario.ca/dataset/building-code-identification-number-bcin-files",
+          "section": "Access: not available",
+          "retrieved": "2026-10-28"
+        }
+      ],
+      "verified": true,
+      "searchUrl": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D4%264%3D*House*",
+      "searchLinks": [
+        {
+          "label": "Independent designers registered for houses",
+          "url": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D4%264%3D*House*"
+        },
+        {
+          "label": "Design firms registered for houses",
+          "url": "https://www.search.quarts.mah.gov.on.ca/en?mf=3%3D3%264%3D*House*"
+        }
+      ],
+      "howToSearch": "Opens Ontario's public registry of designers registered for houses. Check that their classes include “House”, not only HVAC or plumbing.",
+      "searchNote": "Filters go in the 'mf' query parameter (3 = registration type: 3 design firms, 4 independent designers; 4 = classes; 6 = location; text needs * on both sides). The app adds the municipality's name as the location (key 6) when it knows it."
+    },
+    "whoNeedsOne": "Designers who are not the owner generally must be registered (Div. C 3.2.4-3.2.5); an owner designing their own house is exempt (Div. C 3.2.5.1.(3)(b)). Architects and professional engineers are separate routes.",
+    "whoNeedsOneSource": {
+      "title": "2024 Building Code Compendium, Division C Part 3",
+      "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications",
+      "section": "Division C 3.2.4.1. and 3.2.5.1.(3)(b)",
+      "retrieved": "2026-10-28"
+    },
+    "cityNote": null,
+    "selfDraw": {
+      "detail": "The Building Code lets an owner design their own house without registering. Ask your building department whether it accepts owner-drawn plans, and for its drawings checklist, before you start.",
+      "checklist": null,
+      "rule": {
+        "label": "Building Code, Div. C 3.2.5.1.(3)(b)",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications"
+      },
+      "note": null
+    },
+    "designerCost": {
+      "lowCAD": 2000,
+      "highCAD": 5000,
+      "note": "A Toronto price guide's figure for permit drawings (Aug 2026). Ask 2 or 3 designers to quote.",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto (HomeStars, updated 2026-08-21)",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "section": "Permits and drawings: 'Architectural or designer drawings ... typically add another $2,000 to $5,000'",
+        "retrieved": "2026-10-29"
+      }
+    },
+    "trades": [
+      {
+        "title": "Electrician",
+        "detail": "Hire one with an ESA licence, who takes out the ESA permit; or do the wiring yourself in your own house, including a unit you'll rent, after filing an ESA homeowner notification (O. Reg. 570/05, s. 2).",
+        "label": "ESA contractor locator",
+        "url": "https://licensing.esasafe.com/contractor-locator-tool/"
+      },
+      {
+        "title": "Gas fitter",
+        "detail": "For the furnace, water heater or gas lines: must be registered with TSSA.",
+        "label": "TSSA-registered gas contractors",
+        "url": "https://www.tssa.org/fuels-contractor?field_fuel_type_natural_gas_value=Yes"
+      }
+    ]
+  },
+  "costs": [
+    {
+      "item": "Egress window: cut new opening, window and well",
+      "lowCAD": 3500,
+      "highCAD": 8000,
+      "unit": "each",
+      "region": "Canada",
+      "source": {
+        "title": "How Much Does a Basement Egress Window Cost in Canada?",
+        "url": "https://homestars.com/windows-doors/price-guides/basement-egress-window-cost",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path because www.homestars.com blocked automated fetching."
+      },
+      "notes": "Enlarging an existing opening: $1,500-$4,000 (same page).",
+      "estimate": true
+    },
+    {
+      "item": "Egress window incl. excavation, cutting, framing, install",
+      "lowCAD": 3000,
+      "highCAD": 6000,
+      "unit": "each",
+      "region": "Kitchener-Waterloo",
+      "source": {
+        "title": "Basement Renovation Cost Guide: Kitchener-Waterloo & Cambridge 2026",
+        "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+        "publisher": "Caliber Contracting",
+        "pageDate": "2026-04",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "estimate": true
+    },
+    {
+      "item": "Egress window (Toronto legalization guide)",
+      "lowCAD": 7500,
+      "highCAD": 17000,
+      "unit": "each",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Apartment Legalization Toronto: 2026 Code, Egress, Ceiling Height, Fire Separation",
+        "url": "https://renohouse.ca/blog/basement-apartment-legalization-toronto",
+        "publisher": "RenoHouse",
+        "pageDate": "2026-05-05",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "Conflicts with the two lower ranges.",
+      "estimate": true
+    },
+    {
+      "item": "Fire separation (1-hour fire-rated ceiling, self-closing doors)",
+      "lowCAD": 3000,
+      "highCAD": 6000,
+      "unit": "job",
+      "region": "Toronto",
+      "source": {
+        "title": "Cost to Make a Basement Legal in Toronto",
+        "url": "https://renohouse.ca/blog/basement-apartment-conversion-toronto-cost",
+        "publisher": "RenoHouse",
+        "pageDate": "2026-03-06 (updated 2026-06-26)",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "Another RenoHouse page gives $7,000-$13,500 for a typical unit.",
+      "estimate": true
+    },
+    {
+      "item": "Ceiling drywall installed and finished (not Type X specific)",
+      "lowCAD": 4.0,
+      "highCAD": 6.5,
+      "unit": "sqft",
+      "region": "Toronto",
+      "source": {
+        "title": "Drywall Replacement Costs Toronto",
+        "url": "https://renohouse.ca/blog/drywall-guide-toronto",
+        "publisher": "RenoHouse",
+        "pageDate": "2026-03-06 (updated 2026-06-09)",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "Type X upgrade adds $3-$6 per sheet; HST not included. No dated installed price per sq ft for Type X was found.",
+      "estimate": true
+    },
+    {
+      "item": "Separate entrance (door, if needed)",
+      "lowCAD": 5000,
+      "highCAD": 10000,
+      "unit": "job",
+      "region": "GTA",
+      "source": {
+        "title": "Convert Your Basement into an Apartment: A Guide for Toronto Homeowners",
+        "url": "https://www.renoquotes.com/en/blog/convert-your-basement-into-an-apartment-a-guide-for-toronto-homeowners",
+        "publisher": "RenoQuotes",
+        "pageDate": "2025-07-24",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "Upper end open ('$10,000+'); stored as 10000.",
+      "estimate": true
+    },
+    {
+      "item": "Separate side entry (below-grade walk-up)",
+      "lowCAD": 12000,
+      "highCAD": 30000,
+      "unit": "job",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Apartment Legalization Toronto: 2026 Code, Egress, Ceiling Height, Fire Separation",
+        "url": "https://renohouse.ca/blog/basement-apartment-legalization-toronto",
+        "publisher": "RenoHouse",
+        "pageDate": "2026-05-05",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "Same page: rear walk-out $8,000-$22,000.",
+      "estimate": true
+    },
+    {
+      "item": "Kitchen or kitchenette",
+      "lowCAD": 7000,
+      "highCAD": 15000,
+      "unit": "job",
+      "region": "GTA",
+      "source": {
+        "title": "Convert Your Basement into an Apartment: A Guide for Toronto Homeowners",
+        "url": "https://www.renoquotes.com/en/blog/convert-your-basement-into-an-apartment-a-guide-for-toronto-homeowners",
+        "publisher": "RenoQuotes",
+        "pageDate": "2025-07-24",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "estimate": true
+    },
+    {
+      "item": "Basement kitchen with small appliances, rough-in existing",
+      "lowCAD": 20000,
+      "highCAD": 35000,
+      "unit": "job",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "notes": "Conflicts with the RenoQuotes range.",
+      "estimate": true
+    },
+    {
+      "item": "Bathroom rough-in",
+      "lowCAD": 8000,
+      "highCAD": 15000,
+      "unit": "job",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "estimate": true
+    },
+    {
+      "item": "Full basement bathroom",
+      "lowCAD": 15000,
+      "highCAD": 30000,
+      "unit": "job",
+      "region": "Kitchener-Waterloo",
+      "source": {
+        "title": "Basement Renovation Cost Guide: Kitchener-Waterloo & Cambridge 2026",
+        "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+        "publisher": "Caliber Contracting",
+        "pageDate": "2026-04",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "estimate": true
+    },
+    {
+      "item": "Independent heating system for a legal secondary suite",
+      "lowCAD": 6000,
+      "highCAD": 12000,
+      "unit": "job",
+      "region": "Canada",
+      "source": {
+        "title": "How Much Does Basement Development Cost in Canada in 2026?",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-development-cost",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "estimate": true
+    },
+    {
+      "item": "Ductless mini-split",
+      "lowCAD": 3500,
+      "highCAD": 7000,
+      "unit": "job",
+      "region": "Canada",
+      "source": {
+        "title": "How Much Does Basement Development Cost in Canada in 2026?",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-development-cost",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "estimate": true
+    },
+    {
+      "item": "Firestopping and fire dampers",
+      "lowCAD": 1000,
+      "highCAD": 3000,
+      "unit": "job",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Apartment Legalization Toronto: 2026 Code, Egress, Ceiling Height, Fire Separation",
+        "url": "https://renohouse.ca/blog/basement-apartment-legalization-toronto",
+        "publisher": "RenoHouse",
+        "pageDate": "2026-05-05",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "estimate": true
+    },
+    {
+      "item": "Sound insulation, mineral wool + resilient channel (tier 1)",
+      "lowCAD": 3,
+      "highCAD": 5,
+      "unit": "sqft",
+      "region": "Toronto",
+      "source": {
+        "title": "Soundproofing Cost Toronto: 2026 Comparison Across Tiers",
+        "url": "https://renohouse.ca/blog/soundproofing-cost-toronto-comparison",
+        "publisher": "RenoHouse",
+        "pageDate": "2026-05-05",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "estimate": true
+    },
+    {
+      "item": "Full mineral-wool wall assembly",
+      "lowCAD": 15,
+      "highCAD": 25,
+      "unit": "sqft",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "notes": "Strongly conflicts with the tier-1 range.",
+      "estimate": true
+    },
+    {
+      "item": "Designer drawings for permit",
+      "lowCAD": 2000,
+      "highCAD": 5000,
+      "unit": "job",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "notes": "Does not say BCIN specifically; no Ontario BCIN designer published a price.",
+      "estimate": true
+    },
+    {
+      "item": "City of Waterloo permit: creation of a dwelling unit",
+      "lowCAD": 392,
+      "highCAD": 392,
+      "unit": "each",
+      "region": "Waterloo",
+      "source": {
+        "title": "Check building permit timelines and fees",
+        "url": "https://www.waterloo.ca/building-and-renovating/get-a-building-permit/check-building-permit-timelines-and-fees/",
+        "publisher": "City of Waterloo",
+        "pageDate": "no date shown",
+        "sourceType": "government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "Plus renovation area fee below; no HST.",
+      "estimate": true
+    },
+    {
+      "item": "City of Waterloo permit: residential renovation area",
+      "lowCAD": 0.62,
+      "highCAD": 0.62,
+      "unit": "sqft",
+      "region": "Waterloo",
+      "source": {
+        "title": "Check building permit timelines and fees",
+        "url": "https://www.waterloo.ca/building-and-renovating/get-a-building-permit/check-building-permit-timelines-and-fees/",
+        "publisher": "City of Waterloo",
+        "pageDate": "no date shown",
+        "sourceType": "government",
+        "retrieved": "2026-10-28"
+      },
+      "estimate": true
+    },
+    {
+      "item": "City of Waterloo permit: basement finish (one home)",
+      "lowCAD": 351,
+      "highCAD": 351,
+      "unit": "job",
+      "region": "Waterloo",
+      "source": {
+        "title": "Interior renovations and basements",
+        "url": "https://www.waterloo.ca/building-and-renovating/get-a-building-permit/find-project-checklists-and-requirements/interior-renovations-and-basements/",
+        "publisher": "City of Waterloo",
+        "pageDate": "no date shown",
+        "sourceType": "government",
+        "retrieved": "2026-10-28"
+      },
+      "estimate": true
+    },
+    {
+      "item": "ESA permit (notification) fee, renovation with 41+ outlets",
+      "lowCAD": 201,
+      "highCAD": 399,
+      "unit": "job",
+      "region": "Ontario",
+      "source": {
+        "title": "2026 Electrical Safety Services Fees - Residential Fees Quick Reference Guide",
+        "url": "https://esasafe.com/assets/files/esasafe/pdf/Fees/2026-Residential-Fees-Reference-Guide.pdf",
+        "publisher": "Electrical Safety Authority (Ontario's delegated electrical regulator)",
+        "pageDate": "2026-04-01",
+        "sourceType": "regulator",
+        "retrieved": "2026-10-28",
+        "note": "ESA is not on the pack's preferred source list; used only for the permit fee."
+      },
+      "notes": "$201 contractor / $340 non-contractor without service work; $256 / $399 with service work. Fees effective 2026-04-01.",
+      "estimate": true
+    },
+    {
+      "item": "Electrical for a secondary suite with separate metering",
+      "lowCAD": 8000,
+      "highCAD": 15000,
+      "unit": "job",
+      "region": "Canada",
+      "source": {
+        "title": "How Much Does Basement Development Cost in Canada in 2026?",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-development-cost",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "notes": "Upper end open ('or more'). RenoHouse bundles sub-panel, circuits and smoke/CO detectors at $4,000-$8,000.",
+      "estimate": true
+    },
+    {
+      "item": "City of Waterloo long-term rental licence, Class A, new application",
+      "lowCAD": 520,
+      "highCAD": 675,
+      "unit": "each",
+      "region": "Waterloo",
+      "source": {
+        "title": "Get a long-term rental licence",
+        "url": "https://www.waterloo.ca/building-and-renovating/residential-rental-licences/get-a-long-term-rental-licence/",
+        "publisher": "City of Waterloo",
+        "pageDate": "no date shown",
+        "sourceType": "government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "1 to 5 bedrooms; renewal $302-$450.",
+      "estimate": true
+    },
+    {
+      "item": "Converting space inside an existing house (City rule of thumb)",
+      "lowCAD": 100,
+      "highCAD": 100,
+      "unit": "sqft",
+      "region": "Waterloo",
+      "source": {
+        "title": "Additional Residential Units Guide 2025",
+        "url": "https://www.waterloo.ca/media/ghehnugv/additional-residential-units-guide.pdf",
+        "publisher": "City of Waterloo",
+        "pageDate": "2025",
+        "sourceType": "government",
+        "retrieved": "2026-10-28",
+        "section": "p. 17 'Develop your budget'"
+      },
+      "notes": "City guide: 'around $100 per square foot'; additions/coach houses $200-$400/sq ft.",
+      "estimate": true
+    },
+    {
+      "item": "Full legal basement apartment",
+      "lowCAD": 100000,
+      "highCAD": 150000,
+      "unit": "job",
+      "region": "Kitchener-Waterloo",
+      "source": {
+        "title": "Basement Renovation Cost Guide: Kitchener-Waterloo & Cambridge 2026",
+        "url": "https://calibercontracting.ca/basement-renovation-cost-guide-kitchener-waterloo",
+        "publisher": "Caliber Contracting",
+        "pageDate": "2026-04",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "Upper end open ('$150,000+').",
+      "estimate": true
+    },
+    {
+      "item": "Full legal secondary suite",
+      "lowCAD": 90000,
+      "highCAD": 140000,
+      "unit": "job",
+      "region": "Toronto",
+      "source": {
+        "title": "Basement Renovation Cost Guide For Toronto",
+        "url": "https://homestars.com/home-constructions-renovations/price-guides/basement-renovation-cost-toronto",
+        "publisher": "HomeStars",
+        "pageDate": "2026-08-21",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28",
+        "note": "Read via the r.homestars.com mirror of the same path."
+      },
+      "notes": "HomeStars Canada gives $75,000-$130,000; RenoHouse (Toronto 2026) $50,000-$80,000.",
+      "estimate": true
+    },
+    {
+      "item": "Legal basement apartment, 900 sq ft model",
+      "lowCAD": 85000,
+      "highCAD": null,
+      "unit": "job",
+      "region": "Quebec/Ontario",
+      "source": {
+        "title": "Legal basement apartment",
+        "url": "https://www.renoassistance.ca/en/basement/legal-basement-apartment/",
+        "publisher": "RenoAssistance",
+        "pageDate": "2024-09-12",
+        "sourceType": "non-government",
+        "retrieved": "2026-10-28"
+      },
+      "notes": "'Starts at $85,000 + tx'; no upper bound published; excludes tax.",
+      "estimate": true
+    }
+  ],
+  "permitPackage": {
+    "signer": "brief",
+    "signerNote": "A design brief, measured and laid out from your video. A BCIN designer (or you, if your building department accepts owner-drawn plans) checks, finishes and signs it before it's submitted.",
+    "signerSource": {
+      "title": "2024 Building Code Compendium (MMAH), Division C Part 3",
+      "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-3-qualifications",
+      "section": "Division C 3.2.4.1. and 3.2.5.1.(3)(b)",
+      "retrieved": "2026-10-30"
+    },
+    "signerVerified": true,
+    "drawings": [
+      "Site plan: lot lines, buildings, parking and the unit's entrance",
+      "Floor plans, existing and proposed: room names and sizes, doors and windows, the fire separation, smoke and CO alarms, exits",
+      "A cross-section through the basement",
+      "Details: the bedroom escape window",
+      "Anything else on your building department's own checklist"
+    ],
+    "drawingsSource": {
+      "title": "Add a second unit in your house (Government of Ontario, updated 2023-01-30)",
+      "url": "https://www.ontario.ca/page/add-second-unit-your-house",
+      "section": "Getting a building permit: 'construction drawings (most municipalities require at least two sets of drawings)'",
+      "retrieved": "2026-10-30"
+    },
+    "scaleRule": null,
+    "forms": [
+      {
+        "id": "on_application",
+        "title": "Application for a Permit to Construct or Demolish (Ontario's form, with Schedule 1)",
+        "url": "https://www.ontario.ca/files/2026-01/mmah-building-development-application-for-a-permit-to-construct-or-demolish-2026-en-2026-01-27.pdf",
+        "fill": "acroform",
+        "who": "You sign it as the applicant; whoever draws the plans completes Schedule 1",
+        "when": "With the drawings, to your building department",
+        "required": "always",
+        "source": {
+          "title": "2024 Building Code Compendium (MMAH), Division C Part 1",
+          "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-general-0",
+          "section": "Division C 1.3.1.2.(2): applications are made on the form approved by the Minister",
+          "retrieved": "2026-10-30"
+        },
+        "verified": true
+      }
+    ],
+    "portal": {
+      "label": "Find your municipality's building department",
+      "url": "https://www.ontario.ca/page/list-ontario-municipalities"
+    },
+    "upload": [
+      {
+        "what": "Drawings",
+        "where": "This package's sheets A0 to A7, once they're checked and finished."
+      },
+      {
+        "what": "Application with Schedule 1",
+        "where": "Filled in this package: sign page 1; Schedule 1 is for whoever draws the plans."
+      },
+      {
+        "what": "Anything else",
+        "where": "Ask the building department for its own checklist and fee."
+      }
+    ],
+    "ownerBuilder": {
+      "allowed": true,
+      "detail": "Ontario's application lets the owner be the applicant and the builder. Ask your building department what it needs from an owner who builds.",
+      "source": {
+        "title": "Application for a Permit to Construct or Demolish (Ontario, 2026)",
+        "url": "https://www.ontario.ca/files/2026-01/mmah-building-development-application-for-a-permit-to-construct-or-demolish-2026-en-2026-01-27.pdf",
+        "section": "Section C (applicant is the owner) and the builder section",
+        "retrieved": "2026-10-30"
+      },
+      "verified": true
+    },
+    "inspections": [
+      {
+        "id": "footings",
+        "title": "Footings",
+        "when": "Only if new footings are poured",
+        "who": "building"
+      },
+      {
+        "id": "underground_plumbing",
+        "title": "Underground plumbing",
+        "when": "Drains under the slab, before it's covered",
+        "who": "plumbing"
+      },
+      {
+        "id": "framing",
+        "title": "Framing and ductwork",
+        "when": "Walls framed and ducts in, before insulation",
+        "who": "building"
+      },
+      {
+        "id": "plumbing_rough",
+        "title": "Plumbing rough-in",
+        "when": "Pipes in the walls, before insulation",
+        "who": "plumbing"
+      },
+      {
+        "id": "insulation",
+        "title": "Insulation and vapour barrier",
+        "when": "Before it's covered",
+        "who": "building"
+      },
+      {
+        "id": "air_barrier",
+        "title": "Air barrier",
+        "when": "Before drywall",
+        "who": "building"
+      },
+      {
+        "id": "fire_separation",
+        "title": "Fire separations",
+        "when": "Type X board up and sealed",
+        "who": "building"
+      },
+      {
+        "id": "plumbing_final",
+        "title": "Plumbing final",
+        "when": "Fixtures in",
+        "who": "plumbing"
+      },
+      {
+        "id": "final",
+        "title": "Final inspection for occupancy",
+        "when": "Work finished",
+        "who": "building"
+      }
+    ],
+    "inspectionsSource": {
+      "title": "2024 Building Code Compendium (MMAH), Division C Part 1",
+      "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-1-general-0",
+      "section": "Division C 1.3.5.1. Prescribed notices",
+      "retrieved": "2026-10-30"
+    },
+    "plumbing": null
+  }
+}

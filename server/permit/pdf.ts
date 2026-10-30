@@ -224,7 +224,10 @@ export function frame(s: Sheet, p: Project, sheet: { number: string; title: stri
   s.rect(m, m, W - 2 * m, H - 2 * m, { width: 1.2 });
   const x0 = W - m - STRIP;
   s.line(x0, m, x0, H - m, { width: 1.2 });
-  let y = H - m - 22;
+  // Every sheet says it's a draft, at the top of the title strip.
+  s.rect(x0 + 1, H - m - 34, STRIP - 2, 33, { fill: TONE2, stroke: false });
+  s.wrap("DRAFT, for you or a BCIN designer to check before you submit", x0 + 12, H - m - 12, STRIP - 24, { size: 7.5, font: s.fonts.bold, leading: 9 });
+  let y = H - m - 52;
   s.text("ADDITIONAL RESIDENTIAL UNIT", x0 + 12, y, { size: 8.5, font: s.fonts.bold });
   y -= 12;
   s.text("Basement second unit in an existing house", x0 + 12, y, { size: 7.5, color: MUTED });

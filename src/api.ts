@@ -188,10 +188,14 @@ export type Property = {
   lotAreaM2: number | null;
   building: { storeys: number | null; footprintM2: number | null; floorAreaM2: number | null } | null;
   unitsRegistered: number;
+  inRegion?: boolean; // Waterloo Region's open data covers this house (records and the aerial photo)
+  zoningMap?: { label: string; url: string } | null; // the City's own zoning map, where there's no open layer
   sources: string[];
 };
 
-export type AddressHit = { address: string; municipality: string; city: string | null; lon: number; lat: number; units: number };
+// "region": from Waterloo Region's open address list. "ontario": placed by NRCan, no records.
+export type AddressHit = { address: string; municipality: string; city: string | null; lon: number; lat: number; units: number; source?: "region" | "ontario" };
+export type AddressSearch = { results: AddressHit[]; notCovered: { where: string | null; message: string } | null };
 
 export type FixGroup = {
   category: string;
@@ -242,7 +246,9 @@ export type ScanResult = {
   id: string;
   household: Household;
   city?: string;
+  authority?: string; // who issues the permit: "City of Waterloo", "Township of Woolwich"
   coverage?: "full" | "provincial";
+  coverageNote?: string | null; // what Ontario-only coverage means for this municipality
   has3d?: boolean;
   plan?: Plan | null;
   rooms?: RoomResult[];
@@ -359,9 +365,11 @@ export function subscribe(id: string, onEvent: (e: ScanEvent) => void): () => vo
 }
 
 // Address type-ahead, and what public data says about the house picked.
-export async function searchAddress(q: string): Promise<AddressHit[]> {
+export async function searchAddress(q: string): Promise<AddressSearch> {
   const res = await fetch(`/api/address?q=${encodeURIComponent(q)}`);
-  return res.ok ? (await res.json()).results : [];
+  if (!res.ok) return { results: [], notCovered: null };
+  const json = await res.json();
+  return { results: json.results ?? [], notCovered: json.notCovered ?? null };
 }
 export async function getProperty(a: Pick<AddressHit, "address" | "municipality">): Promise<Property | null> {
   const res = await fetch(`/api/property?address=${encodeURIComponent(a.address)}&municipality=${encodeURIComponent(a.municipality)}`);
