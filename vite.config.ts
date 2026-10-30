@@ -10,6 +10,6 @@ export default defineConfig({
   server: {
     port: 5173,
     ...(cert ? { host: true, https: { key: readFileSync(`${cert}-key.pem`), cert: readFileSync(`${cert}.pem`) } } : {}),
-    proxy: { "/api": "http://localhost:8787" },
+    proxy: { "/api": `http://localhost:${process.env.API_PORT ?? 8787}` },
   },
 });

@@ -2,6 +2,7 @@
 // and mechanicals placed where the scan says they are. Metres, room frame (x across, z deep).
 import type { Detection } from "./pipeline";
 import { liftBox, type Scan3d } from "./scan3d";
+import { nearestSide } from "./planSide";
 
 export type Side = "minX" | "maxX" | "minZ" | "maxZ";
 
@@ -72,15 +73,7 @@ function locate(s3: Scan3d, d: Detection) {
   };
 }
 
-export function nearestSide(box: Plan["box"], x: number, z: number): { side: Side; dist: number } {
-  const options: { side: Side; dist: number }[] = [
-    { side: "minX", dist: Math.abs(x - box.minX) },
-    { side: "maxX", dist: Math.abs(x - box.maxX) },
-    { side: "minZ", dist: Math.abs(z - box.minZ) },
-    { side: "maxZ", dist: Math.abs(z - box.maxZ) },
-  ];
-  return options.sort((a, b) => a.dist - b.dist)[0];
-}
+export { nearestSide } from "./planSide";
 
 export function buildPlan(s3: Scan3d, detections: Detection[], trusted: boolean): Plan | null {
   const room = s3.scan.room;

@@ -164,7 +164,7 @@ export function keptInPlace(original: Box[], found: Box[], minIou = 0.2) {
   return original.every((o) => found.some((f) => iou(o, f) >= minIou));
 }
 
-async function boxesIn(jpeg: Buffer, concept: string): Promise<Box[]> {
+export async function boxesIn(jpeg: Buffer, concept: string): Promise<Box[]> {
   const raw = await samImage(concept, `data:image/jpeg;base64,${jpeg.toString("base64")}`).catch(() => "");
   return parseSam(raw)
     .map((t) => t.frames[0]?.box)
@@ -193,7 +193,7 @@ export function jpegSize(jpeg: Buffer): [number, number] | null {
 }
 
 // Muse Image's picture back to the frame's own size, as a JPEG, so boxes line up and the page loads fast.
-async function toFrameJpeg(img: Buffer, w: number, h: number): Promise<Buffer> {
+export async function toFrameJpeg(img: Buffer, w: number, h: number): Promise<Buffer> {
   const work = mkdtempSync(join(tmpdir(), "br-photo-"));
   try {
     writeFileSync(join(work, "in.bin"), img);

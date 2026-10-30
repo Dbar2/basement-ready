@@ -32,6 +32,7 @@ import { TRIAGE } from "./triage";
 import { handlers } from "./scanJobs";
 import { keys, storage, type Scan3dFile } from "./storage";
 import { mountWorkspace } from "./workspaceRoutes";
+import { mountViews } from "./views/routes";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
 const SCANS_PER_IP_PER_HOUR = Number(process.env.SCANS_PER_IP_PER_HOUR ?? 6);
@@ -595,6 +596,9 @@ app.post("/api/scans/:id/replan", async (c) => {
 
 // The workspace: owner profile, permit package, materials, applications, looks (server/workspaceRoutes.ts).
 mountWorkspace(app, currentUser);
+
+// Pictures of a design from the scan's best real angles, all agreeing (server/views/routes.ts).
+mountViews(app);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {
