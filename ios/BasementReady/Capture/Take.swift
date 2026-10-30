@@ -23,6 +23,22 @@ struct Take: Codable, Sendable {
     return folder
   }
 
+  // A sent take's folder: deleted, or in Debug builds moved to Application Support/Kept with the two
+  // before it (video, capture.json and sensors.jsonl: everything the replay harness needs).
+  static func sent(_ folder: URL) {
+    #if DEBUG
+    let fm = FileManager.default
+    let kept = folder.deletingLastPathComponent().deletingLastPathComponent().appending(path: "Kept")
+    try? fm.createDirectory(at: kept, withIntermediateDirectories: true)
+    if (try? fm.moveItem(at: folder, to: kept.appending(path: folder.lastPathComponent))) != nil {
+      let old = ((try? fm.contentsOfDirectory(at: kept, includingPropertiesForKeys: nil)) ?? []).sorted { $0.lastPathComponent > $1.lastPathComponent }
+      for f in old.dropFirst(3) { try? fm.removeItem(at: f) }
+      return
+    }
+    #endif
+    try? FileManager.default.removeItem(at: folder)
+  }
+
   // basement-YYYY-MM-DD-HHMM.mp4, like the web's recordings.
   var uploadName: String {
     let f = DateFormatter()

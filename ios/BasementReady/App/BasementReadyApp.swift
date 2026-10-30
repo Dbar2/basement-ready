@@ -10,6 +10,7 @@ struct BasementReadyApp: App {
   var body: some Scene {
     WindowGroup {
       RootView()
+        .onAppear { OverlayRenderer.warmUp() }
     }
   }
 }

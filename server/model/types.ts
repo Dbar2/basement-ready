@@ -125,7 +125,7 @@ export type Edit =
   | { op: "move_wall"; wallId: string; a: Pt; b: Pt }
   | { op: "add_wall"; wall: Wall }
   | { op: "remove_wall"; wallId: string }
-  | { op: "set_wall"; wallId: string; rating?: Rating; kind?: Wall["kind"]; thicknessM?: number }
+  | { op: "set_wall"; wallId: string; rating?: Rating; kind?: Wall["kind"]; thicknessM?: number; guess?: false } // guess false: they say a guessed wall is right
   | { op: "add_opening"; opening: Opening }
   | { op: "move_opening"; openingId: string; offsetM: number }
   | { op: "set_opening"; openingId: string; widthM?: number; heightM?: number | null; sillM?: number | null; rating?: "20min" | null; swing?: "left" | "right" | null }

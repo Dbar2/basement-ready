@@ -75,6 +75,10 @@ The web view keeps the scan's claim token (`ResultView.swift`), so the answers t
 - **`orientation`:** always `portrait`: the app is portrait-only, and the video is written with the 90° clockwise turn.
 - **Bad frames:** a record with a non-finite number is left out.
 
+## `sensors.jsonl` (kept on the phone, never sent)
+
+Five times a second, ARKit's feature points (`{"t":…,"p":[x,y,z,…]}`), and each plane as it's found, grows or goes (`{"t":…,"plane":"<id>","v":true,"m":[16],"b":[x,y,z,…]}`, `{"t":…,"gone":"<id>"}`), in ARKit's world. It lets the replay harness play a real take back exactly as the phone saw it (README.md). It isn't uploaded.
+
 ## `depth.bin` (LiDAR phones only)
 
 The phone's own `sceneDepth` maps (`ARWorldTrackingConfiguration.supportsFrameSemantics(.sceneDepth)`), in a plain file:

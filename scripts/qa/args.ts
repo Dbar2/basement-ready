@@ -1,17 +1,19 @@
 // The command line, parsed without a library. `pnpm qa --help` prints USAGE.
 import { BROWSERS, type Browser, type Viewport } from "./plan";
+import type { ModelChoice } from "./cost";
 import type { Effort } from "./review";
 
-export const USAGE = `pnpm qa [options]          capture every screen, review with Opus, write the report
+export const USAGE = `pnpm qa [options]          capture every screen, review with Claude, write the report
 pnpm qa:capture [options]  capture and free checks only (no model calls)
 pnpm qa:review [options]   review the latest capture again (or --from <run>)
 
   --only a,b         screens, groups (journey, 3d, docs, marketing) or prefixes (workspace-*)
   --all              include the opt-in screens (marketing pages)
-  --budget 3         dollars a run may spend on Opus (default 3)
+  --model opus       opus (quick re-checks, default) or fable (the full reviews, about 2.5× the price)
+  --budget 3         dollars a run may spend on the review (default 3)
   --browsers chromium,webkit   --viewports phone,desktop
   --scan sample      scans to capture (default sample); --take <id> adds a recorded take (replay)
-  --effort medium    Opus effort: low | medium | high | xhigh | max
+  --effort medium    effort: low | medium | high | xhigh | max
   --concurrency 4    review requests at once
   --base-url URL     use a server that's already running instead of starting one
   --web dev|build    the web server to start: Vite dev (default) or the production build
@@ -29,6 +31,7 @@ export type Args = {
   viewports: Viewport[];
   scans: string[];
   takes: string[];
+  model: ModelChoice;
   effort: Effort;
   concurrency: number;
   baseURL: string | null;
@@ -53,6 +56,7 @@ export function parseArgs(argv: string[]): Args {
     viewports: ["phone", "desktop"],
     scans: ["sample"],
     takes: [],
+    model: "opus",
     effort: "medium",
     concurrency: 4,
     baseURL: null,
@@ -100,6 +104,12 @@ export function parseArgs(argv: string[]): Args {
       case "--take":
         a.takes.push(...list(value()));
         break;
+      case "--model": {
+        const m = value();
+        if (m !== "opus" && m !== "fable") throw new Error("--model is opus or fable");
+        a.model = m;
+        break;
+      }
       case "--effort": {
         const e = value() as Effort;
         if (!EFFORTS.includes(e)) throw new Error(`--effort is one of ${EFFORTS.join(", ")}`);
