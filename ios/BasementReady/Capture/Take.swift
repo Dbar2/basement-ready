@@ -45,9 +45,12 @@ enum CaptureEvent: Sendable {
   case failed(String)
 }
 
-// The real camera (ARCapture) or, in Debug builds, a pretend walk for the simulator (DemoCapture).
-// Each takes a `send` for its events when made.
+// The real camera (ARCapture) or, in Debug builds, a replayed take or a pretend walk for the
+// simulator (ReplayCapture, DemoCapture). Each takes a `send` for its events when made, and fills
+// `feed` with what the overlay draws.
 protocol CaptureSource: AnyObject, Sendable {
+  var feed: OverlayFeed { get }
+  var perf: CapturePerf { get }
   func start() throws
   func stop() async throws -> Take
   func cancel()
