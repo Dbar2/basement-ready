@@ -154,6 +154,11 @@ describe("the reviewer stays out of the app", () => {
     }
   });
 
+  it("the app's build and Docker image leave the reviewer out", () => {
+    expect(readFileSync(".dockerignore", "utf8").split("\n")).toContain("scripts/qa");
+    expect(readFileSync("tsconfig.json", "utf8")).toMatch(/"exclude":\s*\["scripts\/qa"\]/);
+  });
+
   it("the SDK is a dev dependency only", () => {
     const pkg = JSON.parse(readFileSync("package.json", "utf8"));
     expect(pkg.dependencies["@anthropic-ai/sdk"]).toBeUndefined();
