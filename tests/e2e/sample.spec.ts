@@ -4,8 +4,9 @@
 import { join } from "node:path";
 import { Flow } from "./pages/Flow";
 import { Home } from "./pages/Home";
+import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
-import { Workspace } from "./pages/Workspace";
+import { expectSheets, Workspace } from "./pages/Workspace";
 import { runDir } from "./support/run";
 import { expect, test } from "./support/fixtures";
 import sample from "../../public/samples/sample/result.json" with { type: "json" };
@@ -15,6 +16,7 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
   const wait = new WaitScreen(page);
   const flow = new Flow(page);
   const ws = new Workspace(page);
+  const deck = new StyleDeck(page);
 
   await journey.step("home", () => home.open());
   await journey.step("sample wait screen", async () => {
@@ -24,6 +26,10 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
   });
   const asked = await journey.step("wait screen questions", () => wait.answerAll());
   expect(asked!.length, "the sample asks at least one question").toBeGreaterThan(0);
+  await journey.step("swipe your style: two loved, one passed", async () => {
+    await deck.expectOpen();
+    await deck.swipeAll(["love", "pass", "love"]);
+  });
   await journey.step("answer ready", () => wait.waitForAnswer(60_000));
 
   // ---- 2. Is this your basement? The measured room, its overall width and depth on the drawing ----
@@ -49,6 +55,17 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
   const names = (await layouts.names())!;
   expect(names).toEqual(expect.arrayContaining(["One bedroom", "Studio"]));
   await journey.step("studio picked", () => layouts.pick("Studio"));
+  // Every screen's total for the picked design, as its raw numbers (data-low/data-high): one quote.
+  const totals: Record<string, string> = {};
+  const total = async (where: string, scope: import("@playwright/test").Locator) => {
+    const el = scope.locator("[data-total]").first();
+    await expect(el).toBeVisible();
+    totals[where] = `${await el.getAttribute("data-low")}–${await el.getAttribute("data-high")}`;
+  };
+  await total("layout card", page.locator(".layout-card[data-chosen]"));
+  // The decision is priced again for the pick: it catches up with the card, or the test fails.
+  await expect(layouts.decision.locator("[data-total]")).toHaveAttribute("data-low", totals["layout card"].split("–")[0], { timeout: 15_000 });
+  await total("the decision beside it", layouts.decision);
 
   // ---- 4. The studio opens on it, checked and priced ----
   await journey.step("studio", async () => {
@@ -58,6 +75,7 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
   });
   expect(await flow.studio().chosen()).toBe("Studio");
   await expect(flow.studio().cost).toHaveText(/^\$[\d.]+k–\$[\d.]+k hired out$/);
+  await total("studio", flow.studio().cost);
 
   // ---- 5. Pictures of it ----
   await journey.step("pictures", async () => {
@@ -75,22 +93,22 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
     await ws.book().expectOpen();
   });
   const facts = (await ws.book().facts())!;
+  await total("book", ws.book().cover);
   expect(facts["The design"]).toBe("Studio");
 
   // The book counts what the Permit tab counts.
-  const [ready, total] = (/^(\d+) of (\d+) checks ready$/.exec(facts.Permit) ?? []).slice(1).map(Number);
+  const [ready, checks] = (/^(\d+) of (\d+) checks ready$/.exec(facts.Permit) ?? []).slice(1).map(Number);
   await journey.step("permit, with the same count as the book", async () => {
     await ws.open("Permit");
     await ws.permit().expectOpen();
-    expect(total - ready).toBe(await ws.permit().left());
+    expect(checks - ready).toBe(await ws.permit().left());
   });
   await journey.step("permit, owner asked once", async () => {
     await ws.fillProfileIfAsked();
     await ws.permit().expectOpen();
   });
   const pdf = await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-sample-permit.pdf`)));
-  expect(pdf!.pageCount, "permit set pages").toBeGreaterThanOrEqual(8);
-  expect(pdf!.index).toMatchObject({ A0: "Cover, key plan and project data", A2: "Basement plan: unit 2", A3: "Main floor: unit 1 (schematic)" });
+  expectSheets(pdf!);
   journey.timing({ take: "sample", kind: "permit", pages: pdf!.pageCount, sheets: pdf!.index });
 
   await journey.step("money", async () => {
@@ -107,6 +125,11 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
     await expect(ws.answer().verdict).toHaveText(/second home/);
     await expect(ws.answer().scanned).toBeVisible();
   });
+
+  await total("the answer", page.locator("section.decision"));
+  // The layouts, the studio, the book and the answer show the same total for the same design.
+  expect(Object.keys(totals)).toHaveLength(5);
+  expect(new Set(Object.values(totals)), JSON.stringify(totals)).toEqual(new Set([totals.book]));
 
   // ---- Coming back lands where they left off ----
   await journey.step("back on the pictures, then a return visit", async () => {

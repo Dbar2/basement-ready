@@ -38,6 +38,8 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIRequiredDeviceCapabilities: [arkit]
         ITSAppUsesNonExemptEncryption: false
+        # The brand's type (OFL, from github.com/google/fonts; licences beside them in Resources/Fonts).
+        UIAppFonts: ["HankenGrotesk[wght].ttf", "GeistMono[wght].ttf"]
         NSCameraUsageDescription: Basement Ready films your basement to measure it and check if it can become a second unit.
         NSLocalNetworkUsageDescription: To send your video to the Basement Ready server running on your Mac while testing.
         NSAppTransportSecurity:

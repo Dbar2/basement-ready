@@ -1,6 +1,6 @@
 // Answers in, verdict out. Each answered rule is decided in code against the rules pack;
 // the scan's own reading is kept underneath, so clearing an answer puts it back.
-import { verdictFrom } from "./assess";
+import { verdictFrom, type DesignPricing } from "./assess";
 import { evaluateMoney, type MoneyAnswers } from "./eligibility";
 import type { Property } from "./property";
 import { packFor, type Household, type Pack, type Rule } from "./rules";
@@ -81,7 +81,8 @@ export function moneyAndSteps(
   };
 }
 
-export function recheck<R extends { municipality?: string; findings: AnyFinding[]; baseFindings?: AnyFinding[] }>(result: R, answers: Answers) {
+// `design`: the design they picked (server/priced.ts), whose quote is then the cost and the money's base.
+export function recheck<R extends { municipality?: string; findings: AnyFinding[]; baseFindings?: AnyFinding[] }>(result: R, answers: Answers, design: DesignPricing | null = null) {
   const { pack } = packFor(result.municipality ?? "waterloo-on");
   const rules = new Map(pack.rules.map((r) => [r.id, r]));
   // The scan's own reading, before any answers.
@@ -105,7 +106,7 @@ export function recheck<R extends { municipality?: string; findings: AnyFinding[
     };
   });
 
-  const verdict = verdictFrom(findings as any);
+  const verdict = verdictFrom(findings as any, design);
   const money = moneyAndSteps(result as R & MoneyContext, verdict, answers, pack);
   return { ...result, baseFindings: base, findings, ...verdict, ...money, answeredCount: findings.filter((f) => f.answer).length };
 }

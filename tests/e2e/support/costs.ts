@@ -15,9 +15,11 @@ export function realCalls(since: number, until = Infinity): Call[] {
     .filter((c) => c.event === "recorded" && c.status === 200 && Date.parse(c.at) >= since && Date.parse(c.at) <= until);
 }
 
-// Meta's prices (Oct 2026): SAM $0.20 per 1,000 frames with a 50-frame minimum per request, Muse Image
-// $0.01 an image, Muse Spark $1.25 / $4.25 per million tokens in / out. Modal: about $0.03 an area.
+// Meta's prices as the app counts them (server/spend.ts PRICES): SAM $0.20 per 1,000 video frames and
+// $0.0025 a picture, Muse Image $0.01 an image, Muse Spark $1.25 / $4.25 per million tokens in / out.
+// Modal: about $0.03 an area.
 const SAM_PER_FRAME = 0.2 / 1000;
+const SAM_PER_PICTURE = 2.5 / 1000;
 const sparkUsd = (key: string) => {
   const at = [PRIVATE_REPLAY, COMMITTED_REPLAY].map((d) => join(d, `${key}.json`)).find((p) => existsSync(p));
   const usage = at ? JSON.parse(JSON.parse(readFileSync(at, "utf8")).body ?? "{}").usage : null;
@@ -36,7 +38,7 @@ export function costOf(calls: Call[], frames: number, onModal: boolean) {
   };
   const usd =
     parts.samVideoConcepts * Math.max(50, frames) * SAM_PER_FRAME +
-    parts.samPictureChecks * 50 * SAM_PER_FRAME +
+    parts.samPictureChecks * SAM_PER_PICTURE +
     parts.museImages * 0.01 +
     calls.filter((c) => c.model?.startsWith("muse-spark")).reduce((s, c) => s + sparkUsd(c.key), 0) +
     (onModal ? parts.areas3d * 0.03 : 0);

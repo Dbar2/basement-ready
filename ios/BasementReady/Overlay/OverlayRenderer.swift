@@ -116,7 +116,8 @@ final class OverlayRenderer: NSObject, MTKViewDelegate {
       var u = OverlayUniforms(
         viewProj: frame.geometry.projection(viewport: size) * T.inverse,
         camera: SIMD4(eye, now),
-        params: SIMD4(voidView ? 1 : 0, size.y * 0.0055, reduceMotion ? 0 : 1, 0))
+        // The glows hold still (Drawing Set: no pulsing).
+        params: SIMD4(voidView ? 1 : 0, size.y * 0.0055, 0, 0))
 
       if !voidView { textures = drawCamera(frame, size: size, enc: enc) }
       refresh(now: now, eye: eye)
@@ -163,7 +164,7 @@ final class OverlayRenderer: NSObject, MTKViewDelegate {
   private func drawCamera(_ frame: LiveFrame, size: SIMD2<Float>, enc: MTLRenderCommandEncoder) -> [CVMetalTexture] {
     guard let cache = textures else { return [] }
     var quad = frame.geometry.backgroundQuad(viewport: size)
-    var dim: Float = 0.82 // a touch darker, so the overlay reads on a bright wall
+    var dim: Float = 1 // the camera as it is: nothing tinted over it
     let image = frame.image
     let format = CVPixelBufferGetPixelFormatType(image)
     func texture(_ plane: Int, _ pixel: MTLPixelFormat) -> CVMetalTexture? {
