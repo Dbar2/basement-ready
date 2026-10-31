@@ -37,6 +37,8 @@ import { mountIdeas } from "./ideas/routes";
 import { keys, storage, type Scan3dFile } from "./storage";
 import { mountWorkspace } from "./workspaceRoutes";
 import { mountModel } from "./model/routes";
+import { mountScanGate } from "./privacy";
+import { mountAdmin } from "./admin";
 import { answerFor, asksFor, mountAnswers, NOT_YOURS, ownerOf, saveAnswer, savedAnswers } from "./answers";
 import { FAILURE, failureOf } from "./failure";
 import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger, USED_UP } from "./limits";
@@ -72,6 +74,8 @@ function rows<T>(result: unknown): T[] {
 
 const accountsOn = Boolean(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
 if (accountsOn) app.use("/api/*", clerkMiddleware());
+// Every scan's data and media: its owner or an admin only (server/privacy.ts). Before any scan route.
+mountScanGate(app, currentUser);
 
 // Returns the signed-in user's id, creating their row on first sight; null if signed out.
 async function currentUser(c: Context) {
@@ -589,6 +593,9 @@ app.get("/api/ops/summary", async (c) => {
 });
 
 // In production the built web app is served from the same process.
+// /admin: every scan, behind ADMIN_TOKEN (server/admin.ts). Before the web app takes every other path.
+mountAdmin(app);
+
 app.use("/*", serveStatic({ root: "./dist" }));
 app.get("*", serveStatic({ path: "./dist/index.html" }));
 

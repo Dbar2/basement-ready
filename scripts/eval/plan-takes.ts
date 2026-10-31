@@ -15,6 +15,7 @@ import { promisify } from "node:util";
 import { trackedWalk } from "../../server/basement";
 import { cameraLookup } from "../../server/capture";
 import { runScan3d } from "../../server/scan3d";
+import { scanHeaders } from "../scanAccess";
 
 const run = promisify(execFile);
 const MAIN = process.env.BR_MAIN ?? join(process.cwd(), "..", "..", "..");
@@ -68,7 +69,8 @@ async function rendered(id: string) {
 }
 
 async function scanned(id: string, name: string) {
-  const res = await fetch(`http://localhost:${process.env.API_PORT ?? 8787}/api/scans/${id}`);
+  // Scans are private: read with ADMIN_TOKEN from .env.
+  const res = await fetch(`http://localhost:${process.env.API_PORT ?? 8787}/api/scans/${id}`, { headers: scanHeaders() });
   if (!res.ok) throw new Error(`scan ${id}: ${res.status}`);
   const result = (await res.json()).result;
   const out = join(OUT, name);

@@ -119,7 +119,8 @@ export function parseClaims(header: string | undefined): { basementId: string; c
 }
 
 // The basement behind a scan, if this caller may open its workspace.
-export async function basementFor(scanId: string, access: { userId: string | null; claims: { basementId: string; claimToken: string }[] }) {
+// `admin`: an admin reading (server/privacy.ts), who may open any scan but changes nothing.
+export async function basementFor(scanId: string, access: { userId: string | null; claims: { basementId: string; claimToken: string }[]; admin?: boolean }) {
   const [row] = await db
     .select({ basement: schema.basements, result: schema.scans.result })
     .from(schema.scans)
@@ -129,7 +130,7 @@ export async function basementFor(scanId: string, access: { userId: string | nul
   const b = row.basement;
   const owner = Boolean(access.userId && b.ownerId === access.userId);
   const claimed = !b.ownerId && access.claims.some((c) => c.basementId === b.id && sameToken(c.claimToken, b.claimToken));
-  return { basement: b, result: row.result as any, allowed: owner || claimed };
+  return { basement: b, result: row.result as any, allowed: owner || claimed || Boolean(access.admin) };
 }
 
 export async function loadWorkspace(basementId: string): Promise<Workspace> {
