@@ -1,56 +1,22 @@
-// While we check it (brand/explorations/M2-while-we-check.png): the basement putting itself together
-// from the 3D service (the camera's walk first, then each area), your own video with SAM's finds locked
-// on, the photos of what it could look like as each one lands, and the questions only a homeowner can
-// answer, each asked once. Who it's for and the rent were asked on the start sheet; the server keeps
-// every answer (server/eligibility.ts waitQuestions), so a refresh carries on where it left off and
-// the answer arrives already using them. Time left comes from the scan's own progress (waitTime.ts).
-// When the answer lands, the questions are checked again and anything the video settled is dropped.
-// A scan that fails says why and offers "Try again" (the video is kept); a slow one says so. Only the
-// person who filmed it answers: a shared link watches. The example says it's a recorded scan, replayed.
-// A photo take shows its photos instead of the video, each with its finds boxed as they land.
-// For the person who filmed it, this is step 1 of the flow (src/flow/flow.ts): once it's measured it
-// hands on to "Is this your basement?".
-import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import {
-  ANALYSIS_FPS,
-  answerEarly,
-  DEMO_LABEL,
-  EXAMPLE_LABEL,
-  getScan,
-  localPhotoTakes,
-  localVideos,
-  replaySample,
-  retryScan,
-  subscribe,
-  waitAsks,
-  type PhotoTake,
-  type ScanEvent,
-  type WaitAsk,
-} from "../api";
+// While we check it: their own video (or photos) with SAM's finds boxed on it and the time left
+// (src/guide/visuals/VideoFinds.tsx, the guide's wait visual), and beside it the questions only a
+// homeowner can answer, each asked once, until the guide's thread asks them. Who it's for and the rent
+// were asked on the start sheet; the server keeps every answer (server/eligibility.ts waitQuestions), so
+// a refresh carries on where it left off and the answer arrives already using them. When the answer
+// lands, the questions are checked again and anything the video settled is dropped. A scan that fails
+// says why and offers "Try again" (the video is kept). Only the person who filmed it answers: a shared
+// link watches. The example says it's a recorded scan, replayed.
+import { useEffect, useState, type ReactNode } from "react";
+import { answerEarly, DEMO_LABEL, EXAMPLE_LABEL, waitAsks, type WaitAsk } from "../api";
 import { Logo } from "../components/Logo";
-import { PhotoCarousel } from "../components/PhotoCarousel";
-import { FlowHead } from "../flow/FlowNav";
+import { useScanWatch, VideoFindsView } from "../guide/visuals/VideoFinds";
 import "../styles/ask.css";
 import "../styles/journey.css";
-import { modelsFrom, walkFrom } from "./assembly";
-import { leftWords, secondsLeft, waitState } from "./waitTime";
-
-// three.js only loads once there's a basement to draw.
-const Assembling = lazy(() => import("../components/Assembling"));
-// Swipe your style: their own basement restyled while it measures (src/ideas).
-const StyleDeck = lazy(() => import("../ideas/StyleDeck"));
 
 type Props = {
   scanId: string; // "sample" replays the recorded sample scan
   onDone: () => void;
 };
-
-const STAGES = [
-  { id: "prepare", label: "Reading video" },
-  { id: "find", label: "Finding things" },
-  { id: "measure", label: "Measuring rooms" },
-  { id: "assess", label: "Checking the rules" },
-];
 
 type Picture = "door" | "pipes" | "people" | "house" | "houses" | "bill" | "rent" | "tools" | "room";
 // The questions are worded on the server; each gets a drawing here.
@@ -135,141 +101,9 @@ const PICTURES: Record<Picture, ReactNode> = {
   ),
 };
 
-function cssVar(name: string) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-type Photo = { n: number; url: string; title: string };
-
 export function LiveScan({ scanId, onDone }: Props) {
-  const sample = scanId === "sample";
-  const [events, setEvents] = useState<ScanEvent[]>([]);
-  // Why it stopped, and whether running the stored video again can help.
-  const [failure, setFailure] = useState<{ text: string; retry: boolean } | null>(null);
-  // Each "Try again" starts the events over.
-  const [run, setRun] = useState(0);
-  const [retrying, setRetrying] = useState(false);
-  const [retryNote, setRetryNote] = useState<string | null>(null);
-  // Whether this browser (or the signed-in owner) filmed it: only they answer.
-  const [canEdit, setCanEdit] = useState(sample);
-  const [demo, setDemo] = useState(false);
-  // When the newest event arrived here, to count on from its scan time between events.
-  const heardAt = useRef(Date.now());
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  // A photo take: known at once in the tab that sent it, else from the server or the scan's first log.
-  const [sentTake, setSentTake] = useState<PhotoTake | null>(() => localPhotoTakes.get(scanId) ?? null);
-  // Play the file from this tab if we have it; after a refresh, play the server's copy.
-  const local = localVideos.get(scanId);
-  // Made and revoked in one effect, so dev's double mount gets a fresh URL, not a revoked one.
-  const [blob, setBlob] = useState<{ file: File; url: string } | null>(null);
-  useEffect(() => {
-    if (!local) return;
-    const url = URL.createObjectURL(local);
-    setBlob({ file: local, url });
-    return () => URL.revokeObjectURL(url);
-  }, [local]);
-  const src =
-    scanId === "sample" ? "/samples/sample-basement.mp4" : local ? (blob?.file === local ? blob.url : undefined) : `/api/scans/${scanId}/video`;
-
-  useEffect(() => {
-    setEvents([]);
-    setFailure(null);
-    heardAt.current = Date.now();
-    const push = (e: ScanEvent) => {
-      heardAt.current = Date.now();
-      setEvents((prev) => [...prev, e]);
-      if (e.type === "error") setFailure({ text: e.text, retry: (e.data as { retry?: boolean } | undefined)?.retry ?? true });
-    };
-    return sample ? replaySample(push) : subscribe(scanId, push);
-  }, [scanId, run]);
-
-  // Who's watching, and a failure from before this page opened (with whether its video is still kept).
-  useEffect(() => {
-    if (sample) return;
-    void getScan(scanId)
-      .then((s) => {
-        setCanEdit(Boolean(s.canEdit));
-        setDemo(Boolean(s.demo));
-        if (s.photos) setSentTake(s.photos);
-        if (s.status === "error" && s.error) setFailure({ text: s.error, retry: Boolean(s.failure?.retry) });
-      })
-      .catch(() => {});
-  }, [scanId, run]);
-
-  const detections = useMemo(
-    () => events.flatMap((e) => (e.type === "find" ? e.data?.detections ?? [] : [])),
-    [events],
-  );
-  const take = useMemo((): PhotoTake | null => {
-    if (sentTake) return sentTake;
-    const first = events.find((e) => e.type === "log" && e.data?.photos);
-    return first?.data?.photos ? { count: first.data.frameCount ?? first.data.photos.at(-1)!.to, rooms: first.data.photos } : null;
-  }, [sentTake, events]);
-  // The photos whose finds are in, in the order they landed.
-  const landed = useMemo(() => events.flatMap((e) => (e.type === "find" && e.data?.photo != null ? [e.data.photo] : [])), [events]);
-  const done = events.some((e) => e.type === "done");
-  const failed = !done && failure !== null;
-  const lastStage = [...events].reverse().find((e) => e.type === "stage")?.text ?? "prepare";
-  // Measuring is under way once the 3D starts and the finds are in, until its sizes arrive. The rules
-  // check starts alongside it, so it only shows once the measuring is done.
-  const measuring =
-    events.some((e) => e.type === "log" && /in 3D|Mapping your whole basement|Measuring (area|your basement)/.test(e.text)) &&
-    !events.some((e) => e.type === "measure");
-  const stage = done ? "done" : measuring && events.some((e) => e.type === "find" && /Found|No /.test(e.text)) ? "measure" : lastStage;
-  const stageIndex = done ? STAGES.length : Math.max(0, STAGES.findIndex((s) => s.id === stage));
-  const finds = events.filter((e) => e.type === "find" || e.type === "measure");
-  const found = finds.filter((f) => (f.data?.detections?.length ?? 0) > 0).map((f) => f.data?.label?.toLowerCase()).filter(Boolean) as string[];
-  const lastLog = events.filter((e) => e.type === "log").slice(-1)[0];
-
-  // The basement assembling: the walk, then each area as its 3D is ready.
-  const path = useMemo(() => walkFrom(events), [events]);
-  const models = useMemo(() => modelsFrom(events), [events]);
-  const has3d = Boolean(path) || models.length > 0;
-  const [front, setFront] = useState<"3d" | "video">("3d");
-  const areaCount = events.map((e) => (e.type === "log" ? /Measuring area \d+ of (\d+)/.exec(e.text) : null)).filter(Boolean).at(-1)?.[1];
-  const areasIn = models.filter((m) => m.area !== "all").length;
-  const modelCaption = models.some((m) => m.area === "all")
-    ? "Your whole basement in 3D"
-    : areasIn
-      ? areaCount && Number(areaCount) > 1
-        ? `${areasIn} of ${areaCount} areas in 3D`
-        : "Your basement in 3D"
-      : "Your walk through the basement";
-
-  // The photos, as each one lands.
-  const photos = useMemo(() => {
-    const byN = new Map<number, Photo>();
-    for (const e of events) if (e.type === "photo" && e.data?.url && e.data.n) byN.set(e.data.n, { n: e.data.n, url: e.data.url, title: e.data.title ?? e.text });
-    return [...byN.values()].sort((a, b) => a.n - b.n);
-  }, [events]);
-
-  // Time left, from the scan's own progress. It stops when the scan does.
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (done || failed) return;
-    const id = window.setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(id);
-  }, [done, failed]);
-  const quiet = (Date.now() - heardAt.current) / 1000;
-  const scanNow = (events.at(-1)?.at ?? 0) + quiet;
-  const wait = done || failed || sample ? "ok" : waitState(quiet, scanNow);
-  const leftText = done ? "Done" : failed ? "Stopped" : wait !== "ok" ? "Taking longer than usual" : events.length ? leftWords(secondsLeft(events, scanNow)) : "Starting…";
-
-  const tryAgain = async () => {
-    setRetrying(true);
-    setRetryNote(null);
-    try {
-      const r = await retryScan(scanId);
-      if (r.status === "done") return onDone();
-      if (r.waiting) setRetryNote("It's still in line: it starts as soon as a worker is free. You can leave this page and come back to this link.");
-      else setRun((n) => n + 1);
-    } catch (err) {
-      setRetryNote(err instanceof Error ? err.message : "That didn't start. Try again in a moment.");
-    } finally {
-      setRetrying(false);
-    }
-  };
+  const watch = useScanWatch(scanId);
+  const { sample, done, failed, failure, canEdit, demo, wait } = watch;
 
   // The questions, one at a time, each once. The server says what's still worth asking (it already
   // knows the start sheet's answers); answers go to it now and apply when the scan finishes.
@@ -295,114 +129,17 @@ export function LiveScan({ scanId, onDone }: Props) {
     setAsks(next ?? (await waitAsks(scanId).catch(() => asks ?? [])));
   };
 
-  // Ready and nothing left to ask: open the answer on its own after a moment, unless they're swiping.
-  const [swiped, setSwiped] = useState(0);
+  // Ready and nothing left to ask: open the answer on its own after a moment.
   useEffect(() => {
-    if (!done || ask || (asks === null && canEdit) || swiped > 0) return;
+    if (!done || ask || (asks === null && canEdit)) return;
     const id = window.setTimeout(onDone, 2500);
     return () => clearTimeout(id);
-  }, [done, ask, asks, swiped]);
-
-  // Draw SAM's boxes for whatever frame the video is on.
-  useEffect(() => {
-    const v = videoRef.current;
-    const c = canvasRef.current;
-    if (!v || !c || take) return;
-    const index = detections.map((d) => ({ d, byFrame: new Map(d.track.map((t) => [t[0], t])) }));
-    let raf = 0;
-    const draw = () => {
-      raf = requestAnimationFrame(draw);
-      const rect = v.getBoundingClientRect();
-      const dpr = Math.min(window.devicePixelRatio, 2);
-      if (c.width !== Math.round(rect.width * dpr)) {
-        c.width = Math.round(rect.width * dpr);
-        c.height = Math.round(rect.height * dpr);
-      }
-      const ctx = c.getContext("2d")!;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, rect.width, rect.height);
-      if (!v.videoWidth) return;
-      // object-fit: contain, so find where the picture actually sits.
-      const scale = Math.min(rect.width / v.videoWidth, rect.height / v.videoHeight);
-      const pw = v.videoWidth * scale, ph = v.videoHeight * scale;
-      const ox = (rect.width - pw) / 2, oy = (rect.height - ph) / 2;
-      const frame = Math.floor(v.currentTime * ANALYSIS_FPS);
-      ctx.font = `600 12px ${cssVar("--font-body")}`;
-      for (const { d, byFrame } of index) {
-        const t = byFrame.get(frame);
-        if (!t) continue;
-        const [, x, y, w, h] = t;
-        const bx = ox + x * pw, by = oy + y * ph, bw = w * pw, bh = h * ph;
-        const color = cssVar(`--find-${d.kind}`) || cssVar("--color-mint");
-        ctx.strokeStyle = cssVar("--color-mint");
-        ctx.lineWidth = 2;
-        ctx.strokeRect(bx, by, bw, bh);
-        // Corner ticks, like a surveyor's frame.
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 4;
-        const k = Math.min(14, bw / 3, bh / 3);
-        for (const [cx, cy, dx, dy] of [[bx, by, 1, 1], [bx + bw, by, -1, 1], [bx, by + bh, 1, -1], [bx + bw, by + bh, -1, -1]]) {
-          ctx.beginPath();
-          ctx.moveTo(cx + dx * k, cy);
-          ctx.lineTo(cx, cy);
-          ctx.lineTo(cx, cy + dy * k);
-          ctx.stroke();
-        }
-        const label = d.label;
-        const tw = ctx.measureText(label).width + 14;
-        const ly = by > 26 ? by - 24 : by + 4;
-        ctx.fillStyle = cssVar("--color-card");
-        ctx.fillRect(bx, ly, tw, 20);
-        ctx.fillStyle = cssVar("--color-ink");
-        ctx.fillText(label, bx + 7, ly + 14);
-      }
-    };
-    draw();
-    return () => cancelAnimationFrame(raf);
-  }, [detections, take]);
-
-  const yours = take ? "photos" : "video";
-  const video = (
-    <div
-      key="video"
-      className="live-video live-tile"
-      data-photos={Boolean(take)}
-      data-role={has3d && front === "3d" ? "inset" : "main"}
-      {...(has3d && front === "3d" ? { role: "button", tabIndex: 0, "aria-label": `Show your ${yours}`, "data-label": `Your ${yours}`, onClick: () => setFront("video"), onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && setFront("video") } : {})}
-    >
-      {take ? (
-        <PhotoCarousel scanId={scanId} take={take} detections={detections} landed={landed} done={done} />
-      ) : (
-        <>
-          <video
-            ref={videoRef}
-            src={src}
-            autoPlay
-            muted
-            loop
-            playsInline
-            // The server's copy appears a few seconds into the scan; keep trying until it does.
-            onError={(e) => {
-              const v = e.currentTarget;
-              if (!local && scanId !== "sample") setTimeout(() => v.load(), 2000);
-            }}
-          />
-          <canvas ref={canvasRef} aria-hidden />
-          {!done && <div className="live-sweep" aria-hidden />}
-          <p className="live-caption" aria-live="polite">
-            {found.length ? `Found ${found.slice(0, 3).join(", ")}${found.length > 3 ? ` and ${found.length - 3} more` : ""}` : (lastLog?.text ?? "Looking through your video…")}
-          </p>
-        </>
-      )}
-    </div>
-  );
+  }, [done, ask, asks]);
 
   return (
-    <main className="live" data-flow={canEdit || undefined}>
-      {canEdit && <FlowHead scanId={scanId} step="style" remember={!done} />}
+    <main className="live">
       <header className="live-top">
-        {!canEdit && <Logo />}
-        <span className="live-left" data-state={failed ? "failed" : wait}>{leftText}</span>
+        <Logo />
       </header>
       {sample && (
         <p className="example-label" role="note">
@@ -414,31 +151,10 @@ export function LiveScan({ scanId, onDone }: Props) {
           <span className="tag-mono">Demo house</span> {DEMO_LABEL}
         </p>
       )}
-      <ol className="live-stages" aria-label="Scan progress">
-        {STAGES.map((st, i) => (
-          <li key={st.id} data-state={i < stageIndex ? "done" : i === stageIndex ? "active" : "todo"}>
-            <i aria-hidden />
-            <span>{st.id === "prepare" && take ? "Reading photos" : st.label}</span>
-          </li>
-        ))}
-      </ol>
 
       <section className="live-stage">
-        <div className="live-main" data-3d={has3d}>
-          {has3d && (
-            <div
-              key="model"
-              className="live-model live-tile"
-              data-role={front === "3d" ? "main" : "inset"}
-              {...(front === "video" ? { role: "button", tabIndex: 0, "aria-label": "Show your basement in 3D", "data-label": "Your basement", onClick: () => setFront("3d"), onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && setFront("3d") } : {})}
-            >
-              <Suspense fallback={null}>
-                <Assembling path={path} models={models} />
-              </Suspense>
-              <p className="live-caption live-model-caption" aria-live="polite">{modelCaption}</p>
-            </div>
-          )}
-          {video}
+        <div className="live-main">
+          <VideoFindsView scanId={scanId} watch={watch} />
         </div>
 
         <aside className="live-side" aria-live="polite">
@@ -449,21 +165,20 @@ export function LiveScan({ scanId, onDone }: Props) {
                 {wait === "stalled" ? "Your video is saved, so it can run again." : "Your video is saved and we're still on it. You can leave and come back to this link."}
               </p>
               {wait === "stalled" && canEdit && (
-                <button className="btn btn-ghost" disabled={retrying} onClick={() => void tryAgain()}>
-                  {retrying ? "Starting…" : "Try again"}
+                <button className="btn btn-ghost" disabled={watch.retrying} onClick={() => void watch.tryAgain()}>
+                  {watch.retrying ? "Starting…" : "Try again"}
                 </button>
               )}
-              {retryNote && <p className="muted">{retryNote}</p>}
             </div>
           )}
-          {failed ? (
+          {failed && failure ? (
             <div className="live-failed" role="alert">
               <h2>We couldn't finish this scan</h2>
               <p>{failure.text}</p>
               <div className="live-failed-actions">
                 {failure.retry && canEdit && (
-                  <button className="btn btn-primary" disabled={retrying} onClick={() => void tryAgain()}>
-                    {retrying ? "Starting…" : "Try again"} <span className="arrow" aria-hidden>→</span>
+                  <button className="btn btn-primary" disabled={watch.retrying} onClick={() => void watch.tryAgain()}>
+                    {watch.retrying ? "Starting…" : "Try again"} <span className="arrow" aria-hidden>→</span>
                   </button>
                 )}
                 <a className={failure.retry && canEdit ? "link-quiet" : "btn btn-primary"} href="/scans/sample">
@@ -471,7 +186,6 @@ export function LiveScan({ scanId, onDone }: Props) {
                 </a>
                 <a className="link-quiet" href="/">Film again</a>
               </div>
-              {retryNote && <p className="muted">{retryNote}</p>}
             </div>
           ) : done && !ask && (asks !== null || !canEdit) ? (
             <div className="live-ready">
@@ -523,39 +237,12 @@ export function LiveScan({ scanId, onDone }: Props) {
           ) : (
             <div className="live-ready">
               <h2>{!canEdit ? "Checking this basement…" : asks === null ? "Getting your questions…" : "Thanks. Almost there."}</h2>
-              <p className="muted">{lastLog?.text ?? "Checking your basement against the rules."}</p>
               {!canEdit && <p className="muted">Only the person who filmed it answers its questions. This page shows the answer when it's ready.</p>}
             </div>
           )}
-
-          {photos.length > 0 && (
-            <section className="live-photos" aria-label="What it could look like">
-              <h3>What it could look like</h3>
-              <ul>
-                {photos.map((p) => (
-                  <li key={p.n}>
-                    <img src={p.url} alt={`${p.title}, virtually staged from your own video`} />
-                    <b>{p.title}</b>
-                    <span className="live-photo-label">Virtually staged</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
+          {watch.retryNote && <p className="muted">{watch.retryNote}</p>}
         </aside>
       </section>
-
-      {canEdit && !failed && (
-        <section className="live-ideas" aria-labelledby="live-ideas-title">
-          <div className="live-ideas-head">
-            <h2 id="live-ideas-title">Swipe your style</h2>
-            <p className="muted">Your own basement, restyled while it measures. What you love finishes your design.</p>
-          </div>
-          <Suspense fallback={null}>
-            <StyleDeck scanId={scanId} onSwiped={setSwiped} />
-          </Suspense>
-        </section>
-      )}
     </main>
   );
 }

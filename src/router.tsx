@@ -7,6 +7,8 @@ import { PATHS } from "./marketing/site";
 import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
 import { Home } from "./guide/Home";
+import { guideUrl } from "./guide/progress";
+import type { Milestone } from "./guide/types";
 import { Start } from "./screens/Start";
 
 const rootRoute = createRootRoute({ component: Outlet });
@@ -14,32 +16,38 @@ const rootRoute = createRootRoute({ component: Outlet });
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Start });
 
 // The basement's home base (src/guide/Home.tsx), and the guide: the one screen after the upload
-// (ux-guide-build-spec.md). The guide loads with its page.
-export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId", component: Home });
+// (ux-guide-build-spec.md). The guide loads with its page. Older links name the workspace's tabs: the
+// book is on the home base now, and the rest open the guide at their milestone.
+const TAB_AT: Record<string, Milestone | "home"> = { book: "home", ideas: "home", decision: "answer", plan: "answer", permit: "build", money: "build", build: "build" };
+export const scanRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/scans/$scanId",
+  beforeLoad: ({ params, location }) => {
+    const at = TAB_AT[String((location.search as { tab?: unknown }).tab ?? "")];
+    if (at) throw redirect({ href: at === "home" ? `/scans/${params.scanId}` : guideUrl(params.scanId, at) });
+  },
+  component: Home,
+});
 const GuideRoute = lazyRouteComponent(() => import("./guide/GuideScreen"), "GuideRoute");
 const guideRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/guide", component: GuideRoute });
 
 // The one-page plan to hand a designer, made to print or save as a PDF.
 const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
 
-// The flow after the upload (src/flow/flow.ts): while it measures, /scans/:id is the wait screen with
-// the style deck; then each step has its own page, and the book is the workspace's first tab. Each
-// step loads with its page, so the home page stays light.
-const StylePage = lazyRouteComponent(() => import("./flow/StylePage"), "StylePage");
-const PlanConfirm = lazyRouteComponent(() => import("./studio/PlanConfirm"), "PlanConfirm");
-const LayoutsPage = lazyRouteComponent(() => import("./flow/LayoutsPage"), "LayoutsPage");
-const Studio = lazyRouteComponent(() => import("./studio/Studio"), "Studio");
-const PicturesPage = lazyRouteComponent(() => import("./views/PicturesPage"), "PicturesPage");
-const styleRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/style", component: StylePage });
-// "Is this your basement?", then the layouts, then the design in 3D (src/studio).
-const planRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/plan", component: PlanConfirm });
-const layoutsRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/layouts", component: LayoutsPage });
-const studioRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/studio", component: Studio });
-// Pictures of the design from the scan's best real angles, all agreeing (src/views/DesignPictures.tsx).
-const picturesRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/pictures", component: PicturesPage });
-// Older links: the ideas page is the style step now, and the book is the workspace's first tab.
-const ideasRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/ideas", beforeLoad: ({ params }) => { throw redirect({ href: `/scans/${params.scanId}/style` }); } });
-const bookRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/book", beforeLoad: ({ params }) => { throw redirect({ href: `/scans/${params.scanId}?tab=book` }); } });
+// The old flow's pages (01 Style … 05 Pictures) all lived inside what is now Design; the book page is the
+// home base's book.
+const toDesign = ({ params }: { params: { scanId: string } }) => {
+  throw redirect({ href: guideUrl(params.scanId, "design") });
+};
+const legacyRoutes = [
+  createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/style", beforeLoad: toDesign }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/plan", beforeLoad: toDesign }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/layouts", beforeLoad: toDesign }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/studio", beforeLoad: toDesign }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/pictures", beforeLoad: toDesign }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/ideas", beforeLoad: toDesign }),
+  createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/book", beforeLoad: ({ params }) => { throw redirect({ href: `/scans/${params.scanId}` }); } }),
+];
 
 const dashboardRoute = createRoute({ getParentRoute: () => rootRoute, path: "/dashboard", component: Dashboard });
 
@@ -89,7 +97,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, guideRoute, briefRoute, styleRoute, planRoute, layoutsRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes, ...devRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, guideRoute, briefRoute, ...legacyRoutes, dashboardRoute, proJoinRoute, ...pageRoutes, ...devRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });
