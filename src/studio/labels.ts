@@ -4,7 +4,8 @@
 // with its baseline at y.
 
 export type Box = { x0: number; y0: number; x1: number; y1: number };
-export type Tag = { id: string; text: string; short?: string; size: number; spots: [number, number][] };
+// within: where this label must stay, if not the whole drawing (a beam's label inside the walls).
+export type Tag = { id: string; text: string; short?: string; size: number; spots: [number, number][]; within?: Box };
 export type Placed = { x: number; y: number; text: string };
 
 // Monospace tags: about 0.64 of the font size per character, letter spacing included.
@@ -21,8 +22,9 @@ const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(
 export function placeTags(fixed: Box[], tags: Tag[], pad = 4, within?: Box): Map<string, Placed> {
   const taken = [...fixed];
   const out = new Map<string, Placed>();
-  const inside = (b: Box) => !within || (b.x0 >= within.x0 && b.x1 <= within.x1 && b.y0 >= within.y0 && b.y1 <= within.y1);
+  const fits = (b: Box, w?: Box) => !w || (b.x0 >= w.x0 && b.x1 <= w.x1 && b.y0 >= w.y0 && b.y1 <= w.y1);
   for (const t of tags) {
+    const inside = (b: Box) => fits(b, within) && fits(b, t.within);
     let pick: Placed | null = null;
     for (const text of t.short && t.short !== t.text ? [t.text, t.short] : [t.text]) {
       for (const [x, y] of t.spots) {
@@ -57,7 +59,7 @@ export function placeTags(fixed: Box[], tags: Tag[], pad = 4, within?: Box): Map
 // (whichever has more room), then below, then above; the first that keeps the point uncovered wins,
 // else the one nearest to it. The leader runs from the point to a short horizontal shoulder at the
 // callout's edge, as leaders do on the drawings.
-export type Callout = { x: number; y: number; side: "right" | "left" | "below" | "above"; leader: [number, number][] };
+export type Callout = { x: number; y: number; side: "right" | "left" | "below" | "above"; leader: [number, number][]; clear: boolean };
 
 export function placeCallout(at: [number, number], size: { w: number; h: number }, pane: { w: number; h: number; top?: number; bottom?: number }, gap = 28, clear = 10): Callout {
   const [ax, ay] = at;
@@ -75,7 +77,14 @@ export function placeCallout(at: [number, number], size: { w: number; h: number 
   // How far the point is outside each box (0 or less: covered).
   const outside = (b: { x: number; y: number }) => Math.max(b.x - ax, ax - (b.x + size.w), b.y - ay, ay - (b.y + size.h));
   const pick = boxes.find((b) => outside(b) >= clear) ?? boxes.reduce((best, b) => (outside(b) > outside(best) ? b : best));
-  return { ...pick, leader: leaderTo(at, pick, size) };
+  return { ...pick, leader: leaderTo(at, pick, size), clear: outside(pick) >= clear };
+}
+
+// A long thing (a wall, a duct) can be pointed at anywhere along it: the first point whose callout leaves
+// it uncovered, else the first.
+export function placeCalloutAlong(points: [number, number][], size: { w: number; h: number }, pane: { w: number; h: number; top?: number; bottom?: number }): Callout & { at: [number, number] } {
+  const tries = points.map((at) => ({ ...placeCallout(at, size, pane), at }));
+  return tries.find((c) => c.clear) ?? tries[0];
 }
 
 function leaderTo([ax, ay]: [number, number], b: { x: number; y: number }, size: { w: number; h: number }): [number, number][] {
