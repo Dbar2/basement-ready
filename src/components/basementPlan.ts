@@ -51,7 +51,7 @@ export function placePlan(plan: Plan, placement: RoomPlacement): Plan {
     }),
     stairs: plan.stairs.map((st) => {
       const [a, c] = [m.point(st.x0, st.z0), m.point(st.x1, st.z1)];
-      return { ...st, x0: Math.min(a[0], c[0]), z0: Math.min(a[1], c[1]), x1: Math.max(a[0], c[0]), z1: Math.max(a[1], c[1]) };
+      return { ...st, x0: Math.min(a[0], c[0]), z0: Math.min(a[1], c[1]), x1: Math.max(a[0], c[0]), z1: Math.max(a[1], c[1]), ...(st.bottom ? { bottom: m.point(...st.bottom) } : {}) };
     }),
     fixtures: plan.fixtures.map((f) => {
       const [x, z] = m.point(f.x, f.z);

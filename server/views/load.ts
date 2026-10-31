@@ -11,7 +11,7 @@ import { chosenDesign } from "../model/legacy";
 import type { Detection } from "../pipeline";
 import { keys, storage } from "../storage";
 import { basementFor, loadWorkspace } from "../workspace";
-import { assumedIntrinsics, pickAngles, pickDesignAngles, poseAt, viewsFromArea, viewsFromMesh, type Angle, type Spot, type View } from "./angles";
+import { assumedIntrinsics, pickAngles, pickDesignAngles, poseAt, viewsFromArea, viewsFromMesh, type Angle, type Seg, type Spot, type View } from "./angles";
 import type { Design, Furniture, Model } from "../model/types";
 
 export const SAMPLE = "sample";
@@ -48,7 +48,7 @@ function sampleViews(result: any): View[] {
   const spotsFile = sampleFile("3d/scan.json"), mesh = sampleFile("3d/mesh.bin");
   if (!spotsFile || !mesh) return [];
   const spots: Spot[] = JSON.parse(spotsFile.toString("utf8")).frames ?? [];
-  const frames = [...new Set((result.detections ?? []).map((d: Detection) => d.frame) as number[])].filter((n) => sampleFile(`frames/${String(n).padStart(4, "0")}.jpg`));
+  const frames = [...new Set(spots.map((s) => s.frame))].filter((n) => sampleFile(`frames/${String(n).padStart(4, "0")}.jpg`));
   const at = frames.map((n) => poseAt(spots, n)).filter((s): s is Spot => s !== null);
   const buf = mesh.buffer.slice(mesh.byteOffset, mesh.byteOffset + mesh.byteLength);
   const nv = new DataView(buf).getUint32(4, true), nf = new DataView(buf).getUint32(8, true);
@@ -96,12 +96,17 @@ function viewsOf(scanId: string) {
 
 type Pieces = Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[];
 
+// A design's new walls: a piece behind one isn't in the picture. Their doors too: the pictures draw
+// every new door closed (src/views/DesignScene.tsx).
+export const newWallSegs = (design: Pick<Design, "proposed"> | null | undefined): Seg[] =>
+  design ? design.proposed.walls.filter((w) => w.kind === "new").map((w) => [w.a, w.b] as Seg) : [];
+
 // The best angles of every measured room of a scan, 4 to 6 each (perRoom), the design's room first.
 // Judged against a design when one is given: none from inside its furniture, the ones that show it first.
-export async function bestAngles(scanId: string, perRoom = 5, furniture: Pieces = []): Promise<Angle[]> {
+export async function bestAngles(scanId: string, perRoom = 5, furniture: Pieces = [], walls: Seg[] = []): Promise<Angle[]> {
   const v = await viewsOf(scanId);
   if (!v) return [];
-  const angles = pickAngles(v.views, perRoom, furniture);
+  const angles = pickAngles(v.views, perRoom, furniture, walls);
   return angles.sort((a, b) => Number(b.room === v.mainRoom) - Number(a.room === v.mainRoom) || a.room - b.room);
 }
 
@@ -129,9 +134,9 @@ export async function angleById(scanId: string, angleId: string): Promise<Angle 
 }
 
 // The design's own pictures: the `n` angles, from any room, that show it best, each piece in two or more.
-export async function designAngles(scanId: string, n: number, furniture: Pieces): Promise<Angle[]> {
+export async function designAngles(scanId: string, n: number, furniture: Pieces, walls: Seg[] = []): Promise<Angle[]> {
   const v = await viewsOf(scanId);
-  return v ? pickDesignAngles(v.views, n, furniture) : [];
+  return v ? pickDesignAngles(v.views, n, furniture, walls) : [];
 }
 
 // The scan's model, as every page sees it: saved on its workspace, or seeded from the scan.

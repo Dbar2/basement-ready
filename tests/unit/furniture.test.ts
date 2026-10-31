@@ -18,6 +18,7 @@ import {
 } from "../../server/model/furniture";
 import type { Design, Furniture } from "../../server/model/types";
 import type { Plan } from "../../server/plan";
+import { bounds } from "../../server/model/geometry";
 import { seedModel } from "../../server/model/seed";
 
 const plan = (over: Partial<Plan> = {}): Plan => ({
@@ -150,7 +151,8 @@ describe("changing a piece", () => {
     const d = studio();
     const bed = of(d, "bed")[0];
     // A dining table in the narrow sleeping corner, with the bed's spot taken by a wall-long shelf.
-    const crowded = editFurniture(d, { op: "add_furniture", furniture: { id: "block", kind: "shelf", at: [0, -1.5], rotDeg: 0, sizeM: [3.2, 0.7], roomId: bed.roomId } });
+    const r = bounds(d.proposed.rooms.find((x) => x.id === bed.roomId)!.polygon);
+    const crowded = editFurniture(d, { op: "add_furniture", furniture: { id: "block", kind: "shelf", at: [(r.minX + r.maxX) / 2, r.minZ + 0.36], rotDeg: 0, sizeM: [r.maxX - r.minX - 0.02, 0.7], roomId: bed.roomId } });
     expect(swapFurniture(crowded, bed.id, "dining")).toBeNull();
   });
 });

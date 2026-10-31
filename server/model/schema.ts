@@ -37,7 +37,7 @@ const RoomSchema = z.object({
   ceilingRating: rating.optional(),
 });
 const FixtureKindSchema = z.enum(["furnace", "water_heater", "panel", "plumbing", "beam", "duct", "bulkhead", "post", "stairs"]);
-const FixtureSchema = z.object({ id, kind: FixtureKindSchema, at: pt, sizeM: z.tuple([size, size]).optional(), heightM: num.min(0).max(6).nullable().optional(), detectionId: id.optional(), guess: z.boolean().optional() });
+const FixtureSchema = z.object({ id, kind: FixtureKindSchema, at: pt, sizeM: z.tuple([size, size]).optional(), heightM: num.min(0).max(6).nullable().optional(), detectionId: id.optional(), guess: z.boolean().optional(), bottom: pt.optional() });
 const AlarmSchema = z.object({ id, kind: z.enum(["smoke", "co", "combo"]), at: pt, why: z.string().max(200) });
 const FurnitureKindSchema = z.enum(["bed", "sofa", "armchair", "desk", "dining", "dresser", "tv", "rug", "shelf", "kitchen", "fridge", "vanity", "toilet", "shower", "washer_dryer", "other"]);
 const FurnitureSchema = z.object({ id, kind: FurnitureKindSchema, at: pt, rotDeg: num.min(-720).max(720), sizeM: z.tuple([num.min(0.05).max(12), num.min(0.05).max(12)]), colour: z.string().max(40).optional(), roomId: id.optional() });

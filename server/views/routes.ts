@@ -18,7 +18,7 @@ import { museEdit } from "../meta";
 import { designHash } from "../model/furniture";
 import type { Design } from "../model/types";
 import { keys, storage } from "../storage";
-import { anchorsAt, angleById, bestAngles, designAngles, designFor, frameUrl, meshUrl, readStored, SAMPLE, sampleFile, scanResult, type Anchor } from "./load";
+import { anchorsAt, angleById, bestAngles, designAngles, designFor, frameUrl, meshUrl, newWallSegs, readStored, SAMPLE, sampleFile, scanResult, type Anchor } from "./load";
 import { ANCHOR_CONCEPT, makePicture, type DrawnItem, type PictureMeta } from "./photoreal";
 
 const UUID = /^[0-9a-f-]{36}$/;
@@ -116,7 +116,7 @@ const cleanItems = (raw: unknown): DrawnItem[] =>
 // The pictures already made of a design, best angle first: for the book.
 export async function picturesOfDesign(id: string, design: Design) {
   const hash = designHash(design);
-  const angles = await designAngles(id, 5, design.proposed.furniture);
+  const angles = await designAngles(id, 5, design.proposed.furniture, newWallSegs(design));
   const out: { angleId: string; url: string; kind: PictureMeta["kind"]; checked: string; load: () => Promise<Buffer | null> }[] = [];
   for (const a of angles) {
     const meta = await designPicture(id, a.id, hash);
@@ -133,7 +133,8 @@ export function mountViews(app: Hono) {
     const designId = c.req.query("designId");
     const design = await designFor(id, designId && DESIGN_ID.test(designId) ? designId : null);
     const furniture = design?.proposed.furniture ?? [];
-    const [own, rooms, result] = await Promise.all([designAngles(id, perRoom, furniture), bestAngles(id, perRoom, furniture), scanResult(id)]);
+    const walls = newWallSegs(design);
+    const [own, rooms, result] = await Promise.all([designAngles(id, perRoom, furniture, walls), bestAngles(id, perRoom, furniture, walls), scanResult(id)]);
     // The design's own set first (group "design"), then each room's (group: the room's index).
     const angles = [...own.map((a) => ({ ...a, group: "design" as const })), ...rooms.map((a) => ({ ...a, group: a.room }))];
     const main = (result?.rooms ?? []).find((r: { index: number }) => r.index === result?.mainRoom);
