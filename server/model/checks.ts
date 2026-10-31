@@ -16,9 +16,9 @@ import {
   distToSegment,
   dot,
   edges,
+  floorArea,
   inPolygon,
   mul,
-  polygonArea,
   project,
   r2,
   solidPieces,
@@ -63,16 +63,9 @@ export function sides(design: Design, existing: Existing) {
   return { suite, others, region, at };
 }
 
-// Rooms overlap where the layout drew the living space over the stairs: count each floor once.
-function netArea(room: Room, others: Room[]) {
-  const a = bounds(room.polygon);
-  const cut = others.reduce((s, o) => {
-    const b = bounds(o.polygon);
-    const w = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX), d = Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ);
-    return s + (w > 0 && d > 0 ? w * d : 0);
-  }, 0);
-  return Math.max(0, polygonArea(room.polygon) - cut);
-}
+// Rooms overlap where the layout drew the living space over the stairs: count each floor once, as every
+// page does (geometry.ts floorArea).
+const netArea = (room: Room, others: Room[]) => floorArea(room, others);
 
 // Openings whose centre sits on a room's outline.
 export function openingsOn(room: Room, design: Design, kind: Opening["kind"]) {

@@ -6,6 +6,7 @@
 import { useMemo } from "react";
 import { checkDesign, tally } from "../../server/model/checks";
 import { bounds, centroid, polygonArea } from "../../server/model/geometry";
+import { suiteAreaM2 } from "../../server/model/suite";
 import type { Design, Model } from "../../server/model/types";
 import { quote } from "../../server/quote/quote";
 import { useDesignCovers } from "../views/covers";
@@ -23,7 +24,7 @@ export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: 
           const q = quote(model, d, { municipality });
           const suite = d.proposed.rooms.filter((r) => r.unit === 2);
           const beds = suite.filter((r) => r.kind === "bedroom").length;
-          const area = suite.reduce((s, r) => s + polygonArea(r.polygon), 0);
+          const area = suiteAreaM2(d) ?? 0;
           return [d.id, { count, low: q.totalLow, high: q.totalHigh, beds, area }];
         }),
       ),

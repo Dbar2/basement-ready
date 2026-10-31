@@ -3,6 +3,7 @@
 // windows, and the alarms. Fitted to any box, so the same drawing makes the big plan and the small
 // cards of the alternatives. Not a permit sheet: that's server/permit.
 import { rgb } from "pdf-lib";
+import { floorArea } from "../model/geometry";
 import type { Design, Pt, Wall } from "../model/types";
 import type { Sheet } from "../permit/pdf";
 
@@ -25,12 +26,6 @@ const ROOM_FILL: Record<string, ReturnType<typeof rgb>> = {
 };
 
 export type Box = { x: number; y: number; w: number; h: number };
-
-function polyArea(p: Pt[]) {
-  let s = 0;
-  for (let i = 0; i < p.length; i++) s += p[i][0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * p[i][1];
-  return Math.abs(s) / 2;
-}
 
 export function drawDesign(s: Sheet, d: Design, box: Box, o: { labels?: boolean } = {}) {
   const pts = [...d.proposed.walls.flatMap((w) => [w.a, w.b]), ...d.proposed.rooms.flatMap((r) => r.polygon)];
@@ -105,7 +100,7 @@ export function drawDesign(s: Sheet, d: Design, box: Box, o: { labels?: boolean 
     const cx = r.polygon.reduce((t, p) => t + p[0], 0) / r.polygon.length;
     const cz = r.polygon.reduce((t, p) => t + p[1], 0) / r.polygon.length;
     const [x, y] = P([cx, cz]);
-    const area = polyArea(r.polygon);
+    const area = floorArea(r, d.proposed.rooms);
     if (small) continue;
     s.text(r.name, x, y + 2, { size: 7.5, color: FOREST, align: "center", font: s.fonts.bold });
     s.text(`${area.toFixed(1)} m²  ·  ${Math.round(area * 10.7639)} sq ft`, x, y - 7, { size: 6, color: MOSS, align: "center" });
