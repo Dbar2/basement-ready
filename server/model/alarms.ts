@@ -2,7 +2,7 @@
 // rooms and the rest of the suite, CO beside where people sleep when anything burns fuel, and CO in a
 // fuel-burning furnace room (Building Code 9.10.19, 9.32.3.9A, 9.32.3.9B). The same placement as the
 // permit sheets' (server/permit/plans.ts placeAlarms), on the model's rooms, so it runs after every edit.
-import { along, bounds, clamp, dist, distToSegment, edges, inPolygon, r2, sub } from "./geometry";
+import { along, bounds, clamp, dist, distToSegment, edges, inPolygon, largestBox, r2, sub, type Box } from "./geometry";
 import type { Alarm, Design, Fixture, Pt, Room } from "./types";
 
 // Anything that may burn gas: a furnace or a water heater.
@@ -10,8 +10,10 @@ export const burnsFuel = (fixtures: Fixture[]) => fixtures.some((f) => f.kind ==
 
 // On the ceiling, a little off the room's middle so the room's name stays readable on the plan.
 const spot = (r: Room): Pt => {
-  const b = bounds(r.polygon);
-  return [r2((b.minX + b.maxX) / 2), r2(b.minZ + (b.maxZ - b.minZ) * 0.25)];
+  const at = (b: Box): Pt => [r2((b.minX + b.maxX) / 2), r2(b.minZ + (b.maxZ - b.minZ) * 0.25)];
+  const p = at(bounds(r.polygon));
+  // An L-shaped room's box can put that spot outside it: then its main part's.
+  return inPolygon(p, r.polygon) ? p : at(largestBox(r.polygon));
 };
 
 export function placeAlarms(design: Pick<Design, "layout" | "proposed">, fuelBurning: boolean): Alarm[] {
