@@ -11,7 +11,8 @@ import { pricedForBasement } from "./priced";
 import type { Answers, AnswerValue } from "./recheck";
 import { packFor, type Household } from "./rules";
 import { TRIAGE } from "./triage";
-import { basementFor, parseClaims } from "./workspace";
+import { basementFor } from "./workspace";
+import { requestClaims } from "./privacy";
 
 const UUID = /^[0-9a-f-]{36}$/;
 export const NOT_YOURS = "Only the person who filmed this can change its answers. Open it on that device, or sign in.";
@@ -70,7 +71,7 @@ export function asksFor(municipality: string | undefined, household: Household, 
 export async function ownerOf(c: Context, currentUser: (c: Context) => Promise<string | null>) {
   const id = c.req.param("id") ?? "";
   if (!UUID.test(id)) return null;
-  const a = await basementFor(id, { userId: await currentUser(c), claims: parseClaims(c.req.header("x-claims")) });
+  const a = await basementFor(id, { userId: await currentUser(c), claims: requestClaims(c) });
   return a.basement ? { ...a, id } : null;
 }
 

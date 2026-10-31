@@ -11,7 +11,8 @@ import { db, schema } from "../db";
 import { enqueue } from "../jobs";
 import { metaKey, overSpend, USED_UP } from "../limits";
 import { storage } from "../storage";
-import { basementFor, loadWorkspace, parseClaims, saveWorkspace } from "../workspace";
+import { basementFor, loadWorkspace, saveWorkspace } from "../workspace";
+import { adminRead, requestClaims } from "../privacy";
 import type { Model } from "../model/types";
 import { cardKey, cardsSoFar, enqueueCards, retryCards } from "./cards";
 import type { Deck } from "./deck";
@@ -47,7 +48,7 @@ export function mountIdeas(app: Hono, currentUser: (c: Context) => Promise<strin
     const id = c.req.param("id") ?? "";
     if (!UUID.test(id)) return null;
     const userId = await currentUser(c);
-    const a = await basementFor(id, { userId, claims: parseClaims(c.req.header("x-claims")) });
+    const a = await basementFor(id, { userId, claims: requestClaims(c), admin: adminRead(c) });
     return a.basement ? { ...a, id } : null;
   }
 
