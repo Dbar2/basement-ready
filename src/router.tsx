@@ -1,6 +1,7 @@
-import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Link, Outlet, redirect } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, lazyRouteComponent, Outlet, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { Logo } from "./components/Logo";
+import { inApp, newScanHref } from "./inApp";
 import { ContactEmail, MarketingPage, PageHead } from "./marketing/parts";
 import { applyRouteMeta, marketingRoutes, type MarketingRoute } from "./marketing/routes";
 import { PATHS } from "./marketing/site";
@@ -91,7 +92,9 @@ function NotFound() {
     <main className="not-found">
       <Logo />
       <h1>We couldn't find that page.</h1>
-      <Link to="/" className="btn btn-primary">Back to the start</Link>
+      <a href={newScanHref()} className="btn btn-primary">
+        {inApp() ? "New scan" : "Back to the start"}
+      </a>
     </main>
   );
 }
