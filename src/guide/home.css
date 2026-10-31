@@ -7,6 +7,8 @@
 .hb-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 52px; padding: env(safe-area-inset-top, 0px) var(--gutter) 0; border-bottom: var(--line-ink); }
 .hb-home { display: inline-grid; place-items: center; width: 44px; height: 44px; margin-left: -10px; color: var(--color-ink); }
 .hb-home svg { height: 26px; width: auto; display: block; }
+.hb-account { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.hb-new { display: inline-flex; align-items: center; min-height: 44px; font-size: 15px; white-space: nowrap; }
 .hb-title { margin: 0; font: 800 17px var(--font-display); letter-spacing: -0.02em; }
 
 .hb-main { width: 100%; max-width: 640px; margin: 0 auto; padding: 24px var(--gutter) 32px; display: grid; gap: 12px; align-content: start; }

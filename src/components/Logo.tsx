@@ -1,3 +1,5 @@
+import { inApp } from "../inApp";
+
 // The B of Basement with a house cut out of its lower half. Source: brand/logo/mark.svg
 export function Mark({ title = "Basement Ready" }: { title?: string }) {
   return (
@@ -12,9 +14,17 @@ export function Mark({ title = "Basement Ready" }: { title?: string }) {
   );
 }
 
-// The website's logo goes to the website's home. Inside the app, pass the basement's home base
-// (`/scans/:id`): there it never leaves the app.
+// The website's logo goes to the website's home. On a basement's pages, pass its home base (`/scans/:id`):
+// there it never leaves the app. Inside the iPhone app the website is never linked, so a logo that would go
+// there is just the logo.
 export function Logo({ href = "/" }: { href?: string }) {
+  if (href === "/" && inApp())
+    return (
+      <span className="logo">
+        <Mark />
+        <span>Basement Ready</span>
+      </span>
+    );
   return (
     <a className="logo" href={href} aria-label={href === "/" ? "Basement Ready home" : "Your basement"}>
       <Mark />
