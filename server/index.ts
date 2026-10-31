@@ -12,6 +12,7 @@ import { Readable } from "node:stream";
 import { claimBasements, deleteBasement, deleteUserData, ensureUser, listBasements } from "./accounts";
 import { db, migrateDb, schema, usingPglite } from "./db";
 import { enqueue, startWorker } from "./jobs";
+import { withTestTag } from "./testTag";
 import { listModels } from "./meta";
 import { buildPlan } from "./plan";
 import { resolveAddress, searchOntario } from "./address";
@@ -61,6 +62,8 @@ if (process.env.MODEL_API_KEY || process.env.RELAY_TOKEN) {
 }
 
 const app = new Hono();
+// In an end-to-end run, everything a request sets off is tagged with its journey (server/testTag.ts).
+app.use("*", (c, next) => withTestTag(c.req.header("x-e2e-test"), next));
 
 function rows<T>(result: unknown): T[] {
   return (Array.isArray(result) ? result : (result as { rows: T[] }).rows) as T[];

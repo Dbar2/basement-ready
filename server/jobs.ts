@@ -3,13 +3,15 @@
 // has its own slot in a worker, so the photos run while the scan that queued them is still going.
 import { sql } from "drizzle-orm";
 import { db, schema } from "./db";
+import { testTag, withTestTag } from "./testTag";
 
 export type JobRow = typeof schema.jobs.$inferSelect;
 
 const LEASE_MINUTES = 10;
 
 export async function enqueue(kind: string, payload: Record<string, unknown>, maxAttempts = 2) {
-  const [row] = await db.insert(schema.jobs).values({ kind, payload, maxAttempts }).returning();
+  const tag = testTag();
+  const [row] = await db.insert(schema.jobs).values({ kind, payload: tag ? { ...payload, e2eTest: tag } : payload, maxAttempts }).returning();
   return row;
 }
 
@@ -86,7 +88,7 @@ export function startWorker(handlers: Record<string, Handler>, opts: { id?: stri
           continue;
         }
         try {
-          await handlers[kind](job);
+          await withTestTag((job.payload as { e2eTest?: unknown } | null)?.e2eTest, () => handlers[kind](job));
           await complete(job.id);
         } catch (err) {
           const message = err instanceof Error ? err.stack ?? err.message : String(err);
