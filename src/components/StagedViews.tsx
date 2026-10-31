@@ -3,11 +3,14 @@
 // frames finished by Muse Image (always labelled virtually staged, checked by SAM).
 import { Suspense, useState } from "react";
 import type { Concept, Layout, Plan } from "../api";
+import { BeforeAfter } from "../views/BeforeAfter";
 import { lazy3d, View3DBoundary } from "./View3D";
 
 const StagedBasement = lazy3d(() => import("../three/StagedBasement").then((m) => m.StagedBasement));
 
 export const conceptUrl = (scanId: string, n: number) => (scanId === "sample" ? `/samples/sample/concepts/${n}.jpg` : `/api/scans/${scanId}/concepts/${n}.jpg`);
+// The frame a photo was made from: its "before" (the photo is that frame finished, at its size).
+const frameUrlOf = (scanId: string, frame: number) => (scanId === "sample" ? `/samples/sample/frames/${String(frame).padStart(4, "0")}.jpg` : `/api/scans/${scanId}/frames/${frame}`);
 
 export function StagedViews(props: {
   scanId: string;
@@ -71,7 +74,7 @@ export function StagedViews(props: {
           <div className="concepts">
             {photos.map((c) => (
               <figure key={c.n} className="concept">
-                <img src={conceptUrl(scanId, c.n)} alt={`${c.title}, virtually staged from your own video`} loading="lazy" />
+                <BeforeAfter before={frameUrlOf(scanId, c.frame)} after={conceptUrl(scanId, c.n)} alt={`${c.title}, virtually staged from your own video`} />
                 <span className="concept-label">Virtually staged</span>
                 <figcaption>
                   <b>{c.title}</b>
