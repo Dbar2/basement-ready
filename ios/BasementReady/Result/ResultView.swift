@@ -96,6 +96,8 @@ private struct WebPage: UIViewRepresentable {
   func makeUIView(context: Context) -> WKWebView {
     let config = WKWebViewConfiguration()
     config.allowsInlineMediaPlayback = true
+    // The web can tell it's inside the app (navigator.userAgent ends "BasementReadyApp/1").
+    config.applicationNameForUserAgent = "BasementReadyApp/1"
     config.userContentController.addUserScript(WKUserScript(source: Self.claimScript(claim), injectionTime: .atDocumentStart, forMainFrameOnly: true))
     let web = WKWebView(frame: .zero, configuration: config)
     web.navigationDelegate = context.coordinator
