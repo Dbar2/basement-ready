@@ -39,6 +39,9 @@ export type BuildList = {
 
 export type BuildInput = {
   result: any; // the result priced on their design (server/priced.ts): cost, grants, money, moneyQuestions
+  // What the permit routes draw from, when it isn't `result`: a real scan's stored result
+  // (server/workspaceRoutes.ts reads it unpriced), so the readiness and the drawings' fingerprint match.
+  permitResult?: any;
   municipality: string;
   state: StoredState;
   profile: Profile | null;
@@ -54,7 +57,7 @@ const listOf = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -
 const count = (n: number, one: string, many = `${one}s`) => `${n === 1 ? "one" : n === 2 ? "two" : n === 3 ? "three" : n} ${n === 1 ? one : many}`;
 
 export function buildList(input: BuildInput): BuildList {
-  const st = permitStatus(input);
+  const st = permitStatus({ ...input, result: input.permitResult ?? input.result });
   const all = st.readiness.items;
   const of = (group: ReadyItem["group"]) => all.filter((i) => i.group === group);
   const allDone = (xs: ReadyItem[]) => xs.every((x) => x.done);
@@ -305,7 +308,7 @@ export async function buildListFor(scanId: string): Promise<BuildList | null> {
   const result = scan.result as any;
   const priced = result?.findings ? await pricedForBasement(scan.id, scan.basementId, { ...result, household: basement.household ?? result.household }, answers) : result;
   const ws = await loadWorkspace(basement.id);
-  return buildList({ result: priced, municipality: basement.municipality, state: ws.state, profile: ws.profile });
+  return buildList({ result: priced, permitResult: result, municipality: basement.municipality, state: ws.state, profile: ws.profile });
 }
 
 // The example's list, from the workspace and money answers its browser keeps. Checked the way the
