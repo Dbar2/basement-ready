@@ -33,6 +33,7 @@ export function DesignScene({
   overview = false,
   shell = false,
   rated = true,
+  reveal = true,
 }: {
   existing: Existing;
   design: Design;
@@ -42,6 +43,7 @@ export function DesignScene({
   overview?: boolean; // looking down: the scan's ceiling is cut away
   shell?: boolean; // no scan: draw the floor and the house's own walls plain
   rated?: boolean; // mark the fire separation on top of its walls
+  reveal?: boolean; // the as-built rises from the floor when it first shows
 }) {
   const k = existing.scale.factor ?? 1;
   const ceiling = existing.ceilingM ?? 2.4;
@@ -56,7 +58,7 @@ export function DesignScene({
     <>
       {built ? (
         // The design's own new walls are drawn by the stager below.
-        <AsBuiltScene existing={existing} design={design} newWalls={false} atlas={built.atlas} overview={overview} />
+        <AsBuiltScene existing={existing} design={design} newWalls={false} atlas={built.atlas} overview={overview} reveal={reveal} />
       ) : scan ? (
         // The scan was measured before their tape: drawn at the tape's scale, it lines up with the plan.
         <group scale={k}>

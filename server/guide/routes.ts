@@ -58,7 +58,10 @@ export function mountGuide(app: Hono) {
   const state = (c: Context) => {
     const id = c.req.param("id");
     if (id === "sample") return sampleGuide();
-    return id && UUID.test(id) ? startGuide() : null;
+    // Real scans get the guide only once track B's script answers them: the iPhone app opens the guide
+    // whenever this route answers, so until then a real scan's guide is "not found" and the app opens
+    // the scan page instead. GUIDE_STUB=1 turns the stub on for real scans in development.
+    return id && UUID.test(id) && process.env.GUIDE_STUB === "1" ? startGuide() : null;
   };
 
   app.get("/api/scans/:id/guide", (c) => {

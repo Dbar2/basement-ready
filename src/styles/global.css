@@ -438,6 +438,7 @@ a { color: inherit; }
 .concepts { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
 .concept { position: relative; margin: 0; }
 .concept img { display: block; width: 100%; aspect-ratio: 9 / 14; object-fit: cover; border-radius: var(--radius-1); background: var(--color-surface); }
+.concept .before-after { aspect-ratio: 9 / 14; }
 .concept-label { display: block; margin-top: 6px; font-size: var(--text-small); color: var(--color-ink-muted); }
 .concept figcaption { display: grid; gap: 2px; margin-top: 8px; }
 .concept-check { font-size: 13px; color: var(--color-accent-text); }
