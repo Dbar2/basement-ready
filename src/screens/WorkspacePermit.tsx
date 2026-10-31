@@ -23,6 +23,46 @@ function Source({ s }: { s: { title: string; url: string; section?: string | nul
 type EditorProps = TabProps & { status: PermitStatus; item: ReadyItem; savePermit: (patch: Partial<PermitInputs>) => Promise<void>; done: () => void };
 
 // Numbers in millimetres, saved together.
+// Kitchener: how the two units' water is metered, and where the meter is (Building Bulletin BB 2026-04).
+const METER_OPTIONS = [
+  { id: "single", label: "One meter for both units", help: "Where the meter is now, or will be, and how the City reaches it (for example, in unit 1's furnace room)." },
+  { id: "room", label: "A meter for each unit, in a meter room", help: "The room's place; it opens from outside or a shared space, not through either unit." },
+  { id: "compartment", label: "A meter for each unit, in an outside compartment", help: "Which wall, and where along it (Kitchener Utilities drawing WMSD-302)." },
+] as const;
+
+function WaterMeter({ now, onSave }: { now: { option?: string | null; where?: string | null } | undefined; onSave: (v: { option: string; where: string }) => Promise<void> }) {
+  const [option, setOption] = useState(now?.option ?? "");
+  const [where, setWhere] = useState(now?.where ?? "");
+  const [busy, setBusy] = useState(false);
+  const chosen = METER_OPTIONS.find((o) => o.id === option);
+  return (
+    <form
+      className="ws-ready-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        void onSave({ option, where: where.trim() }).finally(() => setBusy(false));
+      }}
+    >
+      <div className="ws-chips" role="group" aria-label="How the water is metered">
+        {METER_OPTIONS.map((o) => (
+          <button key={o.id} type="button" className="chip" aria-pressed={option === o.id} onClick={() => setOption(o.id)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <label className="field">
+        <span>Where</span>
+        <input className="input" value={where} maxLength={160} onChange={(e) => setWhere(e.target.value)} />
+        {chosen && <span className="field-help">{chosen.help}</span>}
+      </label>
+      <button className="btn btn-ghost" disabled={busy || !option || !where.trim()}>
+        {busy ? "Saving…" : "Save"}
+      </button>
+    </form>
+  );
+}
+
 function MmFields({ fields, onSave }: { fields: { key: string; label: string; value: number | null | undefined; help?: string }[]; onSave: (v: Record<string, number | null>) => Promise<void> }) {
   const [draft, setDraft] = useState<Record<string, string>>(Object.fromEntries(fields.map((f) => [f.key, mm(f.value)])));
   const [busy, setBusy] = useState(false);
@@ -224,6 +264,9 @@ function Editor(props: EditorProps) {
     const now = (ws.state.permit?.lotLines ?? []).find((x) => x.id === id);
     return <MmFields fields={[{ key: "mm", label: "Wall to the lot line", value: now?.mm }]} onSave={async (v) => { await savePermit({ lotLines: upsert(ws.state.permit?.lotLines, { id, mm: v.mm }) }); done(); }} />;
   }
+  if (kind === "water") {
+    return <WaterMeter now={ws.state.permit?.waterMeter} onSave={async (v) => { await savePermit({ waterMeter: { option: v.option as "single" | "room" | "compartment", where: v.where } }); done(); }} />;
+  }
   if (kind === "owner") {
     if (!ws.profile) return <ProfileForm initial={null} prefill={ws.prefill} onSave={async (profile) => { await save({ profile }); done(); }} />;
     return <ProfileForm initial={ws.profile} prefill={ws.prefill} onSave={async (profile) => { await save({ profile }); done(); }} onCancel={done} />;
@@ -264,6 +307,7 @@ const GROUPS: { group: ReadyItem["group"]; title: string }[] = [
   { group: "owner", title: "You" },
   { group: "upstairs", title: "Upstairs" },
   { group: "lot", title: "Lot line" },
+  { group: "water", title: "Water meter" },
   { group: "designer", title: "Designer" },
   { group: "review", title: "Look over each sheet" },
 ];
