@@ -9,6 +9,7 @@ import { ANALYSIS_FPS, EXAMPLE_LABEL, getScan, localPhotoTakes, localVideos, rep
 import { PhotoCarousel } from "../../components/PhotoCarousel";
 import { leftWords, secondsLeft, waitState } from "../../screens/waitTime";
 import "../../styles/journey.css";
+import type { VisualProps } from "../mount";
 
 const STAGES = [
   { id: "prepare", label: "Reading your video" },
@@ -238,7 +239,7 @@ export function VideoFindsView({ scanId, watch }: { scanId: string; watch: ScanW
   );
 }
 
-export function VideoFinds({ scanId, onDone }: { scanId: string; onDone?: () => void }) {
+export function VideoFinds({ scanId, onDone }: Pick<VisualProps<"video">, "scanId"> & { onDone?: () => void }) {
   const watch = useScanWatch(scanId);
   useEffect(() => {
     if (watch.done) onDone?.();

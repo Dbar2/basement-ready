@@ -3,6 +3,8 @@
 // basement in section, so the pane is never empty.
 import type { ComponentType } from "react";
 import "../../styles/ask.css";
+import type { VisualProps } from "../mount";
+import type { GlossaryTerm } from "../types";
 import { Alarms } from "./explain/Alarms";
 import { Basement } from "./explain/Basement";
 import { CeilingHeight } from "./explain/CeilingHeight";
@@ -10,7 +12,7 @@ import { EgressWindow } from "./explain/EgressWindow";
 import { FireSeparation } from "./explain/FireSeparation";
 import { SeparateEntrance } from "./explain/SeparateEntrance";
 
-const DRAWINGS: Record<string, ComponentType> = {
+const DRAWINGS: Partial<Record<GlossaryTerm, ComponentType>> = {
   fire_separation: FireSeparation,
   egress_window: EgressWindow,
   ceiling_height: CeilingHeight,
@@ -18,9 +20,10 @@ const DRAWINGS: Record<string, ComponentType> = {
   smoke_co_alarms: Alarms,
 };
 
-export const EXPLAINED_TERMS = Object.keys(DRAWINGS);
+export const EXPLAINED_TERMS = Object.keys(DRAWINGS) as GlossaryTerm[];
 
-export function Explain({ term }: { term: string }) {
+export function Explain({ visual }: Pick<VisualProps<"explain">, "visual">) {
+  const term = visual.term;
   const Drawing = DRAWINGS[term] ?? Basement;
   return (
     <div className="explain" data-term={term}>

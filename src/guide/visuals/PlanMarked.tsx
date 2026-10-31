@@ -1,8 +1,9 @@
 // The answer's visual: their measured plan, read only, with the one fix marked: a red outline on the place
 // it applies to, a 1 px leader to a callout ("To fix · Fire separation"). The verdict sits on the frame's
-// top edge and the area and ceiling on its bottom edge. `mark` is a check id (server/model/checks.ts), a
-// rule id, or a fix category ("fire", "height", "egress", "exit"); with none, or one we can't place, the
-// plan shows without a mark. While the plan loads, its frame shows with one line saying so.
+// top edge and the area and ceiling on its bottom edge. `visual.mark` is a check id (server/model/checks.ts),
+// a rule id, a fix category ("fire", "height", "egress", "exit") or a glossary term ("fire_separation");
+// with none, or one we can't place, the plan shows without a mark. While the plan loads, its frame shows
+// with one line saying so.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { checkDesign } from "../../../server/model/checks";
 import { bounds, polygonArea } from "../../../server/model/geometry";
@@ -11,6 +12,7 @@ import { getScan, type ScanResult } from "../../api";
 import { fmtArea, fmtLength } from "../../components/FloorPlan";
 import { loadModel } from "../../studio/api";
 import { frameOf, PlanSvg, type PlanLayer } from "../../studio/PlanSvg";
+import type { VisualProps } from "../mount";
 // PlanSvg draws with the studio's plan styles (src/studio/studio.css).
 import "../../studio/studio.css";
 import "../../styles/journey.css";
@@ -19,16 +21,29 @@ import "../../styles/journey.css";
 const W = 1000;
 const M = 84;
 
-// Which checks and finds a fix category points at.
-const CATEGORY: Record<string, { rules: RegExp; fixture?: Fixture["kind"]; words: string }> = {
-  fire: { rules: /fire_separation|service_room/, fixture: "stairs", words: "Fire separation" },
-  egress: { rules: /egress/, words: "Escape window" },
-  window: { rules: /egress/, words: "Escape window" },
-  ceiling: { rules: /ceiling|clearance/, fixture: "duct", words: "Ceiling height" },
-  headroom: { rules: /ceiling|clearance/, fixture: "duct", words: "Headroom" },
-  height: { rules: /ceiling|clearance/, fixture: "duct", words: "Headroom" },
-  exit: { rules: /exit|way_out|entrance/, words: "A way out" },
-  alarms: { rules: /alarm/, words: "Alarms" },
+// Which checks and finds a fix category (server/model/fixes.ts CHECK_CATEGORY) or a glossary term points at.
+type Category = { rules: RegExp; fixture?: Fixture["kind"]; words: string };
+const FIRE: Category = { rules: /fire_separation|service_room/, fixture: "stairs", words: "Fire separation" };
+const EGRESS: Category = { rules: /egress/, words: "Escape window" };
+const HEIGHT: Category = { rules: /ceiling|clearance/, fixture: "duct", words: "Headroom" };
+const CEILING: Category = { ...HEIGHT, words: "Ceiling height" };
+const ENTRANCE: Category = { rules: /exit_from_suite|stair_width/, words: "Its own way in" };
+const ALARMS: Category = { rules: /alarms/, words: "Alarms" };
+const CATEGORY: Record<string, Category> = {
+  fire: FIRE,
+  fire_separation: FIRE,
+  egress: EGRESS,
+  window: EGRESS,
+  egress_window: EGRESS,
+  height: HEIGHT,
+  headroom: HEIGHT,
+  ceiling: CEILING,
+  ceiling_height: CEILING,
+  exit: ENTRANCE,
+  entrance: ENTRANCE,
+  separate_entrance: ENTRANCE,
+  alarms: ALARMS,
+  smoke_co_alarms: ALARMS,
 };
 
 type Target = { at: Pt; box: { minX: number; maxX: number; minZ: number; maxZ: number } | null; words: string };
@@ -37,15 +52,22 @@ type Target = { at: Pt; box: { minX: number; maxX: number; minZ: number; maxZ: n
 export function placeMark(mark: string | undefined, existing: Existing, checks: Check[], result: ScanResult | null): Target | null {
   if (!mark) return null;
   const key = mark.toLowerCase();
-  const group = result?.fixGroups?.find((g) => g.category === key || g.ruleIds?.includes(mark));
-  const cat = CATEGORY[key] ?? (group ? CATEGORY[group.category] : undefined);
-  const words = cat?.words ?? group?.title ?? checks.find((c) => c.id === mark)?.label ?? mark;
+  let cat: Category | undefined = CATEGORY[key];
+  const group = result?.fixGroups?.find((g) => g.category === key || g.ruleIds?.includes(mark) || (cat && CATEGORY[g.category]?.rules === cat.rules));
+  cat ??= group ? CATEGORY[group.category] : undefined;
+  // A fire fix that's only the alarms isn't the drywall around the stairs.
+  if (cat === FIRE && group?.ruleIds?.length && !group.ruleIds.some((r) => FIRE.rules.test(r))) cat = ALARMS;
   const failing = checks.filter((c) => c.ok === false && c.at);
+  const rules = cat?.rules;
   const check =
     failing.find((c) => c.id === mark) ??
     failing.find((c) => c.ruleId === mark) ??
-    (cat ? failing.find((c) => c.ruleId && cat.rules.test(c.ruleId)) : undefined) ??
+    (rules ? failing.find((c) => c.ruleId && rules.test(c.ruleId)) : undefined) ??
     (group ? failing.find((c) => c.ruleId && group.ruleIds?.includes(c.ruleId)) : undefined);
+  // A check id or a rule id names its category through the check's rule.
+  const rule = check?.ruleId;
+  cat ??= rule ? [FIRE, EGRESS, HEIGHT, ENTRANCE, ALARMS].find((c) => c.rules.test(rule)) : undefined;
+  const words = cat?.words ?? group?.title ?? check?.label ?? checks.find((c) => c.id === mark)?.label ?? mark;
   const fixture = cat?.fixture ? existing.fixtures.find((f) => f.kind === cat.fixture) : undefined;
   if (fixture) {
     const [sx, sz] = fixture.sizeM ?? [0.6, 0.6];
@@ -64,7 +86,8 @@ function verdictWords(r: ScanResult) {
   return n ? `Yes, after ${n} fix${n === 1 ? "" : "es"}` : VERDICT.fix;
 }
 
-export function PlanMarked({ scanId, mark }: { scanId: string; mark?: string }) {
+export function PlanMarked({ scanId, visual }: Pick<VisualProps<"plan">, "scanId" | "visual">) {
+  const mark = visual.mark;
   const [model, setModel] = useState<Model | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +114,9 @@ export function PlanMarked({ scanId, mark }: { scanId: string; mark?: string }) 
   const view = useMemo(() => {
     if (!model) return null;
     const e = model.existing;
-    const layer: PlanLayer = { walls: e.walls, openings: e.openings, rooms: e.rooms, fixtures: e.fixtures };
+    // Read only, so no "drag to place" on a guessed duct: PlanSvg adds it to every guessed fixture's label.
+    const fixtures = e.fixtures.map((f) => (f.guess ? { ...f, guess: undefined } : f));
+    const layer: PlanLayer = { walls: e.walls, openings: e.openings, rooms: e.rooms, fixtures };
     const frame = frameOf(layer);
     // The checks of their first design: where each rule's trouble is on the plan.
     const checks = model.designs[0] ? checkDesign(model.designs[0], e) : [];
