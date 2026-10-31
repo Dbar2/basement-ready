@@ -246,6 +246,7 @@ export type FixGroup = {
   costHigh: number | null;
   sources: Source[];
   priced?: boolean; // false: the quote can't price it yet (the design has no place for it)
+  fromDesign?: boolean; // the design brought it (server/model/fixes.ts), not the rules
 };
 
 // A money program, decided in code (server/eligibility.ts): yes, no, or one answer away.

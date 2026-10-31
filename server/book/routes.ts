@@ -16,7 +16,11 @@ import { packFor } from "../rules";
 import { picturesOfDesign } from "../views/routes";
 import { basementFor, loadWorkspace, parseClaims, ProfileSchema, StateSchema, type Profile, type StoredState } from "../workspace";
 import { buildBook, timeline } from "./book";
-import { loadPictures, picturesFor, type Picture } from "./pictures";
+import { STYLES, type StyleId } from "../ideas/styles";
+import { fromVideo, loadPictures, named, picturesFor, type Picture } from "./pictures";
+
+// The studio's finishes by name (src/studio/Studio.tsx).
+const FINISH_NAME: Record<string, string> = { light: "Light oak", warm: "Warm wood", deep: "Deep green" };
 
 const UUID = /^[0-9a-f-]{36}$/;
 const SAMPLE = "public/samples/sample";
@@ -50,7 +54,9 @@ export function mountBook(app: Hono, currentUser: (c: Context) => Promise<string
     const design = chosenDesign(model);
     if (!design) return [];
     const made = await picturesOfDesign(id, design).catch(() => []);
-    return made.map((p, i) => ({ title: `${design.name}, view ${i + 1}`, kind: "design" as const, url: p.url, caption: p.kind === "photo" ? "Virtually staged" : "Virtually staged · 3D render", load: p.load }));
+    // Its name, its finish and where in the video each view was taken from (angle "<room>-<frame>").
+    const finish = FINISH_NAME[design.finishes.style] ?? (STYLES[design.finishes.style as StyleId]?.label ?? null);
+    return made.map((p) => ({ title: named(design.name, finish, fromVideo(Number(p.angleId.split("-")[1]))), kind: "design" as const, url: p.url, caption: p.kind === "photo" ? "Virtually staged" : "Virtually staged · 3D render", load: p.load }));
   }
 
   // The permit's own readiness list (server/permit/readiness.ts), so the book counts what the Permit tab counts.

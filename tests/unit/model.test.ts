@@ -591,3 +591,37 @@ describe("the shared furnace and water heater", () => {
     expect(lines.find((l) => l.id === "drywall_board")!.basis).toMatch(/the furnace room's ceiling \([\d.]+ m²\)/);
   });
 });
+
+describe("a furnace found from two rooms", () => {
+  // A rec room and, beside it, the furnace room. The furnace was filmed in the furnace room; lifted in the
+  // rec room's 3D too, it lands clamped to the rec room's far wall (as on David's take).
+  const area = (index: number, name: string, box: { minX: number; maxX: number; minZ: number; maxZ: number }, fixtures: unknown[]) => ({
+    index,
+    name,
+    has3d: true,
+    placement: { turn: 0, x: 0, z: 0 },
+    plan: { ...house().plan, box, widthM: box.maxX - box.minX, depthM: box.maxZ - box.minZ, areaM2: (box.maxX - box.minX) * (box.maxZ - box.minZ), openings: index === 0 ? house().plan.openings : [], stairs: index === 0 ? house().plan.stairs : [], fixtures },
+  });
+  const result = {
+    mainRoom: 0,
+    rooms: [
+      area(0, "Rec room", { minX: -4, maxX: 4, minZ: -3, maxZ: 3 }, [{ kind: "furnace", x: 1.5, z: 3, detectionId: "f1" }, { kind: "water_heater", x: 0.5, z: 3, detectionId: "h1" }]),
+      area(1, "Furnace room", { minX: -8, maxX: -4, minZ: -3, maxZ: 3 }, [{ kind: "furnace", x: -6.5, z: -1, detectionId: "f1" }, { kind: "water_heater", x: -6.8, z: 0, detectionId: "h1" }]),
+    ],
+    detections: [{ id: "f1", label: "Furnace", framesSeen: 4 }, { id: "h1", label: "Water heater", framesSeen: 3 }],
+  };
+
+  it("is the furnace room's, and the design reuses that room: no second service room in the suite", () => {
+    const m = seedModel(result as never, {}, NOW)!;
+    const furnaces = m.existing.fixtures.filter((f) => f.kind === "furnace");
+    expect(furnaces).toHaveLength(1);
+    expect(furnaces[0].at).toEqual([-6.5, -1]);
+    expect(m.existing.fixtures.find((f) => f.kind === "water_heater")!.at).toEqual([-6.8, 0]);
+    for (const d of m.designs) {
+      expect(d.proposed.rooms.filter((r) => r.kind === "mechanical")).toHaveLength(0);
+      // The scan's furnace room is the service room: off the suite, its walls toward it rated.
+      expect(check(d, m.existing, "service-room")).toMatchObject({ ok: true });
+      expect(check(d, m.existing, "service-room").detail).toMatch(/In the furnace room/);
+    }
+  });
+});
