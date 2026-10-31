@@ -27,7 +27,8 @@ export type Plan = {
   areaM2: number;
   ceilingHeightM: number | null;
   // guess: its width wasn't measured (SAM boxed only part of it, or it was seen edge-on).
-  openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string; guess?: boolean }[];
+  // beyondM: how far past the side a door stands (one in the other arm of an L-shaped room, server/model/seed.ts planOf).
+  openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string; guess?: boolean; beyondM?: number }[];
   // bottom: the foot of the flight, where you step off it (x, z), when the scan could tell.
   stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string; bottom?: [number, number] }[];
   fixtures: { kind: FixtureKind; x: number; z: number; detectionId: string }[];
