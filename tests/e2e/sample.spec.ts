@@ -54,7 +54,8 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
     await expect(layouts.decision).toContainText(answer.headline);
   });
   const captions = (await journey.step("a picture of each layout", () => layouts.pictures()))!;
-  expect(captions.every((c) => /Virtually staged/.test(c)), captions.join(" | ")).toBe(true);
+  // Each layout drawn in clean 3D in the basement as built, never a render over a photo.
+  expect(captions.every((c) => /in 3D/.test(c)), captions.join(" | ")).toBe(true);
   const names = (await layouts.names())!;
   expect(names).toEqual(expect.arrayContaining(["One bedroom", "Studio"]));
   await journey.step("studio picked", () => layouts.pick("Studio"));

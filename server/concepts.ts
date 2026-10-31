@@ -16,6 +16,8 @@ import type { Household } from "./rules";
 import { parseSam } from "./sam";
 import { half } from "./scan3d";
 import { keys, storage } from "./storage";
+import { keptLooks } from "./views/looks";
+import { frameQuality, heightsAlong, levelOf, motionOf, pathUp, roomDetail, type Look } from "./views/stable";
 
 const run = promisify(execFile);
 const FPS = 5;
@@ -26,8 +28,9 @@ export type Concepts = { status: "pending" | "done" | "failed"; items: Concept[]
 type Box = { x: number; y: number; w: number; h: number };
 type FramePick = { frame: number; title: string; space: string };
 // What the 3D says about a frame: how far it sees (median depth), how level the phone was (0 level,
-// 1 straight up or down) and which area of the basement it's in.
-export type FrameView = { depthM: number; tilt: number; area: number };
+// 1 straight up or down), which area of the basement it's in, and whether it's fit to make a photo from
+// at all: steady, sharp, level and well lit (server/views/stable.ts; unknown counts as fit).
+export type FrameView = { depthM: number; tilt: number; area: number; fit?: boolean };
 
 export const MAX_PHOTOS = 4;
 // Picks from a video sit this many frames apart (5 s), so no two photos show the same view. A photo
@@ -54,12 +57,14 @@ export function pickFrames(
   const picks: FramePick[] = [];
   const far = (f: number) => picks.every((p) => Math.abs(p.frame - f) >= gap);
   const widest = (frames: number[]) =>
-    frames.filter((f) => far(f) && (views?.get(f)?.tilt ?? 1) < LEVEL).sort((a, b) => views!.get(b)!.depthM - views!.get(a)!.depthM)[0];
+    frames.filter((f) => far(f) && (views?.get(f)?.tilt ?? 1) < LEVEL && views?.get(f)?.fit !== false).sort((a, b) => views!.get(b)!.depthM - views!.get(a)!.depthM)[0];
   for (const w of vision?.rooms ?? []) {
     if (w.atSeconds == null || picks.length >= 2) continue;
     const said = Math.min(frameCount - 1, Math.round(w.atSeconds * FPS));
-    const frame = (views && widest([...views.keys()].filter((f) => Math.abs(f - said) <= 12))) ?? said;
-    if (far(frame)) picks.push({ frame, title: w.room.charAt(0).toUpperCase() + w.room.slice(1), space: w.room });
+    // Where the 3D saw that part of the video, only a frame fit for a photo; none there, no photo.
+    const near = views ? [...views.keys()].filter((f) => Math.abs(f - said) <= 12) : [];
+    const frame = near.length ? widest(near) : said;
+    if (frame != null && far(frame)) picks.push({ frame, title: w.room.charAt(0).toUpperCase() + w.room.slice(1), space: w.room });
   }
   // A window in clear view: the room becomes the bedroom, which needs that window. Its photo is the
   // frame that shows the whole window from farthest back.
@@ -68,11 +73,11 @@ export function pickFrames(
     .sort((a, b) => b.framesSeen - a.framesSeen)[0];
   if (window) {
     const whole = window.track.filter((t) => t[1] > 0.01 && t[2] > 0.01 && t[1] + t[3] < 0.99 && t[2] + t[4] < 0.99);
-    const frame =
-      (views && widest(whole.map((t) => t[0]).filter((f) => views.has(f)))) ??
-      [...whole].sort((a, b) => a[3] * a[4] - b[3] * b[4]).find((t) => far(t[0]) && t[3] > 0.06)?.[0] ??
-      window.frame;
-    if (far(frame)) picks.push({ frame, ...spaces.bedroom });
+    const seen = views ? whole.map((t) => t[0]).filter((f) => views.has(f)) : [];
+    const frame = seen.length
+      ? widest(seen)
+      : ([...whole].sort((a, b) => a[3] * a[4] - b[3] * b[4]).find((t) => far(t[0]) && t[3] > 0.06)?.[0] ?? window.frame);
+    if (frame != null && far(frame)) picks.push({ frame, ...spaces.bedroom });
   }
   const inMain = (f: number) => !mainRoom || (f / FPS >= mainRoom.startS && f / FPS < mainRoom.endS);
   // Frames with the furnace or panel in them stay a service room; frames with something filling the
@@ -130,14 +135,24 @@ export function pickFrames(
 // isn't saved yet are skipped, so this also works part-way through a scan.
 export async function frameViews(scanId: string, rooms: { index: number; has3d: boolean }[]): Promise<Map<number, FrameView> | null> {
   const views = new Map<number, FrameView>();
+  const areas: { index: number; scan: any; depth: Buffer }[] = [];
   for (const room of rooms.filter((r) => r.has3d)) {
     const [json, depth] = await Promise.all([read(keys.scan3d(scanId, "scan.json", room.index)), read(keys.scan3d(scanId, "depth.bin", room.index))]);
-    if (!json || !depth) continue;
-    const scan = JSON.parse(json.toString("utf8"));
+    if (json && depth) areas.push({ index: room.index, scan: JSON.parse(json.toString("utf8")), depth });
+  }
+  // What each frame looks like (light, detail), measured once and kept; without it, judged on the 3D alone.
+  type F = { sourceIndex: number; depthOffset: number; pose: number[][]; sharpness?: number; width?: number; height?: number };
+  const all = areas.flatMap((a) => (a.scan.frames as F[]).flatMap((f) => (a.scan.sentFrames?.[f.sourceIndex] != null && f.width && f.height ? [{ n: a.scan.sentFrames[f.sourceIndex] as number, size: [f.width, f.height] as [number, number] }] : [])));
+  const looks: Map<number, Look> = await keptLooks(scanId, all).catch(() => new Map());
+  for (const { index, scan, depth } of areas) {
     const [, H, W] = scan.files.depth.shape as number[];
-    for (const f of scan.frames as { sourceIndex: number; depthOffset: number; pose: number[][] }[]) {
-      const ours = scan.sentFrames?.[f.sourceIndex];
-      if (ours == null) continue;
+    const frames = (scan.frames as F[]).filter((f) => scan.sentFrames?.[f.sourceIndex] != null);
+    const poses = frames.map((f) => f.pose);
+    const up = pathUp(poses), height = heightsAlong(poses, up);
+    const motion = motionOf(frames.map((f) => ({ frame: scan.sentFrames[f.sourceIndex], pose: f.pose, sharpness: typeof f.sharpness === "number" ? f.sharpness : null })));
+    const detail = roomDetail(frames.map((f) => looks.get(scan.sentFrames[f.sourceIndex])));
+    for (const f of frames) {
+      const ours = scan.sentFrames[f.sourceIndex] as number;
       const z: number[] = [];
       for (let i = 0; i < H * W; i += 7) {
         const v = half(depth.readUInt16LE(f.depthOffset + i * 2));
@@ -145,7 +160,8 @@ export async function frameViews(scanId: string, rooms: { index: number; has3d: 
       }
       if (z.length < 50) continue;
       z.sort((a, b) => a - b);
-      views.set(ours, { depthM: z[Math.floor(z.length / 2)], tilt: Math.abs(f.pose[1][2]), area: room.index });
+      const fit = frameQuality({ heightM: height(f.pose), ...levelOf(f.pose, up), motion: motion.get(ours), look: looks.get(ours) }, detail).ok;
+      views.set(ours, { depthM: z[Math.floor(z.length / 2)], tilt: Math.abs(f.pose[1][2]), area: index, fit });
     }
   }
   return views.size ? views : null;

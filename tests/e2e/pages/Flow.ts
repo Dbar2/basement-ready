@@ -87,7 +87,7 @@ export class LayoutsStep {
     await expect(this.cards.first()).toBeVisible({ timeout: 30_000 });
   }
 
-  // Every card's picture once it's drawn (or its plan, when no angle of the scan shows the design).
+  // Every card's picture once it's drawn: the layout in 3D in the basement as built.
   async pictures(timeout = 120_000) {
     await expect.poll(async () => (await this.cards.count()) > 0 && (await this.cards.locator(".layout-pic[data-ready]").count()) === (await this.cards.count()), { timeout }).toBe(true);
     return (await this.cards.locator(".layout-corner figcaption").allTextContents()).map((t) => t.trim());

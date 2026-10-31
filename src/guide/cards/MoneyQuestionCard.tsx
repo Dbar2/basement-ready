@@ -5,7 +5,7 @@
 import { useEffect, useState } from "react";
 import { getApplications, downloadApplication, mailto, type Application } from "../../workspaceApi";
 import type { CardProps } from "../mount";
-import { dollars, save, useBuild } from "./data";
+import { dollars, save, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Problem, SourceLink } from "./parts";
 
 export function MoneyQuestionCard(props: CardProps) {
@@ -63,7 +63,7 @@ function ApplyCard({ scanId, card, act }: CardProps) {
       if (first.every((g) => g.id in apply))
         act({
           type: "permitItem",
-          itemId: "apply",
+          itemId: stepFor("apply"),
           value: { said: first.map((g) => `${g.shortName}: ${apply[g.id]?.sentAt ? "sent" : example ? "seen" : "not for me"}`).join("; ") },
         });
     } catch (err) {
@@ -124,12 +124,12 @@ function ApplyCard({ scanId, card, act }: CardProps) {
               ) : (
                 <div className="gc-row">
                   {example ? (
-                    <button type="button" className="gc-save" disabled={busy !== null} onClick={() => void mark(g.id, false)}>
+                    <button type="button" className="btn btn-ghost gc-btn" disabled={busy !== null} onClick={() => void mark(g.id, false)}>
                       Got it
                     </button>
                   ) : (
                     <>
-                      <button type="button" className="gc-save" disabled={busy !== null} onClick={() => void mark(g.id, true)}>
+                      <button type="button" className="btn btn-ghost gc-btn" disabled={busy !== null} onClick={() => void mark(g.id, true)}>
                         I sent it
                       </button>
                       <button type="button" className="link-quiet" disabled={busy !== null} onClick={() => void mark(g.id, false)}>

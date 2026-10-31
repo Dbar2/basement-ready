@@ -4,7 +4,7 @@
 import { useState, type FormEvent } from "react";
 import { mailto, type PermitInputs } from "../../workspaceApi";
 import type { CardProps } from "../mount";
-import { savePermit, useBuild } from "./data";
+import { savePermit, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Problem, Saved, SaveButton } from "./parts";
 
 type Designer = NonNullable<PermitInputs["designer"]>;
@@ -58,14 +58,14 @@ export function DesignerCard({ scanId, card, act }: CardProps) {
         onSave={async (clean) => {
           await savePermit(scanId, { signer: "designer", designer: clean });
           setEditing(false);
-          act({ type: "permitItem", itemId: "designer", value: { said: `${clean.name}, BCIN ${clean.bcin}` } });
+          act({ type: "permitItem", itemId: stepFor("designer"), value: { said: `${clean.name}, BCIN ${clean.bcin}` } });
         }}
       />
       {D.ownerAllowed && (
         <button
           type="button"
           className="link-quiet"
-          onClick={() => void savePermit(scanId, { signer: "owner" }).then(() => act({ type: "permitItem", itemId: "designer", value: { said: "I'll sign the drawings myself" } }))}
+          onClick={() => void savePermit(scanId, { signer: "owner" }).then(() => act({ type: "permitItem", itemId: stepFor("designer"), value: { said: "I'll sign the drawings myself" } }))}
         >
           I'll sign them myself instead
         </button>
