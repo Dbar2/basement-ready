@@ -5,6 +5,7 @@
 // 15-minute ceiling, the bedroom on an escape window, 81 cm doors, alarms by the rules, a clear way out.
 import type { BasementPlan, Plan as ScanPlan, RoomResult } from "../../src/api";
 import { basementRooms } from "../../src/components/basementPlan";
+import { overheadFinds } from "../clearance";
 import { suggestLayout, type Layout, type LayoutOptions } from "../layout";
 import type { Plan, Side } from "../plan";
 import { colourFurniture } from "../ideas/deck";
@@ -30,7 +31,7 @@ type ScanResultLike = {
   rooms?: RoomResult[];
   floorPlan?: BasementPlan | null;
   mainRoom?: number | null;
-  measurements?: { ceilingHeightM: number | null; clearances: { detectionId: string; label: string; clearanceM: number }[] } | null;
+  measurements?: { ceilingHeightM: number | null; clearances: { detectionId: string; label: string; clearanceM: number }[]; doubtful?: { detectionId: string; label: string; clearanceM: number; why: string }[] } | null;
   detections?: { id: string; label?: string; framesSeen?: number }[];
   // What a model that watched the whole take saw (server/watch.ts): only each room's windows are read here.
   watch?: { rooms: { name: string; spokenName?: string | null; windows?: { atS: number | null; note: string }[] }[] } | null;
@@ -115,10 +116,11 @@ function edgeDist(poly: Pt[], p: Pt) {
 export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Existing | null {
   if (result.floorPlan?.rooms.length) return existingFromPlan(result.floorPlan, result, tape);
   const placed = basementRooms(result.rooms);
-  const areas: { index: number; name: string; plan: ScanPlan; clearances: { detectionId: string; label: string; clearanceM: number }[] }[] = placed
-    ? placed.map((p) => ({ index: p.room.index, name: p.room.name, plan: p.plan, clearances: p.room.measurements?.clearances ?? [] }))
+  // Overhead finds with their headroom; one whose reading was set aside has none (server/clearance.ts).
+  const areas: { index: number; name: string; plan: ScanPlan; clearances: ReturnType<typeof overheadFinds> }[] = placed
+    ? placed.map((p) => ({ index: p.room.index, name: p.room.name, plan: p.plan, clearances: overheadFinds(p.room.measurements) }))
     : result.plan
-      ? [{ index: result.mainRoom ?? 0, name: result.rooms?.[0]?.name ?? "Your basement", plan: result.plan, clearances: result.measurements?.clearances ?? [] }]
+      ? [{ index: result.mainRoom ?? 0, name: result.rooms?.[0]?.name ?? "Your basement", plan: result.plan, clearances: overheadFinds(result.measurements) }]
       : [];
   if (!areas.length) return null;
   // The scan's main room first, then the biggest: its walls win where two areas share one.
@@ -179,7 +181,7 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
     // Beams, ducts and bulkheads: the scan measured the headroom under them but not where they run.
     // A main beam usually runs down the middle the long way, ducts beside it: placed there for them to drag.
     const long = b.maxX - b.minX >= b.maxZ - b.minZ;
-    const over = area.clearances.filter((c) => c.clearanceM >= MIN_OVERHEAD_M && !fixtures.some((f) => f.detectionId === c.detectionId));
+    const over = area.clearances.filter((c) => (c.clearanceM == null || c.clearanceM >= MIN_OVERHEAD_M) && !fixtures.some((f) => f.detectionId === c.detectionId));
     over.forEach((c, i) => {
       const kind: FixtureKind = /bulkhead/i.test(c.label) ? "bulkhead" : /beam/i.test(c.label) ? "beam" : "duct";
       const off = kind === "beam" ? 0 : (i % 2 ? -1 : 1) * (0.5 + 0.4 * Math.floor(i / 2));
@@ -264,7 +266,7 @@ export function existingFromPlan(plan: BasementPlan, result: ScanResultLike, tap
     ...(f.kind === "stairs" && f.bottom ? { bottom: [r3(f.bottom[0]), r3(f.bottom[1])] as Pt } : {}),
   }));
   // Headroom SAM measured under something the plan didn't place: by the room's middle, for them to drag.
-  const clear = (result.rooms ?? []).flatMap((r) => r.measurements?.clearances ?? []).filter((c) => c.clearanceM >= MIN_OVERHEAD_M && !fixtures.some((f) => f.detectionId === c.detectionId));
+  const clear = (result.rooms ?? []).flatMap((r) => overheadFinds(r.measurements)).filter((c) => (c.clearanceM == null || c.clearanceM >= MIN_OVERHEAD_M) && !fixtures.some((f) => f.detectionId === c.detectionId));
   const biggest = [...plan.rooms].sort((a, b) => b.areaM2 - a.areaM2)[0];
   const names = new Set<string>();
   const rooms: Room[] = plan.rooms.map((r, i) => {

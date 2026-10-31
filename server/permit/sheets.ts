@@ -107,7 +107,11 @@ export function coverSheet(ctx: SheetCtx): Printed {
     const beds = m.design.layout === "studio" ? 0 : unitRooms(m).filter((r) => r.kind === "bedroom").length;
     rows.push(["Unit 2 bedrooms", beds ? String(beds) : "Studio (no separate bedroom)"]);
     if (m.ceilingM) rows.push(["Finished ceiling in unit 2", `${both(m.ceilingM)} (1.95 m required)`]);
-    if (m.beamM) rows.push(["Clear under beams and ducts", `${both(m.beamM)} (1.85 m required)`]);
+    // Under the limit is never plain data: from the video the designer confirms it; measured, it's a fix.
+    if (m.beamM) {
+      const under = m.beamM < 1.85 ? (m.estimated ? "; from the video, the designer confirms it by tape" : ": raised or rerouted, or the suite kept out from under it") : "";
+      rows.push(["Clear under beams and ducts", `${both(m.beamM)} (1.85 m required${under})`]);
+    }
   }
   if (p?.building?.storeys) rows.push(["Existing house", `${p.building.storeys} storey${p.building.storeys === 1 ? "" : "s"} over the basement`]);
   rows.push(["Building Code", "O. Reg. 163/24 (2024 Building Code), Part 9, with Part 11 alternatives for an existing house"]);

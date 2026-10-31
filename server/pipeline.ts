@@ -32,6 +32,7 @@ import { causeOf, FAILURE, stored } from "./failure";
 import { charge, PRICES } from "./spend";
 import { labelled } from "./demo";
 import { roomNames } from "./watch";
+import { sortClearances } from "./clearance";
 import { checkPlanLater, startWatch, type Watching } from "./watchScan";
 
 const run = promisify(execFile);
@@ -244,7 +245,8 @@ export async function finishRooms(
     }
     rooms.push({ index: r.index, name, startS: r.from / ANALYSIS_FPS, endS: r.to / ANALYSIS_FPS, has3d: Boolean(s3), plan, measurements, placement: placements?.[r.index] ?? null });
   }
-  return rooms;
+  // Headroom that can't be headroom is set aside across the whole basement (server/clearance.ts).
+  return sortClearances(rooms);
 }
 
 type Emit = (type: ScanEventType, text: string, data?: unknown) => Promise<void>;
@@ -566,7 +568,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     // They may have answered "who's it for" while this ran.
     const [latest] = await db.select().from(schema.basements).where(eq(schema.basements.id, basement.id));
     const household = (latest?.household ?? basement.household) as Household;
-    const assessment = finishAssessment({ ...ctx, household, watch: await watching.watch }, await sparkP, detections, measurements);
+    const assessment = finishAssessment({ ...ctx, household, watch: await watching.watch, rooms }, await sparkP, detections, measurements);
     await uploads;
 
     const assessed = {
