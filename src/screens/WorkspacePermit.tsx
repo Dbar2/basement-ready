@@ -538,6 +538,12 @@ export function PermitTab(props: TabProps) {
                 {!n.live && <p className="muted">Only if your plan includes this.</p>}
                 <p>
                   <Source s={n.source} />
+                  {n.citySource && (
+                    <>
+                      {" · "}
+                      <Source s={n.citySource} />
+                    </>
+                  )}
                   {n.registry && (
                     <>
                       {" · "}
