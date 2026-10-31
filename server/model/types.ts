@@ -126,7 +126,8 @@ export type Design = {
 // furniture's colour, from the style the board loved most for its room (server/ideas/deck.ts).
 export type Mood = { liked: string[]; disliked: string[]; style: string | null; finishes: Partial<Finishes>; colours?: Partial<Record<FurnitureKind, string>> };
 
-export type Model = { version: 1; existing: Existing; designs: Design[]; mood: Mood };
+// `recommended`: the design the guide puts first, and why in one plain line (server/model/seed.ts).
+export type Model = { version: 1; existing: Existing; designs: Design[]; mood: Mood; recommended?: { designId: string; reason: string } };
 
 // A change to a design: what the editor's drags, the one-tap fixes and muse-spark's proposals produce.
 export type Edit =
