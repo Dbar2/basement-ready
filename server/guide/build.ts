@@ -65,6 +65,10 @@ const dollars = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const lower = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
 const listOf = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const count = (n: number, one: string, many = `${one}s`) => `${n === 1 ? "one" : n === 2 ? "two" : n === 3 ? "three" : n} ${n === 1 ? one : many}`;
+// A "why" reads after the screen's own "Why it matters:" or "Why I'm asking:", so it starts in lower
+// case, unless its first word is a name ("Kitchener asks…", "CMHC…").
+const ORDINARY = new Set(["The", "A", "An", "Each", "Every", "You", "Your", "Most", "It", "Its", "This", "That", "These", "We", "One", "If", "As", "So", "Only", "All", "Any", "No", "There", "When", "Where", "How", "What", "Who"]);
+export const clause = (why: string) => (ORDINARY.has(why.split(/[\s,.;:]/, 1)[0]) ? why.charAt(0).toLowerCase() + why.slice(1) : why);
 
 export function buildList(input: BuildInput): BuildList {
   const st = permitStatus({ ...input, result: input.permitResult ?? input.result });
@@ -300,6 +304,8 @@ export function buildList(input: BuildInput): BuildList {
 
   // Rough minutes for each permit item, for the guide's "about N minutes" before it starts.
   for (const i of items) if (i.section === "permit") i.minutes = i.step === "build.submit" ? 2 : MINUTES[i.step.split(":")[1]] ?? 2;
+
+  for (const i of items) i.why = clause(i.why);
 
   return {
     items,
