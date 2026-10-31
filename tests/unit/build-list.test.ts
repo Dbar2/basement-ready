@@ -36,9 +36,9 @@ describe("the Build milestone's list", () => {
   it("starts at the tape, says what the set is and how much is left, and ends at the book", () => {
     const l = sampleBuildList({ profile: null, state: {} });
     expect(l.next.step).toBe("build.permit:tape");
-    // The first permit item says what the set is and how much is left (the script has no build intro).
-    expect(l.next.message).toMatch(/^I've drawn and filled your permit set\. \d+ things are left before you can hand it in\. Grab a tape measure: /);
-    expect(l.next.choices?.[0]).toEqual({ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } });
+    // The script's build intro says what the set is; the item just asks.
+    expect(l.next.message).toMatch(/^Grab a tape measure: /);
+    expect(l.items.some((i) => /drawn and filled/.test(i.message))).toBe(false);
     expect(l.items.filter((i) => i.section === "permit").every((i) => typeof i.minutes === "number")).toBe(true);
     expect(l.next.card).toEqual({ kind: "tape", id: "tape" });
     expect(l.next.why).toBeTruthy();
@@ -58,9 +58,6 @@ describe("the Build milestone's list", () => {
 
     state = taped(state);
     expect(next().step).toBe("build.permit:owner");
-    // The opening line is said once, before anything is given.
-    expect(next().message).not.toMatch(/drawn and filled/);
-    expect(next().choices?.some((c) => c.label === "What's a permit set?")).toBe(false);
 
 
     profile = OWNER;
