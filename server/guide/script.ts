@@ -70,7 +70,9 @@ export function stepOf(ctx: Ctx, t: Pick<Thread, "passed">): StepId {
     if (!passed.has("design.layouts")) return "design.layouts";
     if (!passed.has("design.look")) return "design.look";
   }
-  return ctx.build.find((b) => !b.done && !passed.has(b.step))?.step ?? "done";
+  const next = ctx.build.find((b) => !b.done && !passed.has(b.step))?.step ?? "done";
+  // The build opens by saying what the permit set needs from them, unless there's nothing left to ask.
+  return next !== "done" && !passed.has("build") ? "build" : next;
 }
 
 export function milestoneOf(step: StepId): Milestone {
@@ -135,12 +137,15 @@ function askSaid(a: WaitAsk, ctx: Ctx, first: boolean): Said {
         : `While I measure, a few quick questions. ${q}`
       : q
     : `One thing before the answer: ${q}`;
-  const text = a.kind === "rule" && a.hint ? `${lead} ${a.hint}` : lead;
+  // The message ends on its question (the screen labels the why "Why I'm asking:" then); what counts
+  // goes in the why.
+  const text = lead;
   const choices: Choice[] =
     a.kind === "look"
       ? a.options.map((o) => ({ label: o.label, action: { type: "setLook", look: o.value as LookKey | "none" } }))
       : a.options.map((o) => ({ label: o.label, action: { type: "answer", questionId: a.id, value: o.value } }));
-  return { text, why: whyFor(a), choices, visual: { kind: "video" } };
+  const why = a.kind === "rule" && a.hint ? `${whyFor(a)} ${a.hint}` : whyFor(a);
+  return { text, why, choices, visual: { kind: "video" } };
 }
 
 function answerSaid(r: ResultLike): Said {
@@ -254,6 +259,24 @@ function lookSaid(ctx: Ctx): Said {
   };
 }
 
+// "To build it you need a permit": what the permit set still needs from them, and about how long.
+function buildSaid(ctx: Ctx, t: Pick<Thread, "passed">): Said {
+  const items = ctx.build.filter((b) => !b.done && !t.passed.includes(b.step) && b.step.startsWith("build.permit:"));
+  const n = items.length;
+  const minutes = items.reduce((s, b) => s + (b.minutes ?? 0), 0);
+  const need = n ? `${cap(num(n))} ${n === 1 ? "thing" : "things"} only you can give${minutes ? `, about ${minutes} minute${minutes === 1 ? "" : "s"}` : ""}.` : "It has everything it needs from you.";
+  return {
+    text: `To build it you need a permit. **I've drawn and filled your permit set** from the scan. ${need} Ready?`,
+    why: "the City needs the permit set before any work starts.",
+    choices: [
+      { label: "What's a permit set?", action: { type: "explain", term: "permit_set" } },
+      { label: "Later", action: { type: "go", to: "home" } },
+      { label: "Start", action: { type: "go", to: "build" }, primary: true },
+    ],
+    visual: { kind: "permit" },
+  };
+}
+
 const doneSaid = (): Said => ({
   text: "That's everything I need. **Your permit set is ready to hand to the City**, and your book has the whole plan: the answer, the design, the money and who builds it.",
   card: { kind: "download", id: "book" },
@@ -271,6 +294,7 @@ export function said(ctx: Ctx, t: Pick<Thread, "passed" | "messages">, step: Ste
       ...(ctx.failed!.retry ? { choices: [{ label: "Try again", action: { type: "ask", text: "Try again" }, primary: true }] } : {}),
       visual: { kind: "video" },
     };
+  if (step === "build") return buildSaid(ctx, t);
   if (step === "wait") return { text: "Still measuring. I'll have your answer in a minute or two.", visual: { kind: "video" } };
   if (step.startsWith("wait.")) {
     const a = ctx.asks.find((x) => askStep(x) === step)!;
@@ -352,8 +376,8 @@ function passing(t: Thread, action: GuideAction, ctx: Ctx): string[] {
       return ["design.layouts"];
     case "go": {
       if (action.to === "home") return [];
-      // Inside the milestone already: past its opening step (the answer).
-      if (milestoneOf(at) === action.to) return at === "answer" ? [at] : [];
+      // Inside the milestone already: past its opening step (the answer, the build's "Start").
+      if (milestoneOf(at) === action.to) return at === "answer" || at === "build" ? [at] : [];
       const order: Milestone[] = ["answer", "design", "build"];
       const before = order.slice(0, order.indexOf(action.to));
       return [...(before.includes("answer") ? ["answer"] : []), ...(before.includes("design") ? DESIGN_STEPS : [])];
