@@ -3,7 +3,7 @@
 // property line, from the survey. Saved as the Permit tab saved them (server/workspace.ts).
 import { useState } from "react";
 import type { CardProps } from "../mount";
-import { metres, save, savePermit, upsert, useBuild } from "./data";
+import { metres, save, savePermit, stepFor, upsert, useBuild } from "./data";
 import { CardFrame, Loading, MmForm, Saved } from "./parts";
 
 export function TapeCard({ scanId, card, act }: CardProps) {
@@ -29,7 +29,7 @@ export function TapeCard({ scanId, card, act }: CardProps) {
               for (const w of windows) lotLines = upsert(lotLines, { id: w.id, mm: v[w.id] });
               await savePermit(scanId, { lotLines });
               setEditing(false);
-              act({ type: "permitItem", itemId: "lot", value: { said: windows.map((w) => `${w.tag} ${metres(v[w.id] ?? 0)}`).join(", ") } });
+              act({ type: "permitItem", itemId: stepFor("lot"), value: { said: windows.map((w) => `${w.tag} ${metres(v[w.id] ?? 0)}`).join(", ") } });
             }}
           />
         )}
@@ -69,7 +69,7 @@ export function TapeCard({ scanId, card, act }: CardProps) {
             for (const w of status.mainWalls) walls = upsert(walls, { id: w.id, mm: v[`wall:${w.id}`] });
             await save(scanId, { state: { tape: { ...tape, ceilingMm: v.ceilingMm, ...(status.overhead ? { beamMm: v.beamMm } : {}) }, permit: { ...permit, walls } } });
             setEditing(false);
-            act({ type: "permitItem", itemId: "tape", value: { said: summary(v).replace(/^./, (c) => c.toUpperCase()) } });
+            act({ type: "permitItem", itemId: stepFor("tape"), value: { said: summary(v).replace(/^./, (c) => c.toUpperCase()) } });
           }}
         />
       )}

@@ -1,6 +1,6 @@
-// The pieces every Build card is made of: a frame, number fields in millimetres, a save button (ink,
-// never mint: the thread's one mint button is the guide's way on), and the line a card folds to once
-// its answer is saved, with a way to change it.
+// The pieces every Build card is made of: a frame, number fields in millimetres, a save button (the
+// mint primary: in a card that asks, saving is the way on, and the message's own choices are hairline),
+// and the line a card folds to once its answer is saved, with a way to change it.
 import { useState, type FormEvent, type ReactNode } from "react";
 import type { CardProps } from "../mount";
 import { mmText, mmValue } from "./data";
@@ -32,7 +32,7 @@ export function Saved({ children, onChange }: { children: ReactNode; onChange?: 
 
 export function SaveButton({ busy, disabled, children = "Save" }: { busy: boolean; disabled?: boolean; children?: ReactNode }) {
   return (
-    <button className="gc-save" disabled={busy || disabled}>
+    <button className="btn btn-primary gc-btn" disabled={busy || disabled}>
       {busy ? "Saving…" : children}
     </button>
   );
