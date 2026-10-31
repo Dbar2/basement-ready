@@ -175,8 +175,16 @@ export function drawFixtures(s: Sheet, v: View, fixtures: PFixture[]) {
         if (alongX) s.line(x0 + t * (x1 - x0), y0, x0 + t * (x1 - x0), y1, { width: 0.4 });
         else s.line(x0, y0 + t * (y1 - y0), x1, y0 + t * (y1 - y0), { width: 0.4 });
       }
-      // The run arrow, up the stair.
-      const [ax, ay, bx, by] = alongX ? [x0 + 4, (y0 + y1) / 2, x1 - 6, (y0 + y1) / 2] : [(x0 + x1) / 2, y0 + 4, (x0 + x1) / 2, y1 - 6];
+      // The run arrow, up the stair: from its foot (`bottom`, where you step off it) when the scan knows
+      // it, else from the low end.
+      const mid = alongX ? (y0 + y1) / 2 : (x0 + x1) / 2;
+      const ends: Pt[] = alongX ? [[x0, mid], [x1, mid]] : [[mid, y0], [mid, y1]];
+      const foot = f.bottom ? (alongX ? v.X(f.bottom[0]) : v.Y(f.bottom[1])) : null;
+      const k = alongX ? 0 : 1;
+      const [from, to] = foot != null && Math.abs(foot - ends[1][k]) < Math.abs(foot - ends[0][k]) ? [ends[1], ends[0]] : ends;
+      const run = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1;
+      const u = [(to[0] - from[0]) / run, (to[1] - from[1]) / run];
+      const [ax, ay, bx, by] = [from[0] + 4 * u[0], from[1] + 4 * u[1], to[0] - 6 * u[0], to[1] - 6 * u[1]];
       s.line(ax, ay, bx, by, { width: 0.6 });
       const ang = Math.atan2(by - ay, bx - ax);
       s.poly([[bx, by], [bx - 5 * Math.cos(ang - 0.45), by - 5 * Math.sin(ang - 0.45)], [bx - 5 * Math.cos(ang + 0.45), by - 5 * Math.sin(ang + 0.45)]], { fill: INK, width: 0.3 });
