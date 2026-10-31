@@ -351,10 +351,11 @@ export function DesignScene({ design, ceilingM = 2.3, floors = true }: { design:
   const maps = useMaps();
   const finishKey = finishKeyFor(design);
   const mats = useMemo(() => makeMats(FINISHES[finishKey], maps), [finishKey, maps]);
-  // New walls go up into the joists, as built (the measured ceiling is the clear height under them, and
-  // the real ceiling hides what's above it), painted the colour picked for the walls. A wall that stops
-  // short of the joists reads as a tall box, and Muse Image makes it a fridge.
-  const h = Math.min(3.2, Math.max(2.0, ceilingM) + 0.45);
+  // New walls go up into the joists, as built: drawn tall, the real ceiling (the scan, depth-only, in
+  // AngleRender.tsx) cuts each one off where it meets it, deep joist bays included. A wall that stops
+  // short of them reads as a tall box (Muse Image makes it a fridge), and the raw ceiling showing over
+  // it as a hatch. Painted the colour picked for the walls.
+  const h = Math.max(3.2, ceilingM + 0.45);
   const boxes = useMemo(() => roomBoxes(design), [design]);
   // The floor they picked, as the 3D's light or warm planks.
   const light = finishWords(design.finishes).floorTone === "light";

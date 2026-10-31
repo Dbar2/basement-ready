@@ -52,6 +52,76 @@ function frame(box: Plan["box"], side: Side) {
 
 const opposite: Record<Side, Side> = { minX: "maxX", maxX: "minX", minZ: "maxZ", maxZ: "minZ" };
 
+// The landing at the foot of each flight whose foot the scan could tell: kept clear, so you can step off
+// the stairs and open the door (server/model/seed.ts walls it in with the stairs).
+export const LANDING_M = 1.0;
+export function landings(plan: Plan): Rect[] {
+  const box = plan.box;
+  return plan.stairs.flatMap((st) => {
+    if (!st.bottom) return [];
+    const alongX = st.x1 - st.x0 >= st.z1 - st.z0;
+    const [lo, hi] = alongX ? [st.x0, st.x1] : [st.z0, st.z1];
+    const b = alongX ? st.bottom[0] : st.bottom[1];
+    const [a0, a1] = Math.abs(b - hi) <= Math.abs(b - lo) ? [hi, Math.min(hi + LANDING_M, alongX ? box.maxX : box.maxZ)] : [Math.max(lo - LANDING_M, alongX ? box.minX : box.minZ), lo];
+    return a1 - a0 > 0.05 ? [alongX ? { x0: r2(a0), x1: r2(a1), z0: st.z0, z1: st.z1 } : { x0: st.x0, x1: st.x1, z0: r2(a0), z1: r2(a1) }] : [];
+  });
+}
+
+// The service room: the furnace and the water heater beside it (within 2.5 m) in one room. A found
+// furnace or water heater is where the camera saw its face, which faces into the room: the room runs
+// from the wall behind it to SERVICE_FRONT_M in front of the face, and half the appliance's width (and a
+// little) past each side. An end that would leave a strip too narrow to use runs on to the wall. Both
+// appliances serve the house and the suite, so the room is walled off from the suite at 30 minutes, with
+// a 20-minute door (server/model/seed.ts).
+const HALF_W: Record<string, number> = { furnace: 0.3, water_heater: 0.3 };
+const SERVICE_FRONT_M = 0.6; // to stand at the front and service them
+const SERVICE_END_M = 0.15;
+const TO_WALL_M = 1.2; // a face this near a wall: the appliance stands against it
+const USELESS_M = 1.5; // a strip narrower than this between the room and a wall is no use to the suite
+export function serviceRoom(plan: Plan): { name: string; rect: Rect } | null {
+  const box = plan.box;
+  const mech = plan.fixtures.filter((x) => x.kind === "furnace" || x.kind === "water_heater");
+  const first = mech.find((x) => x.kind === "furnace") ?? mech[0];
+  if (!first) return null;
+  const group = mech.filter((x) => Math.hypot(x.x - first.x, x.z - first.z) <= 2.5);
+  const name = group.some((x) => x.kind === "furnace") ? "Furnace room" : "Water heater room";
+  const cx = group.reduce((s, x) => s + x.x, 0) / group.length, cz = group.reduce((s, x) => s + x.z, 0) / group.length;
+  const { side, dist } = nearestSide(box, cx, cz);
+  const pad = (x: (typeof group)[number]) => HALF_W[x.kind] + SERVICE_END_M;
+  let r: Rect;
+  if (dist <= TO_WALL_M) {
+    // Against a wall: back to it, out to the front, along it past each end.
+    const alongX = side === "minZ" || side === "maxZ";
+    const a0 = Math.min(...group.map((x) => (alongX ? x.x : x.z) - pad(x))), a1 = Math.max(...group.map((x) => (alongX ? x.x : x.z) + pad(x)));
+    const faces = group.map((x) => (alongX ? x.z : x.x));
+    const back = box[side];
+    const front = side.startsWith("min") ? Math.max(...faces) + SERVICE_FRONT_M : Math.min(...faces) - SERVICE_FRONT_M;
+    const [d0, d1] = [back, front].sort((p, q) => p - q);
+    r = alongX ? { x0: a0, x1: a1, z0: d0, z1: d1 } : { x0: d0, x1: d1, z0: a0, z1: a1 };
+  } else {
+    // Out in the room: room to work all round.
+    const grow = SERVICE_FRONT_M;
+    r = { x0: Math.min(...group.map((x) => x.x - grow)), x1: Math.max(...group.map((x) => x.x + grow)), z0: Math.min(...group.map((x) => x.z - grow)), z1: Math.max(...group.map((x) => x.z + grow)) };
+  }
+  r = { x0: clamp(r.x0, box.minX, box.maxX), x1: clamp(r.x1, box.minX, box.maxX), z0: clamp(r.z0, box.minZ, box.maxZ), z1: clamp(r.z1, box.minZ, box.maxZ) };
+  // A strip too narrow to use, left between the room and the stairs or a wall, goes in the room (never
+  // over the stairs or their landing).
+  const stairs: Rect[] = [...plan.stairs.map((st) => ({ x0: st.x0, x1: st.x1, z0: st.z0, z1: st.z1 })), ...landings(plan)];
+  const onStairs = (q: Rect) => stairs.some((st) => q.x0 < st.x1 - 0.05 && q.x1 > st.x0 + 0.05 && q.z0 < st.z1 - 0.05 && q.z1 > st.z0 + 0.05);
+  for (const st of stairs) {
+    const acrossX = st.x0 < r.x1 - 0.05 && st.x1 > r.x0 + 0.05, acrossZ = st.z0 < r.z1 - 0.05 && st.z1 > r.z0 + 0.05;
+    if (acrossX && st.z1 <= r.z0 + 0.01 && r.z0 - st.z1 < USELESS_M) r = { ...r, z0: st.z1 };
+    if (acrossX && st.z0 >= r.z1 - 0.01 && st.z0 - r.z1 < USELESS_M) r = { ...r, z1: st.z0 };
+    if (acrossZ && st.x1 <= r.x0 + 0.01 && r.x0 - st.x1 < USELESS_M) r = { ...r, x0: st.x1 };
+    if (acrossZ && st.x0 >= r.x1 - 0.01 && st.x0 - r.x1 < USELESS_M) r = { ...r, x1: st.x0 };
+  }
+  for (const [k, edge] of [["x0", box.minX], ["x1", box.maxX], ["z0", box.minZ], ["z1", box.maxZ]] as const) {
+    const left = Math.abs(r[k] - edge);
+    if (left > 0.01 && left < USELESS_M && !onStairs({ ...r, [k]: edge })) r = { ...r, [k]: edge };
+  }
+  return { name, rect: { x0: r2(r.x0), x1: r2(r.x1), z0: r2(r.z0), z1: r2(r.z1) } };
+}
+
 // Options for exploring ideas: force a studio or a one-bedroom, or put the bedroom on another wall.
 export type LayoutOptions = { kind?: Layout["kind"] | null; side?: Side | null };
 
@@ -73,22 +143,14 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   const length = f.aMax - f.aMin;
   const studio = opts.kind ? opts.kind === "studio" : plan.areaM2 < 30 || f.reach < BED_DEPTH + 2.5;
 
-  // Keep-outs that stay as they are: the stairs, and the furnace (or water heater) in its own
-  // fire-separated corner.
+  // Keep-outs that stay as they are: the stairs, and the furnace and water heater in their own
+  // fire-separated service room.
   for (const s of plan.stairs) zone("stairs", "Stairs", { x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1 });
-  const mech = plan.fixtures.find((x) => x.kind === "furnace") ?? plan.fixtures.find((x) => x.kind === "water_heater");
-  for (const fx of mech ? [mech] : []) {
-    const half = 0.9;
-    zone("mechanical", fx.kind === "furnace" ? "Furnace room" : "Water heater", {
-      x0: r2(clamp(fx.x - half, box.minX, box.maxX - 2 * half)),
-      x1: r2(clamp(fx.x + half, box.minX + 2 * half, box.maxX)),
-      z0: r2(clamp(fx.z - half, box.minZ, box.maxZ - 2 * half)),
-      z1: r2(clamp(fx.z + half, box.minZ + 2 * half, box.maxZ)),
-    });
-  }
+  const service = serviceRoom(plan);
+  if (service) zone("mechanical", service.name, service.rect);
 
   // Nothing new goes on top of the stairs or into the furnace corner.
-  const keepouts: Rect[] = zones.map((z) => ({ x0: z.x0, z0: z.z0, x1: z.x1, z1: z.z1 }));
+  const keepouts: Rect[] = [...zones.map((z) => ({ x0: z.x0, z0: z.z0, x1: z.x1, z1: z.z1 })), ...landings(plan)];
   const free = (r: Rect) => !keepouts.some((k) => r.x0 < k.x1 - 0.05 && r.x1 > k.x0 + 0.05 && r.z0 < k.z1 - 0.05 && r.z1 > k.z0 + 0.05);
   // Slide a span along a wall, nearest to `want` first, until it's clear.
   const slideOn = (fr: ReturnType<typeof frame>, want: number, len: number, d0: number, d1: number, lo = fr.aMin, hi = fr.aMax - len) => {
@@ -103,8 +165,8 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
 
   // A bathroom always gets its own walls and door: its inner side, and any side that isn't already a
   // room wall or the wall it shares with the bedroom.
-  const encloseBath = (a0: number, shared: number | null, fr = f) => {
-    const a1 = a0 + BATH_ALONG;
+  const encloseBath = (a0: number, shared: number | null, fr = f, len = BATH_ALONG) => {
+    const a1 = a0 + len;
     const inner = fr.rect(a0, a1, BATH_DEPTH, BATH_DEPTH);
     walls.push({ x0: inner.x0, z0: inner.z0, x1: inner.x1, z1: inner.z1 });
     for (const a of [a0, a1]) {
@@ -112,8 +174,25 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
       const s = fr.rect(a, a, 0, BATH_DEPTH);
       walls.push({ x0: s.x0, z0: s.z0, x1: s.x1, z1: s.z1 });
     }
-    const d = fr.rect(a0 + BATH_ALONG / 2, a0 + BATH_ALONG / 2, BATH_DEPTH, BATH_DEPTH);
+    const d = fr.rect(a0 + len / 2, a0 + len / 2, BATH_DEPTH, BATH_DEPTH);
     doors.push({ x: d.x0, z: d.z0, along: fr.alongX ? "x" : "z", widthM: DOOR_W });
+  };
+
+  // A bathroom that stops just short of the next room or the end wall takes the sliver in: [a0, a1].
+  const SLIVER_M = 0.5;
+  const stretch = (a0: number, len: number, fr = f): [number, number] => {
+    let lo = a0, hi = a0 + len;
+    const band = fr.rect(lo, hi, 0, BATH_DEPTH);
+    for (const k of keepouts) {
+      const across = fr.alongX ? k.z0 < band.z1 - 0.05 && k.z1 > band.z0 + 0.05 : k.x0 < band.x1 - 0.05 && k.x1 > band.x0 + 0.05;
+      if (!across) continue;
+      const [k0, k1] = fr.alongX ? [k.x0, k.x1] : [k.z0, k.z1];
+      if (k1 <= lo + 0.01 && lo - k1 < SLIVER_M) lo = Math.min(lo, k1);
+      if (k0 >= hi - 0.01 && k0 - hi < SLIVER_M) hi = Math.max(hi, k0);
+    }
+    if (lo - fr.aMin < SLIVER_M) lo = fr.aMin;
+    if (fr.aMax - hi < SLIVER_M) hi = fr.aMax;
+    return [r2(lo), r2(hi)];
   };
 
   // Capped pipes in the floor: a bathroom on them needs no new drains. It goes against the wall
@@ -151,6 +230,26 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   let bedA0 = slide(winAt - BED_ALONG / 2, BED_ALONG, 0, depth, bedLo, Math.max(bedLo, bedHi));
   const windowInBedroom = bedA0 !== null && Boolean(win);
   bedA0 ??= slide(f.aMin + length / 2 - BED_ALONG / 2, BED_ALONG, 0, depth) ?? clamp(winAt - BED_ALONG / 2, f.aMin, f.aMax - BED_ALONG);
+  // Where the bathroom goes beside a bedroom at a0: on the plumbing, else in the studio's far corner or
+  // beside the bedroom on its roomier side.
+  const bathFor = (a0: number) => {
+    const a1 = a0 + BED_ALONG;
+    if (studio) return slide(a0 > f.aMin + length / 2 ? f.aMin : f.aMax - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
+    return slide(f.aMax - a1 >= a0 - f.aMin ? a1 : a0 - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
+  };
+  const fitsBath = (a0: number) => {
+    keepouts.push(f.rect(a0, a0 + BED_ALONG, 0, depth));
+    const ok = onRough() !== null || bathFor(a0) !== null;
+    keepouts.pop();
+    return ok;
+  };
+  // No room for a bathroom beside it (a service room in the way): the bedroom slides along its wall,
+  // still on the window, to the end that makes room for one.
+  if (!fitsBath(bedA0)) {
+    const lo = windowInBedroom ? bedLo : f.aMin, hi = windowInBedroom ? Math.max(bedLo, bedHi) : f.aMax - BED_ALONG;
+    const better = [hi, lo].map((a) => r2(a)).find((a) => free(f.rect(a, a + BED_ALONG, 0, depth)) && fitsBath(a));
+    if (better !== undefined) bedA0 = better;
+  }
   const bedA1 = bedA0 + BED_ALONG;
   if (studio) {
     // Sleeping corner by the window, a bathroom next to it, the rest is living and kitchen.
@@ -159,8 +258,9 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
     if (!placeOnRough(bedA0, bedA1)) {
       const bathA0 = slide(bedA0 > f.aMin + length / 2 ? f.aMin : f.aMax - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
       if (bathA0 !== null) {
-        zone("bathroom", "Bathroom", f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
-        encloseBath(bathA0, null);
+        const [b0, b1] = stretch(bathA0, BATH_ALONG);
+        zone("bathroom", "Bathroom", f.rect(b0, b1, 0, BATH_DEPTH));
+        encloseBath(b0, null, f, b1 - b0);
       }
     }
   } else {
@@ -169,10 +269,12 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
     keepouts.push(f.rect(bedA0, bedA1, 0, depth));
     const roomLeft = bedA0 - f.aMin, roomRight = f.aMax - bedA1;
     const rb = placeOnRough(bedA0, bedA1);
-    const bathA0 = rb ? null : slide(roomRight >= roomLeft ? bedA1 : bedA0 - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
-    if (bathA0 !== null) {
-      zone("bathroom", "Bathroom", f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
-      keepouts.push(f.rect(bathA0, bathA0 + BATH_ALONG, 0, BATH_DEPTH));
+    const bathAt = rb ? null : slide(roomRight >= roomLeft ? bedA1 : bedA0 - BATH_ALONG, BATH_ALONG, 0, BATH_DEPTH);
+    const bath = bathAt === null ? null : stretch(bathAt, BATH_ALONG);
+    const bathA0 = bath?.[0] ?? null;
+    if (bath) {
+      zone("bathroom", "Bathroom", f.rect(bath[0], bath[1], 0, BATH_DEPTH));
+      keepouts.push(f.rect(bath[0], bath[1], 0, BATH_DEPTH));
     }
     // New walls: along the bedroom's inner edge, and between bedroom and bathroom (both ends of the
     // bedroom when the bathroom is over the plumbing instead).
@@ -187,7 +289,7 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
     const doorA = roomRight >= roomLeft ? bedA0 + 0.3 + DOOR_W / 2 : bedA1 - 0.3 - DOOR_W / 2;
     const d = f.rect(doorA, doorA, depth, depth);
     doors.push({ x: d.x0, z: d.z0, along: f.alongX ? "x" : "z", widthM: DOOR_W });
-    if (bathA0 !== null) encloseBath(bathA0, roomRight >= roomLeft ? bedA1 : bedA0);
+    if (bath) encloseBath(bath[0], roomRight >= roomLeft ? bedA1 : bedA0, f, bath[1] - bath[0]);
   }
 
   // Kitchen along the opposite wall, clear of the stairs; living space is what's left in the middle.

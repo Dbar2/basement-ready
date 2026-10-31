@@ -55,6 +55,7 @@ export type Fixture = {
   heightM?: number | null; // beams, ducts, bulkheads: floor to their underside
   detectionId?: string;
   guess?: boolean; // seen on video but not placed by the 3D: they drag it where it is
+  bottom?: Pt; // stairs: the foot of the flight, where you step off it
 };
 
 export type Alarm = { id: string; kind: "smoke" | "co" | "combo"; at: Pt; why: string };
