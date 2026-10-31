@@ -43,6 +43,7 @@ export type Block = {
   cap?: string;
   shape?: "box" | "cylinder";
   guess?: boolean; // placed where it probably is, not where the scan saw it
+  label?: string; // what it is and the headroom under it: "Duct · 1.64 m clear"
 };
 
 export type AsBuilt = { surfaces: Surface[]; blocks: Block[]; floorY: number; box: Box; ceilingM: number };
@@ -53,6 +54,12 @@ const WINDOW_TOP_GAP = 0.15; // basement windows sit just under the joists
 const RISE = 0.19;
 const WELL_M = 0.7; // how far the stairwell is drawn above the ceiling
 const SIDE_PROBE = 0.12; // past the slab, to find the room on each side
+type Overhead = "beam" | "duct" | "bulkhead";
+// The deepest each hangs below the ceiling in a house: a headroom lower than this was measured to
+// something else (a shelf, the stairs), not under the run.
+const HANG_MAX: Record<Overhead, number> = { beam: 0.5, duct: 0.5, bulkhead: 0.8 };
+const HANG_DEFAULT = 0.2; // one placed without a headroom
+const OVERHEAD_NAME: Record<Overhead, string> = { beam: "Beam", duct: "Duct", bulkhead: "Bulkhead" };
 
 export const COLOURS = {
   core: "#C9C7C0", // the wall's own edges: jambs, sills, its far side
@@ -260,6 +267,62 @@ function buildStairs(f: Fixture, existing: Existing, walls: Wall[], floorY: numb
   out.blocks.push({ kind: "well", id: `${f.id}:lid`, center: v3(c[0], floorY + H + WELL_M + 0.02, c[1]), size: v3(wx + 0.2, 0.04, wz + 0.2), rotY: 0, colour: COLOURS.well });
 }
 
+// How far from `p` along `d` (a unit vector) to the segment a–b, or null when it doesn't cross it.
+function hitAt(p: Pt, d: Pt, a: Pt, b: Pt): number | null {
+  const e: Pt = [b[0] - a[0], b[1] - a[1]];
+  const den = d[0] * e[1] - d[1] * e[0];
+  if (Math.abs(den) < 1e-9) return null;
+  const w: Pt = [a[0] - p[0], a[1] - p[1]];
+  const t = (w[0] * e[1] - w[1] * e[0]) / den;
+  const s = (w[0] * d[1] - w[1] * d[0]) / den;
+  return t > -1e-9 && s >= 0 && s <= 1 ? t : null;
+}
+
+// A beam, duct or bulkhead as drawn: hung from its room's ceiling down to the headroom they measured,
+// its run cut where it meets a wall's face (or the room's edge) and its width kept off them. Null when
+// it can't be placed honestly: the scan measured the headroom under it but not where it runs (a guess,
+// until they drag it on the plan), it would hang deeper than a real one, or it isn't in a room.
+export function overheadRun(f: Fixture, existing: Existing): { x: [number, number]; z: [number, number]; y: [number, number] } | null {
+  if (f.guess || (f.kind !== "beam" && f.kind !== "duct" && f.kind !== "bulkhead")) return null;
+  const room = existing.rooms.find((r) => r.polygon.length >= 3 && inPolygon(f.at, r.polygon));
+  if (!room) return null;
+  const H = ceilingOf(existing, room);
+  const under = f.heightM ?? H - HANG_DEFAULT;
+  if (under > H - 0.02 || H - under > HANG_MAX[f.kind]) return null;
+  // How far it can reach each way before a wall's face or the room's edge. A wall between two rooms is
+  // centred on its line; one with a room on one side only stands outside it (buildWall).
+  const rooms = existing.rooms.filter((r) => r.polygon.length >= 3);
+  const edges = room.polygon.map((a, i): [Pt, Pt] => [a, room.polygon[(i + 1) % room.polygon.length]]);
+  const reach = (d: Pt) => {
+    let best = Infinity;
+    for (const w of existing.walls) {
+      const t = hitAt(f.at, d, w.a, w.b);
+      if (t === null) continue;
+      const { left, right } = sideRooms(w, rooms);
+      best = Math.min(best, t - (left.length && right.length ? w.thicknessM / 2 : 0));
+    }
+    for (const [a, b] of edges) {
+      const t = hitAt(f.at, d, a, b);
+      if (t !== null) best = Math.min(best, t);
+    }
+    return Math.max(0, best);
+  };
+  const [sx, sz] = f.sizeM ?? [0.5, 0.5];
+  // Its own span about where it is, inside [−back, ahead]: shifted in off a wall first when it's narrow
+  // enough to fit, then cut.
+  const fit = (size: number, back: number, ahead: number): [number, number] => {
+    let lo = -size / 2, hi = size / 2;
+    if (lo < -back) [lo, hi] = [-back, -back + size];
+    if (hi > ahead) [lo, hi] = [ahead - size, ahead];
+    return [Math.max(lo, -back), Math.min(hi, ahead)];
+  };
+  const along = sx >= sz;
+  const [x0, x1] = along ? [Math.max(-sx / 2, -reach([-1, 0])), Math.min(sx / 2, reach([1, 0]))] : fit(sx, reach([-1, 0]), reach([1, 0]));
+  const [z0, z1] = along ? fit(sz, reach([0, -1]), reach([0, 1])) : [Math.max(-sz / 2, -reach([0, -1])), Math.min(sz / 2, reach([0, 1]))];
+  if (Math.max(x1 - x0, z1 - z0) < 0.3 || Math.min(x1 - x0, z1 - z0) < 0.05) return null;
+  return { x: [f.at[0] + x0, f.at[0] + x1], z: [f.at[1] + z0, f.at[1] + z1], y: [under, H] };
+}
+
 // Overhead runs, posts and the mechanical: plain volumes at their heights.
 function buildFixture(f: Fixture, existing: Existing, floorY: number, out: AsBuilt) {
   const room = existing.rooms.find((r) => inPolygon(f.at, r.polygon));
@@ -273,8 +336,18 @@ function buildFixture(f: Fixture, existing: Existing, floorY: number, out: AsBui
     case "beam":
     case "duct":
     case "bulkhead": {
-      const under = Math.min(H - 0.02, f.heightM ?? H - 0.2);
-      box(under, H, [sx, sz], f.kind === "beam" ? COLOURS.beam : f.kind === "duct" ? COLOURS.duct : COLOURS.bulkhead);
+      const run = overheadRun(f, existing);
+      if (!run) return;
+      const { x, z, y } = run;
+      out.blocks.push({
+        kind: "fixture",
+        id: f.id,
+        center: v3((x[0] + x[1]) / 2, floorY + (y[0] + y[1]) / 2, (z[0] + z[1]) / 2),
+        size: v3(x[1] - x[0], y[1] - y[0], z[1] - z[0]),
+        rotY: 0,
+        colour: COLOURS[f.kind],
+        label: `${OVERHEAD_NAME[f.kind]} · ${y[0].toFixed(2)} m clear`,
+      });
       return;
     }
     case "post":
