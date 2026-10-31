@@ -4,6 +4,7 @@
 // every time, finished and coloured by whatever their board reads so far. So every page shows the same
 // design.
 import { ModelSchema } from "./schema";
+import { entranceOf, saidOutside } from "./entrance";
 import { emptyMood, seedModel } from "./seed";
 import type { Model, Mood, Opening } from "./types";
 
@@ -31,7 +32,14 @@ const CACHE_MAX = 40;
 
 export function currentModel(result: unknown, state: StateLike, key?: string): { model: Model; saved: boolean } | null {
   const found = foundModel(result, state, key);
-  return found && { ...found, model: withTapedWindows(found.model, state?.permit?.windows) };
+  return found && { ...found, model: withEntrance(withTapedWindows(found.model, state?.permit?.windows), result) };
+}
+
+// Whether it has its own way in, from the answer as it stands now: they may tell us after the model was
+// saved (server/model/entrance.ts).
+function withEntrance(model: Model, result: unknown): Model {
+  const findings = (result as { findings?: { ruleId?: string; status?: string }[] } | null)?.findings;
+  return { ...model, existing: { ...model.existing, entrance: entranceOf(model.existing, saidOutside(findings)) } };
 }
 
 // A window they taped on the Permit tab is that size everywhere: the studio's checks, the answer, the
@@ -56,7 +64,8 @@ function foundModel(result: unknown, state: StateLike, key?: string): { model: M
   if (saved) return { model: saved, saved: true };
   if (!result) return null;
   const mood = savedMood(state) ?? emptyMood();
-  const k = key ? JSON.stringify([key, state?.tape ?? null, state?.ideas?.kind ?? null, state?.ideas?.side ?? null, mood.finishes, mood.colours ?? null]) : null;
+  const said = saidOutside((result as { findings?: { ruleId?: string; status?: string }[] }).findings);
+  const k = key ? JSON.stringify([key, state?.tape ?? null, state?.ideas?.kind ?? null, state?.ideas?.side ?? null, mood.finishes, mood.colours ?? null, said]) : null;
   if (k && cache.has(k)) {
     const hit = cache.get(k)!;
     return hit ? { model: { ...hit, mood }, saved: false } : null;
