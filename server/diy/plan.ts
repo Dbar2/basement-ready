@@ -4,6 +4,9 @@
 import { cityPermit, ontarioDiy, type CityPermit, type Inspection, type ProItem, type Trade } from "../permit/data";
 import { basementGeometry } from "../permit/plans";
 import { packFor } from "../rules";
+import { currentModel } from "../model/current";
+import { chosenDesign } from "../model/legacy";
+import { suiteAreaM2 } from "../model/suite";
 import { permitFee } from "../steps";
 import type { StoredState } from "../workspace";
 import { loadPrices, takeoff, type Takeoff } from "./takeoff";
@@ -62,7 +65,8 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
   const egressNew = Boolean(geo?.egress && !geo.egress.existing);
 
   const permits: Cost[] = [];
-  const fee = permitFee(pack, result?.plan?.areaM2 ?? null);
+  // On unit 2's floor in the chosen design, as every other page has it (server/model/suite.ts).
+  const fee = permitFee(pack, suiteAreaM2(chosenDesign(currentModel(result, state)?.model ?? null)) ?? result?.plan?.areaM2 ?? null);
   if (fee?.amount) permits.push({ id: "building_permit", item: `Building permit, ${authority === "your municipality" ? "your municipality" : authority}`, lowCAD: fee.amount, highCAD: fee.amount, source: fee.source ? { title: fee.source.title, url: fee.source.url, checked: (fee.source as { retrieved?: string }).retrieved ?? "" } : null, estimate: fee.estimate });
   if (permit?.plumbing?.perFixtureCAD) {
     const fixtures = (geo?.layout?.zones.some((z) => z.kind === "bathroom") ? 3 : 0) + (geo?.layout?.zones.some((z) => z.kind === "kitchen") ? 1 : 0);

@@ -138,7 +138,8 @@ ${tests}
 
   // After the servers have stopped: a passing run's folder goes, and failed runs past the newest two.
   async onExit() {
-    if (this.passed) rmSync(runDir, { recursive: true, force: true });
+    // E2E_KEEP=1 keeps a passing run's folder too (its database, uploads and downloaded PDFs), to look into.
+    if (this.passed && !process.env.E2E_KEEP) rmSync(runDir, { recursive: true, force: true });
     if (!existsSync(E2E)) return;
     const runs = readdirSync(E2E).filter((d) => /^\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}-(replay|record)$/.test(d)).sort().reverse();
     for (const old of runs.slice(KEEP_FAILED)) rmSync(join(E2E, old), { recursive: true, force: true });

@@ -93,6 +93,7 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
     await ws.book().expectOpen();
   });
   const facts = (await ws.book().facts())!;
+  const bookPermit = await ws.book().permitLine();
   await total("book", ws.book().cover);
   expect(facts["The design"]).toBe("Studio");
 
@@ -115,6 +116,19 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
     await ws.open("Money");
     await ws.money().expectOpen();
   });
+
+  // One unit area and one fee: Money's permit step, the book's quote and the permit set's cover and fee.
+  const moneyPermit = await ws.money().permitStep();
+  const sqft = /for about ([\d,]+) sq ft/.exec(moneyPermit.note)?.[1];
+  const fee = /\$[\d,]+$/.exec(moneyPermit.meta)?.[0];
+  expect(sqft, moneyPermit.note).toBeTruthy();
+  expect(fee, moneyPermit.meta).toBeTruthy();
+  expect(bookPermit.amount).toBe(fee);
+  expect(bookPermit.basis).toContain(`(${sqft} sq ft)`);
+  const pdfText = pdf!.pages.map((p) => p.text.replace(/\s+/g, " ")).join(" ");
+  expect(pdf!.pages[0].text.replace(/\s+/g, " ")).toContain(`(${sqft} sq ft)`);
+  expect(pdfText).toContain(`About ${fee}.`);
+  expect(pdfText).toContain(`for about ${sqft} sq ft`);
   await journey.step("build", async () => {
     await ws.open("Build");
     await ws.build().expectOpen();

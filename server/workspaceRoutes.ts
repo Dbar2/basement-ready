@@ -12,12 +12,12 @@ import { lookKey, renderLook, sourcesFrom, STYLES } from "./ideas/looks";
 import { cityPermit } from "./permit/data";
 import { briefEmail, QUARTS } from "./permit/designer";
 import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm } from "./permit/forms";
-import { bounds } from "./permit/model";
-import { buildPermitPackage, type Copy, formInputs, formValues, localDate, NotReady, permitStatus } from "./permit/package";
-import { basementGeometry } from "./permit/plans";
-import { scopeOfWork } from "./permit/sheets";
+import { bounds, permitModel } from "./permit/model";
+import { buildPermitPackage, type Copy, formInputs, formValues, localDate, NotReady, permitStatus, projectFacts } from "./permit/package";
 import { lookupSiteGeometry, type Property, type SiteGeometry } from "./property";
 import { savedAnswers } from "./answers";
+import { homesAfter } from "./eligibility";
+import { areaText } from "./model/suite";
 import { overSpend } from "./limits";
 import { pricedForBasement, pricedSample } from "./priced";
 import { keys, storage } from "./storage";
@@ -63,13 +63,11 @@ const pdf = (bytes: Uint8Array, name: string) =>
 
 const slugOf = (s: string) => s.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "basement";
 
-// The project's numbers every document shares: area, bedrooms and the scope of work.
+// The project's numbers every document shares: area, bedrooms and the scope of work, as the permit set
+// and its forms have them (server/permit/package.ts projectFacts).
 function project(result: any, state: StoredState) {
-  const geo = basementGeometry(result, state);
-  const areaM2 = (geo?.layout?.zones ?? []).filter((z) => z.kind !== "stairs" && z.kind !== "mechanical").reduce((s, z) => s + z.areaM2, 0) || geo?.main?.plan.areaM2 || null;
-  const bedrooms: 0 | 1 = geo?.layout?.kind === "studio" ? 0 : 1;
-  const scope = scopeOfWork({ geo, result } as any);
-  return { geo, areaM2, bedrooms, scope };
+  const { areaM2, bedrooms, scope } = projectFacts(result, permitModel(result, state));
+  return { areaM2, bedrooms: (bedrooms === 0 ? 0 : 1) as 0 | 1, scope };
 }
 
 async function favouriteImages(scanId: string, state: StoredState) {
@@ -97,7 +95,7 @@ function regionValues(profile: Profile | null, result: any, address: string, cit
     cityProvince: `${city}, Ontario`,
     postalCode: profile?.postalCode ?? "",
     bedrooms,
-    areaText: areaM2 ? `about ${Math.round(areaM2)} m² (${Math.round(areaM2 * 10.7639)} sq ft)` : null,
+    areaText: areaM2 ? areaText(areaM2) : null,
     livesThere: typeof told.lives_there === "boolean" ? told.lives_there : null,
     mailing: profile?.mailingAddress || null,
     otherProperty: typeof told.other_home === "boolean" ? told.other_home : null,
@@ -152,7 +150,7 @@ function permitPayload(input: { result: any; municipality: string; state: Stored
   const stair = m?.design.proposed.fixtures.find((f) => f.kind === "stairs") ?? null;
   const fw = foot ? foot.maxX - foot.minX : 1, fd = foot ? foot.maxZ - foot.minZ : 1;
   const { areaM2, bedrooms } = formInputs(input);
-  const units = Math.max(1, input.result?.property?.unitsRegistered ?? 1) + 1;
+  const units = homesAfter(input.result?.property);
   return {
     left: st.readiness.left,
     items: st.readiness.items,

@@ -27,7 +27,17 @@ export type PermitWindow = {
   change: WindowChange;
   escape: boolean; // the bedroom's escape window
   taped: boolean;
+  // An escape window's verdict on the size it's drawn at: true, false, or null when its height isn't
+  // known yet (the scan gets a window's width, not its height; the tape settles it). Every sheet reads it.
+  meets: boolean | null;
 };
+
+// An opening drawn before its height is known: a placeholder for the drawing only, never a claim. A5
+// and A6 both draw it so, and both say the height is to be taped.
+export const UNTAPED_HEIGHT_M = 0.6;
+export const drawnHeightM = (w: Pick<PermitWindow, "heightM">) => w.heightM ?? UNTAPED_HEIGHT_M;
+// How tall a window this wide has to open to be an escape window, in mm.
+export const escapeHeightNeededMm = (widthM: number) => Math.ceil(Math.max(0.38, 0.35 / widthM) * 1000);
 
 export type PermitModel = {
   existing: Existing & { walls: PWall[]; fixtures: PFixture[] };
@@ -412,14 +422,16 @@ export function permitModel(result: any, state: StoredState | null | undefined):
     const nowW = wMm ? wMm / 1000 : o.widthM, nowH = hMm ? hMm / 1000 : o.heightM, nowS = sMm ? sMm / 1000 : (o.sillM ?? null);
     let change: WindowChange = o.status === "new" ? "new" : "keep";
     let widthM = nowW, heightM = nowH, sillM = nowS, was: PermitWindow["was"] = null;
-    if (escape && change === "keep" && escapeOk(wMm ? nowW : null, hMm ? nowH : null) === false) {
+    // Judged on the size it has: taped, else the scan's. One too small is enlarged on the drawings; one
+    // whose height isn't known yet stays as it is, and the sheets say so (the readiness list asks for it).
+    if (escape && change === "keep" && escapeOk(nowW, nowH) === false) {
       change = "enlarge";
       was = { widthM: nowW, heightM: nowH };
       widthM = Math.max(nowW, PROPOSED_ESCAPE.widthM);
       heightM = Math.max(nowH ?? 0, PROPOSED_ESCAPE.heightM);
       sillM = Math.min(nowS ?? PROPOSED_ESCAPE.sillM, PROPOSED_ESCAPE.sillM);
     }
-    windows.push({ id: o.id, wallId: o.wallId, tag: `W${i + 1}`, room: roomOf(o.wallId), widthM, heightM, sillM, was, change, escape, taped: isTaped });
+    windows.push({ id: o.id, wallId: o.wallId, tag: `W${i + 1}`, room: roomOf(o.wallId), widthM, heightM, sillM, was, change, escape, taped: isTaped, meets: escape ? escapeOk(widthM, heightM) : null });
   });
 
   // Each window drawn at its size as built: taped, or proposed when it's new or enlarged.
@@ -449,19 +461,8 @@ export function permitModel(result: any, state: StoredState | null | undefined):
   };
 }
 
-// The suite's rooms, and the floor area of unit 2.
+// The suite's rooms (its floor area, for every page: server/model/suite.ts).
 export const unitRooms = (m: PermitModel) => m.design.proposed.rooms.filter((r) => r.unit === 2);
 // Everything that's unit 2's floor: its rooms, and the area of the basement it takes as a whole (the
 // open floor between the rooms is the suite's too).
 export const unitOutline = (m: PermitModel) => [...m.existing.rooms.filter((r) => r.unit === 2), ...unitRooms(m)].map((r) => r.polygon);
-export function unitArea(m: PermitModel) {
-  const polys = unitOutline(m);
-  if (!polys.length) return 0;
-  const out = m.design.proposed.rooms.filter((r) => r.kind === "stairs" || r.kind === "mechanical").map((r) => r.polygon);
-  const b = bounds(polys.flat());
-  const step = 0.05;
-  let n = 0;
-  for (let x = b.minX + step / 2; x < b.maxX; x += step)
-    for (let z = b.minZ + step / 2; z < b.maxZ; z += step) if (polys.some((p) => inPolygon([x, z], p)) && !out.some((p) => inPolygon([x, z], p))) n++;
-  return n * step * step;
-}

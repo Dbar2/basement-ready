@@ -26,7 +26,7 @@ for (const take of TAKES) {
     } finally {
       // Its upload, frames and 3D are a few hundred megabytes in this run's storage: gone once it's checked.
       // Never throws: the server may still be writing its pictures, and the test's own result matters more.
-      if (scanId) {
+      if (scanId && !process.env.E2E_KEEP) {
         try {
           rmSync(join(runDir, "storage", "scans", scanId), { recursive: true, force: true, maxRetries: 3 });
         } catch {}

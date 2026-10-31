@@ -74,6 +74,13 @@ export class BookTab {
     for (const row of await rows.all()) out[((await row.locator("dt").textContent()) ?? "").trim()] = ((await row.locator("dd").textContent()) ?? "").trim();
     return out;
   }
+
+  // The quote's building-permit line: its amount and how it's counted ("342 sq ft. $392 for the new
+  // unit plus $0.62 per sq ft of the suite (31.8 m² (342 sq ft)).").
+  async permitLine() {
+    const line = this.page.locator(".book-quote li").filter({ has: this.page.locator("strong", { hasText: /^Building permit$/ }) });
+    return { amount: ((await line.locator(".mono").first().textContent()) ?? "").trim(), basis: ((await line.locator("p").first().textContent()) ?? "").trim() };
+  }
 }
 
 // The answer: the decision, what has to change, the scan in 3D and its floor plan.
@@ -167,6 +174,14 @@ export class MoneyTab {
 
   async expectOpen() {
     await expect(this.page.getByRole("heading", { name: "Money you can get" })).toBeVisible({ timeout: 30_000 });
+  }
+
+  // How to apply's permit step: "You or your designer · about 15 business days · $604" and its note
+  // ("$392 per new home + $0.62 per sq ft, for about 342 sq ft").
+  async permitStep() {
+    const step = this.page.locator('.plan-steps li[data-step="permit"]');
+    await expect(step).toBeVisible();
+    return { meta: ((await step.locator(".timeline-meta").textContent()) ?? "").trim(), note: ((await step.locator(".timeline-cost").textContent()) ?? "").trim() };
   }
 }
 

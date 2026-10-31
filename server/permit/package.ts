@@ -10,7 +10,8 @@ import type { Profile, StoredState } from "../workspace";
 import { cityPermit, DEMO_ADDRESS, type CityForm } from "./data";
 import { designerNeed, type DesignerNeed, quartsFilters } from "./designer";
 import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm, permitRows, summarySheet, type FormValues } from "./forms";
-import { permitModel, type PermitModel, unitArea, unitRooms } from "./model";
+import { suiteAreaM2 } from "../model/suite";
+import { permitModel, type PermitModel, unitRooms } from "./model";
 import { embedFonts, INK, LETTER, MUTED, newDoc, type Project, Sheet, type Signer } from "./pdf";
 import { fingerprint, readiness, type Readiness } from "./readiness";
 import { basementPlan, ceilingPlan, coverSheet, details, elevations, finishSheets, mainFloor, notesSheet, type Printed, scopeOfWork, type SheetCtx, SHEETS, sitePlan } from "./sheets";
@@ -186,7 +187,7 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
 
   // The forms, filled from the profile: Schedule 1 says "Homeowner" when the owner draws.
   const outcomes: FormOutcome[] = [];
-  const areaM2 = model ? Math.round(unitArea(model) * 10) / 10 || null : null;
+  const areaM2 = suiteAreaM2(model?.design);
   const values = formValues(input, project.municipality, scopeOfWork(ctx), areaM2, bedroomsOf(model), today, status.place);
   if (copy !== "share" && permit) {
     const needed = formsNeeded(permit.forms, { ownerDraws: status.place.ownerDraws, ownerBuilds: input.state.build?.path !== "hire" });
@@ -213,14 +214,14 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
 
   // The owner's pages: how to submit, and the look they picked. Not part of what the City gets.
   if (copy === "review") {
-    await submitPage(doc, input, permit, authority);
+    await submitPage(doc, input, permit, authority, suiteAreaM2(model?.design));
     if (input.favourites.length) await lookPage(doc, input.favourites, input.state);
   }
   const bytes = await doc.save();
   return { bytes, sheets, forms: outcomes, pages: doc.getPageCount(), signer: status.place.signer, readiness: status.readiness, copy };
 }
 
-async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnType<typeof cityPermit>["permit"], authority: string) {
+async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnType<typeof cityPermit>["permit"], authority: string, suiteM2: number | null) {
   const fonts = await embedFonts(doc);
   const s = new Sheet(doc.addPage(LETTER), fonts);
   const { pack } = packFor(input.municipality);
@@ -240,7 +241,8 @@ async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnT
     s.text(u.what, 48, y, { size: 9.5, font: fonts.bold });
     y = s.wrap(u.where, 230, y, s.width - 278, { size: 9 }) - 6;
   }
-  const fee = permitFee(pack, input.result?.plan?.areaM2 ?? null);
+  // On unit 2's floor, as the cover, the forms, Money and the book have it (server/model/suite.ts).
+  const fee = permitFee(pack, suiteM2 ?? input.result?.plan?.areaM2 ?? null);
   if (fee) {
     y -= 6;
     s.text("FEE", 48, y, { size: 8, color: MUTED, font: fonts.bold });
@@ -291,9 +293,15 @@ export async function lookPage(doc: PDFDocument, favourites: PackageInput["favou
   }
 }
 
+// The numbers every document shares, from the chosen design: unit 2's floor (server/model/suite.ts),
+// its bedrooms and the scope of work. The permit set, its forms, the designer's brief and the grant
+// applications all print these.
+export function projectFacts(result: any, model: PermitModel | null) {
+  return { areaM2: suiteAreaM2(model?.design), bedrooms: bedroomsOf(model), scope: scopeOfWork({ model, result }) };
+}
+
 // The values the forms route fills: the same as the package's.
 export function formInputs(input: Pick<PackageInput, "result" | "municipality" | "state" | "profile">) {
   const status = permitStatus(input);
-  const areaM2 = status.model ? Math.round(unitArea(status.model) * 10) / 10 || null : null;
-  return { status, areaM2, bedrooms: bedroomsOf(status.model), scope: scopeOfWork({ model: status.model, result: input.result }) };
+  return { status, ...projectFacts(input.result, status.model) };
 }
