@@ -1,6 +1,7 @@
 // Client for the workspace (server/workspaceRoutes.ts): the owner profile and saved state, the permit
 // package, the materials list, the applications and the looks. The sample basement keeps its
 // workspace in this browser and gets its documents from stateless routes.
+import { useEffect, useState } from "react";
 import { authHeaders as headers, type Grant, type MoneyQuestion, type PlanSide } from "./api";
 import type { Model } from "../server/model/types";
 
@@ -66,6 +67,7 @@ export type PermitStatus = {
   left: number;
   items: ReadyItem[];
   reviewKey: string;
+  drawingsUrl: string | null;
   canSubmit: boolean;
   sheets: { number: string; title: string }[];
   mainWalls: { id: string; label: string; scanM: number; tapedM: number | null }[];
@@ -256,7 +258,31 @@ export async function getPermitStatus(scanId: string): Promise<PermitStatus> {
   return res.json();
 }
 
-export const shareLink = (scanId: string) => `${window.location.origin}/api/scans/${scanId}/permit.pdf?copy=share`;
+// The drawings-only link for a designer or contractor, signed by the server so it opens for them (scans
+// are private). One look per scan, asked before anyone taps, so the tap can copy it at once (Safari only
+// lets a tap write the clipboard, not a tap that waited on the network). Null for the example and a demo.
+const drawingsLinks = new Map<string, Promise<string | null>>();
+export function drawingsLink(scanId: string): Promise<string | null> {
+  if (isSample(scanId)) return Promise.resolve(null);
+  let p = drawingsLinks.get(scanId);
+  if (!p) {
+    p = getPermitStatus(scanId).then((s) => s.drawingsUrl ?? null, () => (drawingsLinks.delete(scanId), null));
+    drawingsLinks.set(scanId, p);
+  }
+  return p;
+}
+export function useDrawingsLink(scanId: string, wanted = true): string | null {
+  const [link, setLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (!wanted) return;
+    let gone = false;
+    void drawingsLink(scanId).then((l) => !gone && setLink(l));
+    return () => {
+      gone = true;
+    };
+  }, [scanId, wanted]);
+  return link;
+}
 
 export async function downloadForm(scanId: string, formId: string) {
   return saveBlob(await fetch(`/api/scans/${scanId}/forms/${formId}.pdf`, { headers: await headers() }), `${formId}.pdf`);

@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { readFileSync } from "node:fs";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +12,7 @@ import { mountAdmin, stageTimes } from "../../server/admin";
 import { db, migrateDb, schema } from "../../server/db";
 import { adminCookieValue, cookieClaims, mountScanGate, NOT_FOUND, shareKey } from "../../server/privacy";
 import { mountWorkspace } from "../../server/workspaceRoutes";
+import { mountGuide } from "../../server/guide/routes";
 
 const KEY = "test-admin-key-not-a-real-one";
 
@@ -30,6 +32,7 @@ app.get("/api/scans/:id/frames/:n", (c) => c.text("frame"));
 app.get("/api/scans/:id/permit.pdf", (c) => c.text("pdf"));
 app.post("/api/scans/:id/answers", (c) => c.json({ saved: true }));
 mountWorkspace(app, async (c) => c.req.header("x-test-user") ?? null);
+mountGuide(app, async (c) => c.req.header("x-test-user") ?? null);
 mountAdmin(app);
 
 const claimsHeader = (basementId: string, claimToken: string) => ({ "x-claims": encodeURIComponent(JSON.stringify([{ basementId, claimToken }])) });
@@ -106,6 +109,36 @@ describe("private scans: only the owner or an admin", () => {
     expect((await app.request(`/api/scans/${scan.id}/permit.pdf?copy=share&key=${shareKey(scan.id, "a-guess")}`)).status).toBe(404);
     expect((await app.request(`/api/scans/${scan.id}/permit.pdf?copy=share`)).status).toBe(404);
     expect((await app.request(`/api/scans/${scan.id}/video?copy=share&key=${key}`)).status).toBe(404);
+  });
+
+  it("gives the owner the signed drawings link, and that link opens the share copy for anyone", async () => {
+    const sample = JSON.parse(readFileSync("public/samples/sample/result.json", "utf8"));
+    const { basement, scan } = await newScan({ claimToken: "owner-token", result: sample });
+    const status = await app.request(`/api/scans/${scan.id}/permit/status`, { headers: claimsHeader(basement.id, "owner-token") });
+    expect(status.status).toBe(200);
+    const { drawingsUrl } = await status.json();
+    const link = new URL(drawingsUrl);
+    expect(link.pathname).toBe(`/api/scans/${scan.id}/permit.pdf`);
+    expect(link.searchParams.get("copy")).toBe("share");
+    expect((await app.request(`${link.pathname}${link.search}`)).status).toBe(200);
+    expect((await app.request(`/api/scans/${scan.id}/permit/status`)).status).toBe(404);
+  });
+
+  it("the guide: a stranger gets 404, the owner the thread, an admin the thread without saving it", async () => {
+    const sample = JSON.parse(readFileSync("public/samples/sample/result.json", "utf8"));
+    const { basement, scan } = await newScan({ claimToken: "owner-token", result: sample });
+    const guide = `/api/scans/${scan.id}/guide`;
+    expect((await app.request(guide)).status).toBe(404);
+    const saved = async () => ((await db.select().from(schema.workspaces).where(sql`basement_id = ${basement.id}`))[0]?.state as any)?.guide ?? null;
+    const admin = await app.request(guide, { headers: { authorization: `Bearer ${KEY}` } });
+    expect(admin.status).toBe(200);
+    expect(Array.isArray((await admin.json()).messages)).toBe(true);
+    expect(await saved()).toBeNull();
+    const posted = await app.request(guide, { method: "POST", headers: { authorization: `Bearer ${KEY}`, "Content-Type": "application/json" }, body: JSON.stringify({ action: { kind: "tap", id: "x" } }) });
+    expect(posted.status).toBe(404);
+    expect((await app.request(guide, { headers: claimsHeader(basement.id, "owner-token") })).status).toBe(200);
+    expect(await saved()).not.toBeNull();
+    expect((await app.request("/api/scans/sample/guide")).status).toBe(200);
   });
 
   it("leaves the example open to everyone", async () => {

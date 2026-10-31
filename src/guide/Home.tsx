@@ -8,7 +8,7 @@ import { DEMO_LABEL, EXAMPLE_LABEL, getScan, type ScanResult } from "../api";
 import { AccountNav } from "../auth";
 import { chosen, downloadBook } from "../book/bookApi";
 import { Logo, Mark } from "../components/Logo";
-import { getPermitStatus, getWorkspace, type Workspace } from "../workspaceApi";
+import { getPermitStatus, getWorkspace, useDrawingsLink, type Workspace } from "../workspaceApi";
 import type { Fixture, Model, Pt, Wall } from "../../server/model/types";
 import { getGuide } from "./api";
 import { guideUrl, MILESTONES, progress, type MilestoneStatus, type Progress } from "./progress";
@@ -172,12 +172,15 @@ function HomeBase({ scanId, r, owner, p, ws, model, permit }: { scanId: string; 
       setMaking(false);
     }
   };
-  // The one-page plan made for a designer (src/screens/Brief.tsx).
+  // For a designer: the drawings, by the signed link that opens for them although scans are private
+  // (src/workspaceApi.ts drawingsLink). The example's one-page plan is public, so it shares that.
+  const drawings = useDrawingsLink(scanId, owner && scanId !== "sample" && !r.demo);
+  const shareUrl = scanId === "sample" ? `${window.location.origin}/scans/sample/brief` : drawings;
   const share = async () => {
-    const url = `${window.location.origin}/scans/${scanId}/brief`;
-    if (navigator.share) return void (await navigator.share({ title: "Our basement plan", url }).catch(() => {}));
-    const copied = await navigator.clipboard?.writeText(url).then(() => true).catch(() => false);
-    setNote(copied ? { text: "Link copied. It opens the one-page plan." } : { text: url });
+    if (!shareUrl) return;
+    if (navigator.share) return void (await navigator.share({ title: "Our basement plan", url: shareUrl }).catch(() => {}));
+    const copied = await navigator.clipboard?.writeText(shareUrl).then(() => true).catch(() => false);
+    setNote(copied ? { text: scanId === "sample" ? "Link copied. It opens the one-page plan." : "Link copied: the drawings only, no contact details." } : { text: shareUrl });
   };
 
   return (
@@ -205,9 +208,11 @@ function HomeBase({ scanId, r, owner, p, ws, model, permit }: { scanId: string; 
             <button type="button" className="link-quiet" onClick={() => void book()} disabled={making}>
               Your book (PDF)
             </button>
-            <button type="button" className="link-quiet" onClick={() => void share()}>
-              Share with a designer
-            </button>
+            {shareUrl && (
+              <button type="button" className="link-quiet" onClick={() => void share()}>
+                Share with a designer
+              </button>
+            )}
             <a className="link-quiet" href="/">Scan another basement</a>
           </p>
         ) : (

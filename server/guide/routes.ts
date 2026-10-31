@@ -9,6 +9,7 @@
 import { eq } from "drizzle-orm";
 import type { Context, Hono } from "hono";
 import { db, schema } from "../db";
+import { adminRead } from "../privacy";
 import { LOOK_ID, LOOK_VALUES, waitQuestions } from "../eligibility";
 import { clientIp, metaKey, overSpend } from "../limits";
 import { currentModel } from "../model/current";
@@ -274,13 +275,15 @@ export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<strin
     if (c.req.param("id") === "sample") return c.json(sampleStart(new Date().toISOString()), 200, NO_STORE);
     const a = await ownerOf(c, currentUser);
     if (!a) return c.json({ error: "Not found" }, 404);
-    if (!a.allowed) return c.json({ error: NOT_YOURS }, 403);
+    // An admin sees the thread as it stands and saves nothing (server/privacy.ts).
+    const reading = !a.allowed && adminRead(c);
+    if (!a.allowed && !reading) return c.json({ error: NOT_YOURS }, 403);
     const now = new Date().toISOString();
     const stored = storedThread(((await loadWorkspace(a.basement.id)).state as GuideStored).guide);
     const { ctx, state } = await contextFor(a, now, building(stored));
     const was = storedThread(state.guide);
     const { thread, messages } = was ? sync(was, ctx) : { thread: start(ctx), messages: [] };
-    if (!was || messages.length) await saveWorkspace(a.basement.id, { state: { guide: thread } as Partial<GuideStored> });
+    if (!reading && (!was || messages.length)) await saveWorkspace(a.basement.id, { state: { guide: thread } as Partial<GuideStored> });
     return c.json(thread, 200, NO_STORE);
   });
 
