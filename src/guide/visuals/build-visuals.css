@@ -1,0 +1,60 @@
+/* The Build milestone's visuals (src/guide/visuals/BuildVisuals.tsx): drawn on the card paper, hairlines,
+   big figures in Hanken 900 with mono beside them, no shadows. They fill the pane (about 40% of a phone,
+   the left side of a computer). */
+
+.bv { height: 100%; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: var(--color-card); overflow: hidden; }
+.bv-body { min-height: 0; display: grid; align-items: center; padding: clamp(14px, 3vw, 40px) var(--gutter) 8px; overflow: hidden; }
+.bv-cap { justify-self: start; margin: 0 0 12px var(--gutter); padding: 3px 8px; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); font-size: 12px; font-weight: 600; color: var(--color-ink); }
+.bv-big { margin: 0; font: 900 clamp(30px, 6vw, 56px) / 1 var(--font-display); letter-spacing: -0.045em; font-variant-numeric: tabular-nums; }
+.bv-sub { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); }
+
+/* The permit set. */
+.bv-permit { display: grid; grid-template-columns: minmax(90px, 0.8fr) minmax(0, 1.2fr); gap: clamp(14px, 3vw, 40px); align-items: center; max-width: 720px; width: 100%; margin: 0 auto; }
+.bv-sheets { width: 100%; max-height: min(100%, 300px); }
+.bv-sheet { fill: var(--color-card); stroke: var(--color-ink); stroke-width: 1.2; }
+.bv-sheet-back { fill: var(--color-card); stroke: var(--color-border); }
+.bv-ink { fill: none; stroke: var(--color-ink); stroke-width: 1; }
+.bv-ink-thick { stroke: var(--color-ink); stroke-width: 3; }
+.bv-hair { stroke: var(--color-border); stroke-width: 3; }
+.bv-tiny { font: 500 9px var(--font-mono); fill: var(--color-ink); }
+.bv-draft { font: 900 34px var(--font-display); fill: none; stroke: var(--color-stop); stroke-width: 1; opacity: 0.55; letter-spacing: 4px; }
+.bv-ready { display: grid; gap: 6px; min-width: 0; }
+.bv-bar { height: 6px; background: var(--color-surface); max-width: 220px; }
+.bv-bar > span { display: block; height: 100%; background: var(--color-ink); transition: width var(--dur-3) var(--ease-out); }
+.bv-checks { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 2px; font-size: 14px; }
+.bv-checks li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: center; color: var(--color-ink); }
+.bv-checks li:not([data-done]) { color: var(--color-ink); font-weight: 600; }
+.bv-checks li[data-done] { color: var(--color-ink-muted); }
+.bv-box { width: 14px; height: 14px; border: 1px solid var(--color-ink); display: grid; place-items: center; font-size: 11px; line-height: 1; }
+.bv-checks li[data-done] .bv-box { background: var(--color-ink); color: var(--color-card); transition: background var(--dur-2) var(--ease-out); }
+
+/* The money. */
+.bv-money { display: grid; gap: 14px; max-width: 640px; width: 100%; margin: 0 auto; }
+.bv-money-head { display: grid; gap: 4px; }
+.bv-programs { list-style: none; margin: 0; padding: 0; border-top: var(--line-ink); }
+.bv-programs li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 7px 0; border-bottom: var(--line); font-size: 14px; }
+.bv-program-name { font-weight: 700; }
+.bv-programs .mono { font-size: var(--text-figure); text-align: right; }
+.bv-program-state { grid-column: 1 / -1; font-size: 13px; color: var(--color-ink-muted); }
+.bv-programs li[data-qualify="ask"] .bv-program-state { color: var(--color-fix); font-weight: 600; }
+
+/* Who builds it: from the drawings to move-in. */
+.bv-path { list-style: none; margin: 0 auto; padding: 0; display: grid; grid-auto-flow: row; gap: 0; max-width: 520px; width: 100%; counter-reset: none; }
+.bv-path li { display: grid; grid-template-columns: 30px minmax(0, 6.5em) minmax(0, 1fr); gap: 10px; align-items: baseline; padding: 5px 0; border-bottom: var(--line); font-size: 14px; position: relative; }
+.bv-path li:first-child { border-top: var(--line-ink); }
+.bv-path-n { font-size: var(--text-figure); color: var(--color-ink-muted); }
+.bv-path-who { font-weight: 800; }
+.bv-path-what { color: var(--color-ink-muted); }
+.bv-path li[data-end] .bv-path-who { color: var(--color-ok); }
+
+@media (min-width: 1000px) {
+  .bv-checks { font-size: 15px; gap: 4px; }
+  .bv-path { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); max-width: 900px; }
+  .bv-path li { grid-template-columns: none; grid-template-rows: auto auto auto; align-content: start; gap: 4px; padding: 14px 12px 14px 0; border-bottom: 0; border-top: var(--line-ink); }
+  .bv-path li::after { content: "→"; position: absolute; right: 2px; top: 12px; color: var(--color-ink-muted); }
+  .bv-path li[data-end]::after { content: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bv-bar > span, .bv-checks li[data-done] .bv-box { transition: none; }
+}
