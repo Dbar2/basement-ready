@@ -48,7 +48,10 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
   const layouts = flow.layouts();
   await journey.step("layouts", async () => {
     await layouts.expectOpen();
-    await expect(layouts.decision).toContainText(sample.headline);
+    // The answer as the server prices it: the rules' fixes and the picked design's, one count (server/priced.ts).
+    const { result: answer } = await (await page.request.post("/api/recheck", { data: { result: sample, answers: {} } })).json();
+    expect(answer.headline).toMatch(new RegExp(`after ${answer.fixGroups.length} fix(es)?\\.`));
+    await expect(layouts.decision).toContainText(answer.headline);
   });
   const captions = (await journey.step("a picture of each layout", () => layouts.pictures()))!;
   expect(captions.every((c) => /Virtually staged/.test(c)), captions.join(" | ")).toBe(true);

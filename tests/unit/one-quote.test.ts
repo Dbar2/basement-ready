@@ -13,6 +13,7 @@ import { currentModel } from "../../server/model/current";
 import { applyEdits } from "../../server/model/edit";
 import { chosenDesign } from "../../server/model/legacy";
 import type { Design, Model } from "../../server/model/types";
+import { CHECK_CATEGORY, fixCount } from "../../server/model/fixes";
 import { answersIn, pricedSample } from "../../server/priced";
 import { quote } from "../../server/quote/quote";
 import { packFor } from "../../server/rules";
@@ -66,6 +67,11 @@ describe("one quote on every screen", () => {
     const q = quote(model, chosenDesign(model)!, { municipality: sample.municipality });
     const status = await post("/api/sample/diy", { state: { model } });
     expect([status.totals.hiredLow, status.totals.hiredHigh]).toEqual([q.totalLow, q.totalHigh]);
+    // Built yourself: the Build tab's total is the book's, the quote's own (not the shopping list's sum).
+    const book = await post("/api/sample/book", { state: { model } });
+    expect([status.totals.diyLow, status.totals.diyHigh]).toEqual([q.diy.low, q.diy.high]);
+    expect([book.quote.diy.low, book.quote.diy.high]).toEqual([q.diy.low, q.diy.high]);
+    expect(q.diy.high - q.diy.low).toBeGreaterThan(1000);
     const build = pricedSample(sample, { model }).steps.find((s: { id: string }) => s.id === "build");
     expect([build.costLow, build.costHigh]).toEqual([q.totalLow, q.totalHigh]);
   });
@@ -83,10 +89,49 @@ describe("one list of fixes", () => {
     return { ...seeded, designs: seeded.designs.map((x) => (x.id === d.id ? next : x)) };
   };
 
-  it("the example as it is: the rules' fixes, counted the same in the headline", () => {
+  it("the example as it is: the rules' fixes and the design's (the duct under 1.85 m), counted the same in the headline", () => {
     const answer = pricedSample(sample, {});
-    expect(answer.fixGroups.map((g) => g.category)).toEqual(sample.fixGroups.map((g: { category: string }) => g.category));
-    expect(answer.headline).toMatch(new RegExp(`after ${answer.fixGroups.length} fix`));
+    expect(answer.fixGroups.filter((g) => !g.fromDesign).map((g) => g.category)).toEqual(sample.fixGroups.map((g: { category: string }) => g.category));
+    // The duct the scan measured at 1.62 m clear is a fix, in the rules' words, not priced yet.
+    const duct = answer.fixGroups.find((g) => g.fromDesign && g.category === "height")!;
+    expect(duct).toMatchObject({ ruleIds: ["clearance_beams_ducts_suite"], priced: false });
+    expect(duct.why.join(" ")).toMatch(/1\.6\d m/);
+    expect(answer.headline).toMatch(new RegExp(`after ${answer.fixGroups.length} fixes`));
+  });
+
+  // Every screen that counts fixes: the headline (the answer, layouts, brief and book carry it), What has
+  // to change (answer and brief list r.fixGroups), the layout cards and the studio (fixCount in the
+  // browser), and the book and its PDF.
+  for (const [name, make] of [
+    ["the example, one bedroom", () => pick(seeded, "one_bedroom")],
+    ["the example, studio", () => pick(seeded, "studio")],
+    ["a design that adds an escape window", () => withNewWindow()],
+  ] as const) {
+    it(`one count on every screen: ${name}`, async () => {
+      const model = make();
+      const answer = pricedSample(sample, { model });
+      const n = answer.fixGroups.length;
+      expect(answer.headline).toMatch(new RegExp(`after ${n} fix(es)?\\.`));
+      const base = answer.fixGroups.filter((g) => !g.fromDesign);
+      for (const d of model.designs) {
+        // What a card shows is what the headline would say with that design picked.
+        const other = pricedSample(sample, { model: { ...model, designs: model.designs.map((x) => ({ ...x, chosen: x.id === d.id })) } });
+        expect(fixCount(base, d, model.existing)).toBe(other.fixGroups.length);
+      }
+      expect(fixCount(base, chosenDesign(model)!, model.existing)).toBe(n);
+      const book = await post("/api/sample/book", { state: { model } });
+      expect(book.headline).toBe(answer.headline);
+      const res = await app.request("/api/sample/book.pdf", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ state: { model } }) });
+      const pdf = await readPdf(new Uint8Array(await res.arrayBuffer()));
+      expect(pdf.pages.map((p) => p.text).join("\n").replace(/\s+/g, " ")).toContain(`after ${n} fix`);
+    });
+  }
+
+  it("the design checks' rule categories are the packs'", () => {
+    for (const city of ["waterloo-on", "kitchener-on", "cambridge-on", "ontario-on"]) {
+      const { pack } = packFor(city);
+      for (const [ruleId, category] of Object.entries(CHECK_CATEGORY)) expect(pack.rules.find((r) => r.id === ruleId)?.category, `${city} ${ruleId}`).toBe(category);
+    }
   });
 
   it("a new escape window in the design is a fix: listed once, counted in the headline, priced from the quote", () => {
@@ -94,7 +139,8 @@ describe("one list of fixes", () => {
     const answer = pricedSample(sample, { model });
     const egress = answer.fixGroups.filter((g) => g.category === "egress");
     expect(egress).toHaveLength(1);
-    expect(answer.fixGroups.length).toBe(sample.fixGroups.length + 1);
+    // The rules' fixes, the new window and the duct.
+    expect(answer.fixGroups.length).toBe(sample.fixGroups.length + 2);
     expect(answer.headline).toBe(`Yes, your basement can be a second home after ${answer.fixGroups.length} fixes.`);
     const q = quote(model, chosenDesign(model)!, { municipality: sample.municipality });
     const lines = q.byTrade.flatMap((t) => t.lines).filter((l) => l.id.startsWith("egress_"));

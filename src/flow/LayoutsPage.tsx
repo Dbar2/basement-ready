@@ -60,7 +60,7 @@ export function LayoutsPage() {
             <FlowLink className="btn btn-primary" href={`/scans/${scanId}?tab=decision`}>See the answer</FlowLink>
           </div>
         ) : model ? (
-          <LayoutPicker scanId={scanId} model={model} municipality={result?.municipality} onPick={pick} />
+          <LayoutPicker scanId={scanId} model={model} municipality={result?.municipality} fixes={result?.fixGroups} onPick={pick} />
         ) : (
           <div className="skeleton skeleton-plan" aria-busy="true" />
         )}

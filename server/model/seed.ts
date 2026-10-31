@@ -131,6 +131,7 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
   const openings: Opening[] = [];
   const rooms: Room[] = [];
   const fixtures: Fixture[] = [];
+  const onEdge = new Set<Fixture>(); // placed on its area's edge: maybe clamped there from elsewhere
   const box = (p: ScanPlan): Box => ({ minX: r3(p.box.minX), maxX: r3(p.box.maxX), minZ: r3(p.box.minZ), maxZ: r3(p.box.maxZ) });
 
   for (const area of areas) {
@@ -175,8 +176,16 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
       fixtures.push({ id: nextId("stairs", fixtures), kind: "stairs", at: [r3((st.x0 + st.x1) / 2), r3((st.z0 + st.z1) / 2)], sizeM: [r3(st.x1 - st.x0), r3(st.z1 - st.z0)], detectionId: st.detectionId, ...(st.bottom ? { bottom: [r3(st.bottom[0]), r3(st.bottom[1])] as Pt } : {}) });
     }
     for (const f of area.plan.fixtures) {
-      if (fixtures.some((x) => (f.detectionId && x.detectionId === f.detectionId) || (x.kind === f.kind && dist(x.at, [f.x, f.z]) < 1))) continue;
-      fixtures.push({ id: nextId(f.kind, fixtures), kind: f.kind, at: [r3(f.x), r3(f.z)], sizeM: FIXTURE_SIZE[f.kind], detectionId: f.detectionId });
+      // A thing seen from two areas is lifted in each one's 3D; where it isn't in the area, it lands
+      // clamped to the area's edge. The copy inside its area wins (a furnace in the furnace room, not on
+      // the rec room's far wall).
+      const inset = Math.min(f.x - b.minX, b.maxX - f.x, f.z - b.minZ, b.maxZ - f.z);
+      const twin = fixtures.find((x) => (f.detectionId && x.detectionId === f.detectionId) || (x.kind === f.kind && dist(x.at, [f.x, f.z]) < 1));
+      if (twin && !(onEdge.has(twin) && inset > 0.05 && twin.detectionId === f.detectionId)) continue;
+      const fx: Fixture = { id: twin?.id ?? nextId(f.kind, fixtures), kind: f.kind, at: [r3(f.x), r3(f.z)], sizeM: FIXTURE_SIZE[f.kind], detectionId: f.detectionId };
+      if (twin) fixtures.splice(fixtures.indexOf(twin), 1, fx);
+      else fixtures.push(fx);
+      if (inset < 0.02) onEdge.add(fx);
     }
     // Beams, ducts and bulkheads: the scan measured the headroom under them but not where they run.
     // A main beam usually runs down the middle the long way, ducts beside it: placed there for them to drag.
@@ -205,6 +214,10 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
   }
 
   fixtures.splice(0, fixtures.length, ...oneOfEach(fixtures, result.detections));
+  // An area of its own that the furnace or water heater stands in, whatever its size, is the service room
+  // the designs keep (the scan's furnace room): not the main area, and not a copy lying on its edge.
+  for (const r of rooms.slice(1))
+    if (fixtures.some((f) => (f.kind === "furnace" || f.kind === "water_heater") && inPolygon(f.at, r.polygon) && edgeDist(r.polygon, f.at) > 0.05)) r.kind = "mechanical";
   openings.push(...watchedWindows(rooms, walls, openings, result.watch));
 
   // Their tape on the escape window goes on the biggest window: that's the one the bedroom gets.
