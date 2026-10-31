@@ -30,7 +30,7 @@ final class AppModel: ObservableObject {
     case filming(StartAnswers, server: URL)
     case review(Take, StartAnswers, note: String?)
     case sending(retry: (Take, StartAnswers)?) // nil: picked up after a relaunch
-    case result(ScanCreated)
+    case result(ScanCreated, ResultPage)
   }
 
   @Published var stage: Stage = .start
@@ -78,19 +78,20 @@ struct RootView: View {
     Group {
       switch app.stage {
       case .start:
-        StartView(onStart: { answers in app.film(answers) }, onOpenLast: { scan in app.stage = .result(scan) }).preferredColorScheme(.light)
+        StartView(onStart: { answers in app.film(answers) }, onOpenLast: { scan in app.stage = .result(scan, .home) }).preferredColorScheme(.light)
       case .filming(let answers, let server):
         FilmingView(server: server, onDone: { take, note in app.filmed(take, answers: answers, note: note) }, onCancel: { app.stage = .start })
       case .review(let take, let answers, let note):
         ReviewView(take: take, note: note, onSend: { app.send(take, answers) }, onRetake: { app.discard(take) }).preferredColorScheme(.light)
       case .sending(let retry):
         SendingView(uploader: uploader, onRetry: { if let (take, answers) = retry { app.send(take, answers) } else { app.restart() } }, onCancel: { app.restart() }).preferredColorScheme(.light)
-      case .result(let scan):
-        ResultView(scan: scan) { app.restart() }.preferredColorScheme(.light)
+      case .result(let scan, let page):
+        ResultView(scan: scan, page: page) { app.restart() }.preferredColorScheme(.light)
       }
     }
     .onChange(of: uploader.state) { _, state in
-      if case .done(let scan) = state { app.stage = .result(scan) }
+      // Just sent: straight into the guide, where the wait happens.
+      if case .done(let scan) = state { app.stage = .result(scan, .guide) }
     }
     .introFlow() // the launch animation, and the filming guide on the first launch
   }

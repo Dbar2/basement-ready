@@ -16,7 +16,17 @@ export SCANS_PER_IP_PER_HOUR=1000 SCANS_PER_DAY=1000 DAILY_COST_CAP_USD=1000
 # A stand-in key so uploads are accepted; replay answers (or fails) before any request is made.
 export MODEL_API_KEY=replay-only RELAY_TOKEN= META_API_BASE=http://meta.replay.invalid/v1 SCAN3D_URL=http://scan3d.replay.invalid SCAN3D_TOKEN=replay
 export CLERK_SECRET_KEY= CLERK_PUBLISHABLE_KEY=
+# A server this checkout left on our ports earlier is stopped first. Only one whose working folder is
+# this checkout: other sessions run their own servers from their own worktrees.
+for port in "$API" "$WEB"; do
+  for pid in $(lsof -nP -t -iTCP:"$port" -sTCP:LISTEN 2>/dev/null); do
+    [ "$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p')" = "$PWD" ] && kill "$pid"
+  done
+done
+# The API in its own process group, so stopping this script stops all of it (pnpm, tsx and node).
+set -m
 pnpm exec tsx --import ./tests/e2e/support/net-guard.ts server/index.ts &
 api=$!
-trap 'kill $api 2>/dev/null' EXIT INT TERM
+set +m
+trap 'kill -TERM -- -"$api" 2>/dev/null' EXIT INT TERM
 pnpm exec vite --port "$WEB" --strictPort
