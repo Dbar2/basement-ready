@@ -36,8 +36,10 @@ describe("the Build milestone's list", () => {
   it("starts at the tape, says what the set is and how much is left, and ends at the book", () => {
     const l = sampleBuildList({ profile: null, state: {} });
     expect(l.next.step).toBe("build.permit:tape");
-    expect(l.next.message).toMatch(/^I've drawn and filled your permit set\. \d+ things are left before you can hand it in\./);
+    // The first permit item says what the set is and how much is left (the script has no build intro).
+    expect(l.next.message).toMatch(/^I've drawn and filled your permit set\. \d+ things are left before you can hand it in\. Grab a tape measure: /);
     expect(l.next.choices?.[0]).toEqual({ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } });
+    expect(l.items.filter((i) => i.section === "permit").every((i) => typeof i.minutes === "number")).toBe(true);
     expect(l.next.card).toEqual({ kind: "tape", id: "tape" });
     expect(l.next.why).toBeTruthy();
     expect(l.items.at(-1)!.why).toBe("");
@@ -60,6 +62,7 @@ describe("the Build milestone's list", () => {
     expect(next().message).not.toMatch(/drawn and filled/);
     expect(next().choices?.some((c) => c.label === "What's a permit set?")).toBe(false);
 
+
     profile = OWNER;
     expect(next().step).toBe("build.permit:upstairs");
     state = { ...state, permit: { ...state.permit, upstairs: { bedrooms: [], none: true } } };
@@ -73,7 +76,7 @@ describe("the Build milestone's list", () => {
 
     // The money: the example's family may claim the tax credit, and the lender's loan is applied for first.
     expect(ready.next.step).toBe("build.money:apply");
-    expect(ready.next.message).toMatch(/^You may be eligible for up to \$7,000 \(Multigenerational home tax credit\)\. Apply before any work starts: CMHC refinance, a loan rather than a grant\./);
+    expect(ready.next.message).toMatch(/^You may get up to \$7,000 \(Multigenerational home tax credit\)\. Apply before any work starts: CMHC refinance, a loan rather than a grant\./);
     state = { ...state, apply: { cmhc_refinance_secondary_suite: { sentAt: null } } };
     const afterApply = sampleBuildList({ profile, state }).next;
     expect(afterApply.step).toBe("build.builders");
@@ -113,7 +116,7 @@ describe("the Build milestone's list", () => {
     ]);
     expect(item.why).toBe("As your main home. It decides Region of Waterloo forgivable loan.");
     // The first money item says the total.
-    expect(item.message).toMatch(/^You may be eligible for up to \$7,000/);
+    expect(item.message).toMatch(/^You may get up to \$7,000/);
     const unsure = buildList({ result: { ...result, moneyQuestions: [{ ...question, answer: "unsure" }] }, municipality: "waterloo-on", state: {}, profile: null });
     expect(unsure.items.find((i) => i.step === "build.money:lives_there")!.done).toBe(true);
   });
@@ -121,7 +124,7 @@ describe("the Build milestone's list", () => {
   it("never says qualify or approved, and every item says why", () => {
     const l = sampleBuildList({ profile: null, state: taped({}) });
     for (const i of l.items) {
-      expect(`${i.message} ${i.why}`).not.toMatch(/qualif|approved/i);
+      expect(`${i.message} ${i.why}`).not.toMatch(/qualif|approved|eligible/i);
       // Every question says why; the submit copy and the last step ask nothing.
       if (i.step !== "done" && i.step !== "build.submit") expect(i.why.length).toBeGreaterThan(10);
     }
@@ -189,5 +192,18 @@ describe("a real scan's list, from the database", () => {
     const final = await loadWorkspace(b.id);
     const out = await buildPermitPackage({ result, municipality: "waterloo-on", address: "1 Example St", profile: final.profile, state: final.state, site: null, aerialJpeg: null, favourites: [], copy: "submit" });
     expect(out.bytes.byteLength).toBeGreaterThan(10_000);
+  });
+});
+
+describe("the money, from the answers the script loads", () => {
+  it("works the questions out from the household and answers, and drops one once it's answered", () => {
+    const result = { ...sampleResult({}), household: "renter" };
+    const open = buildList({ result, municipality: "waterloo-on", state: {}, profile: null, household: "renter", answers: {}, property: null });
+    const money = open.items.filter((i) => i.section === "money" && i.step !== "build.money:apply");
+    expect(money.length).toBeGreaterThan(0);
+    const q = money[0].step.replace("build.money:", "");
+    const value = (money[0].choices![0].action as { value: unknown }).value;
+    const after = buildList({ result, municipality: "waterloo-on", state: {}, profile: null, household: "renter", answers: { [q]: value }, property: null });
+    expect(after.items.some((i) => i.step === money[0].step && !i.done)).toBe(false);
   });
 });

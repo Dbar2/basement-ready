@@ -27,7 +27,8 @@ import { failureOf } from "../failure";
 import { answer, askSpark, SAMPLE_LINE } from "./ask";
 import { entryFor, sourcesFor } from "./glossary";
 import { cleanSample, SAMPLE_DESCRIBE, SAMPLE_WALL, sampleAct, sampleCtx, samplePack, sampleStart } from "./sample";
-import { act, chosenOf, explainReply, start, sync, type BuildItem, type Ctx, type Reply, type Thread } from "./script";
+import { buildListFor } from "./build";
+import { act, chosenOf, explainReply, start, sync, type Ctx, type Reply, type Thread } from "./script";
 import type { GuideAction, LookKey } from "../../src/guide/types";
 
 const ASK_PER_IP_PER_HOUR = Number(process.env.GUIDE_ASK_PER_IP_PER_HOUR ?? 30);
@@ -80,15 +81,12 @@ const storedThread = (t: unknown): Thread | null => {
 
 // ---- A real scan's context -----------------------------------------------------------------------
 
-// What the build still needs (server/guide/build.ts, track F). Until it lands the build is the permit
-// set itself: the script goes from its intro to the download.
-async function buildFor(_scanId: string, _basementId: string): Promise<BuildItem[]> {
-  return [];
-}
 
 type Access = NonNullable<Awaited<ReturnType<typeof ownerOf>>>;
 
-async function contextFor(a: Access, now: string) {
+// `build`: work out the build list too (it draws the permit set, a second or two): only once the
+// thread is there.
+async function contextFor(a: Access, now: string, build = false) {
   const { basement, id } = a;
   const [scan] = await db.select().from(schema.scans).where(eq(schema.scans.id, id));
   const answers = (await savedAnswers(basement.id)) as Record<string, unknown>;
@@ -110,9 +108,12 @@ async function contextFor(a: Access, now: string) {
   });
   const look = (LOOK_VALUES as readonly string[]).includes(answers[LOOK_ID] as string) ? (answers[LOOK_ID] as LookKey | "none") : null;
   const failed = !result && scan?.status === "error" ? failureOf(scan.error) : null;
-  const ctx: Ctx = { found: [], asks, result, model, look, build: await buildFor(id, basement.id), household, failed, now };
+  const ctx: Ctx = { found: [], asks, result, model, look, build: result && (build || !model) ? ((await buildListFor(id))?.items ?? []) : [], household, failed, now };
   return { ctx, pack, state: w.state as GuideStored, municipality };
 }
+
+// Past the design's look: the build list is what's asked next.
+const building = (t: Thread | null) => Boolean(t?.passed.includes("design.look"));
 
 // ---- Applying an action --------------------------------------------------------------------------
 
@@ -274,7 +275,9 @@ export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<strin
     const a = await ownerOf(c, currentUser);
     if (!a) return c.json({ error: "Not found" }, 404);
     if (!a.allowed) return c.json({ error: NOT_YOURS }, 403);
-    const { ctx, state } = await contextFor(a, new Date().toISOString());
+    const now = new Date().toISOString();
+    const stored = storedThread(((await loadWorkspace(a.basement.id)).state as GuideStored).guide);
+    const { ctx, state } = await contextFor(a, now, building(stored));
     const was = storedThread(state.guide);
     const { thread, messages } = was ? sync(was, ctx) : { thread: start(ctx), messages: [] };
     if (!was || messages.length) await saveWorkspace(a.basement.id, { state: { guide: thread } as Partial<GuideStored> });
@@ -289,20 +292,21 @@ export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<strin
 
     if (c.req.param("id") === "sample") {
       const thread = cleanSample(body?.state, now);
-      const reply = await sampleReply(action, thread, sampleCtx(thread.sample, now));
-      const r = sampleAct(thread, action, now, reply);
+      const reply = await sampleReply(action, thread, sampleCtx(thread.sample, now, body?.workspace));
+      const r = sampleAct(thread, action, now, reply, body?.workspace);
       return c.json({ messages: r.messages, state: r.thread }, 200, NO_STORE);
     }
 
     const a = await ownerOf(c, currentUser);
     if (!a) return c.json({ error: "Not found" }, 404);
     if (!a.allowed) return c.json({ error: NOT_YOURS }, 403);
-    const before = await contextFor(a, now);
-    const thread = storedThread(before.state.guide) ?? start(before.ctx);
+    const stored = storedThread(((await loadWorkspace(a.basement.id)).state as GuideStored).guide);
+    const before = await contextFor(a, now, building(stored));
+    const thread = stored ?? start(before.ctx);
     const applied = await apply(app, c, a, action, before, thread);
     if (applied.error) return c.json({ error: applied.error.text }, applied.error.status);
     // The scan as it is now, after the action.
-    const after = await contextFor(a, now);
+    const after = await contextFor(a, now, building(thread) || (action.type === "go" && action.to === "build"));
     const r = act(thread, action, after.ctx, applied.reply);
     await saveWorkspace(a.basement.id, { state: { guide: r.thread } as Partial<GuideStored> });
     return c.json({ messages: r.messages, state: r.thread }, 200, NO_STORE);

@@ -50,12 +50,35 @@ function model(over: { guesses?: number; fixtureGuesses?: number; confirmed?: bo
   } as never;
 }
 
+// Track F's list (server/guide/build.ts), as it reads before anything is given: it opens with the permit
+// set, a done item counts as given, and it always ends with "done".
+const item = (step: string, section: BuildItem["section"], message: string, why: string, extra: Partial<BuildItem> = {}): BuildItem => ({
+  step,
+  section,
+  message,
+  why,
+  visual: { kind: section === "money" ? "money" : "permit" },
+  done: false,
+  ...extra,
+});
 const items: BuildItem[] = [
-  { step: "build.permit:tape", section: "permit", message: "Measure one wall.", why: "the City checks sizes.", card: { kind: "tape", id: "tape" }, visual: { kind: "permit" }, minutes: 2 },
-  { step: "build.permit:owner", section: "permit", message: "Who owns the house?", why: "the forms ask.", card: { kind: "owner", id: "owner" }, visual: { kind: "permit" }, minutes: 3 },
-  { step: "build.submit", section: "permit", message: "Download the submit copy.", why: "it's what the City takes.", card: { kind: "download", id: "submit" }, visual: { kind: "permit" }, done: true },
-  { step: "build.money:senior", section: "money", message: "Is someone moving in 65 or older?", why: "it decides the tax credit.", visual: { kind: "money" } },
+  item("build.permit:tape", "permit", "Measure one wall.", "the City checks sizes.", {
+    card: { kind: "tape", id: "tape" },
+    choices: [{ label: "Later", action: { type: "go", to: "home" } }],
+    minutes: 2,
+  }),
+  item("build.permit:owner", "permit", "Who owns the house?", "the forms ask.", { card: { kind: "owner", id: "owner" }, minutes: 3 }),
+  item("build.money:senior", "money", "Is someone moving in 65 or older?", "it decides the tax credit.", {
+    choices: [{ label: "Yes", action: { type: "answer", questionId: "senior", value: true } }],
+  }),
+  item("build.submit", "permit", "Download the submit copy.", "", { card: { kind: "download", id: "submit" }, minutes: 1 }),
+  item("done", "done", "That's everything I need from you.", "", {
+    card: { kind: "download", id: "book" },
+    choices: [{ label: "Back to your basement", action: { type: "go", to: "home" }, primary: true }],
+  }),
 ];
+// The list once these steps are given.
+const given = (...steps: string[]) => items.map((i) => (steps.includes(i.step) ? { ...i, done: true } : i));
 
 function ctx(over: Partial<Ctx> = {}): Ctx {
   return { found: [], asks: [], result, model: model(), look: "light", build: items, household: "relative", now: NOW, ...over };
@@ -72,8 +95,9 @@ describe("the guide's wait: one question at a time while it measures", () => {
     expect(t.milestone).toBe("answer");
     expect(t.messages).toHaveLength(1);
     const m = last(t);
-    expect(m.text).toBe("I found a window, the stairs and your furnace. While I measure: **Is there a door from the basement straight outside?** A side door or walk-out that opens to the yard.");
-    expect(m.why).toBe("a separate way in is one of the rules for a second home.");
+    // It ends on its question; what counts goes in the why.
+    expect(m.text).toBe("I found a window, the stairs and your furnace. While I measure: **Is there a door from the basement straight outside?**");
+    expect(m.why).toBe("a separate way in is one of the rules for a second home. A side door or walk-out that opens to the yard.");
     expect(m.choices?.map((c) => c.label)).toEqual(["Yes", "No", "Not sure"]);
     expect(m.choices?.[1].action).toEqual({ type: "answer", questionId: "exit_from_suite", value: false });
     expect(m.choices?.some((c) => c.primary)).toBe(false);
@@ -114,7 +138,7 @@ describe("the guide's wait: one question at a time while it measures", () => {
     expect(last(t).choices).toEqual([{ label: "Try again", action: { type: "ask", text: "Try again" }, primary: true }]);
     expect(last(start(ctx({ result: null, failed: { text: "We couldn't read this video file.", retry: false } }))).choices).toBeUndefined();
     const again = act(t, { type: "ask", text: "Try again" }, ctx({ result: null, asks: [exit] }));
-    expect(again.messages.map((m) => m.text)).toEqual(["Try again", "**Is there a door from the basement straight outside?** A side door or walk-out that opens to the yard."]);
+    expect(again.messages.map((m) => m.text)).toEqual(["Try again", "**Is there a door from the basement straight outside?**"]);
     expect(again.thread.step).toBe("wait.q:exit_from_suite");
   });
 
@@ -301,52 +325,79 @@ describe("the guide's design: the plan, the layouts, the look", () => {
   });
 });
 
-describe("the guide's build", () => {
+describe("the guide's build: track F's list, one item at a time", () => {
   const designed = ["answer", "design.plan", "design.layouts"];
 
-  it("'Looks good' goes to the permit set: what only they can give, and how long", () => {
+  it("'Looks good' opens the build: the permit set is drawn, what only they can give, and how long", () => {
     const r = act(at(designed), { type: "go", to: "build" }, ctx());
+    expect(r.messages[0]).toMatchObject({ from: "you", text: "Looks good" });
     expect(r.thread.step).toBe("build");
     expect(r.thread.milestone).toBe("build");
     expect(r.thread.done).toEqual({ answer: true, design: true, build: false });
     const m = r.messages[1];
     expect(m.text).toBe("To build it you need a permit. **I've drawn and filled your permit set** from the scan. Two things only you can give, about 5 minutes. Ready?");
-    expect(m.choices?.map((c) => c.label)).toEqual(["What's a permit set?", "Later", "Start"]);
+    expect(m.why).toBe("the City needs the permit set before any work starts.");
+    expect(m.choices?.map((c) => [c.label, Boolean(c.primary)])).toEqual([
+      ["What's a permit set?", false],
+      ["Later", false],
+      ["Start", true],
+    ]);
     expect(m.visual).toEqual({ kind: "permit" });
   });
 
-  it("'Start' goes through each item, skipping what's done, with the card's words as their bubble; then done with the book", () => {
-    let t = at([...designed, "design.look"]);
-    t = act(t, { type: "go", to: "build" }, ctx()).thread;
+  it("'Start' goes to the first thing the permit set needs, with its why and its card", () => {
+    const r = act(at([...designed, "design.look"]), { type: "go", to: "build" }, ctx());
+    expect(r.messages[0]).toMatchObject({ from: "you", text: "Start" });
+    expect(r.thread.step).toBe("build.permit:tape");
+    expect(r.messages[1]).toMatchObject({ text: "Measure one wall.", why: "the City checks sizes.", card: { kind: "tape", id: "tape" }, visual: { kind: "permit" } });
+  });
+
+  it("with nothing left for the permit set, the intro says so", () => {
+    const m = last(at([...designed, "design.look"], ctx({ build: given("build.permit:tape", "build.permit:owner") })));
+    expect(m.text).toMatch(/from the scan\. It has everything it needs from you\. Ready\?$/);
+  });
+
+  it("a card's words are their bubble; the item comes again until the list says it's given", () => {
+    const passed = [...designed, "design.look", "build"];
+    const t = at(passed);
     expect(t.step).toBe("build.permit:tape");
-    expect(last(t)).toMatchObject({ text: "Measure one wall.", why: "the City checks sizes.", card: { kind: "tape", id: "tape" } });
-    const tape = act(t, { type: "permitItem", itemId: "build.permit:tape", value: { said: "Walls 7.56 m and 5.52 m, ceiling 2.08 m" } }, ctx());
-    expect(tape.messages[0]).toMatchObject({ from: "you", text: "Walls 7.56 m and 5.52 m, ceiling 2.08 m" });
-    t = tape.thread;
-    expect(t.step).toBe("build.permit:owner");
-    // Put off (its own id is enough), and the submit copy is already done: on to the money.
-    t = act(t, { type: "permitItem", itemId: "owner", value: { said: "Later" } }, ctx()).thread;
+    const saved = act(t, { type: "permitItem", itemId: "tape", value: { said: "Walls 7.56 m and 5.52 m, ceiling 2.08 m" } }, ctx({ build: given("build.permit:tape") }));
+    expect(saved.messages.map((m) => [m.from, m.text])).toEqual([
+      ["you", "Walls 7.56 m and 5.52 m, ceiling 2.08 m"],
+      ["guide", "Who owns the house?"],
+    ]);
+    const notYet = act(saved.thread, { type: "permitItem", itemId: "owner", value: { said: "Sam" } }, ctx({ build: given("build.permit:tape") }));
+    expect(notYet.thread.step).toBe("build.permit:owner");
+    expect(notYet.messages.at(-1)!.text).toBe("Who owns the house?");
+  });
+
+  it("a money question is answered like any other, and a step that asks nothing has no why", () => {
+    const t = at([...designed, "design.look", "build"], ctx({ build: given("build.permit:tape", "build.permit:owner") }));
     expect(t.step).toBe("build.money:senior");
-    const r = act(t, { type: "permitItem", itemId: "build.money:senior", value: null }, ctx());
-    expect(r.messages.map((m) => m.from)).toEqual(["guide"]);
-    expect(r.thread.step).toBe("done");
-    expect(r.thread.done).toEqual({ answer: true, design: true, build: true });
-    expect(last(r.thread).card).toEqual({ kind: "download", id: "book" });
+    const r = act(t, { type: "answer", questionId: "senior", value: true }, ctx({ build: given("build.permit:tape", "build.permit:owner", "build.money:senior") }));
+    expect(r.messages[0]).toMatchObject({ from: "you", text: "Yes" });
+    expect(r.thread.step).toBe("build.submit");
+    expect(r.messages[1].why).toBeUndefined();
+    expect(r.messages[1].card).toEqual({ kind: "download", id: "submit" });
   });
 
-  it("an item the build list no longer has (given elsewhere) is skipped", () => {
-    expect(at([...designed, "design.look", "build"], ctx({ build: [items[1]] })).step).toBe("build.permit:owner");
-  });
-
-  it("with nothing missing it says so", () => {
-    const m = last(act(at(designed), { type: "go", to: "build" }, ctx({ build: [] })).thread);
-    expect(m.text).toMatch(/from the scan\. Nothing's missing\.$/);
-    expect(m.choices?.at(-1)?.label).toBe("See it");
+  it("ends on the list's own done: the book, and the way home", () => {
+    const t = at([...designed, "design.look", "build"], ctx({ build: given("build.permit:tape", "build.permit:owner", "build.money:senior", "build.submit") }));
+    expect(t.step).toBe("done");
+    expect(t.done).toEqual({ answer: true, design: true, build: true });
+    expect(last(t)).toMatchObject({ text: "That's everything I need from you.", card: { kind: "download", id: "book" } });
+    expect(last(t).why).toBeUndefined();
   });
 
   it("'Later' goes home and says nothing", () => {
     const t = at([...designed, "design.look"]);
     expect(act(t, { type: "go", to: "home" }, ctx())).toEqual({ thread: t, messages: [] });
+  });
+
+  it("with no list, done is its own line", () => {
+    const t = at([...designed, "design.look"], ctx({ build: [] }));
+    expect(t.step).toBe("done");
+    expect(last(t).card).toEqual({ kind: "download", id: "book" });
   });
 
   it("a take with no plan goes from the answer straight to building", () => {
@@ -366,6 +417,7 @@ describe("the thread", () => {
       { type: "confirmPlan" },
       { type: "chooseDesign", designId: "one_bedroom" },
       { type: "go", to: "build" },
+      { type: "explain", term: "permit_set" },
       { type: "go", to: "build" },
     ] as const)
       t = act(t, a, c).thread;
