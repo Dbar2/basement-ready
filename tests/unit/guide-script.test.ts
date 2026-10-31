@@ -371,6 +371,20 @@ describe("the guide's build: track F's list, one item at a time", () => {
     expect(notYet.messages.at(-1)!.text).toBe("Who owns the house?");
   });
 
+  it("an aside at a card's step answers it, then gives the step again, card and all, so it can still be done", () => {
+    const t = at([...designed, "design.look", "build"]);
+    expect(t.step).toBe("build.permit:tape");
+    const r = act(t, { type: "explain", term: "permit_set" }, ctx());
+    expect(r.thread.step).toBe("build.permit:tape");
+    expect(r.messages.map((m) => m.from)).toEqual(["you", "guide", "guide"]);
+    expect(r.messages[1].visual).toEqual({ kind: "explain", term: "permit_set" });
+    expect(r.messages[2]).toMatchObject({ text: "Measure one wall.", why: "the City checks sizes.", card: { kind: "tape", id: "tape" } });
+    expect(r.messages[2].choices?.map((c) => c.label)).toEqual(["Later"]);
+    // The drawing stays in the pane.
+    expect(r.messages[2].visual).toBeUndefined();
+    expect(r.thread.visual).toEqual({ kind: "explain", term: "permit_set" });
+  });
+
   it("a money question is answered like any other, and a step that asks nothing has no why", () => {
     const t = at([...designed, "design.look", "build"], ctx({ build: given("build.permit:tape", "build.permit:owner") }));
     expect(t.step).toBe("build.money:senior");

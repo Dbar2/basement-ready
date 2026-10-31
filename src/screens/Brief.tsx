@@ -3,11 +3,19 @@
 // qualify for and how to apply. Laid out for paper: "Save as PDF" is the browser's print dialog.
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { aerialUrl, costLabel, getScan, type ScanResult } from "../api";
+import { aerialUrl, costLabel, getScan, type Grant, type ScanResult } from "../api";
 import { FloorPlan } from "../components/FloorPlan";
 import { Logo } from "../components/Logo";
 import { conceptUrl } from "../components/StagedViews";
-import { worth } from "../components/Money";
+import "../styles/brief.css";
+
+// "$20,000 grant", "Saves fees", "Financing": what a program is worth here.
+const KIND: Record<string, string> = { grant: "grant", forgivable_loan: "forgivable loan", refundable_tax_credit: "tax credit" };
+function worth(g: Grant) {
+  if (g.value === "cash" && g.amountCAD != null) return `$${Math.round(g.amountCAD).toLocaleString("en-CA")} ${KIND[g.kind] ?? ""}`.trim();
+  if (g.value === "financing") return "Financing";
+  return "Saves fees";
+}
 
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const range = (lo: number | null | undefined, hi: number | null | undefined) => (lo == null || hi == null ? null : lo === hi ? money(lo) : `${money(lo)}–${money(hi)}`);
