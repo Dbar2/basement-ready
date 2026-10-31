@@ -146,7 +146,8 @@ for (const take of TAKES) {
       await ws.expectOpen();
       await ws.book().expectOpen();
     });
-    expect((await ws.book().facts())["The design"]).toBe(picked);
+    const facts = (await ws.book().facts())!;
+    expect(facts["The design"]).toBe(picked);
     await expect(page.locator("main.workspace")).toHaveAttribute("data-verdict", r.verdict);
 
     // ---- The answer: the verdict and the measured rooms ----
@@ -201,6 +202,10 @@ for (const take of TAKES) {
 
     // ---- The same as when it was recorded ----
     const count = (labels: string[]) => Object.fromEntries([...new Set(labels)].sort().map((l) => [l, labels.filter((x) => x === l).length]));
+    // The answer as it stands now, priced on the design they picked (server/priced.ts).
+    const now = (await api(page, `/api/scans/${scanId}`)).result;
+    const pdfText = pdf.pages.map((p) => p.text.replace(/\s+/g, " ")).join(" ");
+    const mark = (ok: boolean | null) => (ok === true ? "met" : ok === false ? "not met" : "to check");
     const outcome: Outcome = {
       verdict: r.verdict,
       headline: r.headline,
@@ -208,6 +213,14 @@ for (const take of TAKES) {
       finds: count((r.detections ?? []).map((d: any) => d.label)),
       asked,
       permit: { pages: pdf.pageCount, sheets: pdf.index, left },
+      design: {
+        name: picked,
+        price: facts["Hired out"] ?? "",
+        fixes: (now.fixGroups ?? []).map((g: { title: string }) => g.title),
+        checks: (now.design?.layout?.checks ?? []).map((c: { label: string; ok: boolean | null }) => `${mark(c.ok)}: ${c.label}`),
+        unitArea: /Unit 2 floor area (\S+ m² \([\d,]+ sq ft\))/.exec(pdfText)?.[1] ?? null,
+        permitFee: /About (\$[\d,]+)\./.exec(pdfText)?.[1] ?? null,
+      },
       photos: concepts?.items?.length ?? 0,
       cards: deckNow.cards.length,
     };

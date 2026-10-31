@@ -62,6 +62,8 @@ export type Outcome = {
   finds: Record<string, number>;
   asked: { question: string; answer: string }[];
   permit: { pages: number; sheets: Record<string, string>; left: number };
+  // The design they picked, as the screens and the permit set price and check it.
+  design: { name: string; price: string; fixes: string[]; checks: string[]; unitArea: string | null; permitFee: string | null };
   photos: number;
   cards: number;
 };
