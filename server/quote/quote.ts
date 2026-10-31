@@ -217,7 +217,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   const ceilingM = suite.find((r) => r.ceilingM)?.ceilingM ?? model.existing.ceilingM;
   const H = Math.min(2.44, ceilingM ?? 2.3);
   if (ceilingM == null) assumptions.push("Wall height taken as 2.3 m until the ceiling is measured.");
-  if (model.existing.scale.source === "model") assumptions.push("Sizes come from the video (about ±5–20%); tape the main walls before you order.");
+  if (model.existing.scale.source === "model") assumptions.push("Sizes come from the video until taped: tape the main walls before you order.");
 
   const area = (rs: Room[]) => rs.reduce((s, r) => s + polyArea(r.polygon), 0);
   const ceilingArea = area(suite.filter((r) => r.kind !== "stairs"));
