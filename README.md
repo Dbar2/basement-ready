@@ -15,7 +15,7 @@ A homeowner wondering "could the basement be a home for Mom?" or "could a rental
 - **The opening is real.** Ontario's Planning Act (s. 35.1) stops zoning from banning up to three homes in a house on a serviced lot, and a second unit in an existing house pays no municipal development charges. Every basement that becomes a home is a home that needed no new land.
 - **The first answer is the hard part.** The rules (ceiling height under ducts and beams, a window you can climb out of, fire separation, linked alarms, a way out) are spread across the Building Code, the Fire Code and city by-laws. Money programs are scattered, and some never launched. A Toronto price guide puts permit drawings alone at $2,000–$5,000, before anyone knows whether the basement can work.
 - **What Basement Ready gives back:**
-  - **Time:** film for a few minutes, and the answer comes back in about a minute and a half for a two-minute video.
+  - **Time:** film for a few minutes, and the answer comes back in about two minutes for a two-minute video.
   - **Money:** it finds the programs that fit the household, such as the federal multigenerational tax credit (up to $7,000) and, in Waterloo Region, city grants (up to $20,000 in Waterloo, $10,000 in Cambridge) and the Region's forgivable loan (up to $25,000). Each comes with its source, its conditions and how to apply.
   - **Cost:** a rough range for the whole job, hired out or partly done yourself. For the example basement, that's about $50k–$86k hired out.
   - **Next steps:** a draft permit set, filled-in forms, and quote requests to registered designers and trades the homeowner picks from public registries.
