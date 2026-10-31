@@ -42,3 +42,49 @@
   .sheet-foot.sheet-actions:has(.sheet-limit, .sheet-kept) { flex-wrap: wrap; }
   .sheet-foot.sheet-actions:has(.sheet-limit, .sheet-kept) .btn { flex: 1 1 40%; }
 }
+
+/* ---------- the guide's answer plan (src/guide/visuals/PlanMarked.tsx) ---------- */
+/* The plan on paper, filling the visual pane at its own proportions (the frame is a size container),
+   the verdict on the top edge, the area and ceiling on the bottom edge, the fix outlined in red with a
+   1 px leader to its callout. */
+.plan-marked { width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; gap: var(--space-2); padding: var(--space-3); background: var(--color-card); }
+.plan-marked-verdict { justify-self: end; margin: 0; display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-small); font-weight: 800; }
+.plan-marked-verdict i { width: 8px; height: 8px; background: currentColor; }
+.plan-marked-verdict[data-verdict="yes"] { color: var(--color-ok); }
+.plan-marked-verdict[data-verdict="fix"] { color: var(--color-fix); }
+.plan-marked-verdict[data-verdict="no"] { color: var(--color-stop); }
+.plan-marked-frame { min-height: 0; display: grid; place-items: center; container-type: size; }
+.plan-marked-plan { position: relative; width: min(100cqw, calc(100cqh * var(--ratio, 1.3))); aspect-ratio: var(--ratio, 1.3); }
+.plan-marked-plan > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.plan-marked-mark { pointer-events: none; overflow: visible; }
+.plan-marked-outline { fill: none; stroke: var(--color-stop); stroke-width: 2.5; stroke-dasharray: 8 5; vector-effect: non-scaling-stroke; }
+.plan-marked-leader { fill: none; stroke: var(--color-ink); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.plan-marked-callout { position: absolute; margin: 0; transform: translate(0, -50%); display: grid; gap: 1px; padding: 6px 10px; border: 1px solid var(--color-stop); border-radius: var(--radius-1); background: var(--color-card); font-size: var(--text-small); line-height: 1.25; white-space: nowrap; }
+.plan-marked-callout[data-side="left"] { transform: translate(-100%, -50%); }
+.plan-marked-callout b { color: var(--color-stop); font-weight: 800; }
+.plan-marked-facts { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); }
+.plan-marked-facts .mono { color: var(--color-ink); font-family: var(--font-mono); font-size: var(--text-figure); }
+.plan-marked[data-state="loading"] .plan-marked-frame { grid-row: 2; border: var(--line); border-radius: var(--radius-1); background: var(--color-surface); }
+.plan-marked-note { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); }
+.plan-marked-error { grid-row: 2; align-self: center; justify-self: center; max-width: 40ch; margin: 0; padding: 10px 12px; border: 1px solid var(--color-stop); border-radius: var(--radius-1); }
+.plan-marked-error b { color: var(--color-stop); }
+
+/* ---------- the guide's wait visual (src/guide/visuals/VideoFinds.tsx) ---------- */
+/* Their video (or photos) filling the pane on the 3D frame's surface, SAM's finds boxed on it, what it's
+   doing on a caption at the bottom left, and a progress line along the bottom edge (as in the design). */
+.video-finds { position: relative; width: 100%; height: 100%; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); background: var(--color-surface); overflow: hidden; }
+.video-finds-media { position: relative; min-height: 0; }
+.video-finds-media > video, .video-finds-media > canvas { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.video-finds-media > canvas { pointer-events: none; }
+.video-finds-media > .photo-carousel { position: absolute; inset: 0; }
+.video-finds-status { position: absolute; left: var(--space-3); bottom: calc(var(--space-3) + 5px); z-index: 2; max-width: calc(100% - 2 * var(--space-3)); margin: 0; display: inline-flex; flex-wrap: wrap; gap: 4px var(--space-3); align-items: baseline; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: var(--radius-1); background: var(--color-card); font-size: var(--text-small); font-weight: 600; line-height: 1.3; }
+.video-finds[data-state="failed"] .video-finds-status { border-color: var(--color-stop); }
+.video-finds[data-state="failed"] .video-finds-status span { color: var(--color-stop); }
+.video-finds[data-state="slow"] .video-finds-status, .video-finds[data-state="stalled"] .video-finds-status { border-color: var(--color-fix); }
+.video-finds-status .link-quiet { font-size: var(--text-small); }
+.video-finds-note { position: absolute; left: var(--space-3); right: var(--space-3); bottom: 52px; z-index: 2; margin: 0; padding: 6px 8px; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); font-size: var(--text-small); }
+.video-finds-progress { position: absolute; left: 0; right: 0; bottom: 0; z-index: 2; height: 5px; background: var(--color-border); }
+.video-finds-progress i { display: block; height: 100%; background: var(--color-ink); transform-origin: left center; transition: transform 1s linear; }
+.video-finds-said { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* The photo take's own caption gives way to the pane's status line. */
+.video-finds .photo-carousel .live-caption { display: none; }
