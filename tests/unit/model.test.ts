@@ -617,8 +617,13 @@ describe("a furnace found from two rooms", () => {
     expect(furnaces).toHaveLength(1);
     expect(furnaces[0].at).toEqual([-6.5, -1]);
     expect(m.existing.fixtures.find((f) => f.kind === "water_heater")!.at).toEqual([-6.8, 0]);
+    // Bigger than a closet (24 m²), it's still the service room: the rec room isn't.
+    const room = m.existing.rooms.find((r) => r.name === "Furnace room")!;
+    expect(room.kind).toBe("mechanical");
+    expect(m.existing.rooms.find((r) => r.name === "Rec room")!.kind).not.toBe("mechanical");
     for (const d of m.designs) {
-      expect(d.proposed.rooms.filter((r) => r.kind === "mechanical")).toHaveLength(0);
+      // The design keeps the scan's room (same id), shared by both homes, and builds no second one.
+      expect(d.proposed.rooms.filter((r) => r.kind === "mechanical").map((r) => [r.id, r.unit])).toEqual([[room.id, "shared"]]);
       // The scan's furnace room is the service room: off the suite, its walls toward it rated.
       expect(check(d, m.existing, "service-room")).toMatchObject({ ok: true });
       expect(check(d, m.existing, "service-room").detail).toMatch(/In the furnace room/);
