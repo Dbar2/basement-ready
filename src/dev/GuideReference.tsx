@@ -3,7 +3,7 @@
 // here, at phone and computer sizes, before the script reaches it.
 import { useEffect, useState } from "react";
 import { GuideScreen } from "../guide/GuideScreen";
-import { CARD_KINDS, VISUAL_KINDS, type VisualKind } from "../guide/mount";
+import { CARD_KINDS, VISUAL_KINDS, type CardKind, type VisualKind } from "../guide/mount";
 import type { GuideAction, GuideMessage, GuideState, VisualRef } from "../guide/types";
 import "../guide/guide.css";
 import "./guide-reference.css";
@@ -23,9 +23,23 @@ const SAMPLE_VISUAL: Record<VisualKind, VisualRef> = {
   builders: { kind: "builders" },
 };
 
+// Each card kind with an id from the example (track F's src/guide/cards). The example has no open money
+// question, so its money card is the applications.
+const SAMPLE_CARD: Record<CardKind, string> = {
+  tape: "tape",
+  window: "window-2",
+  owner: "owner",
+  waterMeter: "water",
+  upstairs: "upstairs",
+  designer: "designer",
+  moneyQuestion: "apply",
+  buildPath: "path",
+  download: "review",
+};
+
 function thread(visual: VisualRef): GuideState {
   const messages: GuideMessage[] = [
-    ...CARD_KINDS.map((kind): GuideMessage => ({ id: `card-${kind}`, from: "guide", text: `A ${kind} card, as it sits under a message.`, card: { kind, id: `${kind}-1` }, at })),
+    ...CARD_KINDS.map((kind): GuideMessage => ({ id: `card-${kind}`, from: "guide", text: `A ${kind} card, as it sits under a message.`, card: { kind, id: SAMPLE_CARD[kind] }, at })),
     { id: "you-1", from: "you", text: "What's a fire separation?", at },
     {
       id: "guide-last",

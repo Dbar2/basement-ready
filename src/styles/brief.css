@@ -1,0 +1,6 @@
+/* The brief's lines for how to apply (src/screens/Brief.tsx): moved here from the money page's
+   stylesheet when that page gave way to the guide's Build cards. The rest of the brief is in global.css. */
+.brief-tasks { margin: 2px 0 6px; padding-left: 16px; font-size: 12.5px; display: grid; gap: 1px; }
+.brief-tasks .mono { font-size: 11px; color: var(--color-ink-muted); }
+.brief-link a { color: var(--color-accent-text); }
+.brief-list .muted { font-size: 13px; }
