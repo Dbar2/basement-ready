@@ -112,6 +112,9 @@ for (const take of TAKES) {
     // ---- The flow: the plan check, a layout, the studio, the pictures, the book ----
     const scan = await api(page, `/api/scans/${scanId}`);
     const r = scan.result;
+    // The answer as it stands now: confirming the plan redraws the designs, and picking one prices the
+    // answer on it (server/priced.ts), so the headline and fix count can move on from the first answer.
+    const answer = async () => (await api(page, `/api/scans/${scanId}`)).result;
     await journey.step("is this your basement?", async () => {
       // Swiped on step 1 of the step bar (the wait screen had moved on): on to step 2 from there.
       if (swiped.wentBack) await flow.steps.getByRole("link", { name: /^Step 2: Is this your basement\?/ }).click();
@@ -130,7 +133,7 @@ for (const take of TAKES) {
     const layouts = flow.layouts();
     await journey.step("layouts, with the decision", async () => {
       await layouts.expectOpen();
-      await expect(layouts.decision).toContainText(r.headline);
+      await expect(layouts.decision).toContainText((await answer()).headline);
     });
     await journey.step("a picture of each layout", () => layouts.pictures());
     const picked = (await layouts.names())[0];
@@ -151,14 +154,15 @@ for (const take of TAKES) {
     });
     const facts = (await ws.book().facts())!;
     expect(facts["The design"]).toBe(picked);
-    await expect(page.locator("main.workspace")).toHaveAttribute("data-verdict", r.verdict);
+    const decided = await answer();
+    await expect(page.locator("main.workspace")).toHaveAttribute("data-verdict", decided.verdict);
 
     // ---- The answer: the verdict and the measured rooms ----
     const withPlans = (r.rooms ?? []).filter((x: any) => x.plan);
     expect(withPlans.length, "rooms measured in 3D").toBeGreaterThan(0);
     await journey.step("the answer", async () => {
       await ws.open("The answer");
-      await expect(ws.answer().verdict).toHaveText(r.headline);
+      await expect(ws.answer().verdict).toHaveText(decided.headline);
     });
     const floor = (await journey.step("floor plan", () => ws.answer().floorPlan()))!;
     expect(floor.label).toMatch(new RegExp(`^Floor plan of the basement, ${withPlans.length} rooms?, `));
@@ -214,8 +218,8 @@ for (const take of TAKES) {
     const chosen = chosenDesign(saved)!;
     expect(chosen.name).toBe(picked);
     const outcome: Outcome = {
-      verdict: r.verdict,
-      headline: r.headline,
+      verdict: now.verdict,
+      headline: now.headline,
       rooms: (r.rooms ?? []).map((x: any) => ({ name: x.name, size: x.plan ? `${x.plan.widthM} × ${x.plan.depthM} m` : null })),
       finds: count((r.detections ?? []).map((d: any) => d.label)),
       asked,
