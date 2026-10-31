@@ -1,7 +1,8 @@
 // The guide's thread from the server (GET/POST /api/scans/:id/guide, server/guide/routes.ts): the thread
 // as it stands, and an action on it. A real scan's thread is kept on its workspace; the example's lives in
-// this browser and goes with each action.
+// this browser and goes with each action, with the workspace its cards saved here (src/workspaceApi.ts).
 import { authHeaders } from "../api";
+import { getWorkspace } from "../workspaceApi";
 import type { GuideAction, GuideMessage, GuideState } from "./types";
 
 const SAMPLE_KEY = "br-guide-sample";
@@ -50,12 +51,16 @@ export async function getGuide(scanId: string, fresh = false): Promise<GuideStat
   return state;
 }
 
-// The example sends its thread along, since the server keeps nothing for it.
+// The example sends its thread and its workspace along, since the server keeps nothing for it.
 export async function postGuide(scanId: string, action: GuideAction, state?: GuideState | null): Promise<{ messages: GuideMessage[]; state: GuideState }> {
+  const sample = async () => {
+    const { profile, state: workspace } = await getWorkspace("sample");
+    return { action, state: state ?? readSample(), workspace: { profile, state: workspace } };
+  };
   const res = await fetch(`/api/scans/${scanId}/guide`, {
     method: "POST",
     headers: await authHeaders(true),
-    body: JSON.stringify(scanId === "sample" ? { action, state: state ?? readSample() } : { action }),
+    body: JSON.stringify(scanId === "sample" ? await sample() : { action }),
   });
   if (!res.ok) throw await errorOf(res, "That didn't go through. Try again.");
   const sent = (await res.json()) as { messages: GuideMessage[]; state: GuideState };
