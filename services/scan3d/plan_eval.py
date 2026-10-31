@@ -43,6 +43,8 @@ from scan3d.layout import area_axis, find_floor, read_plan
 ROOT = Path(__file__).resolve().parents[2]
 PLAN = ROOT / "tmp" / "eval" / "plan"
 SKETCHES = ROOT / "scripts" / "eval" / "sketches"
+# Sketches of other people's homes stay out of the repo, beside the cached takes (tmp/ is gitignored).
+PRIVATE_SKETCHES = ROOT / "tmp" / "eval" / "sketches"
 # media/ is git-ignored: in a worktree it lives with the main checkout.
 MEDIA = next((m for m in (ROOT / "media", ROOT.parents[2] / "media") if (m / "eval").exists()), ROOT / "media")
 
@@ -77,7 +79,9 @@ def load_take(name: str, depth: bool = True) -> dict:
         pts.append((s * room) @ M.T + t)
         rgb.append(np.stack([v["red"], v["green"], v["blue"]], 1))
         area.append(np.full(len(room), k, np.int32))
-        dep = (ad / "depth.bin").read_bytes() if depth else None
+        # A take copied from the app's own 3D files has no depth (the API serves points, not depth): no
+        # floor edges and no self-check for it, only the points.
+        dep = (ad / "depth.bin").read_bytes() if depth and (ad / "depth.bin").exists() else None
         shape = scan["files"]["depth"]["shape"]
         for i, fr in enumerate(scan["frames"]):
             P = np.asarray(fr["pose"], float)
@@ -108,6 +112,8 @@ def lift_finds(take: dict) -> dict:
         best = None
         for a in take["areas"]:
             scan = a["scan"]
+            if a["depth"] is None:  # a find is lifted by its depth: a take without depth gets no hints
+                continue
             mids, lows, highs = [], [], []
             for i, fr in enumerate(scan["frames"]):
                 tr = byframe.get(scan["sentFrames"][fr["sourceIndex"]])
@@ -447,6 +453,9 @@ def score_sketch(world: dict, sketch: dict) -> dict:
     small = [r for r in rooms if r["id"] not in roles and r["areaM2"] < 4]
     if small:
         roles[min(small, key=lambda r: r["areaM2"])["id"]] = "closet"
+    for r in rooms:
+        if r["id"] not in roles and r.get("kind") == "bathroom" and "bathroom" not in roles.values():
+            roles[r["id"]] = "bathroom"
     stairs_room = [r for r in rooms if r["id"] not in roles and has(r, {"stairs"})]
     if stairs_room:
         roles[stairs_room[0]["id"]] = "stairs"
@@ -564,7 +573,8 @@ def run(name: str, method: str, use_hints: bool = True, edits=None, peek: int = 
     world = to_world(plan)
     truth = truth_for(name)
     # The homeowner's sketch: the one named for this take, or for the start of its name (david-* -> david).
-    sk = next((p for p in sorted(SKETCHES.glob("*.json"), key=lambda p: -len(p.stem)) if name.startswith(p.stem)), SKETCHES / "none.json")
+    sketches = [*PRIVATE_SKETCHES.glob("*.json"), *SKETCHES.glob("*.json")]
+    sk = next((p for p in sorted(sketches, key=lambda p: -len(p.stem)) if name.startswith(p.stem)), SKETCHES / "none.json")
     if truth is not None:
         score = score_plan(world, truth)
     elif sk.exists():
