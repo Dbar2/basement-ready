@@ -2,7 +2,7 @@
 // City of Kitchener Building Bulletin BB 2026-04). It goes on A1 and A2.
 import { useState, type FormEvent } from "react";
 import type { CardProps } from "../mount";
-import { savePermit, useBuild } from "./data";
+import { savePermit, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Problem, Saved, SaveButton } from "./parts";
 
 const OPTIONS = [
@@ -31,7 +31,7 @@ export function WaterMeterCard({ scanId, card, act }: CardProps) {
           onSave={async (option, where) => {
             await savePermit(scanId, { waterMeter: { option, where } });
             setEditing(false);
-            act({ type: "permitItem", itemId: "water", value: { said: `${labelOf(option)}: ${where}` } });
+            act({ type: "permitItem", itemId: stepFor("water"), value: { said: `${labelOf(option)}: ${where}` } });
           }}
         />
       )}

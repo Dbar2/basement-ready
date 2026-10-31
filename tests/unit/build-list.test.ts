@@ -36,8 +36,9 @@ describe("the Build milestone's list", () => {
   it("starts at the tape, says what the set is and how much is left, and ends at the book", () => {
     const l = sampleBuildList({ profile: null, state: {} });
     expect(l.next.step).toBe("build.permit:tape");
-    expect(l.next.message).toMatch(/^I've drawn and filled your permit set\. \d+ things are left before you can hand it in\./);
-    expect(l.next.choices?.[0]).toEqual({ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } });
+    // The script's build intro says what the set is; the item just asks.
+    expect(l.next.message).toMatch(/^Grab a tape measure: /);
+    expect(l.items.filter((i) => i.section === "permit").every((i) => typeof i.minutes === "number")).toBe(true);
     expect(l.next.card).toEqual({ kind: "tape", id: "tape" });
     expect(l.next.why).toBeTruthy();
     expect(l.items.at(-1)!.why).toBe("");
@@ -56,9 +57,7 @@ describe("the Build milestone's list", () => {
 
     state = taped(state);
     expect(next().step).toBe("build.permit:owner");
-    // The opening line is said once, before anything is given.
-    expect(next().message).not.toMatch(/drawn and filled/);
-    expect(next().choices?.some((c) => c.label === "What's a permit set?")).toBe(false);
+
 
     profile = OWNER;
     expect(next().step).toBe("build.permit:upstairs");
@@ -189,5 +188,18 @@ describe("a real scan's list, from the database", () => {
     const final = await loadWorkspace(b.id);
     const out = await buildPermitPackage({ result, municipality: "waterloo-on", address: "1 Example St", profile: final.profile, state: final.state, site: null, aerialJpeg: null, favourites: [], copy: "submit" });
     expect(out.bytes.byteLength).toBeGreaterThan(10_000);
+  });
+});
+
+describe("the money, from the answers the script loads", () => {
+  it("works the questions out from the household and answers, and drops one once it's answered", () => {
+    const result = { ...sampleResult({}), household: "renter" };
+    const open = buildList({ result, municipality: "waterloo-on", state: {}, profile: null, household: "renter", answers: {}, property: null });
+    const money = open.items.filter((i) => i.section === "money" && i.step !== "build.money:apply");
+    expect(money.length).toBeGreaterThan(0);
+    const q = money[0].step.replace("build.money:", "");
+    const value = (money[0].choices![0].action as { value: unknown }).value;
+    const after = buildList({ result, municipality: "waterloo-on", state: {}, profile: null, household: "renter", answers: { [q]: value }, property: null });
+    expect(after.items.some((i) => i.step === money[0].step && !i.done)).toBe(false);
   });
 });

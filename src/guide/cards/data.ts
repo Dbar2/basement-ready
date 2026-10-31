@@ -78,6 +78,9 @@ export function useBuild(scanId: string): BuildData {
   return data;
 }
 
+// The guide's step for a card's item (server/guide/build.ts), which the script takes as `itemId`.
+export const stepFor = (item: string) => (item === "submit" ? "build.submit" : item === "apply" ? "build.money:apply" : item === "path" ? "build.builders" : `build.permit:${item}`);
+
 export const upsert = <T extends { id: string }>(list: T[] | undefined, item: T) => [...(list ?? []).filter((x) => x.id !== item.id), item];
 export const mmText = (v: number | null | undefined) => (v == null ? "" : String(v));
 export const mmValue = (s: string) => (s.trim() === "" ? null : Math.max(0, Math.round(Number(s))) || null);
