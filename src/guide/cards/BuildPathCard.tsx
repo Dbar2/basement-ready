@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import type { ScanResult } from "../../api";
 import { getDiy, mailto, shareLink, type DiyPlan, type Pro, type Profile } from "../../workspaceApi";
 import type { CardProps } from "../mount";
-import { dollars, save, useBuild } from "./data";
+import { dollars, save, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Saved } from "./parts";
 
 type Path = "hire" | "mix" | "diy";
@@ -38,7 +38,7 @@ export function BuildPathCard({ scanId, card, act }: CardProps) {
     try {
       await save(scanId, { state: { build: { ...build, path: p } } });
       setEditing(false);
-      act({ type: "permitItem", itemId: "path", value: { said: PATHS.find((x) => x.id === p)!.title } });
+      act({ type: "permitItem", itemId: stepFor("path"), value: { said: PATHS.find((x) => x.id === p)!.title } });
     } finally {
       setBusy(false);
     }
@@ -177,7 +177,7 @@ function People({ scanId, r, pros, profile, onPros }: { scanId: string; r: ScanR
             </label>
           </div>
           <div className="gc-row">
-            <button type="button" className="gc-save" onClick={add} disabled={!name.trim()}>
+            <button type="button" className="btn btn-ghost gc-btn" onClick={add} disabled={!name.trim()}>
               Add
             </button>
             <button type="button" className="link-quiet" onClick={() => setAdding(null)}>

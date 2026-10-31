@@ -3,7 +3,7 @@
 // property line, from the survey. Saved as the Permit tab saved them (server/workspace.ts).
 import { useState } from "react";
 import type { CardProps } from "../mount";
-import { metres, save, savePermit, upsert, useBuild } from "./data";
+import { metres, save, savePermit, stepFor, upsert, useBuild } from "./data";
 import { CardFrame, Loading, MmForm, Saved } from "./parts";
 
 export function TapeCard({ scanId, card, act }: CardProps) {
@@ -22,13 +22,14 @@ export function TapeCard({ scanId, card, act }: CardProps) {
           <Saved onChange={() => setEditing(true)}>To the lot line: {said}</Saved>
         ) : (
           <MmForm
-            fields={windows.map((w) => ({ key: w.id, label: `Window ${w.tag}'s wall to the lot line`, value: (permit.lotLines ?? []).find((l) => l.id === w.id)?.mm, help: "Straight out from the house wall to the property line." }))}
+            fields={windows.map((w) => ({ key: w.id, label: `${w.tag}'s wall to the lot line`, value: (permit.lotLines ?? []).find((l) => l.id === w.id)?.mm }))}
+            note="From the house wall straight out to the property line. Your survey shows it."
             onSave={async (v) => {
               let lotLines = permit.lotLines;
               for (const w of windows) lotLines = upsert(lotLines, { id: w.id, mm: v[w.id] });
               await savePermit(scanId, { lotLines });
               setEditing(false);
-              act({ type: "permitItem", itemId: "lot", value: { said: windows.map((w) => `${w.tag} ${metres(v[w.id] ?? 0)}`).join(", ") } });
+              act({ type: "permitItem", itemId: stepFor("lot"), value: { said: windows.map((w) => `${w.tag} ${metres(v[w.id] ?? 0)}`).join(", ") } });
             }}
           />
         )}
@@ -41,13 +42,12 @@ export function TapeCard({ scanId, card, act }: CardProps) {
   const fields = [
     ...status.mainWalls.map((w) => ({
       key: `wall:${w.id}`,
-      label: `The ${w.label}`,
+      label: w.label.charAt(0).toUpperCase() + w.label.slice(1),
       value: (permit.walls ?? []).find((x) => x.id === w.id)?.mm,
-      hint: `The video says about ${w.scanM.toFixed(2)} m.`,
-      help: "Wall face to wall face, at the floor.",
+      placeholder: `about ${Math.round(w.scanM * 1000)}`,
     })),
-    { key: "ceilingMm", label: "Ceiling height", value: tape.ceilingMm, help: "Floor to the underside of the joists." },
-    ...(status.overhead ? [{ key: "beamMm", label: "Under the lowest beam or duct", value: tape.beamMm, help: "Floor to the bottom of the lowest one." }] : []),
+    { key: "ceilingMm", label: "Ceiling height", value: tape.ceilingMm },
+    ...(status.overhead ? [{ key: "beamMm", label: "Under the lowest beam or duct", value: tape.beamMm }] : []),
   ];
   const summary = (v: Record<string, number | null>) =>
     [
@@ -63,12 +63,13 @@ export function TapeCard({ scanId, card, act }: CardProps) {
       ) : (
         <MmForm
           fields={fields}
+          note={`Walls face to face, at the floor. Heights to the underside of the joists${status.overhead ? " and of the lowest beam" : ""}.`}
           onSave={async (v) => {
             let walls = permit.walls;
             for (const w of status.mainWalls) walls = upsert(walls, { id: w.id, mm: v[`wall:${w.id}`] });
             await save(scanId, { state: { tape: { ...tape, ceilingMm: v.ceilingMm, ...(status.overhead ? { beamMm: v.beamMm } : {}) }, permit: { ...permit, walls } } });
             setEditing(false);
-            act({ type: "permitItem", itemId: "tape", value: { said: summary(v).replace(/^./, (c) => c.toUpperCase()) } });
+            act({ type: "permitItem", itemId: stepFor("tape"), value: { said: summary(v).replace(/^./, (c) => c.toUpperCase()) } });
           }}
         />
       )}
