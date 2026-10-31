@@ -1,7 +1,8 @@
 // /dev/guide on a dev server: the guide's screen with every visual kind one tap away, and every card kind in
 // a thread, mounted exactly as the guide mounts them (src/guide/mount.tsx). Each track checks its piece
-// here, at phone and computer sizes, before the script reaches it.
-import { useEffect, useState } from "react";
+// here, at phone and computer sizes, before the script reaches it. Each size is the guide in its own frame
+// (/dev/guide/frame), so its media queries see that size, as on a real phone or computer.
+import { useEffect, useRef, useState } from "react";
 import { GuideScreen } from "../guide/GuideScreen";
 import { CARD_KINDS, VISUAL_KINDS, type CardKind, type VisualKind } from "../guide/mount";
 import type { GuideAction, GuideMessage, GuideState, VisualRef } from "../guide/types";
@@ -56,18 +57,25 @@ function thread(visual: VisualRef): GuideState {
   return { step: "dev", milestone: "design", done: { answer: true, design: false, build: false }, messages, visual };
 }
 
+// The computer frame's real size, drawn scaled to the column.
+const DESK = { w: 1280, h: 800 };
+
 export function GuideReference() {
   const [kind, setKind] = useState<VisualKind>("plan");
-  const [state, setState] = useState<GuideState>(() => thread(SAMPLE_VISUAL.plan));
+  const desk = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.6);
   useEffect(() => {
     document.title = "Guide reference | Basement Ready";
   }, []);
-  useEffect(() => setState((s) => ({ ...s, visual: SAMPLE_VISUAL[kind] })), [kind]);
-  // Taps show as their message here; the server's script answers them in the real guide.
-  const act = (action: GuideAction, label?: string) => {
-    const text = label ?? (action.type === "ask" || action.type === "describe" ? action.text : action.type);
-    setState((s) => ({ ...s, messages: [...s.messages, { id: `you-${Date.now()}`, from: "you", text, at: new Date().toISOString() }] }));
-  };
+  useEffect(() => {
+    const el = desk.current;
+    if (!el) return;
+    // Its 1 px line on each side counts in the space it takes.
+    const fit = new ResizeObserver(() => setScale(Math.min(1, el.clientWidth / (DESK.w + 2))));
+    fit.observe(el);
+    return () => fit.disconnect();
+  }, []);
+  const src = `/dev/guide/frame?visual=${kind}`;
 
   return (
     <main className="gref">
@@ -84,14 +92,31 @@ export function GuideReference() {
       </header>
       <div className="gref-frames">
         <figure className="gref-phone">
-          <GuideScreen scanId="sample" state={state} act={act} />
+          <iframe src={src} title="The guide on a phone" width={390} height={780} />
           <figcaption>Phone, 390 × 780</figcaption>
         </figure>
-        <figure className="gref-desk">
-          <GuideScreen scanId="sample" state={state} act={act} />
-          <figcaption>Computer, 1280 wide</figcaption>
+        <figure>
+          <div className="gref-desk" ref={desk} style={{ height: (DESK.h + 2) * scale }}>
+            <iframe src={src} title="The guide on a computer" width={DESK.w} height={DESK.h} style={{ transform: `scale(${scale})` }} />
+          </div>
+          <figcaption>
+            Computer, {DESK.w} × {DESK.h}
+            {scale < 1 ? `, drawn at ${Math.round(scale * 100)}%` : ""}
+          </figcaption>
         </figure>
       </div>
     </main>
   );
+}
+
+// /dev/guide/frame?visual=plan: the guide, full page, on the sample thread with that visual in the pane.
+// Taps show as their message here; the server's script answers them in the real guide.
+export function GuideFrame() {
+  const kind = new URLSearchParams(window.location.search).get("visual") as VisualKind | null;
+  const [state, setState] = useState<GuideState>(() => thread(SAMPLE_VISUAL[kind && kind in SAMPLE_VISUAL ? kind : "plan"]));
+  const act = (action: GuideAction, label?: string) => {
+    const text = label ?? (action.type === "ask" || action.type === "describe" ? action.text : action.type);
+    setState((s) => ({ ...s, messages: [...s.messages, { id: `you-${Date.now()}`, from: "you", text, at: new Date().toISOString() }] }));
+  };
+  return <GuideScreen scanId="sample" state={state} act={act} />;
 }
