@@ -57,6 +57,7 @@ export type Frame = ReturnType<typeof zoneFrame>;
 
 const SWING_M = 0.9; // in front of a door, each side: its leaf swings there and you walk through
 const WINDOW_M = 0.3; // nothing stands against the wall under a window
+const COUNTER_M = 0.9; // in front of the kitchen's counters, to stand and open them
 const LANDING_M = 1.0; // at the foot of the stairs (server/layout.ts LANDING_M)
 
 // A strip `depth` deep into the room in front of an opening in the outside walls.
@@ -82,8 +83,8 @@ function landings(plan: Plan): Rect[] {
   });
 }
 
-// The floor in front of every door where nothing may stand: both sides of a door in a new wall, the
-// room's side of one in the outside walls; and the stairs' landing.
+// The floor nothing may stand on: in front of every door (both sides of a door in a new wall, the
+// room's side of one in the outside walls), the stairs' landing, and in front of the kitchen's counters.
 export function doorClear(plan: Plan, layout: Layout): Rect[] {
   const out: Rect[] = [];
   for (const d of layout.doors) {
@@ -91,6 +92,11 @@ export function doorClear(plan: Plan, layout: Layout): Rect[] {
     out.push(d.along === "x" ? { x0: d.x - h, x1: d.x + h, z0: d.z - SWING_M, z1: d.z + SWING_M } : { x0: d.x - SWING_M, x1: d.x + SWING_M, z0: d.z - h, z1: d.z + h });
   }
   for (const o of plan.openings) if (o.kind === "door") out.push(inFront(plan.box, o, SWING_M, 0.1));
+  // The counters stand against the zone's back (StagedBasement.tsx Kitchen).
+  for (const k of layout.zones.filter((z) => z.kind === "kitchen")) {
+    const f = zoneFrame(k, backOf(k, plan.box, null));
+    out.push(f.rect(f.uMin, f.uMax, f.depth, f.depth + COUNTER_M));
+  }
   return [...out, ...landings(plan)];
 }
 
@@ -278,33 +284,37 @@ function lounge(f: Frame, u: number, lv: number, chairs: LivingSpot["chairs"], t
   return out;
 }
 
-const LOUNGES_TRIED = 40; // lounges a dining spot is looked for beside, before settling for no dining
+const EACH_KIND = 8; // of each kind of lounge on each side, the first few a dining spot is looked for beside
 const WAYS_TRIED = 200; // way-out checks before taking what fits
 
-// The living space: a lounge at one end, dining as far from it as fits. Of the places the lounge fits,
-// the first in this order: on a side of the room (`prefer` first), then a new wall, then open; with
-// chairs, then without; against the back, then out from it; centred, then off-centre.
+// The living space: a lounge at one end, dining as far from it as fits, leaving a way past. Of the
+// places the lounge fits, the first in this order, with a dining set if one fits beside any of them:
+// with its coffee table, then the sofa on its own; on a side of the room, then a new wall, then open;
+// with chairs, then without; against the back, then out from it; centred, then off-centre.
 function placeLiving(c: Ctx, plan: Plan, layout: Layout, others: Rect[]): LivingSpot | null {
   const z = c.zone;
-  const lounges: { f: Frame; u: number; lv: number; chairs: LivingSpot["chairs"]; table: boolean; pieces: Piece[] }[] = [];
-  // With the coffee table everywhere it fits first; only then the sofa on its own.
+  type Lounge = { f: Frame; u: number; lv: number; chairs: LivingSpot["chairs"]; table: boolean; pieces: Piece[] };
+  const kinds: Lounge[][] = [];
   for (const table of [true, false])
     for (const back of backsOf(z, plan, layout, null)) {
       const f = zoneFrame(z, back);
       if (f.len < 2 * SOFA.u) continue;
-      const kinds: LivingSpot["chairs"][] = !table ? ["none"] : f.len >= 3.6 ? ["two", "one", "none"] : ["one", "none"];
-      for (const chairs of kinds)
+      for (const chairs of (!table ? ["none"] : f.len >= 3.6 ? ["two", "one", "none"] : ["one", "none"]) as LivingSpot["chairs"][]) {
+        const fit: Lounge[] = [];
         for (let lv = 0; lv <= f.depth - (table ? COFFEE.at + COFFEE.v : SOFA.v1) + 1e-6; lv += 0.2)
           for (const du of offsets(f.len / 2 - SOFA.u)) {
             const u = f.uMid + du;
             const pieces = lounge(f, u, lv, chairs, table);
-            if (pieces.every((p) => fits(c, p.rect, p.kind === "sofa"))) lounges.push({ f, u, lv, chairs, table, pieces });
+            if (pieces.every((p) => fits(c, p.rect, p.kind === "sofa"))) fit.push({ f, u, lv, chairs, table, pieces });
           }
+        kinds.push(fit);
+      }
     }
+  const lounges = kinds.flat();
   if (!lounges.length) return null;
-  const tableAt = (l: (typeof lounges)[number]) => l.f.at(l.u, l.lv + COFFEE.at);
+  const tableAt = (l: Lounge) => l.f.at(l.u, l.lv + COFFEE.at);
   // The dining set in either direction, clear of the lounge by APART_M, as far from its coffee table as it goes.
-  const diningFor = (l: (typeof lounges)[number]): LivingSpot["dining"] => {
+  const diningFor = (l: Lounge): LivingSpot["dining"] => {
     const [tx, tz] = tableAt(l);
     for (const seats of [4, 2] as const) {
       let best: { d: NonNullable<LivingSpot["dining"]>; far: number } | null = null;
@@ -324,7 +334,7 @@ function placeLiving(c: Ctx, plan: Plan, layout: Layout, others: Rect[]): Living
     }
     return null;
   };
-  const sideboardFor = (l: (typeof lounges)[number], d: LivingSpot["dining"], taken: Rect[]) => {
+  const sideboardFor = (l: Lounge, d: LivingSpot["dining"], taken: Rect[]) => {
     const f = l.f;
     if (!onBox(z, plan.box, oppositeOf(f.back))) return null;
     const near = d && d.f.back === f.back ? d.u : f.uMid;
@@ -335,7 +345,7 @@ function placeLiving(c: Ctx, plan: Plan, layout: Layout, others: Rect[]): Living
     }
     return null;
   };
-  const build = (l: (typeof lounges)[number], dining: LivingSpot["dining"]): LivingSpot => {
+  const build = (l: Lounge, dining: LivingSpot["dining"]): LivingSpot => {
     const pieces = [...l.pieces];
     if (dining) {
       const { u: hu, v: hv } = DINING[dining.seats];
@@ -347,7 +357,7 @@ function placeLiving(c: Ctx, plan: Plan, layout: Layout, others: Rect[]): Living
   };
   const way = (s: LivingSpot) => wayOut(plan, layout, [...others, ...s.pieces.map((p) => p.rect)]).ok;
   let ways = 0;
-  for (const l of lounges.slice(0, LOUNGES_TRIED)) {
+  for (const l of kinds.flatMap((k) => k.slice(0, EACH_KIND))) {
     const d = diningFor(l);
     if (!d) continue;
     const s = build(l, d);
