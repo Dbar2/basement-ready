@@ -4,7 +4,7 @@
 // Region's loan asks for. Doing it yourself shows the materials and what you still pay pros for.
 import { useEffect, useState } from "react";
 import type { ScanResult } from "../../api";
-import { getDiy, mailto, shareLink, type DiyPlan, type Pro, type Profile } from "../../workspaceApi";
+import { getDiy, mailto, useDrawingsLink, type DiyPlan, type Pro, type Profile } from "../../workspaceApi";
 import type { CardProps } from "../mount";
 import { dollars, save, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Saved } from "./parts";
@@ -79,17 +79,19 @@ function DiySummary({ scanId }: { scanId: string }) {
   );
 }
 
-function quoteBody(p: Pro, r: ScanResult, profile: Profile | null, scanId: string) {
+// `drawings`: the signed drawings-only link (src/workspaceApi.ts drawingsLink); none for the example.
+function quoteBody(p: Pro, r: ScanResult, profile: Profile | null, drawings: string | null) {
   const who = profile?.owners.map((o) => `${o.first} ${o.last}`.trim()).join(" and ") || "[your name]";
   const addr = r.property ? `${r.property.address}, ${r.property.municipality}` : "our house";
   const role = ROLES.find((x) => x.role === p.role)?.label.toLowerCase() ?? "work";
   const scope = `The plan: ${r.design?.name ? r.design.name.toLowerCase() : "a one-bedroom unit"}${r.plan ? ` of about ${Math.round(r.plan.areaM2)} m²` : ""}, with a bathroom, a kitchen, a fire separation between the homes and interconnected alarms.`;
-  return [`Hello ${p.name},`, "", `We're adding a legal second unit in the basement at ${addr} and would like a quote for the ${role}.`, "", scope, "", scanId !== "sample" ? `Drawings and the measured plan: ${shareLink(scanId)}` : "", "", "Please include your WSIB clearance certificate and proof of liability insurance with the quote.", "", "Thank you,", who, profile?.phone ?? ""]
+  return [`Hello ${p.name},`, "", `We're adding a legal second unit in the basement at ${addr} and would like a quote for the ${role}.`, "", scope, "", drawings ? `Drawings and the measured plan: ${drawings}` : "", "", "Please include your WSIB clearance certificate and proof of liability insurance with the quote.", "", "Thank you,", who, profile?.phone ?? ""]
     .filter((l, i, a) => !(l === "" && a[i - 1] === ""))
     .join("\n");
 }
 
 function People({ scanId, r, pros, profile, onPros }: { scanId: string; r: ScanResult; pros: Pro[]; profile: Profile | null; onPros: (pros: Pro[]) => Promise<void> }) {
+  const drawings = useDrawingsLink(scanId, scanId !== "sample" && !r.demo);
   const [adding, setAdding] = useState<Pro["role"] | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -135,7 +137,7 @@ function People({ scanId, r, pros, profile, onPros }: { scanId: string; r: ScanR
               </span>
               <div className="gc-row">
                 {p.email && !example ? (
-                  <a className="chip" href={mailto(p.email, `Quote request: basement second unit${r.property ? `, ${r.property.address}` : ""}`, quoteBody(p, r, profile, scanId))}>
+                  <a className="chip" href={mailto(p.email, `Quote request: basement second unit${r.property ? `, ${r.property.address}` : ""}`, quoteBody(p, r, profile, drawings))}>
                     {p.requestedAt ? "Write again" : "Ask for a quote"}
                   </a>
                 ) : null}
