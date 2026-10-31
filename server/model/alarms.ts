@@ -2,7 +2,7 @@
 // rooms and the rest of the suite, CO beside where people sleep when anything burns fuel, and CO in a
 // fuel-burning furnace room (Building Code 9.10.19, 9.32.3.9A, 9.32.3.9B). The same placement as the
 // permit sheets' (server/permit/plans.ts placeAlarms), on the model's rooms, so it runs after every edit.
-import { along, bounds, clamp, dist, r2 } from "./geometry";
+import { along, bounds, clamp, dist, distToSegment, edges, inPolygon, r2, sub } from "./geometry";
 import type { Alarm, Design, Fixture, Pt, Room } from "./types";
 
 // Anything that may burn gas: a furnace or a water heater.
@@ -29,15 +29,23 @@ export function placeAlarms(design: Pick<Design, "layout" | "proposed">, fuelBur
     const c = spot(bed);
     out.push({ kind: studio && fuelBurning ? "combo" : "smoke", at: c, why: studio ? "In the sleeping area" : "In each bedroom" });
     if (studio || !living) continue;
-    // Outside the bedroom door, in the living space: between the bedroom and the rest of the suite.
-    const door = [...doors].sort((p, q) => dist(p, c) - dist(q, c))[0];
+    // Outside the bedroom door, in the living space: between the bedroom and the rest of the suite. Its
+    // door is the one into the living space (not a furnace room's beside it).
+    const intoLiving = doors.filter((d) => edges(living.polygon).some(([a, b]) => distToSegment(d, a, b) < 0.4));
+    const door = [...(intoLiving.length ? intoLiving : doors)].sort((p, q) => dist(p, c) - dist(q, c))[0];
     const lc = spot(living);
     const at = door ?? lc;
     const lb = bounds(living.polygon);
-    const inLiving: Pt = [
+    let inLiving: Pt = [
       r2(clamp(at[0] + Math.sign(lc[0] - at[0] || 1) * 0.6, lb.minX + 0.4, lb.maxX - 0.4)),
       r2(clamp(at[1] + Math.sign(lc[1] - at[1] || 1) * 0.6, lb.minZ + 0.4, lb.maxZ - 0.4)),
     ];
+    // Off the floor of an L-shaped living space: on the way from the door to its middle instead.
+    if (!inPolygon(inLiving, living.polygon)) {
+      const step = sub(lc, at), L = Math.hypot(step[0], step[1]) || 1;
+      const p = [0.6, 0.8, 1, 1.2, 1.5, 2].map((t): Pt => [r2(at[0] + (step[0] / L) * t), r2(at[1] + (step[1] / L) * t)]).find((q) => inPolygon(q, living.polygon));
+      if (p) inLiving = p;
+    }
     out.push({ kind: fuelBurning ? "combo" : "smoke", at: inLiving, why: fuelBurning ? "Outside the bedroom: smoke, and CO next to where people sleep" : "Between the bedroom and the rest of the suite" });
   }
   if (!beds.length && living) out.push({ kind: fuelBurning ? "combo" : "smoke", at: spot(living), why: "One per storey of the suite" });
