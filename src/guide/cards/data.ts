@@ -7,14 +7,15 @@ import { getScan, type ScanResult } from "../../api";
 import { getPermitStatus, getWorkspace, saveWorkspace, type PermitStatus, type Profile, type Workspace, type WorkspaceState } from "../../workspaceApi";
 
 export type BuildData = { result: ScanResult | null; ws: Workspace | null; status: PermitStatus | null; error: string | null };
-type Entry = { data: BuildData; listeners: Set<() => void>; loading: Promise<void> | null };
+type Entry = { data: BuildData; listeners: Set<() => void>; loading: Promise<void> | null; at: number; tries: number };
 
+const STALE_MS = 4000;
 const EMPTY: BuildData = { result: null, ws: null, status: null, error: null };
 const store = new Map<string, Entry>();
 
 function entry(scanId: string): Entry {
   let e = store.get(scanId);
-  if (!e) store.set(scanId, (e = { data: EMPTY, listeners: new Set(), loading: null }));
+  if (!e) store.set(scanId, (e = { data: EMPTY, listeners: new Set(), loading: null, at: 0, tries: 0 }));
   return e;
 }
 
@@ -31,9 +32,13 @@ export function refresh(scanId: string): Promise<void> {
     try {
       const [scan, ws] = await Promise.all([getScan(scanId), getWorkspace(scanId)]);
       const status = ws.locked ? null : await getPermitStatus(scanId);
+      e.at = Date.now();
+      e.tries = 0;
       set(scanId, { result: scan.result ?? null, ws, status, error: ws.locked ?? null });
     } catch (err) {
       set(scanId, { error: err instanceof Error ? err.message : "That didn't load. Refresh to try again." });
+      // The server may be starting or between deploys: try again a few times, further apart each time.
+      if (++e.tries <= 4) setTimeout(() => void refresh(scanId), 1500 * e.tries);
     } finally {
       e.loading = null;
     }
@@ -65,8 +70,10 @@ export function useBuild(scanId: string): BuildData {
     },
     () => e.data,
   );
+  // A card or visual that appears reads again if what's here is more than a few seconds old: the guide
+  // may have saved an answer (a money question, the plan) since.
   useEffect(() => {
-    if (!e.data.ws && !e.loading) void refresh(scanId);
+    if (!e.loading && (!e.data.ws || Date.now() - e.at > STALE_MS)) void refresh(scanId);
   }, [scanId, e]);
   return data;
 }
