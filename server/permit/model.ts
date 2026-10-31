@@ -337,7 +337,7 @@ function rescale<T>(v: T, o: Pt, kx: number, kz: number): T {
     walls: walls(l.walls),
     openings: scaleOffset(l.openings, l.walls),
     rooms: l.rooms.map((r: Room) => ({ ...r, polygon: r.polygon.map(P) })),
-    fixtures: l.fixtures.map((f: PFixture) => ({ ...f, at: P(f.at), sizeM: f.sizeM ? ([r3(f.sizeM[0] * kx), r3(f.sizeM[1] * kz)] as Pt) : f.sizeM })),
+    fixtures: l.fixtures.map((f: PFixture) => ({ ...f, at: P(f.at), sizeM: f.sizeM ? ([r3(f.sizeM[0] * kx), r3(f.sizeM[1] * kz)] as Pt) : f.sizeM, ...(f.bottom ? { bottom: P(f.bottom) } : {}) })),
     ...(l.alarms ? { alarms: l.alarms.map((a: Alarm) => ({ ...a, at: P(a.at) })) } : {}),
     ...(l.furniture ? { furniture: l.furniture.map((f: any) => ({ ...f, at: P(f.at) })) } : {}),
   });
