@@ -25,8 +25,30 @@ type Props = {
 
 export function GuideScreen({ scanId, state, busy = false, error = null, act }: Props) {
   const log = useRef<HTMLDivElement>(null);
-  // The newest message sits just above the ask bar.
+  const body = useRef<HTMLDivElement>(null);
+  // The newest message sits just above the ask bar. While they're at the bottom, the thread follows it as
+  // messages arrive and cards fill in with their data; once they scroll up to read, it stays put.
+  const pinned = useRef(true);
   useEffect(() => {
+    const el = log.current;
+    if (!el || !body.current) return;
+    const follow = () => {
+      if (pinned.current) el.scrollTop = el.scrollHeight;
+    };
+    const onScroll = () => {
+      pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+    };
+    const grows = new ResizeObserver(follow);
+    grows.observe(body.current);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      grows.disconnect();
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, []);
+  // Something new in the thread, theirs or the guide's, brings it back to the bottom.
+  useEffect(() => {
+    pinned.current = true;
     log.current?.scrollTo({ top: log.current.scrollHeight });
   }, [state.messages.length, busy]);
 
@@ -52,15 +74,17 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act }: 
       </section>
 
       <div className="gs-thread" ref={log} role="log" aria-live="polite" aria-label="Your guide">
-        {state.messages.map((m, i) => (
-          <Message key={m.id} scanId={scanId} m={m} live={i === state.messages.length - 1} busy={busy} act={act} />
-        ))}
-        {busy && <p className="gs-typing">Thinking…</p>}
-        {error && (
-          <p className="gs-error" role="alert">
-            {error}
-          </p>
-        )}
+        <div className="gs-thread-in" ref={body}>
+          {state.messages.map((m, i) => (
+            <Message key={m.id} scanId={scanId} m={m} live={i === state.messages.length - 1} busy={busy} act={act} />
+          ))}
+          {busy && <p className="gs-typing">Thinking…</p>}
+          {error && (
+            <p className="gs-error" role="alert">
+              {error}
+            </p>
+          )}
+        </div>
       </div>
 
       <AskBar busy={busy} onAsk={(text) => act({ type: "ask", text })} />

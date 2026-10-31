@@ -29,11 +29,11 @@
 .gs-visual { grid-area: visual; position: relative; min-height: 0; overflow: hidden; background: var(--color-surface); border-bottom: var(--line-ink); }
 .gs-visual > * { width: 100%; height: 100%; }
 
-/* The thread: the newest message just above the ask bar. The first message's auto margin pushes a short
-   thread down; a long one scrolls, all of it reachable (a grid aligned to the end overflows upward,
-   out of reach). */
-.gs-thread { grid-area: thread; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 12px; padding: 14px var(--gutter) 10px; }
-.gs-thread > :first-child { margin-top: auto; }
+/* The thread: the newest message just above the ask bar. The messages' auto margin pushes a short thread
+   down; a long one scrolls, all of it reachable (a grid aligned to the end overflows upward, out of
+   reach). */
+.gs-thread { grid-area: thread; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; padding: 14px var(--gutter) 10px; }
+.gs-thread-in { flex: none; margin-top: auto; display: flex; flex-direction: column; gap: 12px; }
 .gs-msg { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; animation: rise var(--dur-2) var(--ease-out) both; }
 .gs-msg-mark svg { width: 18px; height: auto; display: block; margin-top: 3px; color: var(--color-ink); }
 .gs-msg-body { display: grid; gap: 8px; min-width: 0; }
