@@ -40,7 +40,7 @@ struct ResultView: View {
       .padding(.horizontal, Space.s3)
       Rectangle().fill(Brand.ink).frame(height: 1)
       if let start {
-        WebPage(url: start, home: scan.homeURL ?? start, claim: scan, controller: web).ignoresSafeArea(edges: .bottom)
+        WebPage(url: start, home: scan.homeURL ?? start, claim: scan, controller: web, onNewScan: onNewScan).ignoresSafeArea(edges: .bottom)
       } else {
         Spacer()
       }
@@ -63,10 +63,11 @@ struct ResultView: View {
 
   // Where a link inside the app goes: on with it, back to the scan's home base, or out to Safari.
   enum Route: Equatable {
-    case stay, home, safari
+    case stay, home, safari, newScan
   }
 
   static func route(_ url: URL, server: URL) -> Route {
+    if url.scheme?.lowercased() == "basementready" { return AppLink(url) == .newScan ? .newScan : .stay }
     guard url.host == server.host, url.port == server.port else {
       return ["about", "blob", "data"].contains(url.scheme ?? "") ? .stay : .safari
     }
@@ -90,8 +91,9 @@ private struct WebPage: UIViewRepresentable {
   let home: URL
   let claim: ScanCreated
   let controller: WebController
+  let onNewScan: () -> Void
 
-  func makeCoordinator() -> Coordinator { Coordinator(home: home) }
+  func makeCoordinator() -> Coordinator { Coordinator(home: home, onNewScan: onNewScan) }
 
   func makeUIView(context: Context) -> WKWebView {
     let config = WKWebViewConfiguration()
@@ -132,9 +134,13 @@ private struct WebPage: UIViewRepresentable {
   @MainActor
   final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     let home: URL
+    let onNewScan: () -> Void
     private var watching: NSKeyValueObservation?
     private var wentHome = Date.distantPast
-    init(home: URL) { self.home = home }
+    init(home: URL, onNewScan: @escaping () -> Void) {
+      self.home = home
+      self.onNewScan = onNewScan
+    }
 
     // Back to the home base, at most once every few seconds: if the home base itself ever sends the
     // page to the front page (a scan that's gone, say), it stays there rather than going round.
@@ -164,6 +170,9 @@ private struct WebPage: UIViewRepresentable {
       case .safari:
         await UIApplication.shared.open(url)
         return .cancel
+      case .newScan:
+        onNewScan()
+        return .cancel
       }
     }
 
@@ -174,6 +183,7 @@ private struct WebPage: UIViewRepresentable {
         case .stay: webView.load(URLRequest(url: url))
         case .home: goHome(webView)
         case .safari: UIApplication.shared.open(url)
+        case .newScan: onNewScan()
         }
       }
       return nil
