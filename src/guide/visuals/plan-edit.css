@@ -117,12 +117,12 @@
 /* A length on one line: the field and OK (the OK in ink; the guide's own way on is the mint one). */
 .length-input.compact { display: grid; gap: 4px; }
 .length-input.compact > div { display: flex; gap: 6px; }
-.length-input.compact label:not(.vh) { font-size: 13px; font-weight: 600; color: var(--color-ink); }
+.length-input.compact label:not(.plan-vh) { font-size: 13px; font-weight: 600; color: var(--color-ink); }
 .length-input.compact .input { min-height: 38px; padding: 6px 10px; font-family: var(--font-mono); font-size: 16px; }
 .length-input.compact .ok, .plan-callout-row .ok { flex: none; min-width: 48px; min-height: 38px; padding: 0 12px; border: 1px solid var(--color-ink); border-radius: var(--radius-2); background: var(--color-ink); color: var(--color-card); font-weight: 700; font-size: 15px; }
 .length-input.compact .ok:disabled, .plan-callout-row .ok:disabled { opacity: 0.45; }
 .length-input.compact .field-error { font-size: 13px; }
-.vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.plan-vh { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 @media (prefers-reduced-motion: reduce) {
   .model-marker, .plan-callout, .plan-edit-busy i::after { animation: none; }
