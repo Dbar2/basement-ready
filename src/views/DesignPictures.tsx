@@ -159,7 +159,7 @@ export function DesignPictures({
         // Nothing to show yet: the render shows while the photo is made.
         setShown((m) => (m.has(a.id) ? m : new Map(m).set(a.id, { url: r.url, kind: "render", checked: "Making it look real…", hash: r.hash })));
         setMaking((s) => new Set(s).add(a.id));
-        postPicture(scanId, a.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, finishes: design.finishes })
+        postPicture(scanId, a.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, doors: r.doors, finishes: design.finishes })
           .then((p: Picture) => {
             if (hashRef.current !== p.designHash) return;
             // Nothing kept on the server (the example, past its committed pictures): the render stays.
@@ -348,7 +348,7 @@ export function DesignPictures({
       {editable && !selected && <p className="views-hint">Tap anything in a picture to change it.</p>}
 
       <Suspense fallback={null}>
-        <AngleRenderer design={design} solid={solid} ceilingM={data.ceilingM ?? 2.3} size={size} onReady={onReady} scanId={scanId} />
+        <AngleRenderer design={design} solid={solid} ceilingM={data.ceilingM ?? 2.3} size={size} onReady={onReady} />
       </Suspense>
     </section>
   );

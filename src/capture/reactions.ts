@@ -11,21 +11,16 @@ export function findLine(key: FindKey, before: readonly FindKey[]): LineId | nul
   switch (key) {
     case "window":
       return had("window") ? "window_more" : "window_found";
-    case "furnace":
-      return had("furnace") ? null : had("heater") ? "furnace_too" : "furnace_found";
     case "heater":
-      return had("heater") ? null : had("furnace") ? "heater_too" : "heater_found";
+      return had("heater") ? null : "heater_found";
     case "panel":
       return had("panel") ? null : "panel_found";
     case "drain":
-    case "roughin":
-      return had("drain", "roughin") ? null : "plumbing_found";
+      return had("drain") ? null : "plumbing_found";
     case "door":
       return had("door") ? null : "door_found";
     case "duct":
       return had("duct") ? null : "duct_found";
-    case "bulkhead":
-      return had("bulkhead") ? null : "low_ceiling";
     default:
       return null; // the stairs step praises the stairs itself
   }

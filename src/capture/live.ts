@@ -7,14 +7,16 @@ import type { LiveMap } from "./map";
 
 // ---------- live finds (SAM 3.1 on one frame at a time) ----------
 
-export type FindKey = "stairs" | "window" | "furnace" | "panel" | "door" | "duct" | "beam" | "drain" | "roughin" | "heater" | "bulkhead";
+// server/live.ts LIVE_CONCEPTS. SAM can't find a furnace, a rough-in or a bulkhead by name, so they aren't
+// asked for live; the scan finds them by pointing (server/pointFinds.ts).
+export type FindKey = "stairs" | "window" | "panel" | "door" | "duct" | "beam" | "drain" | "heater";
 
-// Which checklist step each find ticks.
+// Which checklist step each find ticks. The panel or the water heater means the furnace room is in view.
 export const FIND_TICKS: Partial<Record<FindKey, Need>> = {
   stairs: "stairs",
   window: "windows",
-  furnace: "furnace",
   panel: "furnace",
+  heater: "furnace",
 };
 
 export type LiveBox = { x: number; y: number; w: number; h: number; c: number | null };
@@ -102,11 +104,10 @@ export function useLiveFinds(opts: {
     // Doors every round (they mark a way through), then what's still missing, then an extra.
     const plan = (): FindKey[] => {
       const have = new Set(findsRef.current.map((f) => f.key));
-      const missing = (["stairs", "window", "furnace", "panel"] as FindKey[]).filter((k) => !have.has(k));
+      const missing = (["stairs", "window", "panel"] as FindKey[]).filter((k) => !have.has(k));
       // Beams are left to the full scan: live, they matched furniture in a finished basement. The
-      // plumbing, the water heater and low bulkheads are what the guide talks about, so they're asked
-      // for in turn too.
-      const extras: FindKey[] = ["window", "drain", "heater", "duct", "roughin", "panel", "bulkhead", "furnace"];
+      // drain and the water heater are what the guide talks about, so they're asked for in turn too.
+      const extras: FindKey[] = ["window", "drain", "heater", "duct", "panel"];
       const extra = extras[turn++ % extras.length];
       return [...new Set<FindKey>(["door", ...missing.slice(0, 1), extra, ...missing.slice(1)])].slice(0, 3);
     };

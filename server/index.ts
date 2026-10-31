@@ -25,7 +25,7 @@ import { scanBasement } from "./basement";
 import { readBasementPlan } from "./floorplan";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { liteSurfels, lowOverhead, runScan3d, scan3dReady, summarize, type Scan3d } from "./scan3d";
-import { admit, detectLive, LIVE_CONCEPTS } from "./live";
+import { admit, detectLive, liveKeys } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
 import { cleanMunicipality, MUNICIPALITIES, packFor, type Household } from "./rules";
 import { cleanMoneyAnswer, evaluateMoney, fromWho, STORED_MONEY_QUESTIONS, waitQuestions, WHO_ID, WHO_IDS, type MoneyAnswers, type Who } from "./eligibility";
@@ -370,16 +370,12 @@ app.post("/api/live/detect", async (c) => {
   const body = await c.req.parseBody();
   const frame = body.frame;
   const session = String(body.session ?? "").slice(0, 64);
-  let keys: string[] = [];
-  try {
-    keys = (JSON.parse(String(body.concepts ?? "[]")) as string[]).filter((k) => k in LIVE_CONCEPTS).slice(0, 3);
-  } catch {
-    keys = [];
-  }
-  if (!(frame instanceof File) || frame.size > 400 * 1024 || !keys.length || session.length < 8) {
+  // Only retired keys (an older app): no SAM call, but the frame still builds the 3D preview.
+  const { keys, retiredOnly } = liveKeys(body.concepts);
+  if (!(frame instanceof File) || frame.size > 400 * 1024 || (!keys.length && !retiredOnly) || session.length < 8) {
     return c.json({ error: "Send a small JPEG frame, a session id and 1–3 concepts." }, 400);
   }
-  const refused = admit(clientIp(c), session, keys.length) ?? ((await overSpend()) ? "daily limit" : null);
+  const refused = admit(clientIp(c), session, keys.length) ?? (keys.length && (await overSpend()) ? "daily limit" : null);
   const started = Date.now();
   const jpeg = Buffer.from(await frame.arrayBuffer());
   // The same frames build the 3D preview; the compass heading turns its map with the phone. A frame
@@ -387,7 +383,7 @@ app.post("/api/live/detect", async (c) => {
   const heading = body.heading == null ? NaN : Number(body.heading);
   if (refused !== "slow down") addLiveFrame(session, jpeg, Number.isFinite(heading) ? heading : null);
   if (refused) return c.json({ error: refused, finds: [] }, 429);
-  const finds = await detectLive(`data:image/jpeg;base64,${jpeg.toString("base64")}`, keys);
+  const finds = keys.length ? await detectLive(`data:image/jpeg;base64,${jpeg.toString("base64")}`, keys) : [];
   return c.json({ finds, ms: Date.now() - started });
 });
 
