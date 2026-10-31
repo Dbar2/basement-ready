@@ -1,0 +1,75 @@
+/* The guide's screen (src/guide/GuideScreen.tsx), Drawing Set (brand/ui.md). Phone: the top bar, the
+   basement (about 40% of the height), the thread, the ask bar, all inside one screen. Computer: the
+   basement on the left, the thread and the ask bar in a 440 px column on the right. */
+
+.gs {
+  height: 100dvh;
+  display: grid;
+  grid-template-rows: auto minmax(180px, 40dvh) minmax(0, 1fr) auto;
+  grid-template-areas: "top" "visual" "thread" "ask";
+  background: var(--color-bg);
+  color: var(--color-ink);
+  overflow: hidden;
+}
+.gs-loading { display: grid; place-items: center; grid-template-rows: none; grid-template-areas: none; position: relative; }
+
+/* The top bar: the logo (home) and Answer · Design · Build. */
+.gs-top { grid-area: top; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; min-height: 52px; padding: 0 var(--gutter); padding-top: env(safe-area-inset-top, 0px); border-bottom: var(--line-ink); }
+.gs-home { display: inline-grid; place-items: center; width: 44px; height: 44px; margin-left: -10px; color: var(--color-ink); }
+.gs-home svg { height: 26px; width: auto; display: block; }
+.gs-milestones { display: flex; justify-content: flex-end; gap: 18px; margin: 0; padding: 0; list-style: none; font-size: 15px; font-weight: 600; color: var(--color-ink-muted); }
+.gs-milestones li { position: relative; padding: 14px 0; }
+.gs-milestones li[data-state="done"] { color: var(--color-ink); }
+.gs-milestones li[data-state="done"]::before { content: "\2713"; margin-right: 4px; font-size: 13px; }
+.gs-milestones li[data-state="now"] { color: var(--color-ink); font-weight: 800; }
+.gs-milestones li[data-state="now"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 8px; height: 2px; background: var(--color-ink); transform-origin: left; animation: flow-underline var(--dur-2) var(--ease-draw) both; }
+@keyframes flow-underline { from { transform: scaleX(0); } to { transform: none; } }
+
+/* The basement, always on screen. Each visual fills it (src/guide/mount.tsx). */
+.gs-visual { grid-area: visual; position: relative; min-height: 0; overflow: hidden; background: var(--color-surface); border-bottom: var(--line-ink); }
+.gs-visual > * { width: 100%; height: 100%; }
+
+/* The thread: the newest message just above the ask bar. */
+.gs-thread { grid-area: thread; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: grid; align-content: end; gap: 12px; padding: 14px var(--gutter) 10px; }
+.gs-msg { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; animation: rise var(--dur-2) var(--ease-out) both; }
+.gs-msg-mark svg { width: 18px; height: auto; display: block; margin-top: 3px; color: var(--color-ink); }
+.gs-msg-body { display: grid; gap: 8px; min-width: 0; }
+.gs-msg-body > p { margin: 0; font-size: 16px; line-height: 1.45; text-wrap: pretty; }
+.gs-why { font-size: var(--text-small) !important; color: var(--color-ink-muted); }
+.gs-why::before { content: "Why I'm asking: "; font-weight: 700; color: var(--color-ink); }
+.gs-choices { display: flex; flex-wrap: wrap; gap: 6px; }
+.gs-choice { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: var(--line-ink); border-radius: var(--radius-2); background: transparent; color: var(--color-ink); font-weight: 600; font-size: 15px; }
+.gs-choice:hover:not(:disabled) { background: var(--color-card); }
+.gs-choice:disabled { opacity: 0.45; cursor: default; }
+.gs-choices .btn { min-height: 40px; padding: 0 16px; font-size: 15px; }
+.gs-you { justify-self: end; max-width: 80%; margin: 0; padding: 8px 12px; border-radius: var(--radius-2); background: var(--color-ink); color: var(--color-card); font-size: 15px; animation: rise var(--dur-1) var(--ease-out) both; }
+.gs-typing { margin: 0 0 0 30px; font-size: var(--text-small); color: var(--color-ink-muted); }
+.gs-error { margin: 0; padding: 10px 12px; border: 1px solid var(--color-stop); border-radius: var(--radius-1); color: var(--color-stop); font-weight: 600; font-size: var(--text-small); }
+.gs-card { border: var(--line-ink); border-radius: var(--radius-2); background: var(--color-card); padding: 12px; display: grid; gap: 8px; }
+
+/* The ask bar. */
+.gs-ask { grid-area: ask; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; padding: 10px var(--gutter) max(12px, env(safe-area-inset-bottom, 0px)); border-top: var(--line); background: var(--color-bg); }
+.gs-ask .input { min-height: 44px; }
+.gs-send { min-height: 44px; padding: 0 16px; border: var(--line-ink); border-radius: var(--radius-2); background: transparent; color: var(--color-ink); font-weight: 700; }
+.gs-send:disabled { opacity: 0.4; cursor: default; }
+
+/* Stubs for kinds a track hasn't delivered (src/guide/stubs.tsx). */
+.gs-stub { display: grid; place-content: center; justify-items: center; gap: 6px; padding: 16px; text-align: center; color: var(--color-ink-muted); }
+.gs-visual .gs-stub { border: 1px dashed var(--color-ink-muted); }
+.gs-stub-kind { margin: 0; font: 800 20px var(--font-display); letter-spacing: -0.02em; color: var(--color-ink); }
+.gs-stub .mono { margin: 0; overflow-wrap: anywhere; }
+
+@media (min-width: 1000px) {
+  .gs {
+    grid-template-columns: minmax(0, 1fr) 440px;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "top top" "visual thread" "visual ask";
+  }
+  .gs-visual { border-bottom: 0; border-right: var(--line-ink); }
+  .gs-thread { padding: 20px 24px 12px; }
+  .gs-ask { padding: 12px 24px 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-msg, .gs-you, .gs-milestones li::after { animation: none; }
+}
