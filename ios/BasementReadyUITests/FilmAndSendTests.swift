@@ -59,6 +59,11 @@ final class FilmAndSendTests: XCTestCase {
     expectation(for: words, evaluatedWith: nil)
     waitForExpectations(timeout: 60)
     attach(app, "result")
+
+    // The logo stays in the app: it goes to this basement's home base, never the marketing site.
+    app.buttons["result.logo"].tap()
+    XCTAssertTrue(web.waitForExistence(timeout: 10))
+    XCTAssertTrue(app.buttons["New scan"].exists, "still on the result screen, not sent out of the app")
   }
 
   private func attach(_ app: XCUIApplication, _ name: String) {
