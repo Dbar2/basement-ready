@@ -1,17 +1,22 @@
 // The example's whole thread, scripted: the same script as a real scan (server/guide/script.ts) on the
 // example's own result and model, with its progress kept in the browser and sent back with each action.
-// Typed questions get the glossary or a polite line (server/guide/ask.ts). It never calls a model.
+// Its build is track F's list (server/guide/build.ts) on the workspace the browser keeps for it, sent
+// with each action too. Typed questions get the glossary or a polite line (server/guide/ask.ts). It
+// never calls a model.
 import { readFileSync } from "node:fs";
-import { LOOK_VALUES, waitQuestions } from "../eligibility";
+import { cleanMoneyAnswer, LOOK_VALUES, STORED_MONEY_QUESTIONS, waitQuestions } from "../eligibility";
 import { currentModel } from "../model/current";
 import type { Model } from "../model/types";
 import { plansQuestion } from "../plans";
 import { answersIn, pricedSample } from "../priced";
 import { packFor, type Pack } from "../rules";
-import { act, start, sync, type BuildItem, type Ctx, type Reply, type Thread } from "./script";
+import { sampleBuildList } from "./build";
+import { act, start, type Ctx, type Reply, type Thread } from "./script";
 import type { GuideAction, GuideMessage, LookKey } from "../../src/guide/types";
 
-// What the example remembers between actions: its answers, the layout and the look.
+// What the example remembers between actions: its answers (the rules' and the money's), the layout and
+// the look. Its workspace (the tape, the owner, the sheets looked over) is the browser's, as the cards
+// save it (src/workspaceApi.ts).
 export type SampleProgress = { answers: Record<string, unknown>; chosen: string | null; look: LookKey | "none" | null; confirmed: boolean };
 export type SampleThread = Thread & { sample: SampleProgress };
 
@@ -37,60 +42,17 @@ function sampleModel(p: SampleProgress): Ctx["model"] {
   return { ...m, designs, existing: { ...m.existing, confirmedAt: p.confirmed ? "2026-10-30T00:00:00.000Z" : null } };
 }
 
-// The example's build, in track F's order: one tape number, the submit copy, its money and who builds it.
-function sampleBuild(money: number): BuildItem[] {
-  return [
-    {
-      step: "build.permit:tape",
-      section: "permit",
-      message: "**Start with a tape measure.** Measure the long wall under the window, inside face to inside face, and every size on the permit set follows it.",
-      why: "sizes from a video are close, and the City checks them.",
-      card: { kind: "tape", id: "tape" },
-      visual: { kind: "permit" },
-      minutes: 2,
-      choices: [{ label: "Done", action: { type: "permitItem", itemId: "build.permit:tape", value: { said: "Done" } }, primary: true }],
-    },
-    {
-      step: "build.submit",
-      section: "permit",
-      message: "**Your permit set is ready.** Download the submit copy, read it through once, and hand it to the City.",
-      why: "it's the set the City reviews for your permit.",
-      card: { kind: "download", id: "submit" },
-      visual: { kind: "permit" },
-      minutes: 1,
-      choices: [{ label: "Done", action: { type: "permitItem", itemId: "build.submit", value: { said: "Downloaded it" } }, primary: true }],
-    },
-    {
-      step: "build.money:receipts",
-      section: "money",
-      message: money
-        ? `**You may get up to $${money.toLocaleString("en-CA")} back.** Keep every receipt from the build: the claims ask for them.`
-        : "**Keep every receipt from the build.** If a program fits later, its claim asks for them.",
-      why: "money back is paid on what you spent, after the work.",
-      visual: { kind: "money" },
-      minutes: 1,
-      choices: [
-        { label: "What's the tax credit?", action: { type: "explain", term: "tax_credit" } },
-        { label: "Got it", action: { type: "permitItem", itemId: "build.money:receipts", value: { said: "Got it" } }, primary: true },
-      ],
-    },
-    {
-      step: "build.builders",
-      section: "builders",
-      message: "**Who builds it?** A contractor for all of it, or you do some and hire the rest.",
-      why: "the electrical and the plumbing need licensed trades either way.",
-      card: { kind: "buildPath", id: "path" },
-      visual: { kind: "builders" },
-      minutes: 1,
-      choices: [
-        { label: "I'll do some", action: { type: "permitItem", itemId: "build.builders", value: { said: "I'll do some" } } },
-        { label: "Hire it all", action: { type: "permitItem", itemId: "build.builders", value: { said: "Hire it all" } }, primary: true },
-      ],
-    },
-  ];
+export type SampleWorkspace = { profile: unknown; state: unknown } | null | undefined;
+const BLANK = { profile: null, state: {} };
+
+// A rule's yes, no or not sure, or a money question's own option.
+function sampleAnswer(id: string, v: unknown): unknown {
+  if (STORED_MONEY_QUESTIONS.has(id)) return cleanMoneyAnswer(id, v, samplePack());
+  const asked = result().findings.some((f: { ruleId: string }) => f.ruleId === id);
+  return asked && (typeof v === "boolean" || v === "unsure") ? v : null;
 }
 
-export function sampleCtx(p: SampleProgress, now: string): Ctx {
+export function sampleCtx(p: SampleProgress, now: string, ws?: SampleWorkspace): Ctx {
   const r = result();
   const pack = samplePack();
   const answers = { ...answersIn(r), ...p.answers };
@@ -100,7 +62,36 @@ export function sampleCtx(p: SampleProgress, now: string): Ctx {
     (a) => a.kind === "rule" || a.kind === "look",
   );
   const priced = asks.length ? null : (pricedSample(r, { model }, p.answers as never) as Ctx["result"] & { money?: { total?: number } });
-  return { found: foundIn(model), asks, result: priced, model, look: p.look, build: sampleBuild(priced?.money?.total ?? 0), household: "relative", now };
+  // The money answers only: the example's permit routes draw the sheets with no rule answers (the cards
+  // check them there), so the sheets looked over here have to be the same drawings.
+  const money = Object.fromEntries(Object.entries(p.answers).filter(([id]) => STORED_MONEY_QUESTIONS.has(id)));
+  // Drawing the permit set takes a second or two, so the list is worked out only once the build is reached.
+  let build: Ctx["build"] | null = null;
+  return {
+    found: foundIn(model),
+    asks,
+    result: priced,
+    model,
+    look: p.look,
+    get build() {
+      return (build ??= priced ? buildFor(ws ?? BLANK, money) : []);
+    },
+    household: "relative",
+    now,
+  };
+}
+
+// The same workspace and answers give the same list: the last few are kept (one action asks for it more
+// than once).
+const lists = new Map<string, Ctx["build"]>();
+function buildFor(ws: NonNullable<SampleWorkspace>, money: Record<string, unknown>): Ctx["build"] {
+  const key = JSON.stringify([ws, money]);
+  const kept = lists.get(key);
+  if (kept) return kept;
+  const items = sampleBuildList(ws, money).items;
+  lists.set(key, items);
+  if (lists.size > 20) lists.delete(lists.keys().next().value!);
+  return items;
 }
 
 const fresh = (): SampleProgress => ({ answers: {}, chosen: null, look: null, confirmed: false });
@@ -115,8 +106,7 @@ export function cleanSample(body: unknown, now: string): SampleThread {
   const t = body as Partial<SampleThread> | null;
   if (!t || typeof t !== "object" || !Array.isArray(t.messages) || !Array.isArray(t.passed)) return sampleStart(now);
   const s = (t.sample ?? {}) as Partial<SampleProgress>;
-  const asked = new Set(result().findings.map((f: { ruleId: string }) => f.ruleId));
-  const answers = Object.fromEntries(Object.entries(s.answers ?? {}).filter(([id, v]) => asked.has(id) && (typeof v === "boolean" || v === "unsure")));
+  const answers = Object.fromEntries(Object.entries(s.answers ?? {}).filter(([id, v]) => sampleAnswer(id, v) !== null));
   const ids = new Set(currentModel(result(), {}, "sample")?.model.designs.map((d) => d.id) ?? []);
   const p: SampleProgress = {
     answers,
@@ -134,18 +124,23 @@ export function cleanSample(body: unknown, now: string): SampleThread {
     passed: t.passed.filter((x): x is string => typeof x === "string").slice(0, 60),
     awaiting: t.awaiting === "wall" || t.awaiting === "look" ? t.awaiting : null,
   };
-  return { ...sync(thread, sampleCtx(p, now)).thread, sample: p };
+  // Not moved on here: the action that comes with it says what's next, once (a card has just saved the
+  // workspace it's sent with, so the list may already be past the step this thread is on).
+  return { ...thread, sample: p };
 }
 
 // An action on the example: its progress first, then the script's reply. `reply` is the aside, worked
 // out by the caller (the glossary, the scripted lines or the polite one).
-export function sampleAct(t: SampleThread, action: GuideAction, now: string, reply?: Reply): { thread: SampleThread; messages: GuideMessage[] } {
+export function sampleAct(t: SampleThread, action: GuideAction, now: string, reply?: Reply, ws?: SampleWorkspace): { thread: SampleThread; messages: GuideMessage[] } {
   const p: SampleProgress = { ...t.sample, answers: { ...t.sample.answers } };
-  if (action.type === "answer" && (typeof action.value === "boolean" || action.value === "unsure")) p.answers[action.questionId] = action.value;
+  if (action.type === "answer") {
+    const v = sampleAnswer(action.questionId, action.value);
+    if (v !== null) p.answers[action.questionId] = v;
+  }
   if (action.type === "setLook") p.look = action.look;
   if (action.type === "chooseDesign") p.chosen = action.designId;
   if (action.type === "confirmPlan") p.confirmed = true;
-  const r = act(t, action, sampleCtx(p, now), reply);
+  const r = act(t, action, sampleCtx(p, now, ws), reply);
   return { thread: { ...r.thread, sample: p }, messages: r.messages };
 }
 
