@@ -5,11 +5,12 @@ import { inflateSync } from "node:zlib";
 import { PDFArray, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { designerNeed } from "../../server/permit/designer";
+import { drawFixtures, makeView } from "../../server/permit/draw";
 import { HOMEOWNER_BASIS } from "../../server/permit/forms";
-import { permitModel } from "../../server/permit/model";
+import { bounds, permitModel } from "../../server/permit/model";
 import { EXAMINER_NOTES } from "../../server/permit/notes";
 import { buildPermitPackage, NotReady, permitStatus } from "../../server/permit/package";
-import { PLAN_SCALES, ptPerMetre, TABLOID } from "../../server/permit/pdf";
+import { PLAN_SCALES, ptPerMetre, type Sheet, TABLOID } from "../../server/permit/pdf";
 import { planLayout } from "../../server/permit/sheets";
 import type { StoredState } from "../../server/workspace";
 
@@ -204,5 +205,49 @@ describe("designer route", () => {
       expect(pages[s.page]).toContain("123456");
       expect(pages[s.page]).not.toContain("DESIGNER: HOMEOWNER");
     }
+  });
+});
+
+describe("the stairs on the plan", () => {
+  // The run arrow and "UP" as drawFixtures draws them: the arrow is the 0.6-wide line, start to tip.
+  const arrow = (fixtures: Parameters<typeof drawFixtures>[2]) => {
+    const lines: number[][] = [];
+    const sheet = { fonts: { bold: {}, regular: {} }, line: (x0: number, y0: number, x1: number, y1: number, o: { width?: number }) => o?.width === 0.6 && lines.push([x0, y0, x1, y1]), rect() {}, poly() {}, text() {}, circle() {} } as unknown as Sheet;
+    const box = bounds(fixtures.flatMap((f) => [f.at, f.bottom ?? f.at]));
+    const v = makeView({ x: 0, y: 0, w: 800, h: 600 }, { minX: box.minX - 1, maxX: box.maxX + 1, minZ: box.minZ - 1, maxZ: box.maxZ + 1 }, { ratio: 50, label: "1:50" } as never);
+    drawFixtures(sheet, v, fixtures);
+    expect(lines).toHaveLength(1);
+    return { line: lines[0], v };
+  };
+
+  it("points up the flight, from its foot", () => {
+    // The example's stairs climb west: their foot is the east end.
+    const stairs = permitModel(sample, {})!.design.proposed.fixtures.find((f) => f.kind === "stairs")!;
+    expect(stairs.bottom).toBeTruthy();
+    expect(stairs.bottom![0]).toBeGreaterThan(stairs.at[0]);
+    const { line, v } = arrow([stairs]);
+    expect(line[2]).toBeLessThan(line[0]);
+    expect(Math.abs(line[0] - v.X(stairs.bottom![0]))).toBeLessThan(Math.abs(line[2] - v.X(stairs.bottom![0])));
+    // A flight along z, its foot at the low end: the arrow runs to high z (up the page).
+    const along = { id: "s", kind: "stairs" as const, at: [0, 0] as [number, number], sizeM: [0.9, 2.6] as [number, number], bottom: [0, -1.3] as [number, number] };
+    expect(arrow([along]).line[3]).toBeLessThan(arrow([along]).line[1]);
+    expect(arrow([{ ...along, bottom: [0, 1.3] }]).line[3]).toBeGreaterThan(arrow([{ ...along, bottom: [0, 1.3] }]).line[1]);
+  });
+
+  it("keeps today's arrow when the foot isn't known", () => {
+    const { bottom: _, ...stairs } = permitModel(sample, {})!.design.proposed.fixtures.find((f) => f.kind === "stairs")!;
+    const { line } = arrow([stairs]);
+    expect(line[2]).toBeGreaterThan(line[0]);
+  });
+
+  it("keeps its foot when the tape rescales the plan", () => {
+    // The example's one main wall runs front to back: taped 10% longer, the plan stretches along z.
+    const m = permitModel(sample, {})!;
+    const wall = m.mainWalls[0];
+    const taped = permitModel(sample, { permit: { walls: [{ id: wall.id, mm: Math.round(wall.scanM * 1100) }] } })!;
+    const [a, b] = [m, taped].map((x) => x.design.proposed.fixtures.find((f) => f.kind === "stairs")!);
+    expect(b.at[1]).not.toBeCloseTo(a.at[1], 2);
+    expect(b.bottom![0] - b.at[0]).toBeCloseTo(a.bottom![0] - a.at[0], 2);
+    expect(b.bottom![1] - b.at[1]).toBeCloseTo((a.bottom![1] - a.at[1]) * 1.1, 2);
   });
 });
