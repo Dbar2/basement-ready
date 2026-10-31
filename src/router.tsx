@@ -6,14 +6,18 @@ import { applyRouteMeta, marketingRoutes, type MarketingRoute } from "./marketin
 import { PATHS } from "./marketing/site";
 import { Brief } from "./screens/Brief";
 import { Dashboard } from "./screens/Dashboard";
-import { ScanPage } from "./screens/ScanPage";
+import { Home } from "./guide/Home";
 import { Start } from "./screens/Start";
 
 const rootRoute = createRootRoute({ component: Outlet });
 
 const homeRoute = createRoute({ getParentRoute: () => rootRoute, path: "/", component: Start });
 
-export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId", component: ScanPage });
+// The basement's home base (src/guide/Home.tsx), and the guide: the one screen after the upload
+// (ux-guide-build-spec.md). The guide loads with its page.
+export const scanRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId", component: Home });
+const GuideRoute = lazyRouteComponent(() => import("./guide/GuideScreen"), "GuideRoute");
+const guideRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/guide", component: GuideRoute });
 
 // The one-page plan to hand a designer, made to print or save as a PDF.
 const briefRoute = createRoute({ getParentRoute: () => rootRoute, path: "/scans/$scanId/brief", component: Brief });
@@ -67,7 +71,11 @@ const proJoinRoute = createRoute({ getParentRoute: () => rootRoute, path: PATHS.
 
 // The living reference of the UI system (brand/ui.md), on a dev server only: the production build drops it.
 const devRoutes = import.meta.env.DEV
-  ? [createRoute({ getParentRoute: () => rootRoute, path: "/dev/ui", component: lazyRouteComponent(() => import("./dev/UiReference"), "UiReference") })]
+  ? [
+      createRoute({ getParentRoute: () => rootRoute, path: "/dev/ui", component: lazyRouteComponent(() => import("./dev/UiReference"), "UiReference") }),
+      // Every visual and card kind of the guide, mounted as the guide mounts them (src/dev/GuideReference.tsx).
+      createRoute({ getParentRoute: () => rootRoute, path: "/dev/guide", component: lazyRouteComponent(() => import("./dev/GuideReference"), "GuideReference") }),
+    ]
   : [];
 
 function NotFound() {
@@ -81,7 +89,7 @@ function NotFound() {
 }
 
 export const router = createRouter({
-  routeTree: rootRoute.addChildren([homeRoute, scanRoute, briefRoute, styleRoute, planRoute, layoutsRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes, ...devRoutes]),
+  routeTree: rootRoute.addChildren([homeRoute, scanRoute, guideRoute, briefRoute, styleRoute, planRoute, layoutsRoute, studioRoute, picturesRoute, ideasRoute, bookRoute, dashboardRoute, proJoinRoute, ...pageRoutes, ...devRoutes]),
   defaultNotFoundComponent: NotFound,
   scrollRestoration: true,
 });

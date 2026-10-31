@@ -45,6 +45,7 @@ import { DEMO_MUNICIPALITY, isDemo, labelled } from "./demo";
 import { mountViews } from "./views/routes";
 import { mountAsBuilt } from "./asBuilt";
 import { mountBook } from "./book/routes";
+import { mountGuide } from "./guide/routes";
 import { readPhotos, savePhotos, type PhotoTake } from "./photoInput";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
@@ -574,6 +575,9 @@ mountAsBuilt(app);
 mountIdeas(app, currentUser);
 
 mountBook(app, currentUser);
+
+// The guide's thread: the script, its answers and its visuals (server/guide/routes.ts).
+mountGuide(app);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {
