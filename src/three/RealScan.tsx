@@ -473,7 +473,7 @@ export function RealScan(props: {
           <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim() || "#0F2A1E"]} />
           {built ? (
             <group scale={1 / k}>
-              <AsBuiltScene existing={built} atlas={atlas} overview={mode === "overview"} />
+              <AsBuiltScene existing={built} atlas={atlas} overview={mode === "overview"} labels />
             </group>
           ) : solid ? (
             <SolidView solid={solid} ceilingY={ceiling} overview={mode === "overview"} floors={props.floors ?? []} />

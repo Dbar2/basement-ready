@@ -171,10 +171,44 @@ describe("the as-built model from the plan", () => {
     expect(bottom(furnace)).toBe(0);
     // Both can hide a wall from a camera.
     expect(paintJob(ab).occluders.length).toBeGreaterThanOrEqual(2);
-    // A duct placed by guess hides nothing.
+    // A duct placed by guess isn't drawn, so it hides nothing.
     const e = basement();
     e.fixtures[2] = { ...e.fixtures[2], guess: true };
     expect(paintJob(buildAsBuilt(e)).occluders.length).toBe(paintJob(ab).occluders.length - 1);
+  });
+
+  it("keeps a beam, duct or bulkhead inside its room, under its ceiling, and says the headroom", () => {
+    const duct = (over: Partial<Existing["fixtures"][number]>) => {
+      const e = basement();
+      e.fixtures[2] = { ...e.fixtures[2], ...over };
+      return buildAsBuilt(e).blocks.find((b) => b.id === "duct1");
+    };
+    const span = (b: Block) => ({ x0: b.center[0] - b.size[0] / 2, x1: b.center[0] + b.size[0] / 2, z0: b.center[2] - b.size[2] / 2, z1: b.center[2] + b.size[2] / 2 });
+    // Longer than the room: cut at the outside wall's face (the plan's line) and at the face of the
+    // wall between the rooms (its line less half its 0.12 m).
+    const long = duct({ sizeM: [9, 0.35] })!;
+    expect(span(long).x0).toBeCloseTo(0);
+    expect(span(long).x1).toBeCloseTo(4.94);
+    expect(bottom(long)).toBeCloseTo(1.9);
+    expect(bottom(long) + long.size[1]).toBeCloseTo(2.3);
+    expect(long.label).toBe("Duct · 1.90 m clear");
+    // Up against a wall: moved in off it, its width kept.
+    const side = duct({ at: [2.5, 3.95] })!;
+    expect(span(side).z1).toBeCloseTo(4);
+    expect(side.size[2]).toBeCloseTo(0.35);
+    // In the low furnace room: hung from that room's 2.0 m ceiling, not the living area's.
+    const low = duct({ at: [6.5, 2], sizeM: [3, 0.3], heightM: 1.7 })!;
+    expect(bottom(low) + low.size[1]).toBeCloseTo(2.0);
+    expect(span(low).x0).toBeCloseTo(5.06);
+    expect(span(low).x1).toBeCloseTo(8);
+    // Not drawn when it can't be placed: its run a guess, hanging deeper than any duct (a headroom
+    // measured to something else), flush with the ceiling, or outside every room.
+    expect(duct({ guess: true })).toBeUndefined();
+    expect(duct({ heightM: 1.43 })).toBeUndefined();
+    expect(duct({ heightM: 2.35 })).toBeUndefined();
+    expect(duct({ at: [12, 2] })).toBeUndefined();
+    // Placed without a headroom: just under the ceiling.
+    expect(bottom(duct({ heightM: null })!)).toBeCloseTo(2.1);
   });
 
   it("draws a design on it: removed walls go, new walls stand with their doorways cut", () => {
