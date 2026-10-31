@@ -4,7 +4,7 @@
 // by the server as before (server/permit, server/book); nothing here sends anything.
 import { useEffect, useState } from "react";
 import { downloadBook } from "../../book/bookApi";
-import { downloadForm, downloadPermit, getDiy, openSheet, shareLink, type DiyPlan } from "../../workspaceApi";
+import { downloadForm, downloadPermit, getDiy, openSheet, useDrawingsLink, type DiyPlan } from "../../workspaceApi";
 import type { CardProps } from "../mount";
 import { savePermit, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Problem, Saved } from "./parts";
@@ -173,14 +173,15 @@ function BookCard({ scanId, card }: CardProps) {
   const { result } = useBuild(scanId);
   const { busy, error, run } = useRun();
   const [copied, setCopied] = useState(false);
-  const share = scanId !== "sample" && !result?.demo;
+  // The signed drawings link, looked up before the tap (src/workspaceApi.ts drawingsLink).
+  const link = useDrawingsLink(scanId, scanId !== "sample" && !result?.demo);
   return (
     <CardFrame card={card} label="Your book">
       <button type="button" className="btn btn-ghost gc-btn" disabled={busy !== null} onClick={() => run("book", () => downloadBook(scanId))}>
         {busy === "book" ? "Putting your book together…" : "Download your book (PDF)"}
       </button>
-      {share && (
-        <button type="button" className="link-quiet" onClick={() => void navigator.clipboard?.writeText(shareLink(scanId)).then(() => setCopied(true))}>
+      {link && (
+        <button type="button" className="link-quiet" onClick={() => void navigator.clipboard?.writeText(link).then(() => setCopied(true))}>
           {copied ? "Link copied: drawings only, no contact details" : "Copy a link to the drawings for a designer"}
         </button>
       )}

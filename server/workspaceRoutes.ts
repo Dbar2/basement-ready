@@ -156,6 +156,9 @@ function permitPayload(input: { result: any; municipality: string; state: Stored
     left: st.readiness.left,
     items: st.readiness.items,
     reviewKey: st.reviewKey,
+    // The link the owner hands a designer or a contractor: the drawings-only share copy, signed so it opens
+    // for them although scans are private (server/privacy.ts shareKey). Null for the example and a demo house.
+    drawingsUrl: o.packageUrl,
     canSubmit: st.readiness.left === 0,
     sheets: st.sheets,
     mainWalls: m?.mainWalls ?? [],
