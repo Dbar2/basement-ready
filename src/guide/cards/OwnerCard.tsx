@@ -4,7 +4,7 @@
 import { useState, type FormEvent } from "react";
 import type { Profile } from "../../workspaceApi";
 import type { CardProps } from "../mount";
-import { save, useBuild } from "./data";
+import { save, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Problem, Saved, SaveButton } from "./parts";
 
 const names = (p: Profile) => p.owners.map((o) => `${o.first} ${o.last}`.trim()).filter(Boolean).join(" and ");
@@ -17,7 +17,7 @@ export function OwnerCard({ scanId, card, act }: CardProps) {
   const finish = async (p: Profile) => {
     await save(scanId, { profile: p });
     setEditing(false);
-    act({ type: "permitItem", itemId: "owner", value: { said: `${names(p)}, ${p.phone}, ${p.email}` } });
+    act({ type: "permitItem", itemId: stepFor("owner"), value: { said: `${names(p)}, ${p.phone}, ${p.email}` } });
   };
   if (done && ws.profile && !editing)
     return (
@@ -48,7 +48,7 @@ function SameAsBefore({ p, onUse, onEdit }: { p: Profile; onUse: () => Promise<v
       <div className="gc-row">
         <button
           type="button"
-          className="gc-save"
+          className="btn btn-primary gc-btn"
           disabled={busy}
           onClick={() => {
             setBusy(true);

@@ -1,6 +1,7 @@
 // Pictures that agree with each other: the best real angles of the scan, the design to draw in them,
 // and each angle's picture of a design (a Muse Image photo checked by SAM, or the 3D render).
 //   GET  /api/scans/:id/views                     angles, the design (?designId=, else the chosen one), frame and mesh URLs, and the pictures already made of ?design=<hash>
+//                                                 (each with `before`: the real frame it was made from, the same size and framing, for a before/after slider)
 //   POST /api/scans/:id/views/:angle              the browser's render of a design from that angle → its picture (cached by angle and design)
 //   GET  /api/scans/:id/views/:angle/:view.jpg    a picture (`view`: what the angle shows of a design)
 // Mounted from server/index.ts.
@@ -54,6 +55,9 @@ const anchorsRel = (angle: string) => `views/${angle}-anchors.json`;
 // The picture's address changes when the picture does (a photo replacing the render), so no browser
 // keeps showing the old one.
 export const pictureUrl = (id: string, angle: string, hash: string, at?: string) => `/api/scans/${id}/views/${angle}/${hash}.jpg${at ? `?v=${Date.parse(at).toString(36)}` : ""}`;
+// The real frame a picture was made from: its "before". A picture is the frame restyled at the frame's
+// own size, so the two line up exactly.
+export const beforeUrl = (id: string, angle: string) => frameUrl(id, Number.parseInt(angle.split("-")[1], 10));
 
 // The example's are committed files; everyone else's are in storage.
 async function readPic(id: string, path: string): Promise<Buffer | null> {
@@ -117,10 +121,10 @@ const cleanItems = (raw: unknown): DrawnItem[] =>
 export async function picturesOfDesign(id: string, design: Design) {
   const hash = designHash(design);
   const angles = await designAngles(id, 5, design.proposed.furniture, newWallSegs(design));
-  const out: { angleId: string; url: string; kind: PictureMeta["kind"]; checked: string; load: () => Promise<Buffer | null> }[] = [];
+  const out: { angleId: string; url: string; before: string; kind: PictureMeta["kind"]; checked: string; load: () => Promise<Buffer | null> }[] = [];
   for (const a of angles) {
     const meta = await designPicture(id, a.id, hash);
-    if (meta) out.push({ angleId: a.id, url: pictureUrl(id, a.id, meta.viewKey, meta.at), kind: meta.kind, checked: meta.checked, load: () => readPic(id, rel(a.id, meta.viewKey, "jpg")) });
+    if (meta) out.push({ angleId: a.id, url: pictureUrl(id, a.id, meta.viewKey, meta.at), before: beforeUrl(id, a.id), kind: meta.kind, checked: meta.checked, load: () => readPic(id, rel(a.id, meta.viewKey, "jpg")) });
   }
   return out;
 }
@@ -142,7 +146,7 @@ export function mountViews(app: Hono) {
     const pictures = hash
       ? (await Promise.all([...new Map(angles.map((a) => [a.id, a])).values()].map(async (a) => {
           const meta = await designPicture(id, a.id, hash);
-          return meta ? { ...meta, url: pictureUrl(id, a.id, meta.viewKey, meta.at) } : null;
+          return meta ? { ...meta, url: pictureUrl(id, a.id, meta.viewKey, meta.at), before: beforeUrl(id, a.id), size: [a.intrinsics.width, a.intrinsics.height] as [number, number] } : null;
         }))).filter(Boolean)
       : [];
     return c.json({
@@ -208,7 +212,7 @@ export function mountViews(app: Hono) {
     );
     if (saved) await writePic(id, designRel(angleId, hash), Buffer.from(JSON.stringify({ viewKey: view })), "application/json");
     // Not kept anywhere (the example, past what's committed): the browser shows its own render.
-    return c.json({ ...picture, designHash: hash, url: saved ? pictureUrl(id, angleId, view, picture.at) : null, spentTodayUsd: Math.round(spent.usd * 1000) / 1000 });
+    return c.json({ ...picture, designHash: hash, url: saved ? pictureUrl(id, angleId, view, picture.at) : null, before: beforeUrl(id, angleId), size: [angle.intrinsics.width, angle.intrinsics.height], spentTodayUsd: Math.round(spent.usd * 1000) / 1000 });
   });
 
   app.get("/api/scans/:id/views/:angle/:file", async (c) => {

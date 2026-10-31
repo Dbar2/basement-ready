@@ -36,10 +36,12 @@ describe("the Build milestone's list", () => {
   it("starts at the tape, says what the set is and how much is left, and ends at the book", () => {
     const l = sampleBuildList({ profile: null, state: {} });
     expect(l.next.step).toBe("build.permit:tape");
-    expect(l.next.message).toMatch(/^I've drawn and filled your permit set from the scan\. \d+ things are left before you can hand it in\./);
-    expect(l.next.choices?.[0]).toEqual({ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } });
+    // The script's build intro says what the set is; the item just asks.
+    expect(l.next.message).toMatch(/^Grab a tape measure: /);
+    expect(l.items.filter((i) => i.section === "permit").every((i) => typeof i.minutes === "number")).toBe(true);
     expect(l.next.card).toEqual({ kind: "tape", id: "tape" });
     expect(l.next.why).toBeTruthy();
+    expect(l.items.at(-1)!.why).toBe("");
     expect(steps(l)).toEqual(["build.permit:tape", expect.stringMatching(/^build\.permit:window:/), "build.permit:owner", "build.permit:upstairs", "build.permit:review", "build.money:apply", "build.builders", "build.submit", "done"]);
     expect(l.permit).toMatchObject({ ready: 0, canSubmit: false, city: "Waterloo", authority: "City of Waterloo" });
     expect(l.permit.total).toBeGreaterThan(5);
@@ -55,8 +57,7 @@ describe("the Build milestone's list", () => {
 
     state = taped(state);
     expect(next().step).toBe("build.permit:owner");
-    // Only the first open permit item carries the opening line.
-    expect(next().message).toMatch(/^I've drawn and filled your permit set/);
+
 
     profile = OWNER;
     expect(next().step).toBe("build.permit:upstairs");
@@ -80,7 +81,7 @@ describe("the Build milestone's list", () => {
     const submit = sampleBuildList({ profile, state }).next;
     expect(submit.step).toBe("build.submit");
     expect(submit.card).toEqual({ kind: "download", id: "submit" });
-    expect(submit.message).toBe("Everything's ready. Download the submit copy and hand it in on the City of Waterloo building permit portal.");
+    expect(submit.message).toBe("Everything's ready. Download the submit copy, with no draft marks and every form filled, and hand it in on the City of Waterloo building permit portal.");
 
     state = { ...state, permit: { ...state.permit, submittedAt: "2026-11-01" } };
     expect(next().step).toBe("done");
@@ -120,7 +121,85 @@ describe("the Build milestone's list", () => {
     const l = sampleBuildList({ profile: null, state: taped({}) });
     for (const i of l.items) {
       expect(`${i.message} ${i.why}`).not.toMatch(/qualif|approved/i);
-      expect(i.why.length).toBeGreaterThan(10);
+      // Every question says why; the submit copy and the last step ask nothing.
+      if (i.step !== "done" && i.step !== "build.submit") expect(i.why.length).toBeGreaterThan(10);
     }
+  });
+});
+
+// A real scan: the example's answer stored as a scan, its workspace saved the way the cards save it
+// (PUT /api/scans/:id/workspace: cleanPatch, then saveWorkspace), and its permit status read the way
+// GET /permit/status reads it (the stored result).
+describe("a real scan's list, from the database", () => {
+  it("gets from the answer to the submit copy, and the submit copy builds", async () => {
+    const { db, migrateDb, schema } = await import("../../server/db");
+    const { buildListFor } = await import("../../server/guide/build");
+    const { cleanPatch, loadWorkspace, saveWorkspace } = await import("../../server/workspace");
+    const { buildPermitPackage } = await import("../../server/permit/package");
+    await migrateDb();
+    const result = JSON.parse(readFileSync("public/samples/sample/result.json", "utf8"));
+    const [b] = await db.insert(schema.basements).values({ claimToken: "claim-token-build-f", household: "relative", municipality: "waterloo-on" }).returning();
+    const [s] = await db.insert(schema.scans).values({ basementId: b.id, status: "done", result }).returning();
+    const put = async (body: unknown) => {
+      const patch = cleanPatch(body);
+      if ("error" in patch) throw new Error(patch.error);
+      const now = await loadWorkspace(b.id);
+      await saveWorkspace(b.id, { ...patch, state: patch.state ? { ...now.state, ...patch.state } : undefined });
+    };
+    const status = async () => {
+      const w = await loadWorkspace(b.id);
+      return permitStatus({ result, municipality: "waterloo-on", state: w.state, profile: w.profile });
+    };
+
+    expect((await buildListFor(s.id))!.next.step).toBe("build.permit:tape");
+    await put({ state: taped({}) });
+    await put({ profile: OWNER });
+    const w = await loadWorkspace(b.id);
+    await put({ state: { permit: { ...w.state.permit, upstairs: { bedrooms: [], none: true } } } });
+    expect((await buildListFor(s.id))!.next.step).toBe("build.permit:review");
+    // "Every sheet matches my basement", with the key the status route gives the card.
+    const st = await status();
+    const w2 = await loadWorkspace(b.id);
+    await put({ state: { permit: { ...w2.state.permit, reviewed: st.sheets.map((x) => ({ sheet: x.number, key: st.reviewKey })) } } });
+
+    let list = (await buildListFor(s.id))!;
+    expect(list.permit.canSubmit).toBe(true);
+    // The money questions: each answered with its first choice, through the answers code the guide's
+    // { type: "answer" } goes through. Then the applications and who builds it, as their cards save them.
+    const { saveAnswer, savedAnswers } = await import("../../server/answers");
+    const { pricedForBasement } = await import("../../server/priced");
+    for (let guard = 0; guard < 12 && list.next.step !== "build.submit"; guard++) {
+      const item = list.next;
+      if (item.step === "build.money:apply") {
+        // "Not for me" on each program that applies before work, as the apply card saves it.
+        const priced = (await pricedForBasement(s.id, b.id, { ...result, household: "relative" }, await savedAnswers(b.id))) as { grants: { id: string; qualify: string; apply: { when: string } | null }[] };
+        const first = priced.grants.filter((g) => g.qualify === "yes" && g.apply && (g.apply.when === "before_work" || g.apply.when === "at_permit"));
+        await put({ state: { apply: Object.fromEntries(first.map((g) => [g.id, { sentAt: null }])) } });
+      } else if (item.step.startsWith("build.money:")) {
+        const choice = item.choices![0].action as { questionId: string; value: unknown };
+        await saveAnswer(b.id, choice.questionId, choice.value as never);
+      } else if (item.step === "build.builders") await put({ state: { build: { path: "diy" } } });
+      else throw new Error(`Stuck at ${item.step}`);
+      list = (await buildListFor(s.id))!;
+    }
+    expect(list.next.step).toBe("build.submit");
+    expect(list.next.card).toEqual({ kind: "download", id: "submit" });
+
+    const final = await loadWorkspace(b.id);
+    const out = await buildPermitPackage({ result, municipality: "waterloo-on", address: "1 Example St", profile: final.profile, state: final.state, site: null, aerialJpeg: null, favourites: [], copy: "submit" });
+    expect(out.bytes.byteLength).toBeGreaterThan(10_000);
+  });
+});
+
+describe("the money, from the answers the script loads", () => {
+  it("works the questions out from the household and answers, and drops one once it's answered", () => {
+    const result = { ...sampleResult({}), household: "renter" };
+    const open = buildList({ result, municipality: "waterloo-on", state: {}, profile: null, household: "renter", answers: {}, property: null });
+    const money = open.items.filter((i) => i.section === "money" && i.step !== "build.money:apply");
+    expect(money.length).toBeGreaterThan(0);
+    const q = money[0].step.replace("build.money:", "");
+    const value = (money[0].choices![0].action as { value: unknown }).value;
+    const after = buildList({ result, municipality: "waterloo-on", state: {}, profile: null, household: "renter", answers: { [q]: value }, property: null });
+    expect(after.items.some((i) => i.step === money[0].step && !i.done)).toBe(false);
   });
 });

@@ -3,7 +3,7 @@
 // enough to climb out of; a bedroom window that isn't comes back as a fix to the design.
 import { useState } from "react";
 import type { CardProps } from "../mount";
-import { save, upsert, useBuild } from "./data";
+import { save, stepFor, upsert, useBuild } from "./data";
 import { CardFrame, Loading, MmForm, Saved } from "./parts";
 
 // The Code's escape window: at least 0.35 m² clear, and no side under 380 mm (server/permit/model.ts).
@@ -35,15 +35,16 @@ export function WindowCard({ scanId, card, act }: CardProps) {
       ) : (
         <MmForm
           fields={[
-            { key: "widthMm", label: "Clear width", value: now?.widthMm ?? (w.escape ? tape.egressWidthMm : null), hint: `The video says about ${w.widthM.toFixed(2)} m.`, help: "With the window open as far as it goes." },
-            { key: "heightMm", label: "Clear height", value: now?.heightMm ?? (w.escape ? tape.egressHeightMm : null), hint: w.heightM ? `About ${w.heightM.toFixed(2)} m.` : undefined },
-            { key: "sillMm", label: "Floor to sill", value: now?.sillMm ?? (w.escape ? tape.egressSillMm : null), help: "From the floor to the bottom of the opening." },
+            { key: "widthMm", label: "Clear width", value: now?.widthMm ?? (w.escape ? tape.egressWidthMm : null), placeholder: `about ${Math.round(w.widthM * 1000)}` },
+            { key: "heightMm", label: "Clear height", value: now?.heightMm ?? (w.escape ? tape.egressHeightMm : null), placeholder: w.heightM ? `about ${Math.round(w.heightM * 1000)}` : undefined },
+            { key: "sillMm", label: "Floor to sill", value: now?.sillMm ?? (w.escape ? tape.egressSillMm : null) },
           ]}
+          note="The opening with the window open as far as it goes, not the frame; the sill from the floor to the bottom of the opening."
           onSave={async (v) => {
             const permitNext = { ...permit, windows: upsert(permit.windows, { id: w.id, widthMm: v.widthMm, heightMm: v.heightMm, sillMm: v.sillMm }) };
             await save(scanId, { state: { permit: permitNext, ...(w.escape ? { tape: { ...tape, egressWidthMm: v.widthMm, egressHeightMm: v.heightMm, egressSillMm: v.sillMm } } : {}) } });
             setEditing(false);
-            act({ type: "permitItem", itemId: `window:${w.id}`, value: { said: said(v) } });
+            act({ type: "permitItem", itemId: stepFor(`window:${w.id}`), value: { said: said(v) } });
           }}
         />
       )}

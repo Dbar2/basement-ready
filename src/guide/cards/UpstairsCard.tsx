@@ -2,7 +2,7 @@
 // by floor. Each gets a smoke alarm on the drawings, linked to the suite's. Or: there are none.
 import { useRef, useState, type PointerEvent } from "react";
 import type { CardProps } from "../mount";
-import { savePermit, useBuild } from "./data";
+import { savePermit, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Saved } from "./parts";
 
 const FLOORS = ["Main floor", "Second floor", "Third floor"];
@@ -11,14 +11,20 @@ export function UpstairsCard({ scanId, card, act }: CardProps) {
   const { ws, status } = useBuild(scanId);
   const [floor, setFloor] = useState(1);
   const [editing, setEditing] = useState(false);
+  // Each tap saves, and one bedroom already counts as done: the card folds only on "Done" here, or if
+  // it was done before it opened.
+  const [finished, setFinished] = useState(false);
+  const doneAtOpen = useRef<boolean | null>(null);
   const svg = useRef<SVGSVGElement>(null);
   if (!ws || !status) return <CardFrame card={card} label="Bedrooms upstairs"><Loading /></CardFrame>;
   const up = ws.state.permit?.upstairs ?? { bedrooms: [] };
-  const done = status.items.some((i) => i.group === "upstairs" && i.done);
+  doneAtOpen.current ??= status.items.some((i) => i.group === "upstairs" && i.done);
+  const done = finished || doneAtOpen.current;
   const said = (n: number, none: boolean) => (none ? "No bedrooms upstairs" : `${n} bedroom${n === 1 ? "" : "s"} upstairs`);
   const finish = (n: number, none: boolean) => {
     setEditing(false);
-    act({ type: "permitItem", itemId: "upstairs", value: { said: said(n, none) } });
+    setFinished(true);
+    act({ type: "permitItem", itemId: stepFor("upstairs"), value: { said: said(n, none) } });
   };
   if (done && !editing)
     return (
@@ -78,7 +84,7 @@ export function UpstairsCard({ scanId, card, act }: CardProps) {
       )}
       <div className="gc-row">
         {fp && (
-          <button type="button" className="gc-save" disabled={!up.bedrooms.length} onClick={() => finish(up.bedrooms.length, false)}>
+          <button type="button" className="btn btn-primary gc-btn" disabled={!up.bedrooms.length} onClick={() => finish(up.bedrooms.length, false)}>
             Done
           </button>
         )}
