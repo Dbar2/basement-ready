@@ -577,7 +577,7 @@ mountIdeas(app, currentUser);
 mountBook(app, currentUser);
 
 // The guide's thread: the script, its answers and its visuals (server/guide/routes.ts).
-mountGuide(app);
+mountGuide(app, currentUser);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {

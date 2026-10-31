@@ -1,6 +1,6 @@
 // The Build milestone's pictures, in the visual pane above (or beside) the thread. "permit": the set
 // they'll hand in, drawn as a stack of sheets, with "9 of 13 ready" and what's left. "money": what they
-// may be eligible for, program by program. "builders": who does what, from the drawings to move-in,
+// may get, program by program. "builders": who does what, from the drawings to move-in,
 // for the path they picked. All drawn in code (Drawing Set); they read the same data as the cards
 // (src/guide/cards/data.ts), so a saved answer moves them at once.
 import type { ReactNode } from "react";
@@ -91,7 +91,7 @@ export function MoneyVisual({ scanId }: VisualProps<"money">) {
     <Pane caption="Each program makes the final call" kind="money">
       <div className="bv-money">
         <div className="bv-money-head">
-          <p className="bv-sub">You may be eligible for up to</p>
+          <p className="bv-sub">You may get up to</p>
           <p className="bv-big">{dollars(total)}</p>
           {ifYes > 0 && <p className="bv-sub">and up to {dollars(ifYes)} more, one answer away</p>}
         </div>
