@@ -70,6 +70,13 @@ export function isAdmin(c: Context): boolean {
 // An admin reads; only the owner changes anything.
 export const adminRead = (c: Context) => isRead(c) && isAdmin(c);
 
+// The one link an owner sends on purpose: the permit package's share copy, for their designer (the brief
+// email, server/permit/designer.ts). It opens that file and nothing else, read-only, for whoever holds
+// the link. Signed with the scan's own claim token: no secret of its own, and it's gone with the scan.
+export const shareKey = (scanId: string, claimToken: string) => createHmac("sha256", claimToken).update(`permit share copy ${scanId}`).digest("base64url").slice(0, 32);
+const sharedCopy = (c: Context, scanId: string, claimToken: string) =>
+  isRead(c) && c.req.path.endsWith("/permit.pdf") && c.req.query("copy") === "share" && Boolean(c.req.query("key")) && same(c.req.query("key")!, shareKey(scanId, claimToken));
+
 // ---- The gate in front of every /api/scans/<id> route ----
 
 export function mountScanGate(app: Hono, currentUser: (c: Context) => Promise<string | null>) {
@@ -78,7 +85,7 @@ export function mountScanGate(app: Hono, currentUser: (c: Context) => Promise<st
     // The example, /api/scans/allowance and malformed ids: their own handlers answer.
     if (!UUID.test(id) || adminRead(c)) return next();
     const a = await basementFor(id, { userId: await currentUser(c), claims: requestClaims(c) });
-    if (!a.basement || !a.allowed) return c.json({ error: NOT_FOUND }, 404);
+    if (!a.basement || !(a.allowed || sharedCopy(c, id, a.basement.claimToken))) return c.json({ error: NOT_FOUND }, 404);
     return next();
   };
   app.use("/api/scans/:id", gate);

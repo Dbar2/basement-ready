@@ -9,7 +9,7 @@ vi.hoisted(() => {
 
 import { mountAdmin, stageTimes } from "../../server/admin";
 import { db, migrateDb, schema } from "../../server/db";
-import { adminCookieValue, cookieClaims, mountScanGate, NOT_FOUND } from "../../server/privacy";
+import { adminCookieValue, cookieClaims, mountScanGate, NOT_FOUND, shareKey } from "../../server/privacy";
 import { mountWorkspace } from "../../server/workspaceRoutes";
 
 const KEY = "test-admin-key-not-a-real-one";
@@ -27,6 +27,7 @@ mountScanGate(app, async (c) => c.req.header("x-test-user") ?? null);
 app.get("/api/scans/:id", (c) => c.json({ id: c.req.param("id") }));
 app.get("/api/scans/:id/video", (c) => c.text("video"));
 app.get("/api/scans/:id/frames/:n", (c) => c.text("frame"));
+app.get("/api/scans/:id/permit.pdf", (c) => c.text("pdf"));
 app.post("/api/scans/:id/answers", (c) => c.json({ saved: true }));
 mountWorkspace(app, async (c) => c.req.header("x-test-user") ?? null);
 mountAdmin(app);
@@ -95,6 +96,16 @@ describe("private scans: only the owner or an admin", () => {
     delete process.env.ADMIN_TOKEN;
     expect((await app.request(`/api/scans/${scan.id}/video`, { headers: { authorization: "Bearer " } })).status).toBe(404);
     expect((await app.request(`/api/scans/${scan.id}/video`, { headers: { "x-admin-token": "" } })).status).toBe(404);
+  });
+
+  it("opens the permit's share copy, and only that, for the designer holding the owner's signed link", async () => {
+    const { scan } = await newScan({ claimToken: "the-real-token" });
+    const key = shareKey(scan.id, "the-real-token");
+    expect((await app.request(`/api/scans/${scan.id}/permit.pdf?copy=share&key=${key}`)).status).toBe(200);
+    expect((await app.request(`/api/scans/${scan.id}/permit.pdf?copy=full&key=${key}`)).status).toBe(404);
+    expect((await app.request(`/api/scans/${scan.id}/permit.pdf?copy=share&key=${shareKey(scan.id, "a-guess")}`)).status).toBe(404);
+    expect((await app.request(`/api/scans/${scan.id}/permit.pdf?copy=share`)).status).toBe(404);
+    expect((await app.request(`/api/scans/${scan.id}/video?copy=share&key=${key}`)).status).toBe(404);
   });
 
   it("leaves the example open to everyone", async () => {

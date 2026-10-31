@@ -22,7 +22,7 @@ import { overSpend } from "./limits";
 import { pricedForBasement, pricedSample } from "./priced";
 import { keys, storage } from "./storage";
 import { basementFor, cleanPatch, loadWorkspace, profileFromOtherBasements, saveWorkspace, StateSchema, ProfileSchema, type Profile, type StoredState } from "./workspace";
-import { adminRead, requestClaims } from "./privacy";
+import { adminRead, requestClaims, shareKey } from "./privacy";
 
 const UUID = /^[0-9a-f-]{36}$/;
 const SAMPLE = "public/samples/sample";
@@ -267,7 +267,8 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const w = await loadWorkspace(a.basement.id);
     const property = a.basement.property as Property | null;
     const address = property?.address ?? a.basement.address;
-    const packageUrl = a.result?.demo ? null : `${new URL(c.req.url).origin}/api/scans/${a.id}/permit.pdf?copy=share`;
+    // The designer's link: the share copy, signed so it opens for them (server/privacy.ts shareKey).
+    const packageUrl = a.result?.demo ? null : `${new URL(c.req.url).origin}/api/scans/${a.id}/permit.pdf?copy=share&key=${shareKey(a.id, a.basement.claimToken)}`;
     return c.json(permitPayload({ result: a.result, municipality: a.basement.municipality, state: w.state, profile: w.profile }, { address, packageUrl }));
   });
 
