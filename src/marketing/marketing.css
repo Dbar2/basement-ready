@@ -19,7 +19,8 @@
 .mk-main > *,
 .mk-header,
 .mk-footer {
-  width: min(100% - 2 * var(--mk-gutter), var(--mk-max));
+  /* The footer also closes the app's workspace, outside .mk: same gutters there. */
+  width: min(100% - 2 * var(--mk-gutter, clamp(20px, 4vw, 56px)), var(--mk-max, 1240px));
   margin-inline: auto;
 }
 
@@ -56,7 +57,7 @@
 .mk-nav { display: flex; align-items: center; gap: 28px; font-size: 15px; font-weight: 500; }
 .mk-nav a { text-decoration: none; text-underline-offset: 6px; text-decoration-thickness: 2px; }
 .mk-nav a:hover,
-.mk-nav a[aria-current="page"] { text-decoration-line: underline; text-decoration-color: var(--color-mint-line); }
+.mk-nav a[aria-current="page"] { text-decoration-line: underline; text-decoration-color: var(--color-ink); }
 .mk-nav .mk-nav-cta {
   display: inline-flex;
   align-items: center;
@@ -392,7 +393,7 @@
   line-height: 1.25;
 }
 .mk-q summary::-webkit-details-marker { display: none; }
-.mk-q summary:hover span { text-decoration: underline; text-decoration-color: var(--color-mint-line); text-underline-offset: 5px; text-decoration-thickness: 2px; }
+.mk-q summary:hover span { text-decoration: underline; text-decoration-color: var(--color-ink); text-underline-offset: 5px; text-decoration-thickness: 2px; }
 .mk-q-icon { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--color-ink); stroke-width: 1.75; stroke-linecap: round; }
 .mk-q-v { transform-box: fill-box; transform-origin: center; transition: transform var(--dur-2) var(--ease-out); }
 .mk-q[open] .mk-q-v { transform: rotate(90deg); }
@@ -416,7 +417,7 @@
   transition: color var(--dur-2) var(--ease-out), border-color var(--dur-2) var(--ease-out);
 }
 .mk-toc a:hover { color: var(--color-ink); }
-.mk-toc a[aria-current] { color: var(--color-ink); border-left-color: var(--color-mint-line); font-weight: 600; }
+.mk-toc a[aria-current] { color: var(--color-ink); border-left-color: var(--color-ink); font-weight: 600; }
 .mk-toc-n { font-family: var(--font-mono); font-size: 12px; padding-top: 1px; }
 .mk-clause { padding-block: 28px; border-top: 1px solid var(--color-border); scroll-margin-top: 16px; }
 .mk-clause:first-child { padding-top: 0; border-top: 0; }
@@ -449,7 +450,7 @@
 .mk-footer-brand p { margin: 0; font-size: 14px; color: var(--color-ink-muted); max-width: 52ch; }
 .mk-footer-links { display: flex; flex-wrap: wrap; gap: 10px 24px; font-size: 15px; font-weight: 500; align-content: start; }
 .mk-footer-links a { text-decoration: none; }
-.mk-footer-links a:hover { text-decoration: underline; text-decoration-color: var(--color-mint-line); text-underline-offset: 4px; }
+.mk-footer-links a:hover { text-decoration: underline; text-decoration-color: var(--color-ink); text-underline-offset: 4px; }
 .mk-footer-small { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--color-ink-muted); }
 
 /* ---------- Phones and small tablets ---------- */
