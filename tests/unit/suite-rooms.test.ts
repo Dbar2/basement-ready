@@ -8,6 +8,7 @@ import { BATH_MIN_M2, GALLEY_MIN_M2 } from "../../server/layout";
 import { checkDesign } from "../../server/model/checks";
 import { centroid, inPolygon, overlapArea, polygonArea } from "../../server/model/geometry";
 import { seedModel } from "../../server/model/seed";
+import { quote } from "../../server/quote/quote";
 import type { Design, Model } from "../../server/model/types";
 
 const NOW = "2026-10-31T00:00:00.000Z";
@@ -70,6 +71,109 @@ describe("every seeded design is a home", () => {
     for (const d of model.designs) {
       expect(d.proposed.rooms.filter((r) => r.kind === "mechanical").map((r) => [r.name, r.unit]), d.name).toEqual([["Furnace room", "shared"]]);
       expect(checkDesign(d, model.existing).find((c) => c.id === "service-room")?.ok, d.name).toBe(true);
+    }
+  });
+});
+
+// A made-up basement, nobody's home: a rec room with the stairs and a window, and through one door in its
+// west wall a finished bathroom (2 × 2 m) the watch named.
+const area = (index: number, name: string, box: { minX: number; maxX: number; minZ: number; maxZ: number }, extra: Record<string, unknown> = {}) => ({
+  index,
+  name,
+  has3d: true,
+  placement: { turn: 0, x: 0, z: 0 },
+  plan: {
+    version: 1,
+    box,
+    sides: { minX: "wall", maxX: "wall", minZ: "wall", maxZ: "wall" },
+    widthM: box.maxX - box.minX,
+    depthM: box.maxZ - box.minZ,
+    areaM2: (box.maxX - box.minX) * (box.maxZ - box.minZ),
+    ceilingHeightM: 2.3,
+    openings: [],
+    stairs: [],
+    fixtures: [],
+    scaleSource: "model",
+    trusted: false,
+    ...extra,
+  },
+});
+const withBath = (bathDoors: { side: string; atM: number }[] = []) => ({
+  mainRoom: 0,
+  rooms: [
+    area(0, "Rec room", { minX: -4, maxX: 4, minZ: -3, maxZ: 3 }, {
+      openings: [
+        { kind: "window", side: "maxZ", atM: 2, widthM: 0.9, detectionId: "w1" },
+        { kind: "door", side: "minX", atM: 4, widthM: 0.8, detectionId: "d-bath" },
+      ],
+      stairs: [{ x0: 2.6, z0: -3, x1: 3.6, z1: -1.2, detectionId: "s1" }],
+    }),
+    area(1, "Bathroom", { minX: -6, maxX: -4, minZ: 0, maxZ: 2 }, { openings: bathDoors.map((d, i) => ({ kind: "door", ...d, widthM: 0.8, detectionId: `d-bath-${i}` })) }),
+  ],
+  detections: [],
+});
+
+describe("a bathroom the scan already has", () => {
+  it("is the suite's, kept as it is: no second bathroom built, and priced as there, not new", () => {
+    const m = seedModel(withBath() as never, {}, NOW)!;
+    const bath = m.existing.rooms.find((r) => r.name === "Bathroom")!;
+    for (const d of m.designs) {
+      const baths = d.proposed.rooms.filter((r) => r.kind === "bathroom");
+      expect(baths.map((r) => [r.id, r.unit, r.kept]), d.name).toEqual([[bath.id, 2, true]]);
+      expect(checkDesign(d, m.existing).find((c) => c.id === "rooms")?.ok, d.name).toBe(true);
+      expect(checkDesign(d, m.existing).find((c) => c.id === "way-out")?.ok, d.name).not.toBe(false);
+      // No drains, fixtures or fan for it, and no new floor in it; its ceiling is still the suite's rated one.
+      const q = quote(m, d, { municipality: "waterloo-on" })!;
+      const lines = q.byTrade.flatMap((t) => t.lines);
+      expect(lines.some((l) => l.id === `bath_${bath.id}` || l.id === `rough_${bath.id}`), d.name).toBe(false);
+      expect(lines.find((l) => l.id === "bath_fans")?.qty ?? 0, d.name).toBe(0);
+      expect(q.assumptions.join(" ")).toMatch(/Bathroom is kept as it is/);
+    }
+  });
+
+  it("isn't kept when it's a passage (a second door through it): the suite builds its own", () => {
+    const m = seedModel(withBath([{ side: "minZ", atM: 1 }]) as never, {}, NOW)!;
+    for (const d of m.designs) {
+      expect(d.proposed.rooms.some((r) => r.kept), d.name).toBe(false);
+      expect(d.proposed.rooms.find((r) => r.kind === "bathroom" && r.unit === 2), d.name).toBeTruthy();
+    }
+  });
+});
+
+describe("a furnace closet the plan left out", () => {
+  // A made-up plan: one room (6 × 5 m) with a 1.4 × 1.6 m pocket cut out of its corner, walled on its open
+  // sides, and the furnace found in the pocket, outside the room.
+  const wall = (id: string, a: [number, number], b: [number, number], kind: "foundation" | "existing" = "existing") => ({ id, a, b, thicknessM: 0.15, kind, rooms: ["r1"], seenShare: 1 });
+  const floorPlan = {
+    version: 1,
+    rotation: 0,
+    floor: null,
+    ceilingM: 2.3,
+    footprintM2: 30,
+    rooms: [{ id: "r1", polygon: [[0, 0], [6, 0], [6, 5], [1.4, 5], [1.4, 3.4], [0, 3.4]], areaM2: 27.8, ceilingM: 2.3, low: false, cameras: 10, kind: "other", name: "Rec room" }],
+    walls: [
+      wall("w1", [0, 0], [6, 0], "foundation"),
+      wall("w2", [6, 0], [6, 5], "foundation"),
+      wall("w3", [6, 5], [0, 5], "foundation"),
+      wall("w4", [0, 5], [0, 0], "foundation"),
+      wall("w5", [0, 3.4], [1.4, 3.4]),
+      wall("w6", [1.4, 3.4], [1.4, 5]),
+    ],
+    openings: [{ id: "win1", kind: "window", wallId: "w1", offsetM: 3, widthM: 0.9, heightM: null, at: [3, 0], rooms: ["r1"], source: "sam" }],
+    fixtures: [{ id: "furnace1", kind: "furnace", at: [0.7, 4.2], source: "sam" }],
+    edits: [],
+  };
+  it("is a room of its own, the service room every design keeps: rated walls and a 20-minute door", () => {
+    const m = seedModel({ floorPlan, rooms: [], detections: [] } as never, {}, NOW)!;
+    const closet = m.existing.rooms.find((r) => r.kind === "mechanical")!;
+    expect(closet).toMatchObject({ name: "Furnace room" });
+    expect(polygonArea(closet.polygon)).toBeCloseTo(1.4 * 1.6, 1);
+    for (const d of m.designs) {
+      expect(d.proposed.rooms.find((r) => r.id === closet.id)?.unit, d.name).toBe("shared");
+      expect(d.proposed.rooms.filter((r) => r.kind === "mechanical"), d.name).toHaveLength(1);
+      expect(checkDesign(d, m.existing).find((c) => c.id === "service-room"), d.name).toMatchObject({ ok: true });
+      const doors = d.proposed.openings.filter((o) => o.kind === "door" && o.rating === "20min" && ["w5", "w6"].includes(o.wallId));
+      expect(doors, d.name).toHaveLength(1);
     }
   });
 });

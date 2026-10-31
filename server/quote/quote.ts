@@ -221,9 +221,13 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
 
   const area = (rs: Room[]) => rs.reduce((s, r) => s + polyArea(r.polygon), 0);
   const ceilingArea = area(suite.filter((r) => r.kind !== "stairs"));
-  const floorRooms = suite.filter((r) => !["stairs", "mechanical", "storage"].includes(r.kind));
+  // A room kept as the scan found it (a bathroom already there) keeps its floor, fixtures and fan: only
+  // the suite's fire-rated ceiling goes over it, like the rest.
+  const kept = suite.filter((r) => r.kept);
+  const floorRooms = suite.filter((r) => !["stairs", "mechanical", "storage"].includes(r.kind) && !r.kept);
   const floorArea = area(floorRooms);
-  const baths = suite.filter((r) => r.kind === "bathroom");
+  const baths = suite.filter((r) => r.kind === "bathroom" && !r.kept);
+  for (const r of kept) assumptions.push(`${r.name} is kept as it is: its fixtures, floor and fan aren't priced, only the fire-rated ceiling over it.`);
   const kitchens = suite.filter((r) => r.kind === "kitchen");
   const laundry = P.rooms.filter((r) => r.kind === "laundry" && r.unit !== 1);
   const inSuite = (p: Pt) => suite.some((r) => nearRoom(p, r));
