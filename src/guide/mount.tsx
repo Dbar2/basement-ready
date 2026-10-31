@@ -6,6 +6,7 @@ import { BUILD_CARDS } from "./cards";
 import { VisualStub } from "./stubs";
 import type { CardRef, GuideAction, VisualRef } from "./types";
 import { BuildersVisual, MoneyVisual, PermitVisual } from "./visuals/BuildVisuals";
+import { PlanEdit } from "./visuals/PlanEdit";
 
 export type VisualKind = VisualRef["kind"];
 export type CardKind = CardRef["kind"];
@@ -23,7 +24,7 @@ const VISUALS: { [K in VisualKind]: ComponentType<VisualProps<K>> } = {
   video: VisualStub,
   plan: VisualStub,
   explain: VisualStub,
-  planEdit: VisualStub,
+  planEdit: PlanEdit, // track D: check the plan, editable
   layouts: VisualStub,
   beforeAfter: VisualStub,
   // The Build milestone (track F).

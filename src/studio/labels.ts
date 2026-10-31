@@ -4,7 +4,8 @@
 // with its baseline at y.
 
 export type Box = { x0: number; y0: number; x1: number; y1: number };
-export type Tag = { id: string; text: string; short?: string; size: number; spots: [number, number][] };
+// within: where this label must stay, if not the whole drawing (a beam's label inside the walls).
+export type Tag = { id: string; text: string; short?: string; size: number; spots: [number, number][]; within?: Box };
 export type Placed = { x: number; y: number; text: string };
 
 // Monospace tags: about 0.64 of the font size per character, letter spacing included.
@@ -17,25 +18,32 @@ const hits = (a: Box, b: Box, pad: number) => a.x0 < b.x1 + pad && b.x0 < a.x1 +
 
 const overlap = (a: Box, b: Box) => Math.max(0, Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0)) * Math.max(0, Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0));
 
-export function placeTags(fixed: Box[], tags: Tag[], pad = 4): Map<string, Placed> {
+// within: the drawing's edges, when a label mustn't run off them (a plan filling a pane).
+export function placeTags(fixed: Box[], tags: Tag[], pad = 4, within?: Box): Map<string, Placed> {
   const taken = [...fixed];
   const out = new Map<string, Placed>();
+  const fits = (b: Box, w?: Box) => !w || (b.x0 >= w.x0 && b.x1 <= w.x1 && b.y0 >= w.y0 && b.y1 <= w.y1);
   for (const t of tags) {
+    const inside = (b: Box) => fits(b, within) && fits(b, t.within);
     let pick: Placed | null = null;
     for (const text of t.short && t.short !== t.text ? [t.text, t.short] : [t.text]) {
       for (const [x, y] of t.spots) {
-        if (!taken.some((b) => hits(textBox(x, y, text, t.size), b, pad))) {
+        const box = textBox(x, y, text, t.size);
+        if (inside(box) && !taken.some((b) => hits(box, b, pad))) {
           pick = { x, y, text };
           break;
         }
       }
       if (pick) break;
     }
-    // Nowhere clear: the short text where it covers least.
+    // Nowhere clear: the short text where it covers least (running off the edge counts most).
     if (!pick) {
       const text = t.short ?? t.text;
       const [x, y] = t.spots.reduce((best, s) => {
-        const cost = (p: [number, number]) => taken.reduce((sum, b) => sum + overlap(textBox(p[0], p[1], text, t.size), b), 0);
+        const cost = (p: [number, number]) => {
+          const box = textBox(p[0], p[1], text, t.size);
+          return taken.reduce((sum, b) => sum + overlap(box, b), 0) + (inside(box) ? 0 : 1e9);
+        };
         return cost(s) < cost(best) ? s : best;
       });
       pick = { x, y, text };
@@ -44,4 +52,47 @@ export function placeTags(fixed: Box[], tags: Tag[], pad = 4): Map<string, Place
     out.set(t.id, pick);
   }
   return out;
+}
+
+// A callout beside the thing it's about (a wall's length, a room's name), in screen pixels: clear of
+// that point, inside the pane and under its tools, on the side with the room. Tried right or left first
+// (whichever has more room), then below, then above; the first that keeps the point uncovered wins,
+// else the one nearest to it. The leader runs from the point to a short horizontal shoulder at the
+// callout's edge, as leaders do on the drawings.
+export type Callout = { x: number; y: number; side: "right" | "left" | "below" | "above"; leader: [number, number][]; clear: boolean };
+
+export function placeCallout(at: [number, number], size: { w: number; h: number }, pane: { w: number; h: number; top?: number; bottom?: number }, gap = 28, clear = 10): Callout {
+  const [ax, ay] = at;
+  const m = 8;
+  const top = pane.top ?? m, bottom = pane.h - (pane.bottom ?? m);
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const fitX = (x: number) => clamp(x, m, Math.max(m, pane.w - size.w - m));
+  const fitY = (y: number) => clamp(y, top, Math.max(top, bottom - size.h));
+  const sides: Callout["side"][] = ax <= pane.w / 2 ? ["right", "left", "below", "above"] : ["left", "right", "below", "above"];
+  const boxes = sides.map((side) => {
+    const x = side === "right" ? ax + gap : side === "left" ? ax - gap - size.w : ax - size.w / 2;
+    const y = side === "below" ? ay + gap : side === "above" ? ay - gap - size.h : ay - size.h / 2;
+    return { side, x: fitX(x), y: fitY(y) };
+  });
+  // How far the point is outside each box (0 or less: covered).
+  const outside = (b: { x: number; y: number }) => Math.max(b.x - ax, ax - (b.x + size.w), b.y - ay, ay - (b.y + size.h));
+  const pick = boxes.find((b) => outside(b) >= clear) ?? boxes.reduce((best, b) => (outside(b) > outside(best) ? b : best));
+  return { ...pick, leader: leaderTo(at, pick, size), clear: outside(pick) >= clear };
+}
+
+// A long thing (a wall, a duct) can be pointed at anywhere along it: the first point whose callout leaves
+// it uncovered, else the first.
+export function placeCalloutAlong(points: [number, number][], size: { w: number; h: number }, pane: { w: number; h: number; top?: number; bottom?: number }): Callout & { at: [number, number] } {
+  const tries = points.map((at) => ({ ...placeCallout(at, size, pane), at }));
+  return tries.find((c) => c.clear) ?? tries[0];
+}
+
+function leaderTo([ax, ay]: [number, number], b: { x: number; y: number }, size: { w: number; h: number }): [number, number][] {
+  const inY = (y: number) => Math.max(b.y + 10, Math.min(b.y + size.h - 10, y));
+  const inX = (x: number) => Math.max(b.x + 10, Math.min(b.x + size.w - 10, x));
+  if (ax <= b.x) return [[ax, ay], [b.x - 12, inY(ay)], [b.x, inY(ay)]];
+  if (ax >= b.x + size.w) return [[ax, ay], [b.x + size.w + 12, inY(ay)], [b.x + size.w, inY(ay)]];
+  // Above or below the box: drop to its edge, the shoulder along it.
+  const ey = ay < b.y ? b.y : b.y + size.h;
+  return [[ax, ay], [inX(ax), ey]];
 }
