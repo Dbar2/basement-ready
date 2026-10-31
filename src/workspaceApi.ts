@@ -150,7 +150,7 @@ export type DiyPlan = {
   takeoff: { lines: Line[]; assumptions: string[]; materialsCAD: number; hstCAD: number; missing: string[]; wallHeightM: number; checked: string };
   permits: Cost[];
   hires: Cost[];
-  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null };
+  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null; fromQuote: boolean };
   steps: { n: number; title: string; who: string; detail: string; inspection: string | null }[];
 };
 

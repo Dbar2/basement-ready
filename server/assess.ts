@@ -236,6 +236,7 @@ export type FixGroup = {
   costSource: any;
   sources: Rule["source"][];
   priced?: boolean; // false: a fix the quote can't price yet (the design has no place for it)
+  fromDesign?: boolean; // the design brought it (server/model/fixes.ts), not the rules
 };
 
 // The design they picked, once there is one (server/priced.ts): its quote is the cost, a fix it needs

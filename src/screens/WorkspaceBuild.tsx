@@ -308,11 +308,15 @@ function Diy({ plan }: { plan: DiyPlan }) {
             <dd className="mono">{range(t.diyLow, t.diyHigh)}</dd>
           </div>
           <div>
-            <dt>Hiring out the code work</dt>
+            <dt>Hired out</dt>
             <dd className="mono">{range(t.hiredLow, t.hiredHigh)}</dd>
           </div>
         </dl>
-        <p className="lede">Doing it yourself: every material for the finished unit ({money(plan.takeoff.materialsCAD)} plus {money(plan.takeoff.hstCAD)} HST), the permits, and the pros you still pay; your own time isn't counted. Hiring out is the rough cost on your plan for the code work (the fixes and what every suite needs); a contractor quotes the kitchen, bathroom and finishes on top.</p>
+        <p className="lede">
+          {t.fromQuote
+            ? "Your quote's two totals, as your book has them. Doing it yourself: the materials, the permits and the pros the law still needs, with contingency and HST; your own time isn't counted. Hiring out: the whole job done by trades."
+            : `Doing it yourself: every material for the finished unit (${money(plan.takeoff.materialsCAD)} plus ${money(plan.takeoff.hstCAD)} HST), the permits, and the pros you still pay; your own time isn't counted. Hiring out is the rough cost on your plan for the code work.`}
+        </p>
         <ul className="ruled ws-costs">
           {[...plan.permits, ...plan.hires].map((c) => (
             <li key={c.id} data-only={c.only ? true : undefined}>

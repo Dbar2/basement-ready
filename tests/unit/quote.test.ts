@@ -315,6 +315,15 @@ describe("the book's pictures", () => {
     expect(pictures.at(-1)?.kind).toBe("concept");
     expect(new Set(pictures.map((p) => p.url)).size).toBe(pictures.length);
   });
+
+  it("each say what they show: the room, what changed, and where in the video", async () => {
+    // Five looks and the scan's own idea, all of one corner from one moment of the video: six titles.
+    const { pictures } = await picturesFor("sample", sample, {}, model, []);
+    expect(new Set(pictures.map((p) => p.title)).size).toBe(pictures.length);
+    const looks = pictures.filter((p) => p.kind === "look");
+    expect(looks.map((p) => p.title)).toContain("A bedroom for your parent · Warm wood look · from 0:00 in your video");
+    expect(pictures.find((p) => p.kind === "concept")!.title).toMatch(/the first idea from your scan · from \d+:\d\d in your video$/);
+  });
 });
 
 describe("the book", () => {
