@@ -1,6 +1,6 @@
-// The pieces every Build card is made of: a frame, number fields in millimetres, a save button (ink,
-// never mint: the thread's one mint button is the guide's way on), and the line a card folds to once
-// its answer is saved, with a way to change it.
+// The pieces every Build card is made of: a frame, number fields in millimetres, a save button (the
+// mint primary: in a card that asks, saving is the way on, and the message's own choices are hairline),
+// and the line a card folds to once its answer is saved, with a way to change it.
 import { useState, type FormEvent, type ReactNode } from "react";
 import type { CardProps } from "../mount";
 import { mmText, mmValue } from "./data";
@@ -32,7 +32,7 @@ export function Saved({ children, onChange }: { children: ReactNode; onChange?: 
 
 export function SaveButton({ busy, disabled, children = "Save" }: { busy: boolean; disabled?: boolean; children?: ReactNode }) {
   return (
-    <button className="gc-save" disabled={busy || disabled}>
+    <button className="btn btn-primary gc-btn" disabled={busy || disabled}>
       {busy ? "Saving…" : children}
     </button>
   );
@@ -46,10 +46,11 @@ export function Problem({ text }: { text: string | null }) {
   ) : null;
 }
 
-export type MmField = { key: string; label: string; value: number | null | undefined; help?: string; hint?: string };
+export type MmField = { key: string; label: string; value: number | null | undefined; placeholder?: string };
 
-// Numbers in millimetres, typed together and saved together. A field's hint is what the video says.
-export function MmForm({ fields, submit, onSave }: { fields: MmField[]; submit?: string; onSave: (v: Record<string, number | null>) => Promise<void> }) {
+// Numbers in millimetres, one line each (what, the box, mm), typed together and saved together. The
+// placeholder is what the video says; `note` is one line of how to measure, under them all.
+export function MmForm({ fields, note, submit, onSave }: { fields: MmField[]; note?: string; submit?: string; onSave: (v: Record<string, number | null>) => Promise<void> }) {
   const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.key, mmText(f.value)])));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,20 +65,18 @@ export function MmForm({ fields, submit, onSave }: { fields: MmField[]; submit?:
   };
   return (
     <form className="gc-form" onSubmit={send}>
-      <div className="gc-mm-grid">
+      <div className="gc-mm-rows">
         {fields.map((f) => (
           <label key={f.key} className="gc-mm">
             <span className="gc-mm-label">{f.label}</span>
-            <span className="gc-mm-input">
-              <input className="input" inputMode="numeric" autoComplete="off" value={draft[f.key] ?? ""} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.replace(/[^0-9]/g, "") })} />
-              <span className="mono" aria-hidden>
-                mm
-              </span>
+            <input className="input" inputMode="numeric" autoComplete="off" placeholder={f.placeholder} value={draft[f.key] ?? ""} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.replace(/[^0-9]/g, "") })} />
+            <span className="mono" aria-hidden>
+              mm
             </span>
-            {(f.hint || f.help) && <span className="field-help">{[f.hint, f.help].filter(Boolean).join(" ")}</span>}
           </label>
         ))}
       </div>
+      {note && <p className="field-help">{note}</p>}
       <Problem text={error} />
       <SaveButton busy={busy} disabled={!ready}>
         {submit ?? "Save"}

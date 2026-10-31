@@ -12,22 +12,26 @@ import { eq } from "drizzle-orm";
 import type { CardRef, Choice, StepId, VisualRef } from "../../src/guide/types";
 import { savedAnswers } from "../answers";
 import { db, schema } from "../db";
-import type { MoneyQuestion, Program } from "../eligibility";
+import { evaluateMoney, type MoneyAnswers, type MoneyQuestion, type Program } from "../eligibility";
+import type { Property } from "../property";
+import { packFor, type Household } from "../rules";
 import { permitStatus } from "../permit/package";
 import type { ReadyItem } from "../permit/readiness";
 import { pricedForBasement, pricedSample } from "../priced";
-import { loadWorkspace, type Profile, type StoredState } from "../workspace";
+import { loadWorkspace, ProfileSchema, StateSchema, type Profile, type StoredState } from "../workspace";
 
 export type BuildSection = "permit" | "money" | "builders" | "done";
 export type BuildItem = {
   step: StepId; // "build.permit:<id>", "build.submit", "build.money:<question>", "build.builders", "done"
   section: BuildSection;
   message: string;
-  why: string;
+  why: string; // "" where nothing is asked: the submit copy and the last step
   card?: CardRef;
   choices?: Choice[];
   visual: VisualRef;
   done: boolean;
+  // About how long it takes them, for the guide's "about N minutes" (permit items only).
+  minutes?: number;
 };
 export type BuildList = {
   items: BuildItem[]; // in the order the guide asks, done ones included; always ends with "done"
@@ -39,12 +43,21 @@ export type BuildList = {
 
 export type BuildInput = {
   result: any; // the result priced on their design (server/priced.ts): cost, grants, money, moneyQuestions
+  // What the permit routes draw from, when it isn't `result`: a real scan's stored result
+  // (server/workspaceRoutes.ts reads it unpriced), so the readiness and the drawings' fingerprint match.
+  permitResult?: any;
+  // With the answers, the money is worked out here from them (server/eligibility.ts), as the answer
+  // does; without, it's read from the priced result.
+  household?: Household;
+  answers?: Record<string, unknown>;
+  property?: Property | null;
   municipality: string;
   state: StoredState;
   profile: Profile | null;
 };
 
 const PERMIT: VisualRef = { kind: "permit" };
+const MINUTES: Record<string, number> = { design: 3, tape: 5, window: 3, owner: 2, upstairs: 1, lot: 3, water: 2, designer: 10, review: 5 };
 const MONEY: VisualRef = { kind: "money" };
 const BUILDERS: VisualRef = { kind: "builders" };
 const LATER: Choice = { label: "Later", action: { type: "go", to: "home" } };
@@ -54,7 +67,7 @@ const listOf = (xs: string[]) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -
 const count = (n: number, one: string, many = `${one}s`) => `${n === 1 ? "one" : n === 2 ? "two" : n === 3 ? "three" : n} ${n === 1 ? one : many}`;
 
 export function buildList(input: BuildInput): BuildList {
-  const st = permitStatus(input);
+  const st = permitStatus({ ...input, result: input.permitResult ?? input.result });
   const all = st.readiness.items;
   const of = (group: ReadyItem["group"]) => all.filter((i) => i.group === group);
   const allDone = (xs: ReadyItem[]) => xs.every((x) => x.done);
@@ -85,7 +98,7 @@ export function buildList(input: BuildInput): BuildList {
       step: "build.permit:tape",
       section: "permit",
       message: `Grab a tape measure: ${listOf(what)}.`,
-      why: "The video's sizes are close; the City's drawings need measured ones, and every size on them comes from these.",
+      why: "The City's drawings need measured sizes, and every size on them comes from these.",
       card: { kind: "tape", id: "tape" },
       choices: [LATER],
       visual: PERMIT,
@@ -192,22 +205,22 @@ export function buildList(input: BuildInput): BuildList {
     });
   }
 
-  // Whichever permit item comes up first says what the set is and how much is left.
-  const opener = items.find((i) => i.section === "permit" && !i.done);
-  if (opener) {
-    const left = st.readiness.left;
-    opener.message = `I've drawn and filled your permit set from the scan. ${left === 1 ? "One thing is" : `${left} things are`} left before you can hand it in. ${opener.message}`;
-    opener.choices = [{ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } }, ...(opener.choices ?? [])];
-  }
-
   // The money: one item per question that still decides a program, then applying for what fits
   // before any work starts. Whichever comes first says how much they may be eligible for.
-  const money = input.result?.money ?? { total: 0, ifYes: 0 };
-  const grants = (input.result?.grants ?? []) as Program[];
+  const worked = input.answers
+    ? evaluateMoney(packFor(input.municipality).pack, {
+        household: input.household ?? input.result?.household ?? "unsure",
+        answers: input.answers as MoneyAnswers,
+        property: input.property ?? input.result?.property ?? null,
+        costHigh: input.result?.cost?.high ?? null,
+      })
+    : null;
+  const money = worked ? { total: worked.total, ifYes: worked.ifYes } : (input.result?.money ?? { total: 0, ifYes: 0 });
+  const grants = (worked?.programs ?? input.result?.grants ?? []) as Program[];
   const cash = grants.filter((g) => g.qualify === "yes" && g.value === "cash" && (g.amountCAD ?? 0) > 0);
   const lead = money.total > 0 ? `You may be eligible for up to ${dollars(money.total)}${cash.length ? ` (${listOf(cash.map((g) => g.shortName))})` : ""}.` : "";
   const moneyItems: BuildItem[] = [];
-  const questions = ((input.result?.moneyQuestions ?? []) as MoneyQuestion[]).filter((q) => q.id !== "household");
+  const questions = ((worked?.questions ?? input.result?.moneyQuestions ?? []) as MoneyQuestion[]).filter((q) => q.id !== "household");
   for (const q of questions) {
     moneyItems.push({
       step: `build.money:${q.id}`,
@@ -247,7 +260,7 @@ export function buildList(input: BuildInput): BuildList {
     step: "build.builders",
     section: "builders",
     // With nothing to answer or apply for, the money is said here, on the way past.
-    message: `${!firstMoney && lead ? `${lead} ` : ""}Who builds it? Hire a contractor to run it, run it yourself with licensed trades for some of it, or do it all yourself.`,
+    message: `${!moneyItems.length && lead ? `${lead} ` : ""}Who builds it? Hire a contractor to run it, run it yourself with licensed trades for some of it, or do it all yourself.`,
     why: "It changes the cost, who pulls which permit, and who you call. I'll line up the public registries and write the quote requests.",
     card: { kind: "buildPath", id: "path" },
     choices: [LATER],
@@ -261,9 +274,10 @@ export function buildList(input: BuildInput): BuildList {
     step: "build.submit",
     section: "permit",
     message: canSubmit
-      ? `Everything's ready. Download the submit copy and hand it in ${portal ? `on the ${portal.label}` : `to the ${st.place.authority}`}.`
+      ? `Everything's ready. Download the submit copy, with no draft marks and every form filled, and hand it in ${portal ? `on the ${portal.label}` : `to the ${st.place.authority}`}.`
       : `The submit copy unlocks when nothing is left: ${st.readiness.left} to go.`,
-    why: "The submit copy has no draft marks and every form filled. It's the one the City reviews.",
+    // Nothing is asked here either.
+    why: "",
     card: canSubmit ? { kind: "download", id: "submit" } : undefined,
     visual: PERMIT,
     done: Boolean(input.state.permit?.submittedAt),
@@ -272,13 +286,17 @@ export function buildList(input: BuildInput): BuildList {
   items.push({
     step: "done",
     section: "done",
-    message: "That's everything I need from you. Your book has the answer, your design, the permit set and the money in one PDF.",
-    why: "Share it with a designer or a contractor so they can quote without a first visit.",
+    message: "That's everything I need from you. Your book has the answer, your design, the permit set and the money in one PDF, to share with a designer or a contractor so they can quote without a first visit.",
+    // Nothing is asked here, so there's no "why".
+    why: "",
     card: { kind: "download", id: "book" },
     choices: [{ label: "Back to your basement", action: { type: "go", to: "home" }, primary: true }],
     visual: PERMIT,
     done: false,
   });
+
+  // Rough minutes for each permit item, for the guide's "about N minutes" before it starts.
+  for (const i of items) if (i.section === "permit") i.minutes = i.step === "build.submit" ? 2 : MINUTES[i.step.split(":")[1]] ?? 2;
 
   return {
     items,
@@ -303,11 +321,16 @@ export async function buildListFor(scanId: string): Promise<BuildList | null> {
   const result = scan.result as any;
   const priced = result?.findings ? await pricedForBasement(scan.id, scan.basementId, { ...result, household: basement.household ?? result.household }, answers) : result;
   const ws = await loadWorkspace(basement.id);
-  return buildList({ result: priced, municipality: basement.municipality, state: ws.state, profile: ws.profile });
+  return buildList({ result: priced, permitResult: result, municipality: basement.municipality, state: ws.state, profile: ws.profile });
 }
 
-// The example's list, from the workspace and money answers its browser keeps.
-export function sampleBuildList(ws: { profile: Profile | null; state: StoredState }, answers: Record<string, unknown> = {}): BuildList {
-  const result = pricedSample(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), ws.state, answers as never);
-  return buildList({ result, municipality: "waterloo-on", state: ws.state, profile: ws.profile });
+// The example's list, from the workspace and money answers its browser keeps. Checked the way the
+// example's permit routes check it (server/workspaceRoutes.ts sampleBody): the drawings' fingerprint
+// follows the checked shape, so a sheet looked over there counts here too.
+export function sampleBuildList(ws: { profile: unknown; state: unknown }, answers: Record<string, unknown> = {}): BuildList {
+  const p = ProfileSchema.safeParse(ws.profile);
+  const s = StateSchema.safeParse(ws.state ?? {});
+  const state: StoredState = s.success ? s.data : {};
+  const result = pricedSample(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), state, answers as never);
+  return buildList({ result, municipality: "waterloo-on", state, profile: p.success ? p.data : null });
 }
