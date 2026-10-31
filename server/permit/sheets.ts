@@ -10,7 +10,7 @@ import type { CityPermit } from "./data";
 import { boxesMeet, drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type PageBox, type Scale, type View } from "./draw";
 import { homesAfter } from "../eligibility";
 import { areaText, suiteAreaM2 } from "../model/suite";
-import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, escapeOk, PROPOSED_ESCAPE, type PermitModel, type PermitWindow, type PWall, unitOutline, unitRooms, wallLen } from "./model";
+import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, escapeOk, PROPOSED_ESCAPE, keptBathroom, type PermitModel, type PermitWindow, type PWall, unitOutline, unitRooms, wallLen } from "./model";
 
 // What a window's tag says about escape: only a size that meets the rule is called an escape window.
 const escapeLabel = (w: PermitWindow) => (!w.escape ? "" : w.meets ? " ESCAPE WINDOW" : w.meets === null ? " WINDOW: ESCAPE SIZE TO BE TAPED" : " WINDOW: TOO SMALL TO ESCAPE");
@@ -74,7 +74,7 @@ export function scopeOfWork(o: { model?: PermitModel | null; geo?: Geometry | nu
   const studio = m ? m.design.layout === "studio" || !unitRooms(m).some((r) => r.kind === "bedroom") : o.geo?.layout?.kind === "studio";
   const parts = [
     `Create a second dwelling unit (additional residential unit), ${studio ? "a studio (bachelor) unit" : "a one-bedroom unit"}, in the basement of the existing house`,
-    "new partition walls, a bathroom and a kitchen",
+    keptBathroom(m) ? "new partition walls and a kitchen; the existing bathroom becomes unit 2's, with no change to it" : "new partition walls, a bathroom and a kitchen",
     "a fire separation between the two units",
     "hard-wired, interconnected smoke and CO alarms in both units",
   ];
@@ -870,7 +870,7 @@ export function details(ctx: SheetCtx): Printed {
 export function notesSheet(ctx: SheetCtx): Printed {
   const { s, a, page } = newSheet(ctx, "A7", SHEETS[7].title, null);
   const m = ctx.model;
-  const list = notesFor({ fuelBurning: m?.fuelBurning ?? true, stairs: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "stairs") ?? true), escapeNew: Boolean(m?.windows.some((w) => w.change !== "keep")) });
+  const list = notesFor({ fuelBurning: m?.fuelBurning ?? true, stairs: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "stairs") ?? true), escapeNew: Boolean(m?.windows.some((w) => w.change !== "keep")), bathNew: !keptBathroom(m) });
   const colW = (a.w - 40) / 3;
   let col = 0, y = a.y + a.h - 20;
   const printed: string[] = [];

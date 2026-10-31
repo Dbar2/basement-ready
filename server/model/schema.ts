@@ -35,6 +35,7 @@ const RoomSchema = z.object({
   unit: z.union([z.literal(1), z.literal(2), z.literal("shared")]),
   ceilingM: num.min(0).max(6).nullable().optional(),
   ceilingRating: rating.optional(),
+  kept: z.boolean().optional(),
 });
 const FixtureKindSchema = z.enum(["furnace", "water_heater", "panel", "plumbing", "beam", "duct", "bulkhead", "post", "stairs"]);
 const FixtureSchema = z.object({ id, kind: FixtureKindSchema, at: pt, sizeM: z.tuple([size, size]).optional(), heightM: num.min(0).max(6).nullable().optional(), detectionId: id.optional(), guess: z.boolean().optional(), bottom: pt.optional() });
