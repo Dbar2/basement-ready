@@ -21,6 +21,10 @@ export type Take = {
   answers: WaitAnswers;
   // The rendered test basements come with their true rooms (scripts/eval/generate.py).
   truth?: string;
+  // An app take's city when it isn't Waterloo (posted with no address, so no public data is looked up).
+  municipality?: string;
+  // The browser setups it runs in, when not all four (playwright.config.ts projects).
+  projects?: string[];
 };
 
 const media = (...p: string[]) => join(MEDIA_ROOT, ...p);
@@ -51,6 +55,21 @@ export const TAKES: Take[] = [
     who: { label: "Rental at market rent", id: "rental_market" },
     answers: { "What would you like it to be": "A rental suite" },
     truth: media("eval/b2-finished-family/truth.json"),
+  },
+  {
+    // b2 again, as a Kitchener house: the city's own permit items (its water-meter question) in a
+    // browser. Its video, finds, plan check and pictures replay b2's; Spark's verdict reads Kitchener's rules.
+    id: "b2-kitchener",
+    label: "Rendered basement b2 in Kitchener (app, tracked camera)",
+    video: media("eval/b2-finished-family/walkthrough.mp4"),
+    capture: media("eval/b2-finished-family/capture.json"),
+    via: "app",
+    private: false,
+    address: null,
+    who: { label: "Rental at market rent", id: "rental_market" },
+    answers: { "What would you like it to be": "A rental suite" },
+    municipality: "kitchener-on",
+    projects: ["chromium-desktop", "webkit-phone"],
   },
 ];
 
@@ -96,11 +115,12 @@ export function saveOutcome(t: Take, o: Outcome) {
 }
 
 // Why a take can't run here, or null when it can.
-export function unavailable(t: Take): string | null {
+export function unavailable(t: Take, project?: string): string | null {
   if (!existsSync(t.video)) return `its video isn't on this machine (${t.video})`;
   if (t.capture && !existsSync(t.capture)) return `its camera path isn't on this machine (${t.capture})`;
   if (mode === "replay" && !recordedOutcome(t)) return "not recorded yet: run pnpm test:e2e:record (it spends Meta credits; ask first)";
   if (mode === "record" && !process.env.E2E_TAKES?.split(",").includes(t.id)) return "recording costs money: name it in E2E_TAKES to record it";
+  if (t.projects && project && !t.projects.includes(project)) return `runs in ${t.projects.join(" and ")} only`;
   if (mode === "record" && t.private && RECORD_DIR === COMMITTED_REPLAY) return "a private take is never recorded into the committed folder";
   return null;
 }
