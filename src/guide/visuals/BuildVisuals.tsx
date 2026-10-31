@@ -11,7 +11,7 @@ import "./build-visuals.css";
 export function PermitVisual({ scanId }: VisualProps<"permit">) {
   const { status, result } = useBuild(scanId);
   const city = result?.authority ?? (result?.city ? `City of ${result.city}` : null);
-  if (!status) return <Pane caption={city ? `Your permit set, ${city}` : "Your permit set"} />;
+  if (!status) return <Pane caption={city ? `Your permit set, ${city}` : "Your permit set"} note="Opening your permit set…" />;
   const total = status.items.length;
   const ready = total - status.left;
   // One line per kind of thing, in the order the guide asks.
@@ -26,11 +26,17 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
     { group: "designer", label: "Your designer" },
     { group: "review", label: "Each sheet looked over" },
   ];
-  const lines = [
+  const all = [
     { label: "Drawings to scale", done: true },
     { label: "City forms filled", done: true },
     ...groups.filter((g) => status.items.some((i) => i.group === g.group)).map((g) => ({ label: g.label, done: status.items.filter((i) => i.group === g.group).every((i) => i.done) })),
   ];
+  // Five lines fit the pane on a phone: the last done ones, then what's next; the rest show on a
+  // computer and count as "and N more" on a phone (build-visuals.css).
+  const todo = all.filter((l) => !l.done);
+  const shown = [...all.filter((l) => l.done).slice(-Math.max(1, 5 - todo.length)), ...todo].slice(0, 5);
+  const more = all.length - shown.length;
+  const lines = all.map((l) => ({ ...l, extra: !shown.includes(l) }));
   return (
     <Pane caption={city ? `Your permit set, ${city}` : "Your permit set"} kind="permit">
       <div className="bv-permit">
@@ -58,7 +64,7 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
           </div>
           <ul className="bv-checks">
             {lines.map((l) => (
-              <li key={l.label} data-done={l.done || undefined}>
+              <li key={l.label} data-done={l.done || undefined} data-extra={l.extra || undefined}>
                 <span className="bv-box" aria-hidden>
                   {l.done ? "✓" : ""}
                 </span>
@@ -66,6 +72,7 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
                 <span className="visually-hidden">{l.done ? ", done" : ", to do"}</span>
               </li>
             ))}
+            {more > 0 && <li className="bv-more">and {more} more</li>}
           </ul>
         </div>
       </div>
@@ -75,13 +82,13 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
 
 export function MoneyVisual({ scanId }: VisualProps<"money">) {
   const { result } = useBuild(scanId);
-  if (!result) return <Pane caption="The money" />;
+  if (!result) return <Pane caption="The money" note="Adding up the money…" />;
   const grants = (result.grants ?? []).filter((g) => g.qualify !== "no");
   const total = result.money?.total ?? 0;
   const ifYes = result.money?.ifYes ?? 0;
   const worth = (g: (typeof grants)[number]) => (g.value === "cash" ? (g.amountCAD ? `up to ${dollars(g.amountCAD)}` : "to be worked out") : g.value === "financing" ? "a loan" : "saves fees");
   return (
-    <Pane caption="Decided from each program's written rules. The program makes the final call." kind="money">
+    <Pane caption="Each program makes the final call" kind="money">
       <div className="bv-money">
         <div className="bv-money-head">
           <p className="bv-sub">You may be eligible for up to</p>
@@ -159,10 +166,10 @@ export function BuildersVisual({ scanId }: VisualProps<"builders">) {
 }
 
 // The pane's paper and its caption. With nothing loaded yet it stays a quiet sheet, never empty or spinning.
-function Pane({ caption, kind, children }: { caption: string; kind?: string; children?: ReactNode }) {
+function Pane({ caption, kind, note, children }: { caption: string; kind?: string; note?: string; children?: ReactNode }) {
   return (
     <div className="bv" data-build-visual={kind ?? "loading"}>
-      <div className="bv-body">{children}</div>
+      <div className="bv-body">{children ?? <p className="bv-sub bv-note">{note}</p>}</div>
       <p className="bv-cap">{caption}</p>
     </div>
   );
