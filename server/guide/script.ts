@@ -403,12 +403,14 @@ export function act(t: Thread, action: GuideAction, ctx: Ctx, reply?: Reply): { 
   const aside = reply ?? (action.type === "explain" ? explainReply(action.term) : null);
   if (aside && step === before) {
     const current = said(ctx, moved, step);
-    if (QUESTION.test(step)) {
-      // A question's still open: answer the aside, then ask it again.
+    // Only the newest message's buttons are live. A step whose way on is its answers or its card (no mint
+    // button: a question, a build item) is said again under the aside, so it can still be answered.
+    if (QUESTION.test(step) || !current.choices?.some((c) => c.primary)) {
       out.push(message(t, out, { from: "guide", at: ctx.now, ...replySaid(aside) }));
       // Without a visual of its own, so the aside's drawing stays in the pane.
       const { visual: _visual, ...again } = current;
-      out.push(message(t, out, { from: "guide", at: ctx.now, ...again, text: `Back to my question: ${current.text.slice(current.text.indexOf("**"))}` }));
+      const text = QUESTION.test(step) ? `Back to my question: ${current.text.slice(current.text.indexOf("**"))}` : current.text;
+      out.push(message(t, out, { from: "guide", at: ctx.now, ...again, text }));
     } else {
       // Otherwise the way on stays one tap away, under the reply.
       const on = current.choices?.find((c) => c.primary);
