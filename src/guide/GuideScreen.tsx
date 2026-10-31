@@ -2,10 +2,12 @@
 // basement in the visual pane, the guide's thread under it (beside it on a computer), and the ask bar.
 // GuideScreen draws a state; GuideRoute loads it for /scans/:id/guide.
 import { useParams } from "@tanstack/react-router";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef } from "react";
 import { Mark } from "../components/Logo";
+import { AskBar } from "./AskBar";
 import { Card, Visual } from "./mount";
 import { isMilestone, MILESTONES } from "./progress";
+import { rich } from "./Thread";
 import type { GuideAction, GuideMessage, GuideState } from "./types";
 import { useGuide } from "./useGuide";
 import "./guide.css";
@@ -16,9 +18,10 @@ type Props = {
   busy?: boolean;
   error?: string | null;
   act: (action: GuideAction, label?: string) => void;
+  placeholder?: string; // what the ask bar suggests at this step (useGuide)
 };
 
-export function GuideScreen({ scanId, state, busy = false, error = null, act }: Props) {
+export function GuideScreen({ scanId, state, busy = false, error = null, act, placeholder }: Props) {
   const log = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   // The newest message sits just above the ask bar. While they're at the bottom, the thread follows it as
@@ -46,6 +49,8 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act }: 
     pinned.current = true;
     log.current?.scrollTo({ top: log.current.scrollHeight });
   }, [state.messages.length, busy]);
+  // The newest guide message is the one asking: only its buttons are live, even under their own reply.
+  const asking = state.messages.findLast((m) => m.from === "guide")?.id;
 
   return (
     <div className="gs" data-milestone={state.milestone}>
@@ -68,10 +73,10 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act }: 
         <Visual scanId={scanId} visual={state.visual} act={act} />
       </section>
 
-      <div className="gs-thread" ref={log} role="log" aria-live="polite" aria-label="Your guide">
+      <div className="gs-thread" ref={log} role="log" aria-live="polite" aria-label="Your guide" aria-busy={busy}>
         <div className="gs-thread-in" ref={body}>
-          {state.messages.map((m, i) => (
-            <Message key={m.id} scanId={scanId} m={m} live={i === state.messages.length - 1} busy={busy} act={act} />
+          {state.messages.map((m) => (
+            <Message key={m.id} scanId={scanId} m={m} live={m.id === asking} busy={busy} act={act} />
           ))}
           {busy && <p className="gs-typing">Thinking…</p>}
           {error && (
@@ -82,15 +87,17 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act }: 
         </div>
       </div>
 
-      <AskBar busy={busy} onAsk={(text) => act({ type: "ask", text })} />
+      <AskBar busy={busy} placeholder={placeholder} onAsk={(text) => act({ type: "ask", text })} />
     </div>
   );
 }
 
-// A message that ends in a question says why it asks; any other says why it matters.
-const asks = (m: GuideMessage) => m.text.trim().endsWith("?");
+// A message that ends in a question says why it asks; any other says why it matters. The question is
+// often in bold, so the marks come off first.
+const asks = (m: GuideMessage) => m.text.replace(/\*\*/g, "").trim().endsWith("?");
 
-// One message: the guide's (with its why, its card and its choices while it's the newest) or theirs.
+// One message: the guide's (with its why, its card and its choices while it's the one asking) or theirs.
+// The guide's text and why carry **bold** and [sources](https://…) (track B's rich()).
 function Message({ scanId, m, live, busy, act }: { scanId: string; m: GuideMessage; live: boolean; busy: boolean; act: Props["act"] }) {
   if (m.from === "you") return <p className="gs-you">{m.text}</p>;
   return (
@@ -99,10 +106,10 @@ function Message({ scanId, m, live, busy, act }: { scanId: string; m: GuideMessa
         <Mark title="" />
       </span>
       <div className="gs-msg-body">
-        <p>{m.text}</p>
+        <p>{rich(m.text)}</p>
         {m.why && (
           <p className="gs-why">
-            <b>{asks(m) ? "Why I'm asking:" : "Why it matters:"}</b> {m.why}
+            <b>{asks(m) ? "Why I'm asking:" : "Why it matters:"}</b> {rich(m.why)}
           </p>
         )}
         {m.card && <Card scanId={scanId} card={m.card} act={act} />}
@@ -121,31 +128,9 @@ function Message({ scanId, m, live, busy, act }: { scanId: string; m: GuideMessa
   );
 }
 
-function AskBar({ busy, onAsk }: { busy: boolean; onAsk: (text: string) => void }) {
-  const [text, setText] = useState("");
-  const send = (e: FormEvent) => {
-    e.preventDefault();
-    const t = text.trim();
-    if (!t || busy) return;
-    onAsk(t);
-    setText("");
-  };
-  return (
-    <form className="gs-ask" onSubmit={send}>
-      <label className="visually-hidden" htmlFor="guide-ask-input">
-        Ask anything about your basement
-      </label>
-      <input id="guide-ask-input" className="input" value={text} maxLength={400} onChange={(e) => setText(e.target.value)} placeholder="Ask anything about your basement" autoComplete="off" />
-      <button type="submit" className="gs-send" disabled={busy || !text.trim()}>
-        Send
-      </button>
-    </form>
-  );
-}
-
 export function GuideRoute() {
   const { scanId } = useParams({ from: "/scans/$scanId/guide" });
-  const { state, busy, error, act } = useGuide(scanId);
+  const { state, busy, error, act, placeholder } = useGuide(scanId);
   useEffect(() => {
     document.title = "Your guide | Basement Ready";
   }, []);
@@ -168,5 +153,5 @@ export function GuideRoute() {
         {error ? <p className="gs-error">{error}</p> : <p className="viewer-empty">Opening your guide…</p>}
       </div>
     );
-  return <GuideScreen scanId={scanId} state={state} busy={busy} error={error} act={act} />;
+  return <GuideScreen scanId={scanId} state={state} busy={busy} error={error} act={act} placeholder={placeholder} />;
 }
