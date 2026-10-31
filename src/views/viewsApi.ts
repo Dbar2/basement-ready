@@ -5,8 +5,10 @@ import type { PictureMeta } from "../../server/views/photoreal";
 import type { AngleView } from "./AngleRender";
 
 // `url` is null when the server kept nothing (the example, past its committed pictures): show the render.
-export type Picture = PictureMeta & { url: string | null };
-export type ViewsData = { angles: AngleView[]; design: Design | null; designHash: string | null; meshUrl: string; ceilingM: number | null; pictures: (PictureMeta & { url: string })[]; label: string };
+// `before`: the real frame the picture was made from, the same size (`size`) and framing: the "before"
+// of a before/after slider (src/views/BeforeAfter.tsx).
+export type Picture = PictureMeta & { url: string | null; before: string; size: [number, number] };
+export type ViewsData = { angles: AngleView[]; design: Design | null; designHash: string | null; meshUrl: string; ceilingM: number | null; pictures: (PictureMeta & { url: string; before: string; size: [number, number] })[]; label: string };
 
 // `designId`: which of the model's designs the angles are judged against (else the chosen one);
 // `designHash`: which version of it the pictures already made are looked up for.

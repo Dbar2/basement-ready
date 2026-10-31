@@ -104,6 +104,8 @@ export function DesignPictures({
   const [selected, setSelected] = useState<Selected | null>(null);
   const [snap, setSnap] = useState<{ fn: Snap; hash: string } | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Pictures showing their "before": the real frame each was made from, same size and framing.
+  const [before, setBefore] = useState<Set<string>>(new Set());
 
   const design = controlled ?? own;
   const hash = useMemo(() => (design ? designHash(design) : null), [design]);
@@ -226,7 +228,7 @@ export function DesignPictures({
     <section className="views" data-view={view}>
       <div className="views-head">
         <p className="views-status" aria-live="polite">
-          {updating ? "Updating every angle…" : `${angles.length} angles from where you filmed`}
+          {updating ? "Updating every angle…" : `${angles.length} angle${angles.length === 1 ? "" : "s"} from where you filmed`}
         </p>
         <div className="segmented small" role="group" aria-label="Show as">
           <button aria-pressed={view === "swipe"} onClick={() => setView("swipe")}>
@@ -244,6 +246,7 @@ export function DesignPictures({
             <figure key={a.id} className="views-card" data-angle={a.id} data-shows={renders.get(a.id)?.items.map((i) => `${i.id}:${i.share.toFixed(3)}`).join(" ")}>
               <button className="views-hit" style={{ aspectRatio: `${a.intrinsics.width} / ${a.intrinsics.height}` }} onClick={(e) => tap(a.id, e)} aria-label={editable ? "Tap something in this picture to change it" : "Picture of the design"} disabled={!editable}>
                 {s ? <Fade url={s.url} alt="The design, virtually staged in your basement" /> : <img className="views-img views-frame" src={a.frameUrl} alt="" />}
+                {s && before.has(a.id) && <img className="views-img" src={a.frameUrl} alt="Before: the frame from your video" draggable={false} />}
                 {outline && selected?.angleId === a.id && (
                   <span className="views-outline" style={{ left: `${outline.x * 100}%`, top: `${outline.y * 100}%`, width: `${outline.w * 100}%`, height: `${outline.h * 100}%` }} />
                 )}
@@ -251,6 +254,16 @@ export function DesignPictures({
               <figcaption>
                 <span className="views-label">Virtually staged</span>
                 <span className="views-checked">{making.has(a.id) && s?.kind === "render" ? "Making it look real…" : s?.checked ?? "Drawing the design…"}</span>
+                {s && (
+                  <button
+                    type="button"
+                    className="link-quiet views-before"
+                    aria-pressed={before.has(a.id)}
+                    onClick={() => setBefore((b) => (b.has(a.id) ? new Set([...b].filter((x) => x !== a.id)) : new Set(b).add(a.id)))}
+                  >
+                    {before.has(a.id) ? "Show the design" : "Show before"}
+                  </button>
+                )}
               </figcaption>
             </figure>
           );
