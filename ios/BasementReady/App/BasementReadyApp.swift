@@ -68,6 +68,29 @@ final class AppModel: ObservableObject {
     uploader.reset()
     stage = .start
   }
+
+  // basementready://new: a new scan, from the web's in-app link. Never in the middle of a take or a
+  // send; from the review it waits too, so a take isn't left behind unsent by a stray link.
+  func open(_ url: URL) {
+    guard AppLink(url) == .newScan else { return }
+    switch stage {
+    case .start, .result: restart()
+    case .filming, .review, .sending: break
+    }
+  }
+}
+
+// The app's own links: basementready://new.
+enum AppLink: Equatable {
+  case newScan
+
+  init?(_ url: URL) {
+    guard url.scheme?.lowercased() == "basementready" else { return nil }
+    switch url.host?.lowercased() ?? url.path {
+    case "new": self = .newScan
+    default: return nil
+    }
+  }
 }
 
 struct RootView: View {
@@ -86,9 +109,10 @@ struct RootView: View {
       case .sending(let retry):
         SendingView(uploader: uploader, onRetry: { if let (take, answers) = retry { app.send(take, answers) } else { app.restart() } }, onCancel: { app.restart() }).preferredColorScheme(.light)
       case .result(let scan, let page):
-        ResultView(scan: scan, page: page) { app.restart() }.preferredColorScheme(.light)
+        ResultView(scan: scan, page: page, onNewScan: { app.restart() }).preferredColorScheme(.light)
       }
     }
+    .onOpenURL { url in app.open(url) }
     .onChange(of: uploader.state) { _, state in
       // Just sent: straight into the guide, where the wait happens.
       if case .done(let scan) = state { app.stage = .result(scan, .guide) }
