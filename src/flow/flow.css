@@ -56,7 +56,6 @@
 .live[data-flow] > .flow-head { margin-inline: calc(-1 * clamp(16px, 3vw, 40px)); }
 .live[data-flow] > .live-top { justify-content: flex-end; padding-top: 0; }
 
-.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 /* ---------- pick a layout, with the decision beside it ---------- */
 .layouts-page { display: grid; gap: 24px; padding: 28px var(--gutter) 40px; align-items: start; }

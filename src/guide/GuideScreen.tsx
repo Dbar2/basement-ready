@@ -92,6 +92,9 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act }: 
   );
 }
 
+// A message that ends in a question says why it asks; any other says why it matters.
+const asks = (m: GuideMessage) => m.text.trim().endsWith("?");
+
 // One message: the guide's (with its why, its card and its choices while it's the newest) or theirs.
 function Message({ scanId, m, live, busy, act }: { scanId: string; m: GuideMessage; live: boolean; busy: boolean; act: Props["act"] }) {
   if (m.from === "you") return <p className="gs-you">{m.text}</p>;
@@ -102,7 +105,11 @@ function Message({ scanId, m, live, busy, act }: { scanId: string; m: GuideMessa
       </span>
       <div className="gs-msg-body">
         <p>{m.text}</p>
-        {m.why && <p className="gs-why">{m.why}</p>}
+        {m.why && (
+          <p className="gs-why">
+            <b>{asks(m) ? "Why I'm asking:" : "Why it matters:"}</b> {m.why}
+          </p>
+        )}
         {m.card && <Card scanId={scanId} card={m.card} act={act} />}
         {live && m.choices && m.choices.length > 0 && (
           <div className="gs-choices">

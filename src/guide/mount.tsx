@@ -6,7 +6,10 @@ import { BUILD_CARDS } from "./cards";
 import { VisualStub } from "./stubs";
 import type { CardRef, GuideAction, VisualRef } from "./types";
 import { BuildersVisual, MoneyVisual, PermitVisual } from "./visuals/BuildVisuals";
+import { Explain } from "./visuals/Explain";
 import { PlanEdit } from "./visuals/PlanEdit";
+import { PlanMarked } from "./visuals/PlanMarked";
+import { VideoFinds } from "./visuals/VideoFinds";
 
 export type VisualKind = VisualRef["kind"];
 export type CardKind = CardRef["kind"];
@@ -21,9 +24,10 @@ export const CARD_KINDS: CardKind[] = ["tape", "window", "owner", "waterMeter", 
 
 // Swap a stub for the real component as each track lands.
 const VISUALS: { [K in VisualKind]: ComponentType<VisualProps<K>> } = {
-  video: VisualStub,
-  plan: VisualStub,
-  explain: VisualStub,
+  // The wait and the answer (track C).
+  video: VideoFinds,
+  plan: PlanMarked,
+  explain: Explain,
   planEdit: PlanEdit, // track D: check the plan, editable
   layouts: VisualStub,
   beforeAfter: VisualStub,
