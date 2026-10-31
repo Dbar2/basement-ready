@@ -60,13 +60,23 @@ final class FilmAndSendTests: XCTestCase {
     waitForExpectations(timeout: 60)
     attach(app, "result")
 
-    // The logo stays in the app: it goes to this basement's home base, never the marketing site.
-    app.buttons["result.logo"].tap()
-    XCTAssertTrue(web.waitForExistence(timeout: 10))
-    XCTAssertTrue(app.buttons["New scan"].exists, "still on the result screen, not sent out of the app")
-
-    // basementready://new (the web's in-app "New scan" link) goes back to the start screen.
-    XCUIDevice.shared.system.open(URL(string: "basementready://new")!)
+    // One bar: the page's own ends with New scan (basementready://new) in the app, and the app's
+    // bar gives way to it. A server from before Nov 1 has no such link and keeps the app's bar.
+    let pageNewScan = web.links["New scan"]
+    if pageNewScan.waitForExistence(timeout: 30) {
+      let appBarGone = NSPredicate { _, _ in !app.buttons["result.logo"].exists }
+      expectation(for: appBarGone, evaluatedWith: nil)
+      waitForExpectations(timeout: 10)
+      attach(app, "one bar")
+      // The page's logo stays in the app: this basement's home base, never the marketing site.
+      web.links["Your basement"].firstMatch.tap()
+      XCTAssertTrue(web.links["New scan"].waitForExistence(timeout: 30), "still the basement's own page, in the app")
+      web.links["New scan"].tap()
+    } else {
+      app.buttons["result.logo"].tap()
+      XCTAssertTrue(web.waitForExistence(timeout: 10))
+      app.buttons["New scan"].tap()
+    }
     XCTAssertTrue(app.buttons["Start filming"].waitForExistence(timeout: 15), "a new scan starts from the start screen")
   }
 
