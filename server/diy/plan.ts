@@ -1,7 +1,7 @@
 // "Do it yourself": who may do which part of the work in Ontario, the materials list, the permits
 // and the pros you must still pay, DIY total against the hired total, and the order to build in,
 // lined up with the inspections the city books.
-import { cityPermit, ontarioDiy, type CityPermit, type Inspection, type ProItem, type Trade } from "../permit/data";
+import { cityPermit, forCity, ontarioDiy, type Cite, type CityPermit, type Inspection, type ProItem, type Trade } from "../permit/data";
 import { basementGeometry } from "../permit/plans";
 import { packFor } from "../rules";
 import { currentModel } from "../model/current";
@@ -17,11 +17,11 @@ export type BuildStep = { n: number; title: string; who: string; detail: string;
 export type DiyPlan = {
   city: string;
   permit: CityPermit | null; // who signs, forms, portal, inspections (the pack's permitPackage)
-  needsPro: (ProItem & { live: boolean })[];
+  needsPro: (Omit<ProItem, "cities"> & { citySource: Cite | null; live: boolean })[];
   egressNew: boolean;
   electrical: { text: string; verified: boolean; source: { title: string; url: string } };
   ownerBuilder: { allowed: boolean; detail: string; source: { title: string; url: string } } | null;
-  trades: Trade[];
+  trades: (Omit<Trade, "cities"> & { citySource: Cite | null })[];
   takeoff: Takeoff;
   permits: Cost[];
   hires: Cost[];
@@ -96,11 +96,12 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
   return {
     city,
     permit,
-    needsPro: diy.needsPro.map((n) => ({ ...n, live: n.when === "always" || (n.when === "egress_cut" && egressNew) })),
+    // Ontario's wording, with this city's own additions only (server/permit/data.ts forCity).
+    needsPro: diy.needsPro.map((n) => ({ ...forCity(n, municipality), live: n.when === "always" || (n.when === "egress_cut" && egressNew) })),
     egressNew,
     electrical: { text: diy.electrical.text, verified: diy.electrical.verified, source: diy.electrical.source },
     ownerBuilder: permit ? { allowed: permit.ownerBuilder.allowed, detail: permit.ownerBuilder.detail, source: permit.ownerBuilder.source } : null,
-    trades: diy.trades,
+    trades: diy.trades.map((t) => forCity(t, municipality)),
     takeoff: t,
     permits,
     hires,

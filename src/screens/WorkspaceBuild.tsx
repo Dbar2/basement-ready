@@ -286,6 +286,14 @@ function Diy({ plan }: { plan: DiyPlan }) {
                 <a className="ws-source" href={tr.source.url} target="_blank" rel="noreferrer">
                   {tr.source.section ? `${tr.source.title}, ${tr.source.section}` : tr.source.title}
                 </a>
+                {tr.citySource && (
+                  <>
+                    {" · "}
+                    <a className="ws-source" href={tr.citySource.url} target="_blank" rel="noreferrer">
+                      {tr.citySource.section ? `${tr.citySource.title}, ${tr.citySource.section}` : tr.citySource.title}
+                    </a>
+                  </>
+                )}
                 {tr.registry && (
                   <>
                     {" · "}

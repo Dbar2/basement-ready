@@ -120,7 +120,8 @@ export type Line = {
   only?: string | null;
 };
 export type Cost = { id: string; item: string; lowCAD: number; highCAD: number; source: { title: string; url: string; checked: string } | null; estimate: boolean; only?: string | null };
-export type Trade = { id: string; title: string; owner: "yes" | "with_permit" | "ask" | "no"; detail: string; permit: string | null; registry?: { label: string; url: string } | null; source: Cite; verified: boolean; notes?: string };
+// citySource: the page behind the house's own city's addition to the Ontario wording (server/permit/data.ts forCity).
+export type Trade = { id: string; title: string; owner: "yes" | "with_permit" | "ask" | "no"; detail: string; permit: string | null; registry?: { label: string; url: string } | null; source: Cite; citySource: Cite | null; verified: boolean; notes?: string };
 export type CityForm = { id: string; title: string; url: string | null; fill: "acroform" | "summary"; who: string; when: string; required: string; source: Cite; verified: boolean; notes?: string };
 export type CityPermit = {
   signer: "owner" | "brief";
@@ -137,7 +138,7 @@ export type CityPermit = {
   inspections: { id: string; title: string; when: string; who: string }[];
   inspectionsSource: Cite;
 };
-export type ProItem = { id: string; title: string; who: string; when: string; detail: string; registry?: { label: string; url: string } | null; source: Cite; verified: boolean; notes?: string; live: boolean };
+export type ProItem = { id: string; title: string; who: string; when: string; detail: string; registry?: { label: string; url: string } | null; source: Cite; citySource: Cite | null; verified: boolean; notes?: string; live: boolean };
 
 export type DiyPlan = {
   city: string;
