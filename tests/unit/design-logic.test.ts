@@ -175,5 +175,23 @@ describe.skipIf(!existsSync(FRIEND))("the friend's take (private)", () => {
       for (const b of beds(d)) for (const f of mech) expect(near(b, f.at), `${d.name} ${f.kind}`).toBeGreaterThanOrEqual(1.5);
       expect(d.why, d.name).toMatch(/keeps your bathroom/i);
     }
+    expect(m.recommended.designId).toBe(m.designs[0].id);
+    expect(m.recommended.reason).toMatch(/^Keeps your bathroom/);
+  });
+});
+
+describe("the design the guide recommends", () => {
+  it("is the best one, first, with its reason in one plain line", () => {
+    const m = currentModel(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), {})!.model;
+    expect(m.recommended).toEqual({ designId: m.designs[0].id, reason: "The bedroom on the window wall, away from the furnace and water heater." });
+    expect(m.designs[0].layout).toBe("one_bedroom");
+  });
+  it("is kept on a saved model, and given to one saved before there was one", () => {
+    const seeded = currentModel(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), {})!.model;
+    const { recommended: _, ...older } = seeded;
+    const back = currentModel(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), { model: { ...older, designs: older.designs.map((d) => ({ ...d, why: undefined })) } })!.model;
+    expect(back.recommended).toEqual({ designId: seeded.designs[0].id, reason: "One bedroom: the layout that fits your basement best." });
+    const kept = currentModel(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), { model: { ...seeded, recommended: { designId: "studio", reason: "Their pick." } } })!.model;
+    expect(kept.recommended).toEqual({ designId: "studio", reason: "Their pick." });
   });
 });

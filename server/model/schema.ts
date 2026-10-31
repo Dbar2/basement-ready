@@ -73,6 +73,7 @@ export const ModelSchema = z.object({
   version: z.literal(1),
   existing: ExistingSchema,
   designs: z.array(DesignSchema).max(8),
+  recommended: z.object({ designId: id, reason: z.string().max(200) }).optional(),
   mood: z.object({
     liked: z.array(id).max(200),
     disliked: z.array(id).max(200),

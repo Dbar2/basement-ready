@@ -5,7 +5,7 @@
 // design.
 import { ModelSchema } from "./schema";
 import { entranceOf, saidOutside } from "./entrance";
-import { emptyMood, seedModel } from "./seed";
+import { emptyMood, recommendedOf, seedModel } from "./seed";
 import type { Model, Mood, Opening } from "./types";
 
 type Tape = { egressWidthMm?: number | null; egressHeightMm?: number | null; egressSillMm?: number | null; ceilingMm?: number | null };
@@ -32,7 +32,14 @@ const CACHE_MAX = 40;
 
 export function currentModel(result: unknown, state: StateLike, key?: string): { model: Model; saved: boolean } | null {
   const found = foundModel(result, state, key);
-  return found && { ...found, model: withEntrance(withTapedWindows(found.model, state?.permit?.windows), result) };
+  return found && { ...found, model: withRecommended(withEntrance(withTapedWindows(found.model, state?.permit?.windows), result)) };
+}
+
+// The design the guide recommends: kept as it was seeded while that design is still there; a model saved
+// before there was one, or without that design any more, gets the first of its own.
+function withRecommended(model: Model): Model {
+  if (!model.designs.length || (model.recommended && model.designs.some((d) => d.id === model.recommended!.designId))) return model;
+  return { ...model, recommended: recommendedOf(model.designs) };
 }
 
 // Whether it has its own way in, from the answer as it stands now: they may tell us after the model was

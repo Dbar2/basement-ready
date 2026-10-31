@@ -901,6 +901,15 @@ const grown = (poly: Pt[], by: number): Pt[] => {
   return rectPoly(b.minX - by, b.minZ - by, b.maxX + by, b.maxZ + by);
 };
 
+// The design to recommend: the best of them, which the seed puts first, and its reason in one line (the
+// first two parts of its sentence: "Keeps your bathroom; the bedroom on the window wall, away from the
+// furnace."). A design saved before designs said why gets a plain one.
+export function recommendedOf(designs: Design[]): { designId: string; reason: string } {
+  const d = designs[0];
+  const parts = (d.why ?? "").replace(/\.$/, "").split("; ").filter(Boolean);
+  return { designId: d.id, reason: parts.length ? `${parts.slice(0, 2).join("; ")}.` : `${d.name}: the layout that fits your basement best.` };
+}
+
 export function emptyMood(): Model["mood"] {
   return { liked: [], disliked: [], style: null, finishes: {} };
 }
@@ -917,5 +926,6 @@ export function seedModel(
   // Its own way in, before any layout: the designs put a new entrance where it has none.
   const existing: Existing = { ...found, entrance: entranceOf(found, saidOutside(result.findings)) };
   const mood = state.mood ?? emptyMood();
-  return { version: 1, existing, designs: seedDesigns(existing, { pick: state.ideas ?? null, finishes: mood.finishes, colours: mood.colours, now }), mood };
+  const designs = seedDesigns(existing, { pick: state.ideas ?? null, finishes: mood.finishes, colours: mood.colours, now });
+  return { version: 1, existing, designs, mood, ...(designs.length ? { recommended: recommendedOf(designs) } : {}) };
 }
