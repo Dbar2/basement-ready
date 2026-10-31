@@ -68,3 +68,35 @@
 @media (prefers-reduced-motion: reduce) {
   .live-main > .live-tile, .live-photos li { animation: none; transition: none; }
 }
+
+/* ---------- the guide's explainer drawings (src/guide/visuals/Explain.tsx) ---------- */
+/* One 400 × 300 drawing on paper, scaled to fill the visual pane. Ink lines, the key part heavier (red
+   only for the fire separation, as in the design), figures in Geist Mono, words in Hanken. */
+.explain { width: 100%; height: 100%; min-height: 0; display: grid; place-items: center; padding: var(--space-3); background: var(--color-card); }
+.explain .ex { display: block; width: 100%; height: 100%; max-width: 760px; }
+.ex-paper { fill: var(--color-card); }
+.ex-title { font: 800 15px var(--font-display); letter-spacing: -0.02em; fill: var(--color-ink); }
+.ex-words { font: 400 12px var(--font-body); fill: var(--color-ink); }
+.ex-muted { fill: var(--color-ink-muted); }
+.ex-label { font: 700 12px var(--font-body); fill: var(--color-ink); }
+.ex-figure { font: 400 11px var(--font-mono); font-variant-numeric: tabular-nums; fill: var(--color-ink-muted); }
+.ex-figure.ex-big { font-size: 15px; fill: var(--color-ink); }
+.ex-plan { font: 500 10px var(--font-mono); letter-spacing: 0.04em; fill: var(--color-ink); }
+.ex-line { fill: none; stroke: var(--color-ink); stroke-width: 1.5; stroke-linejoin: round; }
+.ex-heavy { stroke-width: 3; }
+.ex-walls { stroke-width: 5; stroke-linejoin: miter; }
+.ex-thin { fill: none; stroke: var(--color-ink); stroke-width: 1; }
+.ex-ext { fill: none; stroke: var(--color-ink-muted); stroke-width: 0.8; }
+.ex-surface { fill: var(--color-surface); }
+.ex-card { fill: var(--color-card); }
+.ex-fill-ink, .ex-dot { fill: var(--color-ink); }
+.ex-knock { fill: var(--color-card); }
+.ex-key { fill: none; stroke: var(--color-ink); stroke-width: 3; stroke-linejoin: miter; }
+.ex-key.ex-card { fill: var(--color-card); }
+.ex-key.ex-stop { stroke: var(--color-stop); stroke-width: 2.5; fill: var(--color-card); }
+.ex-leader[data-tone="stop"] .ex-dot { fill: var(--color-stop); }
+.ex-wire { fill: none; stroke: var(--color-ink); stroke-width: 1.2; stroke-dasharray: 5 4; }
+/* The key lines stroke in once (pathLength=1 on each); reduced motion shows them drawn (global.css). */
+.ex-draw { stroke-dasharray: 1; stroke-dashoffset: 0; animation: ex-draw var(--dur-draw) var(--ease-draw) both; }
+@keyframes ex-draw { from { stroke-dashoffset: 1; } }
+@media (prefers-reduced-motion: reduce) { .ex-draw { animation: none; } }
