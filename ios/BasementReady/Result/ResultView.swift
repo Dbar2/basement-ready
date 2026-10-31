@@ -6,6 +6,10 @@
 // Inside the app the logo always goes to the scan's home base, never the marketing site: the app's
 // own logo above the page, and the page's links to the front page too. Other marketing and legal
 // pages, and other sites, open in Safari.
+//
+// One bar: once the page shows its own (the guide's and the home base's end with New scan,
+// basementready://new, when the page knows it's in the app), the app's bar gives way to it. A page
+// without one, such as a server from before Nov 1, keeps the app's bar, so New scan is always there.
 import SwiftUI
 import WebKit
 
@@ -19,8 +23,22 @@ struct ResultView: View {
   let onNewScan: () -> Void
   @StateObject private var web = WebController()
   @State private var start: URL?
+  @State private var pageHasBar = false
 
   var body: some View {
+    VStack(spacing: 0) {
+      if !pageHasBar { appBar }
+      if let start {
+        WebPage(url: start, home: scan.homeURL ?? start, claim: scan, controller: web, onNewScan: onNewScan, onPageBar: { pageHasBar = $0 })
+      } else {
+        Spacer()
+      }
+    }
+    .background(Brand.bg.ignoresSafeArea())
+    .task { start = await Self.firstPage(scan, page) }
+  }
+
+  private var appBar: some View {
     VStack(spacing: 0) {
       HStack {
         Button { if let home = scan.homeURL { web.load(home) } } label: {
@@ -39,14 +57,7 @@ struct ResultView: View {
       }
       .padding(.horizontal, Space.s3)
       Rectangle().fill(Brand.ink).frame(height: 1)
-      if let start {
-        WebPage(url: start, home: scan.homeURL ?? start, claim: scan, controller: web, onNewScan: onNewScan).ignoresSafeArea(edges: .bottom)
-      } else {
-        Spacer()
-      }
     }
-    .background(Brand.bg.ignoresSafeArea())
-    .task { start = await Self.firstPage(scan, page) }
   }
 
   // The guide if this server has it, else the home base (a server from before the guide, Oct 31).
@@ -93,8 +104,23 @@ private struct WebPage: UIViewRepresentable {
   let claim: ScanCreated
   let controller: WebController
   let onNewScan: () -> Void
+  let onPageBar: (Bool) -> Void
 
-  func makeCoordinator() -> Coordinator { Coordinator(home: home, onNewScan: onNewScan) }
+  func makeCoordinator() -> Coordinator { Coordinator(home: home, onNewScan: onNewScan, onPageBar: onPageBar) }
+
+  // Tells the app whether the page shows its own New scan (basementready://new), as it changes: the
+  // page's router swaps screens without a navigation, so it watches the document.
+  static let barScript = """
+  (() => {
+    let last = null;
+    const check = () => {
+      const has = !!document.querySelector('a[href^="basementready://new"]');
+      if (has !== last) { last = has; window.webkit.messageHandlers.brPage.postMessage({ newScan: has }); }
+    };
+    new MutationObserver(check).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["href"] });
+    check();
+  })();
+  """
 
   func makeUIView(context: Context) -> WKWebView {
     let config = WKWebViewConfiguration()
@@ -102,6 +128,8 @@ private struct WebPage: UIViewRepresentable {
     // The web can tell it's inside the app (navigator.userAgent ends "BasementReadyApp/1").
     config.applicationNameForUserAgent = "BasementReadyApp/1"
     config.userContentController.addUserScript(WKUserScript(source: Self.claimScript(claim), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    config.userContentController.addUserScript(WKUserScript(source: Self.barScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
+    config.userContentController.add(MessageRelay(context.coordinator), name: "brPage")
     let web = WKWebView(frame: .zero, configuration: config)
     web.navigationDelegate = context.coordinator
     web.uiDelegate = context.coordinator
@@ -136,12 +164,19 @@ private struct WebPage: UIViewRepresentable {
   final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
     let home: URL
     let onNewScan: () -> Void
+    let onPageBar: (Bool) -> Void
     private var watching: NSKeyValueObservation?
     private var wentHome = Date.distantPast
-    init(home: URL, onNewScan: @escaping () -> Void) {
+    init(home: URL, onNewScan: @escaping () -> Void, onPageBar: @escaping (Bool) -> Void) {
       self.home = home
       self.onNewScan = onNewScan
+      self.onPageBar = onPageBar
     }
+
+    func pageMessage(_ body: Any) {
+      if let has = (body as? [String: Any])?["newScan"] as? Bool { onPageBar(has) }
+    }
+
 
     // Back to the home base, at most once every few seconds: if the home base itself ever sends the
     // page to the front page (a scan that's gone, say), it stays there rather than going round.
@@ -194,5 +229,16 @@ private struct WebPage: UIViewRepresentable {
       if let credential = DevTrust.credential(for: challenge) { return (.useCredential, credential) }
       return (.performDefaultHandling, nil)
     }
+  }
+}
+
+// The page's messages to the app, without the content controller keeping the coordinator alive.
+private final class MessageRelay: NSObject, WKScriptMessageHandler {
+  weak var target: WebPage.Coordinator?
+  init(_ target: WebPage.Coordinator) { self.target = target }
+
+  func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+    let body = message.body
+    MainActor.assumeIsolated { target?.pageMessage(body) }
   }
 }
