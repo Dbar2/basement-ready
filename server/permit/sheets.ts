@@ -10,10 +10,14 @@ import type { CityPermit } from "./data";
 import { boxesMeet, drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type PageBox, type Scale, type View } from "./draw";
 import { homesAfter } from "../eligibility";
 import { areaText, suiteAreaM2 } from "../model/suite";
-import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, escapeOk, PROPOSED_ESCAPE, keptBathroom, type PermitModel, type PermitWindow, type PWall, unitOutline, unitRooms, wallLen } from "./model";
+import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, escapeOk, escapeStatus, PROPOSED_ESCAPE, keptBathroom, type PermitModel, type PermitWindow, type PWall, unitOutline, unitRooms, wallLen } from "./model";
 
-// What a window's tag says about escape: only a size that meets the rule is called an escape window.
-const escapeLabel = (w: PermitWindow) => (!w.escape ? "" : w.meets ? " ESCAPE WINDOW" : w.meets === null ? " WINDOW: ESCAPE SIZE TO BE TAPED" : " WINDOW: TOO SMALL TO ESCAPE");
+// What a window's tag says about escape (model.ts escapeStatus): only a size that meets the rule is called
+// an escape window.
+const escapeLabel = (w: PermitWindow) => {
+  const st = escapeStatus(w);
+  return !st ? "" : st === "ESCAPE" ? " ESCAPE WINDOW" : ` WINDOW: ${st}`;
+};
 import { citeText, notesFor } from "./notes";
 import { faceHeightM, STOREY_M, TOP_CEILING_M, upo } from "./spatial";
 import { area, both, DETAIL_SCALES, dimText, FAINT, fitScale, frame, ftIn, INK, largestFit, mmBoth, MUTED, OWNER_EXEMPTION, PAPER, PLAN_SCALES, type Project, ptPerMetre, Sheet, sizeText, SITE_SCALES, SMALL_SCALES, TABLOID, TONE, TONE2, TONE3, watermark, type Fonts } from "./pdf";

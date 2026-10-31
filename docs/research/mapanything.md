@@ -171,7 +171,7 @@ Store `depth_z` (fp16), `intrinsics`, `camera_poses` and `conf` instead of raw `
 - **Low light and phone video:** there's **no published evaluation** of low light or handheld phone video. The limitations section doesn't mention low light. Dim basements mean motion blur and noise, which hurt both depth and poses. Mitigate in capture: turn every light on, use the phone torch if allowed, move slowly, and pick the sharpest frames.
 - **Calibration is strong:** single-image focal estimation error is 0.39° on ScanNet++ (Table 3). Passing intrinsics doesn't fix scale (see the table above), so images-only is fine.
 
-**What this means for the product.** A 2.0 m ceiling with a 20% scale error reads anywhere from 1.6 to 2.4 m. That swings a "ceiling height OK?" verdict entirely. After a one-measurement fix, expect roughly ±3–5% (est., from the 3.5% aligned figure), about ±6–10 cm on a 2 m ceiling. That's still close to code thresholds, so near a threshold say "confirm with a tape measure" instead of pass/fail. This fits your trust rule.
+**What this means for the product.** Without a tape, the video's scale can be off enough to swing a "ceiling height OK?" verdict entirely. One tape measurement brings it much closer, but a reading can still sit near a code threshold, so near a threshold say "confirm with a tape measure" instead of pass/fail. This fits your trust rule. The product never shows these error figures to homeowners.
 
 **Fixing scale with one known measurement.**
 1. Fit floor and ceiling planes (section 6) and compute the measured height `h_scan`.
