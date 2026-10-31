@@ -380,3 +380,27 @@ describe("the City's form", () => {
     expect(checked).toBeGreaterThan(10);
   });
 });
+
+describe("a bathroom kept as it is", () => {
+  it("reads as existing on the sheets, in the scope and in the notes", async () => {
+    // The example's design, with its bathroom the one the scan found (server/model/seed.ts keeps one).
+    const model = structuredClone(currentModel(sample, {}, "sample")!.model);
+    const bath = chosenDesign(model)!.proposed.rooms.find((r) => r.unit === 2 && r.kind === "bathroom")!;
+    const as = async (kept: boolean) => {
+      bath.kept = kept || undefined;
+      return pdfOf(sample, { model: structuredClone(model) } as StoredState);
+    };
+    const kept = await as(true);
+    expect(sheet(kept, "A0")).toContain("the existing bathroom becomes unit 2's, with no change to it");
+    expect(sheet(kept, "A0")).not.toContain("a bathroom and a kitchen");
+    expect(sheet(kept, "A2")).toMatch(/BATHROOM .*EXISTING, NO CHANGE/);
+    expect(sheet(kept, "A2")).toMatch(/WC \(E\)/);
+    expect(sheet(kept, "A7")).not.toContain("GRAB-BAR BLOCKING");
+    // Built new, as before.
+    const built = await as(false);
+    expect(sheet(built, "A0")).toContain("new partition walls, a bathroom and a kitchen");
+    expect(sheet(built, "A2")).not.toContain("EXISTING, NO CHANGE");
+    expect(sheet(built, "A2")).not.toMatch(/\(E\)/);
+    expect(sheet(built, "A7")).toContain("GRAB-BAR BLOCKING");
+  }, SLOW);
+});

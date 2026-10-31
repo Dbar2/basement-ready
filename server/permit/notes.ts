@@ -18,7 +18,7 @@ const code = (part: 7 | 9 | 11, section: string): Cite => ({
 });
 const kitchener = (pages: string): Cite => ({ title: "Adding a Second Unit to an Existing House (City of Kitchener, 2025)", url: KITCHENER, section: pages, retrieved: ON });
 
-export type NoteWhen = "always" | "fuel_burning" | "stairs" | "escape_new" | "shared_heating";
+export type NoteWhen = "always" | "fuel_burning" | "stairs" | "escape_new" | "shared_heating" | "bath_new";
 export type ExaminerNote = { id: string; title: string; text: string; cites: Cite[]; when: NoteWhen };
 
 export const EXAMINER_NOTES: ExaminerNote[] = [
@@ -146,7 +146,8 @@ export const EXAMINER_NOTES: ExaminerNote[] = [
     title: "Grab-bar blocking",
     text: "Solid blocking in the main bathroom's stud walls beside the toilet and the tub or shower, for grab bars later.",
     cites: [code(9, "9.5.2.4.(1)"), kitchener("p. 23")],
-    when: "always",
+    // New walls only: a bathroom kept as it is gets none.
+    when: "bath_new",
   },
   {
     id: "esa",
@@ -179,8 +180,8 @@ export const EXAMINER_NOTES: ExaminerNote[] = [
 ];
 
 // The notes that apply to this project.
-export function notesFor(o: { fuelBurning: boolean; stairs: boolean; escapeNew: boolean; sharedHeating?: boolean }) {
-  return EXAMINER_NOTES.filter((n) => n.when === "always" || (n.when === "fuel_burning" && o.fuelBurning) || (n.when === "stairs" && o.stairs) || (n.when === "escape_new" && o.escapeNew) || (n.when === "shared_heating" && o.sharedHeating !== false));
+export function notesFor(o: { fuelBurning: boolean; stairs: boolean; escapeNew: boolean; sharedHeating?: boolean; bathNew?: boolean }) {
+  return EXAMINER_NOTES.filter((n) => n.when === "always" || (n.when === "fuel_burning" && o.fuelBurning) || (n.when === "stairs" && o.stairs) || (n.when === "escape_new" && o.escapeNew) || (n.when === "shared_heating" && o.sharedHeating !== false) || (n.when === "bath_new" && o.bathNew !== false));
 }
 
 export const citeText = (c: Cite) => `${c.section ? `${c.section}, ` : ""}${c.title}`;

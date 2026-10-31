@@ -463,6 +463,8 @@ export function permitModel(result: any, state: StoredState | null | undefined):
 
 // The suite's rooms (its floor area, for every page: server/model/suite.ts).
 export const unitRooms = (m: PermitModel) => m.design.proposed.rooms.filter((r) => r.unit === 2);
+// The suite's bathroom is the one the scan found, finished as it is (Room.kept): nothing built there.
+export const keptBathroom = (m: PermitModel | null | undefined) => Boolean(m && unitRooms(m).some((r) => r.kind === "bathroom" && r.kept));
 // Everything that's unit 2's floor: its rooms, and the area of the basement it takes as a whole (the
 // open floor between the rooms is the suite's too).
 export const unitOutline = (m: PermitModel) => [...m.existing.rooms.filter((r) => r.unit === 2), ...unitRooms(m)].map((r) => r.polygon);
