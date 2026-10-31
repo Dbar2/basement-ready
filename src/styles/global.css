@@ -60,7 +60,7 @@ a { color: inherit; }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn .arrow { transition: transform var(--dur-2) var(--ease-out); }
 .btn:hover .arrow { transform: translateX(3px); }
-.link-quiet { background: none; border: 0; padding: 0; color: var(--color-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-mint-line); }
+.link-quiet { background: none; border: 0; padding: 0; color: var(--color-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-ink); }
 
 .chip {
   min-height: var(--control-h-sm);
@@ -87,7 +87,7 @@ a { color: inherit; }
 .nav { position: relative; z-index: 5; display: flex; align-items: center; justify-content: space-between; padding: 28px clamp(20px, 4vw, 56px); }
 .nav-links { display: flex; gap: 32px; font-weight: 500; font-size: 15px; background: var(--color-bg); padding: 12px 24px; border-radius: 14px; }
 .nav-links a { text-decoration: none; }
-.nav-links a:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-mint-line); }
+.nav-links a:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-ink); }
 
 /* ---------- Start sheet (two quick questions) ---------- */
 .sheet-backdrop { position: fixed; inset: 0; background: color-mix(in srgb, var(--color-ink) 28%, transparent); z-index: 50; display: grid; place-items: center; animation: fade-in var(--dur-2) var(--ease-out); }
@@ -357,12 +357,12 @@ a { color: inherit; }
 
 /* ---------- while we check it ---------- */
 .live-left { font-size: var(--text-small); color: var(--color-ink-muted); }
-/* The scan's four stages as one ruled progress line: done in ink, the current one in mint-line. */
+/* The scan's four stages as one ruled progress line: done and current in ink, the current one named in bold. */
 .live-stages { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; list-style: none; margin: 0; padding: 0; font-size: var(--text-small); }
 .live-stages li { display: block; padding-top: 8px; border-top: 3px solid var(--color-border); color: var(--color-ink-muted); opacity: 1; transition: border-color var(--dur-2) var(--ease-out), color var(--dur-2) var(--ease-out); }
 .live-stages li i { display: none; }
 .live-stages li[data-state="done"] { border-top-color: var(--color-ink); color: var(--color-ink); }
-.live-stages li[data-state="active"] { border-top-color: var(--color-mint-line); color: var(--color-ink); font-weight: 600; }
+.live-stages li[data-state="active"] { border-top-color: var(--color-ink); color: var(--color-ink); font-weight: 700; }
 .live-caption { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 10px 14px; border-top: var(--line-ink); background: var(--color-card); font-weight: 600; font-size: 15px; line-height: 1.3; }
 .live-side { display: grid; align-content: start; }
 .live-ask, .live-ready { display: grid; gap: 12px; padding: 16px 0 0; border-top: var(--line-ink); animation: rise var(--dur-2) var(--ease-out) both; }

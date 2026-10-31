@@ -53,7 +53,7 @@
 .plan-tools .chip { min-height: 36px; padding: 4px 12px; }
 .plan-tools .segmented button { min-height: 34px; padding: 4px 12px; }
 .history { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
-.history .chip { border-color: transparent; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-mint-line); padding-inline: 8px; }
+.history .chip { border-color: transparent; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-ink); padding-inline: 8px; }
 .history .chip:disabled { opacity: 0.4; text-decoration: none; }
 .model-plan { display: block; width: 100%; height: auto; touch-action: none; user-select: none; -webkit-user-select: none; }
 .model-plan:focus { outline: none; }

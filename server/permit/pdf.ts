@@ -1,6 +1,8 @@
 // Drawing on PDF pages with pdf-lib (MIT): the sheet frame and title block every drawing carries,
 // real architectural scales, lines, text that wraps, and lengths in metres with feet and inches.
 // The standard PDF fonts only cover Windows-1252 text, so everything drawn goes through `safe`.
+import fontkit from "@pdf-lib/fontkit";
+import { readFile } from "node:fs/promises";
 import { clip, degrees, endPath, LineCapStyle, PDFDocument, popGraphicsState, pushGraphicsState, rectangle, rgb, StandardFonts, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 
 // Black and white only: cities ask for legible black-and-white drawings (Kitchener's Project
@@ -43,6 +45,22 @@ export async function embedFonts(doc: PDFDocument): Promise<Fonts> {
     regular: await doc.embedFont(StandardFonts.Helvetica),
     bold: await doc.embedFont(StandardFonts.HelveticaBold),
     mono: await doc.embedFont(StandardFonts.Courier),
+  };
+}
+
+// The brand's own type for the homeowner's book (brand/ui.md): Hanken Grotesk 400 and 800 and Geist Mono 400,
+// static cuts of the OFL fonts in server/fonts, subset into the PDF. The permit sheets keep the standard fonts.
+const BRAND_FONTS = ["HankenGrotesk-Regular.ttf", "HankenGrotesk-ExtraBold.ttf", "GeistMono-Regular.ttf"] as const;
+let brandBytes: Promise<Buffer[]> | null = null;
+
+export async function embedBrandFonts(doc: PDFDocument): Promise<Fonts> {
+  doc.registerFontkit(fontkit);
+  brandBytes ??= Promise.all(BRAND_FONTS.map((f) => readFile(new URL(`../fonts/${f}`, import.meta.url))));
+  const [regular, bold, mono] = await brandBytes;
+  return {
+    regular: await doc.embedFont(regular, { subset: true }),
+    bold: await doc.embedFont(bold, { subset: true }),
+    mono: await doc.embedFont(mono, { subset: true }),
   };
 }
 

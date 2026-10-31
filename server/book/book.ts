@@ -8,7 +8,7 @@ import { PDFDocument, rgb } from "pdf-lib";
 import type { Design, Model } from "../model/types";
 import { cityPermit } from "../permit/data";
 import { lookPage, localDate } from "../permit/package";
-import { embedFonts, LETTER, newDoc, Sheet, type Fonts } from "../permit/pdf";
+import { embedBrandFonts, LETTER, newDoc, Sheet, type Fonts } from "../permit/pdf";
 import { quote as priceDesign, type Quote } from "../quote/quote";
 import type { StoredState } from "../workspace";
 import type { PictureKind } from "./pictures";
@@ -44,7 +44,7 @@ const VERDICT: Record<string, { label: string; color: ReturnType<typeof rgb> }> 
 function page(doc: PDFDocument, fonts: Fonts, kicker: string, title: string, o: { address: string }) {
   const s = new Sheet(doc.addPage(LETTER), fonts);
   s.rect(0, 0, s.width, s.height, { fill: rgb(1, 1, 1), stroke: false });
-  s.text(kicker.toUpperCase(), M, s.height - M, { size: 8, color: LEAF, font: fonts.bold });
+  s.text(kicker, M, s.height - M, { size: 9, color: LEAF, font: fonts.bold });
   s.text(o.address, s.width - M, s.height - M, { size: 8, color: MOSS, align: "right" });
   const y = s.wrap(title, M, s.height - M - 26, s.width - 2 * M, { size: 20, font: fonts.bold, color: FOREST, leading: 24 });
   s.text(`Basement Ready · page ${doc.getPageCount()}`, M, 30, { size: 7, color: MOSS });
@@ -90,7 +90,7 @@ export function readinessFrom(result: any, design: Design | null): ReadinessItem
 export async function buildBook(input: BookInput): Promise<BookOut> {
   const today = input.today ?? localDate();
   const doc = await newDoc(`Your basement book: ${input.address}`);
-  const fonts = await embedFonts(doc);
+  const fonts = await embedBrandFonts(doc);
   const pages: string[] = [];
   const o = { address: input.address };
   const designs = input.model.designs;
@@ -118,17 +118,18 @@ export async function buildBook(input: BookInput): Promise<BookOut> {
 function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design | null, q: Quote | null, ready: ReadinessItem[], today: string) {
   const s = new Sheet(doc.addPage(LETTER), fonts);
   s.rect(0, 0, s.width, s.height, { fill: rgb(0.957, 0.965, 0.949), stroke: false });
-  s.rect(0, s.height - 8, s.width, 8, { fill: MINT, stroke: false });
-  s.text("BASEMENT READY", M, s.height - M, { size: 9, color: FOREST, font: fonts.bold });
+  s.text("Basement Ready", M, s.height - M, { size: 11, color: FOREST, font: fonts.bold });
   s.text(today, s.width - M, s.height - M, { size: 9, color: MOSS, align: "right" });
   let y = s.height - 190;
-  s.text("YOUR BASEMENT, THE BOOK", M, y, { size: 9, color: LEAF, font: fonts.bold });
-  y = s.wrap(input.address, M, y - 30, s.width - 2 * M, { size: 30, font: fonts.bold, color: FOREST, leading: 34 }) - 18;
+  // Drawing Set (brand/ui.md): no label above the title, the verdict as a square and a word, no capitals.
+  y = s.wrap(input.address, M, y - 30, s.width - 2 * M, { size: 30, font: fonts.bold, color: FOREST, leading: 34 }) - 4;
+  s.text("Your basement, the book", M, y, { size: 11, color: MOSS });
+  y -= 30;
   const v = VERDICT[input.result?.verdict as string] ?? null;
   if (v) {
-    s.rect(M, y - 6, s.textWidth(v.label, 11, fonts.bold) + 20, 22, { fill: v.color, stroke: false });
-    s.text(v.label, M + 10, y + 1, { size: 11, font: fonts.bold, color: rgb(1, 1, 1) });
-    y -= 34;
+    s.rect(M, y - 1, 9, 9, { fill: v.color, stroke: false });
+    s.text(v.label, M + 16, y, { size: 12, font: fonts.bold, color: v.color });
+    y -= 30;
   }
   if (input.result?.demo) {
     y = s.wrap("The demo house: the City of Waterloo's rules on a house that isn't real.", M, y, s.width - 2 * M, { size: 10, color: AMBER, font: fonts.bold }) - 10;
@@ -148,7 +149,7 @@ function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design 
   if (ready.length) facts.push(["Permit", `${done} of ${ready.length} checks ready`]);
   for (const [k, val] of facts) {
     s.line(M, y + 14, s.width - M, y + 14, { width: 0.5, color: LINE });
-    s.text(k.toUpperCase(), M, y, { size: 8, color: MOSS, font: fonts.bold });
+    s.text(k, M, y, { size: 9.5, color: MOSS });
     y = s.wrap(val, M + 130, y, s.width - 2 * M - 130, { size: 11, color: FOREST }) - 12;
   }
   s.wrap("A planning book, not a permit or a contract. Sizes come from your scan; prices are dated shelf prices and published rates. Pictures marked \"virtually staged\" are made by Muse Image from your own photos.", M, 70, s.width - 2 * M, { size: 7.5, color: MOSS });
@@ -203,7 +204,7 @@ async function picturesPages(doc: PDFDocument, fonts: Fonts, input: BookInput, o
   }
   // The permit package's look page, four to a page: their design first, then what they loved.
   for (let i = 0; i < pics.length && i < 12; i += 4) {
-    await lookPage(doc, pics.slice(i, i + 4).map((p) => ({ title: p.kind === "design" ? `Your design: ${p.title}` : p.title, jpeg: p.jpeg })), input.state ?? {});
+    await lookPage(doc, pics.slice(i, i + 4).map((p) => ({ title: p.kind === "design" ? `Your design: ${p.title}` : p.title, jpeg: p.jpeg })), input.state ?? {}, fonts);
     pages.push(i ? "Pictures (continued)" : "Pictures");
   }
 }
@@ -301,7 +302,7 @@ function quotePages(doc: PDFDocument, fonts: Fonts, q: Quote, o: { address: stri
   const f = new Flow(doc, fonts, "Quote by line", "Line by line", o, pages);
   for (const t of q.byTrade) {
     f.need(80);
-    f.s.text(t.label.toUpperCase(), M, f.y, { size: 8, color: LEAF, font: fonts.bold });
+    f.s.text(t.label, M, f.y, { size: 10, color: FOREST, font: fonts.bold });
     f.y -= 14;
     for (const l of t.lines) {
       const detail = `${l.qty.toLocaleString("en-CA")} ${l.unit}. ${l.basis}`;
@@ -360,7 +361,7 @@ function readinessPage(doc: PDFDocument, fonts: Fonts, ready: ReadinessItem[], o
   for (const [label, items, color] of groups) {
     if (!items.length) continue;
     f.need(30);
-    f.s.text(`${label.toUpperCase()} (${items.length})`, M, f.y, { size: 8, color, font: fonts.bold });
+    f.s.text(`${label} (${items.length})`, M, f.y, { size: 10, color, font: fonts.bold });
     f.y -= 15;
     for (const it of items) {
       f.need(26);
