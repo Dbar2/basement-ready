@@ -303,7 +303,7 @@ export function frame(s: Sheet, p: Project, sheet: { number: string; title: stri
     s.rect(x0 + 6, y - stampH + 6, STRIP - 12, 40, { fill: TONE2, stroke: false });
     s.text("DRAFT FOR YOUR REVIEW", L, y - stampH + 32, { size: 9, font: s.fonts.bold });
     s.text(p.left > 0 ? `${p.left} thing${p.left === 1 ? "" : "s"} left before you can submit: see A0` : "Ready: download the submit copy", L, y - stampH + 18, { size: 7 });
-    if (p.estimated) s.text("Sizes from the video, about ±5-20%, until taped", L, y - stampH + 10, { size: 6, color: MUTED });
+    if (p.estimated) s.text("Sizes from the video until taped: tape one wall on the Permit tab", L, y - stampH + 10, { size: 6, color: MUTED });
   }
   y -= stampH + 14;
 

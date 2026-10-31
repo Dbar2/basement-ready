@@ -57,7 +57,9 @@ describe("clearanceRule: the headroom decided from the lowest real reading", () 
   it("a reading on the video's own scale that could be either side is the designer's to confirm", () => {
     const d = clearanceRule(sortClearances(david()), 1.85)!;
     expect(d.status).toBe("designer_checks");
-    expect(d.why).toMatch(/about 1\.70 m under the duct in Room 1 once finished \(±34 cm\)/);
+    expect(d.why).toMatch(/about 1\.70 m under the duct in Room 1 once finished; the rule needs 1\.85 m/);
+    // No error figure is shown, only the reading and the rule.
+    expect(d.why).not.toContain("±");
     expect(d.why).toMatch(/6 readings were set aside as not headroom, the lowest: 1\.20 m under the duct in the Rec room is 1\.18 m below its 2\.38 m ceiling/);
   });
 
