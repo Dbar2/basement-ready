@@ -182,7 +182,7 @@ export async function buildPermitPackage(input: PackageInput): Promise<PackageOu
     readiness: status.readiness,
     storeys: Math.max(1, input.result?.property?.building?.storeys ?? 1),
   };
-  const sheets: Printed[] = [coverSheet(ctx), sitePlan(ctx), ...basementPlan(ctx), mainFloor(ctx), ceilingPlan(ctx), elevations(ctx), details(ctx), notesSheet(ctx)];
+  const sheets: Printed[] = [coverSheet(ctx), sitePlan(ctx), ...basementPlan(ctx), mainFloor(ctx), ...ceilingPlan(ctx), elevations(ctx), details(ctx), notesSheet(ctx)];
   finishSheets(ctx, sheets);
 
   // The forms, filled from the profile: Schedule 1 says "Homeowner" when the owner draws.

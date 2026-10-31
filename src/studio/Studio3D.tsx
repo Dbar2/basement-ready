@@ -7,7 +7,7 @@ import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
-import { along, bounds, dot, polygonArea, project, solidPieces, sub, wallNormal } from "../../server/model/geometry";
+import { along, bounds, dot, floorArea, polygonArea, project, solidPieces, sub, wallNormal } from "../../server/model/geometry";
 import type { Design, Existing, Pt, Wall } from "../../server/model/types";
 import { useAtlas } from "../three/AsBuilt";
 import { bestView, spotsOf, type Spot } from "../three/AsBuiltView";
@@ -147,7 +147,7 @@ function Overlay({ design, h, selected, marker, view, handles, canDragWall }: { 
             return (
               <Tag key={r.id} position={[(c.x0 + c.x1) / 2, 0.3, (c.z0 + c.z1) / 2]} priority={PRIORITY.room + Math.min(0.99, polygonArea(r.polygon) / 1000)}>
                 <span className="stage-tag">
-                  <b>{r.name}</b> {polygonArea(r.polygon) >= 2 && <span>{polygonArea(r.polygon).toFixed(1)} m²</span>}
+                  <b>{r.name}</b> {floorArea(r, rooms) >= 2 && <span>{floorArea(r, rooms).toFixed(1)} m²</span>}
                 </span>
               </Tag>
             );

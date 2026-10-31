@@ -3,7 +3,7 @@
 // ducts with the headroom under them, alarms, rooms with their areas. Walls, doors and finds can be
 // dragged (or nudged with the arrow keys once picked), and a new wall drawn with a finger.
 import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { add, along, bounds, centroid, dist, dot, inPolygon, mul, openingEnds, polygonArea, project, sub, wallLength, wallNormal, type Box } from "../../server/model/geometry";
+import { add, along, bounds, centroid, dist, dot, floorArea, inPolygon, mul, openingEnds, project, sub, wallLength, wallNormal, type Box } from "../../server/model/geometry";
 import type { Alarm, Fixture, Furniture, Opening, Pt, Room, Wall } from "../../server/model/types";
 import { fmtArea, fmtLength, type Units } from "../components/FloorPlan";
 import { placeTags, textBox, type Box as TagBox, type Placed, type Tag } from "./labels";
@@ -174,7 +174,7 @@ export function PlanSvg(props: {
         const b = bounds(r.polygon);
         const wide = (b.maxX - b.minX) * s;
         if (wide < 60 || (b.maxZ - b.minZ) * s < 30) return [];
-        const area = wide > 120 && polygonArea(r.polygon) >= 2 ? ` ${fmtArea(polygonArea(r.polygon), units)}` : "";
+        const area = wide > 120 && floorArea(r, layer.rooms) >= 2 ? ` ${fmtArea(floorArea(r, layer.rooms), units)}` : "";
         return [{ r, x: X(c[0]), y: Z(c[1]) + 5, area }];
       });
   const fixed: TagBox[] = names.map((n) => {

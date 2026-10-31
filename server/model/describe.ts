@@ -4,7 +4,7 @@
 // its checks and cost, and they tap Apply.
 import { outputText, responses } from "../meta";
 import { checkDesign } from "./checks";
-import { bounds, r2, roomArea, wallLength } from "./geometry";
+import { bounds, floorArea, r2, wallLength } from "./geometry";
 import { validateEdits } from "./schema";
 import type { Design, Edit, Existing } from "./types";
 
@@ -48,7 +48,7 @@ function brief(design: Design, existing: Existing) {
     layout: design.layout,
     rooms: rooms.map((r) => {
       const b = bounds(r.polygon);
-      return { id: r.id, kind: r.kind, name: r.name, unit: r.unit, x0: r2(b.minX), z0: r2(b.minZ), x1: r2(b.maxX), z1: r2(b.maxZ), areaM2: r2(roomArea(r)) };
+      return { id: r.id, kind: r.kind, name: r.name, unit: r.unit, x0: r2(b.minX), z0: r2(b.minZ), x1: r2(b.maxX), z1: r2(b.maxZ), areaM2: r2(floorArea(r, rooms)) };
     }),
     walls: walls.map((w) => ({ id: w.id, kind: w.kind, rating: w.rating, a: w.a.map(r2), b: w.b.map(r2), lengthM: r2(wallLength(w)) })),
     openings: openings.map((o) => ({ id: o.id, wallId: o.wallId, kind: o.kind, offsetM: r2(o.offsetM), widthM: r2(o.widthM), rating: o.rating ?? null })),

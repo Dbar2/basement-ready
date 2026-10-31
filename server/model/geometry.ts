@@ -95,6 +95,32 @@ export const rectPoly = (x0: number, z0: number, x1: number, z1: number): Pt[] =
 
 export const roomArea = (r: Pick<Room, "polygon">) => polygonArea(r.polygon);
 
+// A room's own floor: its outline less what a stair or a furnace room drawn inside it takes (a design's
+// living room is drawn around the stairs). Every page, sheet and sum of rooms reads this, so a room has
+// one area everywhere.
+export function floorArea(room: Pick<Room, "polygon" | "kind">, rooms: readonly Pick<Room, "polygon" | "kind">[]) {
+  const own = polygonArea(room.polygon);
+  if (room.kind === "stairs" || room.kind === "mechanical") return own;
+  const inner = rooms.filter((r) => r !== room && (r.kind === "stairs" || r.kind === "mechanical")).reduce((s, r) => s + overlapArea(room.polygon, r.polygon), 0);
+  return Math.max(0, own - inner);
+}
+
+// A box with its sides along the axes, as most rooms are.
+const isBox = (poly: Pt[]) => poly.length === 4 && poly.every((p, i) => Math.abs(p[0] - poly[(i + 1) % 4][0]) < 1e-6 || Math.abs(p[1] - poly[(i + 1) % 4][1]) < 1e-6);
+
+// How much floor two outlines share: exact for two boxes; otherwise counted in 10 cm cells of the box
+// they share (an L-shaped furnace room's box can reach over a room it doesn't touch).
+export function overlapArea(a: Pt[], b: Pt[]) {
+  const A = bounds(a), B = bounds(b);
+  const x0 = Math.max(A.minX, B.minX), x1 = Math.min(A.maxX, B.maxX), z0 = Math.max(A.minZ, B.minZ), z1 = Math.min(A.maxZ, B.maxZ);
+  if (x1 <= x0 || z1 <= z0) return 0;
+  if (isBox(a) && isBox(b)) return (x1 - x0) * (z1 - z0);
+  const step = 0.1;
+  let n = 0;
+  for (let x = x0 + step / 2; x < x1; x += step) for (let z = z0 + step / 2; z < z1; z += step) if (inPolygon([x, z], a) && inPolygon([x, z], b)) n++;
+  return n * step * step;
+}
+
 // The edges of a polygon as (a, b) pairs.
 export const edges = (poly: Pt[]): [Pt, Pt][] => poly.map((p, i) => [p, poly[(i + 1) % poly.length]]);
 
