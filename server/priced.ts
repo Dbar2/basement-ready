@@ -28,6 +28,9 @@ export function designPricing(result: { municipality?: string }, model: Model | 
   const lineCost: DesignPricing["lineCost"] = {};
   const egress = lines.filter((l) => l.id.startsWith("egress_"));
   if (egress.length) lineCost.egress = { low: egress.reduce((s, l) => s + l.low, 0), high: egress.reduce((s, l) => s + l.high, 0) };
+  // A new entrance the design adds is the exit fix's price (server/model/entrance.ts).
+  const entrance = lines.filter((l) => l.id.startsWith("entrance_"));
+  if (entrance.length) lineCost.exit = { low: entrance.reduce((s, l) => s + l.low, 0), high: entrance.reduce((s, l) => s + l.high, 0) };
   // The design's own fixes (server/model/fixes.ts, which the layout cards and the studio count too): an
   // escape window it needs, whether or not the scan named it, and every check it still fails (the duct
   // under 1.85 m), each in the rules' words.
@@ -49,7 +52,7 @@ export function designPricing(result: { municipality?: string }, model: Model | 
       fromDesign: true,
     };
   });
-  return { name: design.name, cost: { low: q.totalLow, high: q.totalHigh }, fixes, lineCost, suiteAreaM2: suiteAreaM2(design) };
+  return { name: design.name, cost: { low: q.totalLow, high: q.totalHigh }, fixes, lineCost, suiteAreaM2: suiteAreaM2(design), entrance: model.existing.entrance };
 }
 
 // A result, re-checked with its answers and priced on the model's chosen design (as it stands when

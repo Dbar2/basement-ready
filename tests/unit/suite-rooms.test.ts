@@ -13,9 +13,11 @@ import type { Design, Model } from "../../server/model/types";
 
 const NOW = "2026-10-31T00:00:00.000Z";
 const load = (f: string) => seedModel(JSON.parse(readFileSync(f, "utf8")), {}, NOW)!;
-const takes: [string, Model][] = [
-  ["the example", load("public/samples/sample/result.json")],
-  ["b2", load("tests/fixtures/b2-family-result.json")],
+// What each can be: b2's rec room is too small for a bedroom and a living space, and its laundry room
+// holds the water heater, so it's a studio there (a bed never goes beside the water heater).
+const takes: [string, Model, string[]][] = [
+  ["the example", load("public/samples/sample/result.json"), ["one_bedroom", "studio"]],
+  ["b2", load("tests/fixtures/b2-family-result.json"), ["studio"]],
 ];
 const suite = (d: Design) => d.proposed.rooms.filter((r) => r.unit === 2);
 // Floor two rooms share, past what rounding leaves (a few centimetres along an edge).
@@ -25,9 +27,9 @@ const overlap = (a: Design["proposed"]["rooms"][number], b: Design["proposed"]["
 };
 
 describe("every seeded design is a home", () => {
-  for (const [name, model] of takes) {
-    it(`${name}: a one-bedroom and a studio, each passing its own kitchen, bathroom and sleep check`, () => {
-      expect(model.designs.map((d) => d.layout)).toEqual(expect.arrayContaining(["one_bedroom", "studio"]));
+  for (const [name, model, kinds] of takes) {
+    it(`${name}: ${kinds.join(" and ")}, each passing its own kitchen, bathroom and sleep check`, () => {
+      expect(model.designs.map((d) => d.layout)).toEqual(kinds);
       for (const d of model.designs) {
         const checks = checkDesign(d, model.existing);
         expect(checks.find((c) => c.id === "rooms"), `${d.name}: ${checks.find((c) => c.id === "rooms")?.detail}`).toMatchObject({ ok: true });
@@ -58,9 +60,8 @@ describe("every seeded design is a home", () => {
       const service = d.proposed.rooms.find((r) => r.kind === "mechanical" && inPolygon(heater.at, r.polygon))!;
       expect(service, d.name).toMatchObject({ unit: "shared", name: "Water heater room" });
     }
-    // The one-bedroom sleeps there, by its window; the studio washes there, the rest still its laundry.
-    const one = model.designs.find((d) => d.layout === "one_bedroom")!;
-    expect(one.proposed.rooms.find((r) => r.id === laundry.id)).toMatchObject({ kind: "bedroom", name: "Bedroom" });
+    // Nobody sleeps there; the studio washes there, the rest still its laundry room.
+    for (const d of model.designs) expect(d.proposed.rooms.find((r) => r.id === laundry.id)?.kind, d.name).toBe("laundry");
     const studio = model.designs.find((d) => d.layout === "studio")!;
     expect(studio.proposed.rooms.find((r) => r.id === laundry.id)).toMatchObject({ kind: "laundry", name: "Laundry room" });
     expect(studio.proposed.rooms.some((r) => r.kind === "bathroom" && inPolygon(centroid(r.polygon), laundry.polygon))).toBe(true);
@@ -131,12 +132,10 @@ describe("a bathroom the scan already has", () => {
     }
   });
 
-  it("isn't kept when it's a passage (a second door through it): the suite builds its own", () => {
+  it("is kept even when the plan shows a second door through it: never a second bathroom", () => {
     const m = seedModel(withBath([{ side: "minZ", atM: 1 }]) as never, {}, NOW)!;
-    for (const d of m.designs) {
-      expect(d.proposed.rooms.some((r) => r.kept), d.name).toBe(false);
-      expect(d.proposed.rooms.find((r) => r.kind === "bathroom" && r.unit === 2), d.name).toBeTruthy();
-    }
+    const bath = m.existing.rooms.find((r) => r.name === "Bathroom")!;
+    for (const d of m.designs) expect(d.proposed.rooms.filter((r) => r.kind === "bathroom").map((r) => [r.id, r.kept]), d.name).toEqual([[bath.id, true]]);
   });
 });
 

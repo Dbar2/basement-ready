@@ -6,6 +6,7 @@
 // Numbers from the rules pack (data/rules/waterloo-on.json) and the approved sets the City marked up:
 // 30-minute walls and 15-minute floors between the units, 20-minute doors with closers.
 import { burnsFuel } from "./alarms";
+import { ENTRANCE_RULE, ENTRANCE_SOURCE, newEntrance, outsideDoors } from "./entrance";
 import {
   add,
   along,
@@ -185,6 +186,32 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
   const beds = S.suite.filter((r) => r.kind === "bedroom");
   const confirmedScale = existing.scale.source === "tape" || existing.scale.source === "arkit" || existing.scale.source === "user_measurement";
 
+  // First: its own way in (server/model/entrance.ts). A door straight outside from the suite, or one
+  // they say is there; where they say there's none, the design needs a new one, and the fix adds it.
+  if (existing.entrance) {
+    // Where they told us there's no door straight outside, only a new one is its way in.
+    const own = outsideDoors(walls, openings).filter((o) => existing.entrance!.status !== "needed" || o.status === "new").filter((o) => {
+      const w = walls.find((x) => x.id === o.wallId)!;
+      return S.suite.some((r) => edges(r.polygon).some(([p, q]) => distToSegment(along(w, o.offsetM), p, q) < 0.3));
+    });
+    const built = own.find((o) => o.status === "new");
+    const status = own.length ? "own" : existing.entrance.status;
+    const add = status === "needed" ? newEntrance(design) : null;
+    out.push({
+      id: "entrance",
+      label: "It has its own way in",
+      ok: status === "own" ? true : status === "needed" ? false : null,
+      detail: built
+        ? `A new entrance here, at the side or back of the house: a walk-up stairwell and its own outside door (${ENTRANCE_SOURCE}).`
+        : own.length
+          ? "Its own door straight outside."
+          : existing.entrance.why,
+      ruleId: ENTRANCE_RULE,
+      fix: add ? { label: "Add a separate entrance here", edits: [{ op: "add_opening", opening: add }] } : undefined,
+      at: built ? along(walls.find((w) => w.id === built.wallId)!, built.offsetM) : add ? along(walls.find((w) => w.id === add.wallId)!, add.offsetM) : undefined,
+    });
+  }
+
   // Bedroom sizes, and a one-tap fix: slide its new wall out far enough.
   if (!studio)
     for (const bed of beds) {
@@ -357,6 +384,19 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
     });
   }
 
+  // Stairs left open to the suite (inside a room kept as it is): they're the suite's, and the house is
+  // closed off at the top with a 20-minute self-closing door.
+  const openStairs = fixtures.filter((f) => f.kind === "stairs" && S.suite.some((r) => inPolygon(f.at, r.polygon)) && !rooms.some((r) => r.kind === "stairs" && inPolygon(f.at, r.polygon)));
+  if (openStairs.length)
+    out.push({
+      id: "stairs-top",
+      label: "A 20-minute door at the top of the stairs",
+      ok: null,
+      detail: "The stairs are the basement home's: a 20-minute self-closing door at the top closes the house off from them.",
+      ruleId: "fire_separation_between_units",
+      at: openStairs[0].at,
+    });
+
   // Alarms: in each bedroom and outside it, CO when something burns fuel, all wired together.
   const smoke = alarms.filter((a) => a.kind === "smoke" || a.kind === "combo");
   const bare = beds.filter((b) => !smoke.some((a) => inPolygon(a.at, b.polygon)));
@@ -447,7 +487,7 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
     detail: gaps.length ? `${gaps.length === 1 ? "One opening" : `${gaps.length} openings`} with no wall between the suite and the ${S.others.some((r) => r.kind === "stairs") ? "stair" : "rest of the house"}.` : "Continuous around the suite and the stair, and through bulkheads.",
     ruleId: "fire_separation_between_units",
     fix: gaps.length
-      ? { label: "Close the gaps with rated walls", edits: gaps.map((g) => ({ op: "add_wall", wall: { id: "", a: g.a, b: g.b, thicknessM: 0.12, kind: "new", rating: "30min" } })) }
+      ? { label: "Close the gaps with rated walls", edits: gaps.map((g) => ({ op: "add_wall", wall: { id: "", a: g.a, b: g.b, thicknessM: 0.12, kind: "new", rating: "30min", why: "Closes the 30-minute fire separation between the two homes." } })) }
       : undefined,
     at: gaps[0] ? mul(add(gaps[0].a, gaps[0].b), 0.5) : undefined,
   });
