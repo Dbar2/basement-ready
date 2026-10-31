@@ -1,0 +1,55 @@
+/* The home base (src/guide/Home.tsx), Drawing Set (brand/ui.md): the goal, three milestone rows divided
+   by hairlines under an ink rule, the book and share links, and Continue along the bottom. One column,
+   640 px at most, on every screen. */
+
+.hb { min-height: 100dvh; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--color-bg); color: var(--color-ink); }
+
+.hb-top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; min-height: 52px; padding: env(safe-area-inset-top, 0px) var(--gutter) 0; border-bottom: var(--line-ink); }
+.hb-home { display: inline-grid; place-items: center; width: 44px; height: 44px; margin-left: -10px; color: var(--color-ink); }
+.hb-home svg { height: 26px; width: auto; display: block; }
+.hb-title { margin: 0; font: 800 17px var(--font-display); letter-spacing: -0.02em; }
+
+.hb-main { width: 100%; max-width: 640px; margin: 0 auto; padding: 24px var(--gutter) 32px; display: grid; gap: 12px; align-content: start; }
+.hb-example { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); text-wrap: pretty; }
+.hb-example b { color: var(--color-ink); }
+.hb-goal { margin: 0; font-size: clamp(30px, 6.4vw, 44px); line-height: 1.02; letter-spacing: -0.045em; text-wrap: balance; }
+.hb-for { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); text-wrap: pretty; }
+
+/* The milestones: hairline rows under an ink rule, never cards. */
+.hb-miles { margin: 12px 0 4px; padding: 0; list-style: none; border-top: var(--line-ink); }
+.hb-mile > a, .hb-mile > div { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: var(--line); color: inherit; text-decoration: none; }
+.hb-mile > a:hover .hb-name { text-decoration: underline; text-underline-offset: 4px; }
+.hb-th { width: 64px; height: 48px; display: block; overflow: hidden; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); }
+.hb-th svg { width: 100%; height: 100%; display: block; }
+.hb-text { display: grid; gap: 2px; min-width: 0; }
+.hb-name { font: 800 17px var(--font-display); letter-spacing: -0.02em; }
+.hb-line { font-size: var(--text-small); color: var(--color-ink-muted); }
+.hb-st { font-size: 14px; font-weight: 800; }
+.hb-mile[data-state="done"] .hb-st { color: var(--color-ok); }
+.hb-mile[data-state="done"] .hb-st::before { content: "\2713"; margin-right: 4px; }
+.hb-mile[data-state="next"] .hb-st { color: var(--color-fix); }
+.hb-mile[data-state="todo"] .hb-st { color: var(--color-ink-muted); font-weight: 600; }
+
+/* The drawings in the thumbnails. */
+.hb-wall { stroke: var(--color-ink); stroke-width: 1.5; stroke-linecap: square; }
+.hb-wall-new { stroke: var(--color-ink); stroke-width: 2.5; stroke-linecap: square; }
+.hb-fixture { fill: none; stroke: var(--color-ink-muted); stroke-width: 1; }
+.hb-sheet { fill: var(--color-card); stroke: var(--color-ink); stroke-width: 1.5; }
+.hb-sheet-text { fill: none; stroke: var(--color-border); stroke-width: 2; }
+.hb-sheet-plan { fill: none; stroke: var(--color-ink); stroke-width: 1; }
+
+.hb-links { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; }
+.hb-links .link-quiet { min-height: 44px; display: inline-flex; align-items: center; }
+.hb-links .link-quiet:disabled { opacity: 0.5; cursor: default; }
+.hb-note { margin: 0; min-height: 1.4em; font-size: var(--text-small); color: var(--color-ink-muted); overflow-wrap: anywhere; }
+
+/* Continue: the one way on, along the bottom. */
+.hb-go { position: sticky; bottom: 0; border-top: var(--line-ink); background: var(--color-bg); padding: 12px var(--gutter) max(16px, env(safe-area-inset-bottom, 0px)); }
+.hb-go-in { max-width: 640px; margin: 0 auto; display: grid; }
+
+@media (min-width: 720px) {
+  .hb-main { padding-top: 40px; padding-bottom: 20px; }
+  .hb-mile > a, .hb-mile > div { grid-template-columns: 96px minmax(0, 1fr) auto; gap: 16px; padding: 14px 0; }
+  .hb-th { width: 96px; height: 72px; }
+  .hb-go-in { justify-items: end; }
+}

@@ -22,8 +22,8 @@
 .gs-milestones li[data-state="done"] { color: var(--color-ink); }
 .gs-milestones li[data-state="done"]::before { content: "\2713"; margin-right: 4px; font-size: 13px; }
 .gs-milestones li[data-state="now"] { color: var(--color-ink); font-weight: 800; }
-.gs-milestones li[data-state="now"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 8px; height: 2px; background: var(--color-ink); transform-origin: left; animation: flow-underline var(--dur-2) var(--ease-draw) both; }
-@keyframes flow-underline { from { transform: scaleX(0); } to { transform: none; } }
+.gs-milestones li[data-state="now"]::after { content: ""; position: absolute; left: 0; right: 0; bottom: 8px; height: 2px; background: var(--color-ink); transform-origin: left; animation: gs-underline var(--dur-2) var(--ease-draw) both; }
+@keyframes gs-underline { from { transform: scaleX(0); } to { transform: none; } }
 
 /* The basement, always on screen. Each visual fills it (src/guide/mount.tsx). */
 .gs-visual { grid-area: visual; position: relative; min-height: 0; overflow: hidden; background: var(--color-surface); border-bottom: var(--line-ink); }
