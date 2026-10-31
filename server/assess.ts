@@ -259,6 +259,8 @@ export type DesignPricing = {
   lineCost: Record<string, { low: number; high: number }>;
   // Unit 2's floor in that design (server/model/suite.ts): what the permit fee is worked on.
   suiteAreaM2: number | null;
+  // Whether it has its own way in, from the scan and their answer (server/model/entrance.ts).
+  entrance?: { status: "own" | "needed" | "unknown"; why: string };
 };
 
 // Pure: the verdict, the fix list and the cost, from the findings as they stand (and the design, when
@@ -319,14 +321,19 @@ export function verdictFrom(findings: VerdictFinding[], design: DesignPricing | 
   const n = fixGroups.length;
   const open = findings.filter((f) => f.status === "needs_answer" || f.status === "needs_measurement" || f.status === "designer_checks").length;
   const verdict: "yes" | "fix" | "no" = blockers.length ? "no" : n > 0 ? "fix" : "yes";
+  // First of all, its own way in (server/model/entrance.ts): where there's none, it says so before anything
+  // else, and the new entrance is the first fix.
+  const exit = findings.find((f) => f.ruleId === "exit_from_suite");
+  const entrance = design?.entrance ?? { status: exit?.status === "likely_fix" ? ("needed" as const) : exit?.status === "likely_ok" ? ("own" as const) : ("unknown" as const), why: exit?.why ?? "" };
+  if (entrance.status === "needed") fixGroups.sort((a, b) => Number(b.category === "exit") - Number(a.category === "exit"));
   const headline = blockers.length
     ? "Not as a second unit here. You could still finish it as part of your home."
     : n > 0
-      ? `Yes, your basement can be a second home after ${n} fix${n === 1 ? "" : "es"}.`
+      ? `${entrance.status === "needed" ? "It needs its own way in first. " : ""}Yes, your basement can be a second home after ${n} fix${n === 1 ? "" : "es"}.`
       : open
         ? "Looks like yes. Your designer confirms a few details."
         : "Yes, your basement can be a second home.";
-  return { fixGroups, standard, cost, verdict, headline, blockers: blockers.map((b) => b.ruleId) };
+  return { fixGroups, standard, cost, verdict, headline, blockers: blockers.map((b) => b.ruleId), entrance };
 }
 
 type Triageable = { ruleId: string; check: Rule["check"]; status: Status; why: string | null; question: string | null; evidence: string[]; fix: Rule["fix"] | null };
@@ -453,7 +460,7 @@ export function buildResult(
     const d = decided[f.ruleId];
     return d ? { ...f, ...d, question: null, fix: d.status === "likely_fix" || d.status === "standard" ? rule.fix : null } : triage(f, rule, ctx.property, confirms);
   });
-  const { fixGroups, standard, cost, verdict, headline } = verdictFrom(triaged);
+  const { fixGroups, standard, cost, verdict, headline, entrance } = verdictFrom(triaged);
 
   return {
     vision: cleanVision(model.vision),
@@ -464,6 +471,7 @@ export function buildResult(
     coverageNote: note,
     verdict,
     headline,
+    entrance,
     route: model.route === "basement_finish" ? "basement_finish" : "second_unit",
     wants: model.wants ?? "",
     summary: model.summary ?? "",
