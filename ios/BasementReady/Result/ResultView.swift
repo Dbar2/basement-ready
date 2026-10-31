@@ -56,6 +56,7 @@ struct ResultView: View {
     var req = URLRequest(url: api)
     req.timeoutInterval = 6
     req.setValue("application/json", forHTTPHeaderField: "Accept")
+    req.setValue(scan.claimsHeader, forHTTPHeaderField: "x-claims") // a scan opens only for its owner
     guard let (data, res) = try? await session.data(for: req), let http = res as? HTTPURLResponse, (200..<300).contains(http.statusCode),
           (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else { return scan.homeURL }
     return guide
