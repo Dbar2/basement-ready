@@ -67,3 +67,15 @@ export async function postGuide(scanId: string, action: GuideAction, state?: Gui
   if (scanId === "sample") keepSample(sent.state);
   return sent;
 }
+
+// Their question said aloud: the recorded clip, as the browser made it, to Muse Voice Transcribe on the
+// server (server/guide/voice.ts). Returns the words for the ask box.
+export async function hearGuide(scanId: string, clip: Blob): Promise<string> {
+  const res = await fetch(`/api/scans/${scanId}/guide/voice`, {
+    method: "POST",
+    headers: { ...(await authHeaders()), "Content-Type": clip.type || "application/octet-stream" },
+    body: clip,
+  });
+  if (!res.ok) throw await errorOf(res, "I couldn't hear that. Try again, or type it.");
+  return ((await res.json()) as { text: string }).text;
+}
