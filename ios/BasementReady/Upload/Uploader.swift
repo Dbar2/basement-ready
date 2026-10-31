@@ -10,7 +10,11 @@ struct ScanCreated: Codable, Equatable, Sendable {
   let claimToken: String
   var server: URL?
 
-  var resultURL: URL? { server?.appending(path: "scans/\(id)") }
+  // The scan's home base on the web; the app's logo always comes back here, never the marketing site.
+  var homeURL: URL? { server?.appending(path: "scans/\(id)") }
+  // The guide, where the wait and the next steps happen (servers since the guide, Oct 31).
+  var guideURL: URL? { server?.appending(path: "scans/\(id)/guide") }
+  var guideAPI: URL? { server?.appending(path: "api/scans/\(id)/guide") }
 
   // The last take this phone sent, so the start screen can open its answer again.
   static let lastKey = "lastScan"

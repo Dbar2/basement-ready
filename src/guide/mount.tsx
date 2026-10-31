@@ -2,8 +2,10 @@
 // ux-guide-build-spec.md) with these props; the shell track (A) wires them in here. Until a track lands,
 // its kinds show a labelled stub, so the guide always has something in the pane.
 import type { ComponentType } from "react";
-import { CardStub, VisualStub } from "./stubs";
+import { BUILD_CARDS } from "./cards";
+import { VisualStub } from "./stubs";
 import type { CardRef, GuideAction, VisualRef } from "./types";
+import { BuildersVisual, MoneyVisual, PermitVisual } from "./visuals/BuildVisuals";
 
 export type VisualKind = VisualRef["kind"];
 export type CardKind = CardRef["kind"];
@@ -24,22 +26,14 @@ const VISUALS: { [K in VisualKind]: ComponentType<VisualProps<K>> } = {
   planEdit: VisualStub,
   layouts: VisualStub,
   beforeAfter: VisualStub,
-  permit: VisualStub,
-  money: VisualStub,
-  builders: VisualStub,
+  // The Build milestone (track F).
+  permit: PermitVisual,
+  money: MoneyVisual,
+  builders: BuildersVisual,
 };
 
-const CARDS: Record<CardKind, ComponentType<CardProps>> = {
-  tape: CardStub,
-  window: CardStub,
-  owner: CardStub,
-  waterMeter: CardStub,
-  upstairs: CardStub,
-  designer: CardStub,
-  moneyQuestion: CardStub,
-  buildPath: CardStub,
-  download: CardStub,
-};
+// Every card kind is the Build milestone's (track F, src/guide/cards).
+const CARDS: Record<CardKind, ComponentType<CardProps>> = BUILD_CARDS;
 
 export function Visual({ scanId, visual, act }: { scanId: string; visual: VisualRef; act: (action: GuideAction) => void }) {
   const C = VISUALS[visual.kind] as ComponentType<VisualProps>;

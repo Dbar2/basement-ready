@@ -12,6 +12,8 @@ import type { Detection } from "../pipeline";
 import { keys, storage } from "../storage";
 import { basementFor, loadWorkspace } from "../workspace";
 import { assumedIntrinsics, pickAngles, pickDesignAngles, poseAt, viewsFromArea, viewsFromMesh, type Angle, type Seg, type Spot, type View } from "./angles";
+import { keptLooks, measureLooks } from "./looks";
+import { motionOf } from "./stable";
 import type { Design, Furniture, Model } from "../model/types";
 
 export const SAMPLE = "sample";
@@ -63,7 +65,19 @@ function sampleViews(result: any): View[] {
     const zs = [b.minX, b.maxX].flatMap((x) => [b.minZ, b.maxZ].map((z) => s * x + c * z + p.z));
     boxes.set(r.index, { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs), ceilingM: r.plan.ceilingHeightM ?? 2.3 });
   }
-  return viewsFromMesh(at, pos, boxes, assumedIntrinsics(1280, 720));
+  // How the camera moved, from the whole camera path (every spot, not only those with a frame kept).
+  const motion = motionOf(spots.map((s) => ({ frame: s.frame, pose: s.pose, sharpness: null })));
+  return viewsFromMesh(at, pos, boxes, assumedIntrinsics(1280, 720), undefined, motion, spots.map((s) => s.pose));
+}
+
+const pad = (n: number) => String(n).padStart(4, "0");
+// Each view with its frame's look (light and detail, server/views/looks.ts): measured once per scan and
+// kept in its storage; the example's few frames are measured when first asked for.
+async function withLooks(scanId: string, views: View[]): Promise<View[]> {
+  const frames = [...new Map(views.map((v) => [v.frame, [v.intrinsics.width, v.intrinsics.height] as [number, number]]))].map(([n, size]) => ({ n, size }));
+  if (!frames.length) return views;
+  const looks = scanId === SAMPLE ? await measureLooks(frames, async (n) => sampleFile(`frames/${pad(n)}.jpg`)) : await keptLooks(scanId, frames);
+  return views.map((v) => ({ ...v, look: looks.get(v.frame) ?? null }));
 }
 
 // Every candidate view of a finished scan. Cached per process: once a scan is done its frames and 3D
@@ -76,7 +90,7 @@ function viewsOf(scanId: string) {
       (async () => {
         const result = await scanResult(scanId);
         if (!result) return null;
-        if (scanId === SAMPLE) return { views: sampleViews(result), mainRoom: result.mainRoom ?? null };
+        if (scanId === SAMPLE) return { views: await withLooks(scanId, sampleViews(result)), mainRoom: result.mainRoom ?? null };
         const views: View[] = [];
         for (const room of (result.rooms ?? []) as { index: number; has3d: boolean; placement?: any }[]) {
           if (!room.has3d) continue;
@@ -84,7 +98,7 @@ function viewsOf(scanId: string) {
           if (!json) continue;
           views.push(...viewsFromArea({ room: room.index, scan: JSON.parse(json.toString("utf8")), depth, placement: room.placement ?? null, hasFrame: (n) => n < (result.frameCount ?? Infinity) }));
         }
-        return { views, mainRoom: result.mainRoom ?? null };
+        return { views: await withLooks(scanId, views), mainRoom: result.mainRoom ?? null };
       })().catch((err) => {
         cache.delete(scanId);
         throw err;
@@ -121,7 +135,12 @@ export async function deckViews(scanId: string, areas: number): Promise<View[]> 
     const json = await readStored(keys.area3d(scanId, i, "scan.json"));
     if (json) views.push(...viewsFromArea({ room: i, scan: JSON.parse(json.toString("utf8")), depth: null, placement: null }));
   }
-  return views;
+  return withLooks(scanId, views);
+}
+
+// Every candidate view of a scan with how fit its frame is to picture (for checking the choice).
+export async function allViews(scanId: string): Promise<View[]> {
+  return (await viewsOf(scanId))?.views ?? [];
 }
 
 // One view of the scan by its angle id ("room-frame"), whether or not it was picked.
