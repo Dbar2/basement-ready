@@ -224,6 +224,9 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
   const furn = m.design.proposed.furniture ?? [];
   const LABEL: Record<string, string> = { toilet: "WC", vanity: "LAV", shower: "SHOWER", kitchen: "COUNTER", fridge: "FRIDGE", washer_dryer: "W/D" };
   const fixed = furn.filter((f) => LABEL[f.kind]);
+  // Fixtures in a room kept as the scan found it are already there: "WC (E)".
+  const kept = m.design.proposed.rooms.filter((r) => r.kept);
+  const there = (p: Pt) => kept.some((r) => inPolygon(p, r.polygon));
   if (fixed.length) {
     for (const f of fixed) {
       const [w, d] = f.sizeM;
@@ -231,20 +234,20 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
       const corners: Pt[] = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].map(([x, z]) => [f.at[0] + x * Math.cos(r) - z * Math.sin(r), f.at[1] + x * Math.sin(r) + z * Math.cos(r)]);
       s.poly(corners.map(v.P), { width: 0.5, color: MUTED, fill: PAPER });
       const [cx, cy] = v.P(f.at);
-      s.text(LABEL[f.kind], cx, cy - 2, { size: 4.6, align: "center", color: MUTED });
+      s.text(there(f.at) ? `${LABEL[f.kind]} (E)` : LABEL[f.kind], cx, cy - 2, { size: 4.6, align: "center", color: MUTED });
     }
     return;
   }
   const outer = bounds(m.design.proposed.rooms.filter((r) => r.unit === 2).flatMap((r) => r.polygon));
   for (const room of m.design.proposed.rooms.filter((r) => r.unit === 2 && (r.kind === "bathroom" || r.kind === "kitchen"))) {
     const z = bounds(room.polygon);
-    const items = room.kind === "bathroom" ? ["WC", "LAV", "SHOWER"] : ["FRIDGE", "SINK", "RANGE"];
+    const items = (room.kind === "bathroom" ? ["WC", "LAV", "SHOWER"] : ["FRIDGE", "SINK", "RANGE"]).map((x) => (room.kept ? `${x} (E)` : x));
     const alongX = z.maxX - z.minX >= z.maxZ - z.minZ;
     const atMin = alongX ? Math.abs(z.minZ - outer.minZ) < Math.abs(outer.maxZ - z.maxZ) : Math.abs(z.minX - outer.minX) < Math.abs(outer.maxX - z.maxX);
     const len = alongX ? z.maxX - z.minX : z.maxZ - z.minZ;
     const depth = Math.min(0.6, alongX ? z.maxZ - z.minZ : z.maxX - z.minX);
     items.forEach((label, i) => {
-      const wide = label === "SHOWER" ? Math.min(0.9, len / 3) : Math.min(0.6, len / 3.4);
+      const wide = label.startsWith("SHOWER") ? Math.min(0.9, len / 3) : Math.min(0.6, len / 3.4);
       const a = (len / items.length) * (i + 0.5) - wide / 2;
       let x0: number, z0: number, x1: number, z1: number;
       if (alongX) {
@@ -260,7 +263,7 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
       }
       const [px0, py0] = v.P([x0, z1]), [px1, py1] = v.P([x1, z0]);
       s.rect(px0, py0, px1 - px0, py1 - py0, { width: 0.5, color: MUTED, fill: PAPER });
-      if (label === "WC") s.circle((px0 + px1) / 2, (py0 + py1) / 2, Math.min(px1 - px0, py1 - py0) / 3, { width: 0.4, color: MUTED });
+      if (label.startsWith("WC")) s.circle((px0 + px1) / 2, (py0 + py1) / 2, Math.min(px1 - px0, py1 - py0) / 3, { width: 0.4, color: MUTED });
       s.text(label, (px0 + px1) / 2, (py0 + py1) / 2 - 2, { size: label.length > 4 ? 4.2 : 4.8, align: "center", color: MUTED });
     });
   }
@@ -309,6 +312,7 @@ export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: 
     if (r.unit === 2) lines.push([`${ftIn(full.maxX - full.minX)} x ${ftIn(full.maxZ - full.minZ)}`, 5.5, false]);
     const clg = r.ceilingM ?? m.ceilingM;
     if (o.ceiling && clg) lines.push([`CLG ${ftIn(clg)} (${Math.round(clg * 1000)})`, 5.5, false]);
+    if (r.kept) lines.push(["EXISTING, NO CHANGE", 5.5, false]);
     if (elsewhere.length) lines.push([`CONTINUES ON ${elsewhere.join(", ")}`, 5.5, false]);
     const tall = (b.maxZ - b.minZ) * v.k;
     const width = (t: string, size: number, bold: boolean) => s.textWidth(t, size, bold ? s.fonts.bold : s.fonts.regular) + 6;
