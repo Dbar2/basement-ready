@@ -1,7 +1,8 @@
 // The best real camera angles to picture a design from: picked from the frames the 3D kept, never at
-// random. A good angle is sharp, sees a lot of the room's floor and walls, is taken at eye height with
-// the phone level, and has nothing right in front of the lens. Then the set is spread out around each
-// room: different spots and directions, not neighbours in time.
+// random. A good angle is steady and sharp, level, well exposed and at eye height (server/views/stable.ts:
+// a frame that isn't is never pictured), sees a lot of the room's floor and walls, and has nothing right
+// in front of the lens. Then the set is spread out around each room: different spots and directions,
+// not neighbours in time.
 //
 // Pure: the views come from each area's scan.json and depth.bin (viewsFromArea), or, for a scan that
 // only kept camera spots (the example), from the solid surface (viewsFromMesh). bestAngles in
@@ -10,6 +11,7 @@ import type { RoomPlacement } from "../basement";
 import { corners, lookOf } from "../model/furniture";
 import type { Furniture } from "../model/types";
 import { half } from "../scan3d";
+import { frameQuality, heightsAlong, levelOf, motionOf, pathUp, roomDetail, type Look, type Motion } from "./stable";
 
 export type Intrinsics = { fx: number; fy: number; cx: number; cy: number; width: number; height: number; source: "scan" | "assumed" };
 
@@ -26,6 +28,8 @@ export type View = {
   sharpness: number | null; // variance of the Laplacian, from the 3D service
   seen: { floor: number; wall: number; near: number }; // shares of the room's floor and walls in view, and of the view taken up by something closer than 1.5 m
   depth?: DepthGrid; // what the camera sees, coarsely: for telling whether a piece of the design is hidden
+  motion?: Motion | null; // how fast the camera turned there, and how sharp it is against the frames around it
+  look?: Look | null; // its light and detail (server/views/looks.ts)
 };
 
 // How far the camera sees in each cell of a coarse grid over the picture (0..1 of its width and
@@ -39,12 +43,11 @@ type Box = { minX: number; maxX: number; minZ: number; maxZ: number; ceilingM: n
 const FLOOR_CELL = 0.25;
 const WALL_CELL = 0.3;
 const NEAR_M = 1.5;
+const NEAR_MAX = 0.4; // more of the picture than this closer than NEAR_M: a picture of what's in the way
 const MIN_GAP_FRAMES = 10; // 2 s of video at 5 fps
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const deg = (r: number) => (r * 180) / Math.PI;
-// 1 inside [lo, hi], falling to 0 `soft` outside it.
-const band = (x: number, lo: number, hi: number, soft: number) => (x >= lo && x <= hi ? 1 : Math.max(0, 1 - (x < lo ? lo - x : x - hi) / soft));
 const smooth = (e0: number, e1: number, x: number) => {
   const t = clamp((x - e0) / (e1 - e0), 0, 1);
   return t * t * (3 - 2 * t);
@@ -67,11 +70,9 @@ export function placePose(P: number[][], p: RoomPlacement | null): number[][] {
   return [...out, [0, 0, 0, 1]];
 }
 
-const attitude = (P: number[][]) => ({
-  heightM: P[1][3],
-  pitchDeg: deg(Math.asin(clamp(P[1][2], -1, 1))),
-  rollDeg: deg(Math.asin(clamp(P[1][0], -1, 1))),
-});
+// Height above the floor, and pitch and roll against `up` (the camera path's own, server/views/stable.ts
+// pathUp, where it can tell; else the 3D's +y).
+const attitude = (P: number[][], up: [number, number, number] | null = null, height = (Q: number[][]) => Q[1][3]) => ({ heightM: height(P), ...levelOf(P, up) });
 
 // Something in the way: a surface close to the lens that isn't the floor under your feet or the ceiling.
 const isNear = (y: number, box: Box) => y >= 0.12 && y <= box.ceilingM - 0.1;
@@ -140,12 +141,18 @@ export function viewsFromArea(a: AreaInput): View[] {
   const scan = a.scan;
   const room = scan.room ?? {};
   if (!room.box || !scan.frames?.length) return [];
+  // How the camera moved through the area, in filming order.
+  const numberOf = (f: any) => scan.sentFrames?.[f.sourceIndex] ?? Number.parseInt(String(f.name), 10);
+  const motion = motionOf((scan.frames as any[]).filter((f) => f.pose && Number.isFinite(numberOf(f))).map((f) => ({ frame: numberOf(f), pose: f.pose, sharpness: typeof f.sharpness === "number" ? f.sharpness : null })));
+  const poses = (scan.frames as any[]).filter((f) => f.pose).map((f) => f.pose as number[][]);
+  const up = pathUp(poses);
+  const height = heightsAlong(poses, up);
   const box: Box = { minX: room.box.min[0], maxX: room.box.max[0], minZ: room.box.min[2], maxZ: room.box.max[2], ceilingM: room.ceilingHeightM ?? room.box.max[1] ?? 2.3 };
   const [, H, W] = (scan.files?.depth?.shape ?? [0, 0, 0]) as number[];
   const step = a.step ?? 3;
   const out: View[] = [];
   for (const f of scan.frames as any[]) {
-    const frame = scan.sentFrames?.[f.sourceIndex] ?? Number.parseInt(String(f.name), 10);
+    const frame = numberOf(f);
     if (!Number.isFinite(frame) || (a.hasFrame && !a.hasFrame(frame))) continue;
     if (!f.intrinsics || !f.model || !f.pose) continue;
     const P = f.pose as number[][];
@@ -183,10 +190,11 @@ export function viewsFromArea(a: AreaInput): View[] {
       frame,
       pose: placePose(P, a.placement),
       intrinsics: frameIntrinsics(f),
-      ...attitude(P),
+      ...attitude(P, up, height),
       sharpness: typeof f.sharpness === "number" ? f.sharpness : null,
       seen,
       ...(depth ? { depth } : {}),
+      motion: motion.get(frame) ?? null,
     });
   }
   return out;
@@ -232,7 +240,11 @@ export function poseAt(spots: Spot[], frame: number, maxGap = 3): Spot | null {
 
 // What each camera sees of the solid surface: its vertices splatted into a coarse depth buffer from
 // that camera, the nearest one per cell kept. `boxes` are the rooms' boxes in the basement frame.
-export function viewsFromMesh(spots: Spot[], meshPos: Int16Array, boxes: Map<number, Box>, intrinsics: Intrinsics, sharpness?: Map<number, number>): View[] {
+// `motion`: how the camera moved, from the whole camera path (server/views/stable.ts motionOf).
+// `path`: the whole camera path's poses, which say which way is up (server/views/stable.ts pathUp).
+export function viewsFromMesh(spots: Spot[], meshPos: Int16Array, boxes: Map<number, Box>, intrinsics: Intrinsics, sharpness?: Map<number, number>, motion?: Map<number, Motion>, path: number[][][] = []): View[] {
+  const up = pathUp(path);
+  const height = heightsAlong(path, up);
   const GW = 64, GH = Math.max(1, Math.round((GW * intrinsics.height) / intrinsics.width));
   const sx = GW / intrinsics.width, sy = GH / intrinsics.height;
   const out: View[] = [];
@@ -272,10 +284,11 @@ export function viewsFromMesh(spots: Spot[], meshPos: Int16Array, boxes: Map<num
       frame: s.frame,
       pose: P.map((r) => [...r]),
       intrinsics,
-      ...attitude(P),
+      ...attitude(P, up, height),
       sharpness: sharpness?.get(s.frame) ?? null,
       seen: valid > 20 ? { ...coverage(pts, box), near: near / valid } : { floor: 0, wall: 0, near: 1 },
       depth,
+      motion: motion?.get(s.frame) ?? null,
     });
   }
   return out;
@@ -367,34 +380,31 @@ function inside(p: [number, number], poly: [number, number][]) {
 
 const yawOf = (P: number[][]) => Math.atan2(P[0][2], P[2][2]);
 
-// How good each view is on its own, 0..1, and why. Coverage is against the best view of the same room.
+// How good each view is on its own, 0..1, and why: how fit the frame is to picture (server/views/stable.ts:
+// 0 for one that's blurred, crooked, badly lit or swinging round), how much of the room it sees (against
+// the best view of the same room) and whether something stands right in front of the lens.
 function scoreViews(views: View[]) {
-  const best = new Map<number, { floor: number; wall: number; sharp: number[] }>();
+  const best = new Map<number, { floor: number; wall: number; sharp: number[]; looks: (Look | null | undefined)[] }>();
   for (const v of views) {
-    const b = best.get(v.room) ?? { floor: 1e-6, wall: 1e-6, sharp: [] };
+    const b = best.get(v.room) ?? { floor: 1e-6, wall: 1e-6, sharp: [], looks: [] };
     b.floor = Math.max(b.floor, v.seen.floor);
     b.wall = Math.max(b.wall, v.seen.wall);
     if (v.sharpness != null) b.sharp.push(v.sharpness);
+    b.looks.push(v.look);
     best.set(v.room, b);
   }
+  const detail = new Map([...best].map(([room, b]) => [room, roomDetail(b.looks)]));
   return views.map((v) => {
     const b = best.get(v.room)!;
+    // Its sharpness against the room's middling frame counts a little too.
     const sorted = [...b.sharp].sort((x, y) => x - y);
-    const median = sorted.length ? sorted[Math.floor(sorted.length / 2)] : null;
-    const sharp = v.sharpness == null || !median ? 1 : clamp(v.sharpness / median, 0, 1) ** 1.5;
+    const sharpRoom = v.sharpness != null && sorted.length ? v.sharpness / sorted[Math.floor(sorted.length / 2)] : null;
+    const q = frameQuality({ ...v, sharpRoom }, detail.get(v.room) ?? null);
     const wide = 0.5 * (v.seen.floor / b.floor) + 0.5 * (v.seen.wall / b.wall);
-    const height = band(v.heightM, 1.1, 1.8, 0.5);
-    // Level is best; a phone tipped down 20° the way most people film still makes a good picture.
-    const level = band(Math.abs(v.pitchDeg), 0, 12, 33) * band(Math.abs(v.rollDeg), 0, 4, 14);
     const clear = 1 - smooth(0.12, 0.45, v.seen.near);
-    const score = wide * height * level * clear * (0.4 + 0.6 * sharp);
-    const why = [
-      `sees ${Math.round(v.seen.floor * 100)}% of the floor and ${Math.round(v.seen.wall * 100)}% of the walls`,
-      `${v.heightM.toFixed(2)} m up`,
-      `pitch ${v.pitchDeg.toFixed(0)}°, roll ${v.rollDeg.toFixed(0)}°`,
-      `${Math.round(v.seen.near * 100)}% within 1.5 m`,
-      v.sharpness == null ? "sharpness unknown" : `sharpness ${Math.round(sharp * 100)}%`,
-    ].join(" · ");
+    const blocked = v.seen.near > NEAR_MAX;
+    const score = blocked ? 0 : wide * clear * q.score;
+    const why = [`sees ${Math.round(v.seen.floor * 100)}% of the floor and ${Math.round(v.seen.wall * 100)}% of the walls`, `${Math.round(v.seen.near * 100)}% within 1.5 m`, q.why, blocked && q.ok ? "not pictured: something right in front" : null].filter(Boolean).join(" · ");
     return { v, score, why };
   });
 }
@@ -403,8 +413,9 @@ type Scored = { v: View; score: number; why: string; shows: string[]; share: num
 
 // Greedy, spread-out picking from a pool: each next pick is scored down by how close it stands to, and
 // how nearly it looks the same way as, the picks so far (frames under 2 s from a pick are out), and up
-// by `gain` (what it adds that the picks so far don't have).
-function spreadPick(pool: Scored[], n: number, gain: (c: Scored, picked: Scored[]) => number = () => 1): Scored[] {
+// by `gain` (what it adds that the picks so far don't have). Only frames scoring at least `keep` of the
+// best are picked at all: no making up the numbers with weaker ones.
+function spreadPick(pool: Scored[], n: number, gain: (c: Scored, picked: Scored[]) => number = () => 1, keep = 0.5): Scored[] {
   const sorted = [...pool].filter((s) => s.score > 0).sort((a, b) => b.score - a.score || a.v.room - b.v.room || a.v.frame - b.v.frame);
   if (!sorted.length) return [];
   const top = sorted[0].score;
@@ -412,7 +423,7 @@ function spreadPick(pool: Scored[], n: number, gain: (c: Scored, picked: Scored[
   while (picked.length < n) {
     let best: Scored | null = null, bestValue = 0;
     for (const c of sorted) {
-      if (picked.includes(c) || c.score < top * 0.2) continue;
+      if (picked.includes(c) || c.score < top * keep) continue;
       let spread = 1;
       for (const p of picked) {
         if (p.v.room === c.v.room && Math.abs(c.v.frame - p.v.frame) < MIN_GAP_FRAMES) {
@@ -462,13 +473,14 @@ export function pickDesignAngles(views: View[], n: number, furniture: Pick<Furni
   const picks = spreadPick(pool, clamp(Math.round(n), 1, 8), (c, picked) => {
     const count = (id: string) => picked.filter((p) => p.shows.includes(id)).length;
     return Math.sqrt(Math.min(1, c.share * 2)) * (1 + c.shows.reduce((g, id) => g + (count(id) < 2 ? 0.6 : 0.05), 0));
-  });
+  }, 0.35);
   return picks.map(asAngle);
 }
 
 // The best `perRoom` angles of each room, spread out: each next pick is scored down by how close it
 // stands to, and how nearly it looks the same way as, the ones already picked; frames under 2 s from
-// a pick are out. Rooms keep their order; within a room, the best first. Deterministic.
+// a pick are out, and so are frames well below the room's best. A room with no frame fit to picture
+// gets none. Rooms keep their order; within a room, the best first. Deterministic.
 export function pickAngles(views: View[], perRoom = 5, furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[] = [], walls: Seg[] = []): Angle[] {
   const n = clamp(Math.round(perRoom), 1, 8);
   const scored = withDesign(views, furniture, walls);
