@@ -1,7 +1,8 @@
 // "Pick a layout": the model's designs for their basement (server/model/seed.ts: one bedroom on the
 // window, the studio, the bedroom on another wall, two bedrooms where they fit), each permit-ready from
-// the start. Every card has the plan, a picture of the design itself from the real angle that shows it
-// best (src/views/covers.tsx), how many of its checks it meets, and what it costs hired out
+// the start. Every card has the plan, a picture of the design in their basement in clean 3D (the basement
+// as built with the design's walls and furniture inside, src/views/layoutShots.tsx), how many of its
+// checks it meets, and what it costs hired out
 // (server/quote). On a phone they swipe between them; on a computer they sit side by side.
 import { useMemo } from "react";
 import { checkDesign, tally } from "../../server/model/checks";
@@ -10,7 +11,7 @@ import { bounds, centroid, polygonArea } from "../../server/model/geometry";
 import { suiteAreaM2 } from "../../server/model/suite";
 import type { Design, Model } from "../../server/model/types";
 import { quote } from "../../server/quote/quote";
-import { useDesignCovers } from "../views/covers";
+import { useLayoutShots } from "../views/layoutShots";
 import "./ideas.css";
 
 const cad = (n: number) => `$${Math.round(n / 1000)}k`;
@@ -18,7 +19,7 @@ const cad = (n: number) => `$${Math.round(n / 1000)}k`;
 // `fixes`: the answer's list (server/priced.ts); each card counts it with its own design's fixes, as the
 // headline would if that design were picked.
 export function LayoutPicker({ scanId, model, municipality, fixes, onPick }: { scanId: string; model: Model; municipality?: string; fixes?: { category: string; fromDesign?: boolean }[]; onPick: (id: string) => void }) {
-  const { covers, renderer } = useDesignCovers(scanId, model.designs);
+  const { shots, renderer } = useLayoutShots(scanId, model);
   const facts = useMemo(
     () =>
       new Map(
@@ -41,19 +42,17 @@ export function LayoutPicker({ scanId, model, municipality, fixes, onPick }: { s
       <ul className="layout-row">
         {model.designs.map((d) => {
           const f = facts.get(d.id)!;
-          const cover = covers[d.id];
+          const shot = shots[d.id];
           return (
             <li key={d.id} className="layout-card" data-chosen={d.chosen || undefined}>
               <button type="button" className="layout-hit" aria-pressed={d.chosen} onClick={() => onPick(d.id)} aria-label={`Pick ${d.name}`}>
                 <figure className="layout-corner">
-                  <span className="layout-pic" data-ready={Boolean(cover) || undefined}>
-                    {cover ? <img src={cover.url} alt={`${d.name}, virtually staged in your basement`} draggable={false} /> : cover === null ? <DesignThumb design={d} /> : null}
+                  <span className="layout-pic" data-ready={Boolean(shot) || undefined}>
+                    {shot ? <img src={shot} alt={`${d.name}, drawn in 3D in your basement`} draggable={false} /> : shot === null ? <DesignThumb design={d} /> : null}
                   </span>
-                  <figcaption>
-                    {cover ? (cover.making ? "Virtually staged · making it look real…" : cover.kind === "photo" ? "Virtually staged" : "Virtually staged · 3D render") : cover === null ? "The plan" : "Drawing it in your basement…"}
-                  </figcaption>
+                  <figcaption>{shot ? "Your basement in 3D, laid out this way" : shot === null ? "The plan" : "Drawing it in 3D…"}</figcaption>
                 </figure>
-                {cover !== null && <DesignThumb design={d} />}
+                {shot !== null && <DesignThumb design={d} />}
                 <h3>{d.name}</h3>
                 <dl className="layout-facts">
                   <div>
