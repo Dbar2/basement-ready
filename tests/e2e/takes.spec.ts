@@ -9,7 +9,10 @@ import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
 import { expectSheets, Workspace } from "./pages/Workspace";
 import type { Page, Response, TestInfo } from "@playwright/test";
-import { api, expect, oneAtATime, test, type Journey } from "./support/fixtures";
+import { checkDesign } from "../../server/model/checks";
+import { chosenDesign } from "../../server/model/legacy";
+import type { Model } from "../../server/model/types";
+import { api, claimedApi, expect, oneAtATime, test, type Journey } from "./support/fixtures";
 import { costOf, realCalls } from "./support/costs";
 import { mode, runDir } from "./support/run";
 import { recordedOutcome, saveOutcome, TAKES, unavailable, type Outcome } from "./support/takes";
@@ -146,7 +149,8 @@ for (const take of TAKES) {
       await ws.expectOpen();
       await ws.book().expectOpen();
     });
-    expect((await ws.book().facts())["The design"]).toBe(picked);
+    const facts = (await ws.book().facts())!;
+    expect(facts["The design"]).toBe(picked);
     await expect(page.locator("main.workspace")).toHaveAttribute("data-verdict", r.verdict);
 
     // ---- The answer: the verdict and the measured rooms ----
@@ -201,6 +205,14 @@ for (const take of TAKES) {
 
     // ---- The same as when it was recorded ----
     const count = (labels: string[]) => Object.fromEntries([...new Set(labels)].sort().map((l) => [l, labels.filter((x) => x === l).length]));
+    // The answer as it stands now, priced on the design they picked (server/priced.ts).
+    const now = (await api(page, `/api/scans/${scanId}`)).result;
+    const pdfText = pdf.pages.map((p) => p.text.replace(/\s+/g, " ")).join(" ");
+    const mark = (ok: boolean | null) => (ok === true ? "met" : ok === false ? "not met" : "to check");
+    // Every check the studio runs on the design they picked, the service room's among them.
+    const saved = (await claimedApi(page, `/api/scans/${scanId}/model`)).model as Model;
+    const chosen = chosenDesign(saved)!;
+    expect(chosen.name).toBe(picked);
     const outcome: Outcome = {
       verdict: r.verdict,
       headline: r.headline,
@@ -208,6 +220,14 @@ for (const take of TAKES) {
       finds: count((r.detections ?? []).map((d: any) => d.label)),
       asked,
       permit: { pages: pdf.pageCount, sheets: pdf.index, left },
+      design: {
+        name: picked,
+        price: facts["Hired out"] ?? "",
+        fixes: (now.fixGroups ?? []).map((g: { title: string }) => g.title),
+        checks: checkDesign(chosen, saved.existing).map((c) => `${mark(c.ok)}: ${c.label}`),
+        unitArea: /([\d.]+ m² \([\d,]+ sq ft\))/.exec(pdf.pages[0].text.replace(/\s+/g, " "))?.[1] ?? null,
+        permitFee: /About (\$[\d,]+)\./.exec(pdfText)?.[1] ?? null,
+      },
       photos: concepts?.items?.length ?? 0,
       cards: deckNow.cards.length,
     };
