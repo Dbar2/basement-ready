@@ -310,7 +310,9 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
 
   // ---- Drywall and taping ----
   const ratedM2 = Math.max(0, 2 * L(ratedNew) * H + L(keptRated) * H - holeArea(holesIn([...ratedNew, ...keptRated])));
-  const typeX = ceilingArea + ratedM2;
+  // The furnace room serves both homes: Type X under its ceiling too (9.10.10.3).
+  const serviceCeiling = area(P.rooms.filter((r) => r.kind === "mechanical" && r.unit !== 2));
+  const typeX = ceilingArea + serviceCeiling + ratedM2;
   const mr = Math.max(0, L(bathWalls) * H - holeArea(holesIn(bathWalls)));
   const regular = Math.max(0, 2 * L(plainNew) * H + foundWallM2 - holeArea(holesIn(plainNew)) * 2 - mr);
   const board = typeX + mr + regular;
@@ -320,7 +322,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
     item: "Hang the drywall",
     qty: board * FT2,
     unit: "sq ft",
-    basis: `5/8" Type X on the whole suite ceiling (${r1(ceilingArea)} m², the 15-minute floor separation) and both sides of the rated walls (${r1(ratedM2)} m²); moisture-resistant board in the bathroom; 1/2" everywhere else (9.10.9).`,
+    basis: `5/8" Type X on the whole suite ceiling (${r1(ceilingArea)} m², the 15-minute floor separation)${serviceCeiling > 0 ? `, the furnace room's ceiling (${r1(serviceCeiling)} m²)` : ""} and both sides of the rated walls (${r1(ratedM2)} m²); moisture-resistant board in the bathroom; 1/2" everywhere else (9.10.9).`,
     parts: [
       part("drywall_typex_58", "5/8\" Type X drywall", typeX * FT2, WASTE.drywall, SHEET_FT2),
       part("drywall_mr_12", "1/2\" moisture-resistant drywall", mr * FT2, WASTE.drywall, SHEET_FT2),
@@ -537,7 +539,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   });
 
   // ---- Paint ----
-  const wallsPaint = Math.max(0, board - ceilingArea);
+  const wallsPaint = Math.max(0, board - ceilingArea - serviceCeiling);
   add({
     id: "paint_walls",
     trade: "paint",

@@ -57,7 +57,12 @@ describe("seeding the example basement", () => {
     // Two sides the camera never saw are guesses until confirmed.
     expect(e.walls.filter((w) => w.guess)).toHaveLength(2);
     expect(e.openings.map((o) => o.kind).sort()).toEqual(["door", "window"]);
-    expect(e.fixtures.find((f) => f.kind === "stairs")?.sizeM).toEqual([1.75, 0.88]);
+    // The flight from its top at the west wall to its foot, where you step off (from the 3D: it climbs west).
+    const stairs = e.fixtures.find((f) => f.kind === "stairs")!;
+    expect(stairs.sizeM).toEqual([2.68, 0.88]);
+    expect(stairs.bottom![0]).toBeCloseTo(stairs.at[0] + stairs.sizeM![0] / 2, 1);
+    // The furnace and water heater SAM can't name, found by pointing.
+    expect(e.fixtures.map((f) => f.kind)).toEqual(expect.arrayContaining(["furnace", "water_heater"]));
     // The 0.6 m "beam" was a shelf; the 1.64 m duct is real, placed for them to drag.
     const duct = e.fixtures.find((f) => f.kind === "duct")!;
     expect(duct.heightM).toBe(1.64);
@@ -100,13 +105,14 @@ describe("seeding the example basement", () => {
     expect(c[0]).toBeGreaterThan(b.minX);
     expect(c[0]).toBeLessThan(b.maxX);
     expect(d.proposed.alarms.filter((a) => inPolygon(a.at, bed.polygon))).toHaveLength(1);
-    expect(d.proposed.alarms).toHaveLength(2);
+    // The furnace may burn gas: a CO alarm too.
+    expect(d.proposed.alarms).toHaveLength(3);
   });
 
   it("places alarms where the permit sheets do", () => {
     const main = mainRoom(m.existing)!;
     const layout = suggestLayout(planOf(m.existing, main), { kind: "one_bedroom" });
-    const theirs = permitAlarms(layout as never, null, false);
+    const theirs = permitAlarms(layout as never, null, true);
     const ours = chosen(m).proposed.alarms;
     expect(ours.map((a) => a.kind)).toEqual(theirs.map((a) => a.kind));
     ours.forEach((a, i) => expect(dist(a.at, [theirs[i].x, theirs[i].z])).toBeLessThan(0.02));
@@ -252,7 +258,9 @@ describe("the checks, one by one", () => {
     expect(check(bare, e, "co-alarms").ok).toBe(false);
     expect(check(bare, e, "alarms-linked").ok).toBe(false);
     // Nothing that burns fuel: the CO check asks.
-    const sample = seedModel(sampleResult(), {}, NOW)!;
+    const noFuel = sampleResult();
+    for (const p of [noFuel.plan, ...noFuel.rooms.map((r: { plan: { fixtures: unknown[] } }) => r.plan)]) p.fixtures = [];
+    const sample = seedModel(noFuel, {}, NOW)!;
     expect(check(chosen(sample), sample.existing, "co-alarms").ok).toBeNull();
   });
 
@@ -473,7 +481,7 @@ describe("the chosen design in the older layout shape", () => {
     const m = seedModel(sampleResult(), {}, NOW)!;
     const d = chosenDesign(m)!;
     const out = layoutOf(m.existing, d)!;
-    expect(out.layout.zones.map((z) => z.kind).sort()).toEqual(["bathroom", "bedroom", "kitchen", "living"]);
+    expect(out.layout.zones.map((z) => z.kind).sort()).toEqual(["bathroom", "bedroom", "kitchen", "living", "mechanical"]);
     expect(out.layout.walls).toHaveLength(d.proposed.walls.filter((w) => w.kind === "new").length);
     expect(out.layout.doors.length).toBeGreaterThanOrEqual(3);
     expect(out.layout.window?.side).toBe("maxZ");
@@ -524,5 +532,62 @@ describe("furniture in the model", () => {
     ]);
     expect(edits.map((e: Edit) => e.op)).toEqual(["add_furniture"]);
     expect(dropped).toHaveLength(2);
+  });
+});
+
+describe("the shared furnace and water heater", () => {
+  const m = seedModel(sampleResult(), {}, NOW)!;
+  for (const d of m.designs) {
+    it(`get a service room in the ${d.name.toLowerCase()}: 30-minute walls, a 20-minute door, met`, () => {
+      const service = room(d, "mechanical");
+      expect(service.unit).toBe("shared");
+      for (const f of m.existing.fixtures.filter((x) => x.kind === "furnace" || x.kind === "water_heater")) expect(inPolygon(f.at, service.polygon)).toBe(true);
+      // Its walls toward the suite are rated and one has a rated door; where it meets the stair room, the
+      // stair's rated wall serves both (no second wall beside it).
+      const b = bounds(service.polygon);
+      const own = d.proposed.walls.filter((w) => w.kind === "new" && [w.a, w.b].every((p) => p[0] >= b.minX - 0.01 && p[0] <= b.maxX + 0.01 && p[1] >= b.minZ - 0.01 && p[1] <= b.maxZ + 0.01));
+      expect(own.length).toBeGreaterThan(0);
+      expect(own.every((w) => w.rating === "30min")).toBe(true);
+      expect(d.proposed.openings.some((o) => o.kind === "door" && o.rating === "20min" && own.some((w) => w.id === o.wallId))).toBe(true);
+      const lines = d.proposed.walls.filter((w) => w.kind === "new").map((w) => `${w.a.map((v) => v.toFixed(2))}|${w.b.map((v) => v.toFixed(2))}`);
+      expect(new Set(lines).size).toBe(lines.length);
+      expect(check(d, m.existing, "service-room")).toMatchObject({ ok: true, ruleId: "service_room_separation" });
+      // Every rule that applies is met or is a person's to confirm, but for the duct the scan measured low.
+      expect(checkDesign(d, m.existing).filter((c) => c.ok === false).map((c) => c.id)).toEqual(["headroom"]);
+    });
+  }
+
+  it("count as a fix while they stand in the suite, and while their walls aren't rated", () => {
+    const d = chosen(m);
+    const service = room(d, "mechanical");
+    // The service room taken out: the furnace and water heater are in the suite.
+    const open = { ...d, proposed: { ...d.proposed, rooms: d.proposed.rooms.filter((r) => r.id !== service.id) } };
+    expect(check(open, m.existing, "service-room")).toMatchObject({ ok: false });
+    expect(check(open, m.existing, "service-room").detail).toMatch(/stands in the suite/);
+    // Its own door made a plain one.
+    const b = bounds(service.polygon);
+    const onIt = (p: number[]) => p[0] >= b.minX - 0.01 && p[0] <= b.maxX + 0.01 && p[1] >= b.minZ - 0.01 && p[1] <= b.maxZ + 0.01;
+    const door = d.proposed.openings.find((o) => o.rating === "20min" && d.proposed.walls.some((w) => w.id === o.wallId && onIt(w.a) && onIt(w.b)))!;
+    const plain = applyEdit(d, { op: "set_opening", openingId: door.id, rating: null }, NOW);
+    expect(check(plain, m.existing, "service-room")).toMatchObject({ ok: false, detail: expect.stringMatching(/aren't rated yet/) });
+  });
+
+  it("put the stair room's landing at the foot of the flight, with its door, and the kitchen off it", () => {
+    const d = chosen(m);
+    const stairs = m.existing.fixtures.find((f) => f.kind === "stairs")!;
+    const r = bounds(room(d, "stairs").polygon);
+    // The foot is the east end: the room runs a metre past it.
+    expect(r.maxX).toBeCloseTo(stairs.bottom![0] + 1, 1);
+    const door = d.proposed.openings.find((o) => o.rating === "20min" && d.proposed.walls.find((w) => w.id === o.wallId)!.a[1] === r.maxZ)!;
+    expect(along(d.proposed.walls.find((w) => w.id === door.wallId)!, door.offsetM)[0]).toBeGreaterThan(stairs.bottom![0] - 0.05);
+    expect(bounds(room(d, "kitchen").polygon).minX).toBeGreaterThanOrEqual(r.maxX - 0.05);
+  });
+
+  it("are priced: the furnace room's door, and Type X on its walls and ceiling", async () => {
+    const { quote } = await import("../../server/quote/quote");
+    const q = quote(m, chosen(m), { municipality: "waterloo-on" });
+    const lines = q.byTrade.flatMap((t) => t.lines);
+    expect(lines.find((l) => l.id === "doors_rated")!.qty).toBe(2);
+    expect(lines.find((l) => l.id === "drywall_board")!.basis).toMatch(/the furnace room's ceiling \([\d.]+ m²\)/);
   });
 });

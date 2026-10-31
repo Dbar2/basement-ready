@@ -475,6 +475,40 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
     at: plainDoors[0] ? along(walls.find((w) => w.id === plainDoors[0].wallId)!, plainDoors[0].offsetM) : undefined,
   });
 
+  // The furnace and water heater serve both homes: in a room of their own off the suite (or on the
+  // house's side), behind the rated walls and a rated door.
+  const appliances = fixtures.filter((f) => f.kind === "furnace" || f.kind === "water_heater");
+  if (appliances.length) {
+    const loose = appliances.filter((f) => S.at(f.at) === 2);
+    const homes = rooms.filter((r) => r.unit !== 2 && appliances.some((f) => inPolygon(f.at, r.polygon)));
+    const touches = (w: Wall, r: Room) => {
+      const L = wallLength(w), n = wallNormal(w);
+      for (let t = Math.min(0.15, L / 2); t <= L - Math.min(0.15, L / 2) + 1e-9; t += 0.2) {
+        const p = along(w, t);
+        if (inPolygon(add(p, mul(n, 0.15)), r.polygon) || inPolygon(add(p, mul(n, -0.15)), r.polygon)) return true;
+      }
+      return false;
+    };
+    const around = walls.filter((w) => needs.has(w.id) && homes.some((r) => touches(w, r)));
+    const weak = around.filter((w) => w.rating !== "30min").length + openings.filter((o) => o.kind === "door" && around.some((w) => w.id === o.wallId) && o.rating !== "20min").length;
+    const furnace = appliances.some((f) => f.kind === "furnace"), heater = appliances.some((f) => f.kind === "water_heater");
+    const name = furnace && heater ? "The furnace and water heater" : furnace ? "The furnace" : "The water heater";
+    out.push({
+      id: "service-room",
+      label: `${name} ${furnace && heater ? "are" : "is"} in a fire-separated service room`,
+      ok: loose.length === 0 && weak === 0,
+      detail: loose.length
+        ? `${loose.length === appliances.length ? name : "One of them"} stands in the suite. ${furnace && heater ? "They serve" : "It serves"} both homes, so ${furnace && heater ? "they go" : "it goes"} in a room of ${furnace && heater ? "their" : "its"} own: 30-minute walls and a 20-minute door with a closer.`
+        : weak
+          ? "Its walls or door toward the suite aren't rated yet."
+          : homes[0]
+            ? `In the ${homes[0].name.toLowerCase()}, behind 30-minute walls and a 20-minute door with a closer.`
+            : "On the house's side of the fire separation.",
+      ruleId: "service_room_separation",
+      at: loose[0]?.at,
+    });
+  }
+
   // The stair everyone uses to get out.
   const stair = fixtures.find((f) => f.kind === "stairs" && f.sizeM);
   if (stair) {

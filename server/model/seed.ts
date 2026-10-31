@@ -170,7 +170,7 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
     }
     for (const st of area.plan.stairs) {
       if (fixtures.some((f) => f.kind === "stairs" && dist(f.at, [(st.x0 + st.x1) / 2, (st.z0 + st.z1) / 2]) < 0.5)) continue;
-      fixtures.push({ id: nextId("stairs", fixtures), kind: "stairs", at: [r3((st.x0 + st.x1) / 2), r3((st.z0 + st.z1) / 2)], sizeM: [r3(st.x1 - st.x0), r3(st.z1 - st.z0)], detectionId: st.detectionId });
+      fixtures.push({ id: nextId("stairs", fixtures), kind: "stairs", at: [r3((st.x0 + st.x1) / 2), r3((st.z0 + st.z1) / 2)], sizeM: [r3(st.x1 - st.x0), r3(st.z1 - st.z0)], detectionId: st.detectionId, ...(st.bottom ? { bottom: [r3(st.bottom[0]), r3(st.bottom[1])] as Pt } : {}) });
     }
     for (const f of area.plan.fixtures) {
       if (fixtures.some((x) => (f.detectionId && x.detectionId === f.detectionId) || (x.kind === f.kind && dist(x.at, [f.x, f.z]) < 1))) continue;
@@ -261,6 +261,7 @@ export function existingFromPlan(plan: BasementPlan, result: ScanResultLike, tap
     ...(f.sizeM ? { sizeM: [r3(f.sizeM[0]), r3(f.sizeM[1])] as Pt } : FIXTURE_SIZE[f.kind] ? { sizeM: FIXTURE_SIZE[f.kind] } : {}),
     ...(f.heightM != null ? { heightM: f.heightM } : {}),
     ...(f.detectionId ? { detectionId: f.detectionId } : {}),
+    ...(f.kind === "stairs" && f.bottom ? { bottom: [r3(f.bottom[0]), r3(f.bottom[1])] as Pt } : {}),
   }));
   // Headroom SAM measured under something the plan didn't place: by the room's middle, for them to drag.
   const clear = (result.rooms ?? []).flatMap((r) => r.measurements?.clearances ?? []).filter((c) => c.clearanceM >= MIN_OVERHEAD_M && !fixtures.some((f) => f.detectionId === c.detectionId));
@@ -349,7 +350,7 @@ export function planOf(existing: Existing, room: Room): Plan {
     openings,
     stairs: existing.fixtures
       .filter((f) => f.kind === "stairs" && f.sizeM && within(f.at))
-      .map((f) => ({ x0: f.at[0] - f.sizeM![0] / 2, z0: f.at[1] - f.sizeM![1] / 2, x1: f.at[0] + f.sizeM![0] / 2, z1: f.at[1] + f.sizeM![1] / 2, detectionId: f.id })),
+      .map((f) => ({ x0: f.at[0] - f.sizeM![0] / 2, z0: f.at[1] - f.sizeM![1] / 2, x1: f.at[0] + f.sizeM![0] / 2, z1: f.at[1] + f.sizeM![1] / 2, detectionId: f.id, ...(f.bottom ? { bottom: f.bottom } : {}) })),
     fixtures: existing.fixtures
       .filter((f): f is Fixture & { kind: "furnace" | "panel" | "water_heater" | "plumbing" } => ["furnace", "panel", "water_heater", "plumbing"].includes(f.kind) && within(f.at))
       .map((f) => ({ kind: f.kind, x: f.at[0], z: f.at[1], detectionId: f.id })),
@@ -367,10 +368,22 @@ function freeSides(r: Box, main: Box) {
 }
 
 // The stair down from the main floor: its run, plus a landing at the foot to step off onto, walled in.
-function stairRoom(st: Box, main: Box, taken: Box[]): Box {
+// `bottom`: the foot, when the scan could tell; then the landing goes there, and a strip too narrow to
+// use beside the top of the flight goes in with the stairs.
+const NARROW_M = 0.9;
+function stairRoom(st: Box, main: Box, taken: Box[], bottom?: Pt): Box {
   const snap = (v: number, edge: number) => (Math.abs(v - edge) < 0.15 ? edge : v);
-  const s: Box = { minX: snap(st.minX, main.minX), maxX: snap(st.maxX, main.maxX), minZ: snap(st.minZ, main.minZ), maxZ: snap(st.maxZ, main.maxZ) };
+  let s: Box = { minX: snap(st.minX, main.minX), maxX: snap(st.maxX, main.maxX), minZ: snap(st.minZ, main.minZ), maxZ: snap(st.maxZ, main.maxZ) };
   const alongX = s.maxX - s.minX >= s.maxZ - s.minZ;
+  if (bottom) {
+    const footHi = alongX ? Math.abs(bottom[0] - s.maxX) <= Math.abs(bottom[0] - s.minX) : Math.abs(bottom[1] - s.maxZ) <= Math.abs(bottom[1] - s.minZ);
+    const top = (k: "minX" | "maxX" | "minZ" | "maxZ") => (Math.abs(s[k] - main[k]) < NARROW_M ? main[k] : s[k]);
+    s = alongX ? (footHi ? { ...s, minX: top("minX") } : { ...s, maxX: top("maxX") }) : footHi ? { ...s, minZ: top("minZ") } : { ...s, maxZ: top("maxZ") };
+    const foot: Box = alongX
+      ? footHi ? { ...s, minX: s.maxX, maxX: Math.min(main.maxX, s.maxX + LANDING_M) } : { ...s, maxX: s.minX, minX: Math.max(main.minX, s.minX - LANDING_M) }
+      : footHi ? { ...s, minZ: s.maxZ, maxZ: Math.min(main.maxZ, s.maxZ + LANDING_M) } : { ...s, maxZ: s.minZ, minZ: Math.max(main.minZ, s.minZ - LANDING_M) };
+    return { minX: Math.min(s.minX, foot.minX), maxX: Math.max(s.maxX, foot.maxX), minZ: Math.min(s.minZ, foot.minZ), maxZ: Math.max(s.maxZ, foot.maxZ) };
+  }
   const clash = (b: Box) => taken.some((t) => b.minX < t.maxX - 0.05 && b.maxX > t.minX + 0.05 && b.minZ < t.maxZ - 0.05 && b.maxZ > t.minZ + 0.05);
   const ends: Box[] = alongX
     ? [
@@ -423,7 +436,8 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
     if (kind === "stairs") {
       // The stair stays the house's: walled in at 30 minutes, a 20-minute door at its foot into the suite.
       const run: Box = { minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 };
-      const r = stairRoom(run, mb, closed);
+      const flight = fixtures.find((f) => f.kind === "stairs" && inBox(f.at, run, 0.05));
+      const r = stairRoom(run, mb, closed, flight?.bottom);
       rooms.push({ id: nextId("stairs", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "stairs", name: "Stairs to the main floor", unit: "shared", ceilingM });
       const sides = freeSides(r, mb).map((s) => newWall(s.a, s.b, "30min"));
       const rc: Pt = [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
@@ -451,13 +465,18 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
       // The furnace room: its own rated walls and a rated door, so a fire there stays there.
       const r: Box = { minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 };
       rooms.push({ id: nextId("mechanical", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "mechanical", name: z.name, unit: "shared", ceilingM });
-      const sides = freeSides(r, mb).map((s) => newWall(s.a, s.b, "30min"));
+      // Where it meets the stair room, the stair's wall is its wall too.
+      const sides = freeSides(r, mb).flatMap((s) => uncovered(s.a, s.b, walls).map(([a, b]) => newWall(a, b, "30min")));
       const w = sides.filter((s) => wallLength(s) >= DOOR_M + 0.1).sort((a, b) => dist(along(a, wallLength(a) / 2), centre) - dist(along(b, wallLength(b) / 2), centre))[0];
       if (w) door(w, wallLength(w) / 2, "20min");
       continue;
     }
     rooms.push({ id: nextId(kind, rooms), polygon: rectPoly(z.x0, z.z0, z.x1, z.z1), kind, name: z.name, unit: 2, ceilingM, ceilingRating: "15min" });
   }
+  // The living space is what's left: where the stair and furnace rooms take the whole of one end of it,
+  // it stops at their walls.
+  const shared = rooms.filter((r) => r.unit === "shared").map((r) => bounds(r.polygon));
+  for (const r of rooms.filter((x) => x.kind === "living")) r.polygon = rectPoly(...trimEnds(bounds(r.polygon), shared));
   // The leftover floor of the area is the suite's hall and open space; the rooms the scan saw elsewhere
   // stay the house's.
   const design: Design = {
@@ -472,6 +491,39 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
   };
   design.proposed.alarms = placeAlarms(design, burnsFuel(fixtures));
   return design;
+}
+
+// A rectangle less any end of it the boxes cover right across: [minX, minZ, maxX, maxZ].
+function trimEnds(r: Box, boxes: Box[]): [number, number, number, number] {
+  const covered = (x: number, z: number) => boxes.some((b) => inBox([x, z], b, 0.01));
+  const across = (n: number, at: (t: number) => Pt) => Array.from({ length: n }, (_, i) => at((i + 0.5) / n)).every((p) => covered(p[0], p[1]));
+  let { minX, maxX, minZ, maxZ } = r;
+  const STEP = 0.05;
+  while (maxX - minX > 1 && across(12, (t) => [minX + STEP / 2, minZ + t * (maxZ - minZ)])) minX += STEP;
+  while (maxX - minX > 1 && across(12, (t) => [maxX - STEP / 2, minZ + t * (maxZ - minZ)])) maxX -= STEP;
+  while (maxZ - minZ > 1 && across(12, (t) => [minX + t * (maxX - minX), minZ + STEP / 2])) minZ += STEP;
+  while (maxZ - minZ > 1 && across(12, (t) => [minX + t * (maxX - minX), maxZ - STEP / 2])) maxZ -= STEP;
+  return [r3(minX), r3(minZ), r3(maxX), r3(maxZ)];
+}
+
+// The parts of a straight wall from a to b that no wall already stands on.
+function uncovered(a: Pt, b: Pt, walls: Wall[]): [Pt, Pt][] {
+  const L = dist(a, b);
+  if (L < 1e-6) return [];
+  const on = walls.flatMap((w) => {
+    const p = project({ a, b }, w.a), q = project({ a, b }, w.b);
+    if (Math.abs(p.off) > 0.03 || Math.abs(q.off) > 0.03) return [];
+    const lo = Math.max(0, Math.min(p.t, q.t)), hi = Math.min(L, Math.max(p.t, q.t));
+    return hi - lo > 0.01 ? [[lo, hi] as const] : [];
+  }).sort((x, y) => x[0] - y[0]);
+  const out: [Pt, Pt][] = [];
+  let t = 0;
+  for (const [lo, hi] of on) {
+    if (lo - t > 0.1) out.push([along({ a, b }, t), along({ a, b }, lo)]);
+    t = Math.max(t, hi);
+  }
+  if (L - t > 0.1) out.push([along({ a, b }, t), b]);
+  return out;
 }
 
 const inBox = (p: Pt, b: Box, pad: number) => p[0] > b.minX - pad && p[0] < b.maxX + pad && p[1] > b.minZ - pad && p[1] < b.maxZ + pad;

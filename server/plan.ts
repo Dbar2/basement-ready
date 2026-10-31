@@ -28,7 +28,8 @@ export type Plan = {
   ceilingHeightM: number | null;
   // guess: its width wasn't measured (SAM boxed only part of it, or it was seen edge-on).
   openings: { kind: "window" | "door"; side: Side; atM: number; widthM: number; detectionId: string; guess?: boolean }[];
-  stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string }[];
+  // bottom: the foot of the flight, where you step off it (x, z), when the scan could tell.
+  stairs: { x0: number; z0: number; x1: number; z1: number; detectionId: string; bottom?: [number, number] }[];
   fixtures: { kind: FixtureKind; x: number; z: number; detectionId: string }[];
   scaleSource: "model" | "user_measurement" | "door" | "arkit";
   trusted: boolean;
@@ -44,7 +45,7 @@ export function rescalePlan(p: Plan, s: number): Plan {
     areaM2: Math.round(p.areaM2 * s * s * 10) / 10,
     ceilingHeightM: p.ceilingHeightM == null ? null : r2(p.ceilingHeightM),
     openings: p.openings.map((o) => ({ ...o, atM: r2(o.atM), widthM: r2(o.widthM) })),
-    stairs: p.stairs.map((st) => ({ ...st, x0: r2(st.x0), z0: r2(st.z0), x1: r2(st.x1), z1: r2(st.z1) })),
+    stairs: p.stairs.map((st) => ({ ...st, x0: r2(st.x0), z0: r2(st.z0), x1: r2(st.x1), z1: r2(st.z1), ...(st.bottom ? { bottom: [r2(st.bottom[0]), r2(st.bottom[1])] as [number, number] } : {}) })),
     fixtures: p.fixtures.map((f) => ({ ...f, x: r2(f.x), z: r2(f.z) })),
     scaleSource: "door",
   };
