@@ -495,9 +495,28 @@ export function whoQuestion(): { id: string; question: string; hint: string; opt
   };
 }
 
+// The look, asked once while it measures: the guide shows the design finished in it. "none": they'd
+// rather say it in their own words, which the guide asks for at the design's look.
+export const LOOK_ID = "look";
+export const LOOK_VALUES = ["light", "warm", "deep", "plain", "none"] as const;
+export function lookQuestion() {
+  return {
+    id: LOOK_ID,
+    question: "Which look do you like for it?",
+    hint: "I'll show your basement finished in it.",
+    options: [
+      { label: "Light oak", value: "light" },
+      { label: "Warm wood", value: "warm" },
+      { label: "Deep green", value: "deep" },
+      { label: "Plain", value: "plain" },
+      { label: "None of these", value: "none" },
+    ],
+  };
+}
+
 export type WaitAsk = {
   id: string;
-  kind: "who" | "plans" | "rule" | "money";
+  kind: "who" | "plans" | "rule" | "look" | "money";
   question: string;
   hint: string;
   options: { label: string; value: MoneyValue }[];
@@ -521,6 +540,7 @@ export function waitQuestions(
     findings?: FindingLike[] | null;
     ruleAsks: RuleAsk[];
     plans: { id: string; question: string; hint: string; options: { label: string; value: MoneyValue }[] };
+    look?: boolean; // the guide asks the look too (server/guide/script.ts)
   },
 ): WaitAsk[] {
   const said = (id: string) => input.answers[id] !== undefined && input.answers[id] !== null;
@@ -537,6 +557,7 @@ export function waitQuestions(
     ? input.findings.filter((f) => f.status === "needs_answer" && !f.answer && f.question && yesNo(f)).map((f) => ({ ruleId: f.ruleId, question: f.question!, hint: f.hint ?? "" }))
     : input.ruleAsks.filter((r) => rules.has(r.ruleId));
   for (const r of open) add({ id: r.ruleId, kind: "rule", question: r.question, hint: r.hint ?? "", options: YES_NO });
+  if (input.look) add({ kind: "look", ...lookQuestion() });
   // Who it's for was asked above or at the start; the rest only while they still decide something.
   const money = evaluateMoney(pack, { household: input.household, answers: input.answers as MoneyAnswers, property: input.property ?? null });
   for (const q of money.questions) if (q.id !== "household") add({ id: q.id, kind: "money", question: q.question, hint: q.hint, options: q.options, decides: q.decides });

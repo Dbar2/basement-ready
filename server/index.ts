@@ -37,6 +37,7 @@ import { mountIdeas } from "./ideas/routes";
 import { keys, storage, type Scan3dFile } from "./storage";
 import { mountWorkspace } from "./workspaceRoutes";
 import { mountModel } from "./model/routes";
+import { mountGuide } from "./guide/routes";
 import { answerFor, asksFor, mountAnswers, NOT_YOURS, ownerOf, saveAnswer, savedAnswers } from "./answers";
 import { FAILURE, failureOf } from "./failure";
 import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger, USED_UP } from "./limits";
@@ -564,6 +565,8 @@ app.post("/api/scans/:id/replan", async (c) => {
 // The workspace: owner profile, permit package, materials, applications, looks (server/workspaceRoutes.ts).
 mountWorkspace(app, currentUser);
 mountModel(app, currentUser);
+// The guide: its thread, its script and its answers (server/guide/routes.ts).
+mountGuide(app, currentUser);
 
 // Pictures of a design from the scan's best real angles, all agreeing (server/views/routes.ts).
 mountViews(app);
