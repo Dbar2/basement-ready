@@ -41,14 +41,14 @@ export function Brief() {
   return (
     <main className="brief">
       <div className="brief-actions">
-        <a className="link-quiet" href={`/scans/${scanId}`}>Back to the answer</a>
+        <a className="link-quiet" href={`/scans/${scanId}`}>Back to your basement</a>
         <button className="btn btn-primary" onClick={() => window.print()}>
           Save as PDF
         </button>
       </div>
 
       <header className="brief-head">
-        <Logo />
+        <Logo href={`/scans/${scanId}`} />
         <div>
           <p className="aside">Basement suite plan · {today}</p>
           <p className="mono">{p ? `${p.address}, ${p.municipality}` : r.city ?? ""}</p>

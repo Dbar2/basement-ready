@@ -12,9 +12,11 @@ export function Mark({ title = "Basement Ready" }: { title?: string }) {
   );
 }
 
-export function Logo() {
+// The website's logo goes to the website's home. Inside the app, pass the basement's home base
+// (`/scans/:id`): there it never leaves the app.
+export function Logo({ href = "/" }: { href?: string }) {
   return (
-    <a className="logo" href="/" aria-label="Basement Ready home">
+    <a className="logo" href={href} aria-label={href === "/" ? "Basement Ready home" : "Your basement"}>
       <Mark />
       <span>Basement Ready</span>
     </a>
