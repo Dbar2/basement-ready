@@ -6,15 +6,16 @@
 import type { BasementPlan, Plan as ScanPlan, RoomResult } from "../../src/api";
 import { basementRooms } from "../../src/components/basementPlan";
 import { overheadFinds } from "../clearance";
-import { BATH_MIN_M2, GALLEY_MIN_M2, suggestLayout, type Layout, type LayoutOptions } from "../layout";
+import { BATH_MIN_M2, GALLEY_MIN_M2, suggestLayout, WHY, type Layout, type LayoutOptions, type ZoneKind } from "../layout";
 import type { Plan, Side } from "../plan";
 import { colourFurniture } from "../ideas/deck";
 import { burnsFuel, placeAlarms } from "./alarms";
 import { checkDesign } from "./checks";
+import { entranceOf, outsideDoors, saidOutside } from "./entrance";
 import { applyEdits, nextId } from "./edit";
 import { furnishDesign } from "./furniture";
 import { add, along, bounds, centroid, clamp, dist, dot, edges as edgesOf, inPolygon, largestBox, minusBoxes, mul, overlapArea, polygonArea, project, r2, r3, rectPoly, sub, wallLength, wallNormal, type Box } from "./geometry";
-import type { Design, Edit, Existing, Finishes, Fixture, FixtureKind, Model, Mood, Opening, Pt, Room, RoomKind, Wall } from "./types";
+import type { Check, Design, Edit, Existing, Finishes, Fixture, FixtureKind, Model, Mood, Opening, Pt, Room, RoomKind, Wall } from "./types";
 
 // Anything overhead has its underside well above furniture; below this SAM outlined a shelf
 // (server/scan3d.ts lowOverhead).
@@ -35,6 +36,8 @@ type ScanResultLike = {
   detections?: { id: string; label?: string; framesSeen?: number }[];
   // What a model that watched the whole take saw (server/watch.ts): only each room's windows are read here.
   watch?: { rooms: { name: string; spokenName?: string | null; windows?: { atS: number | null; note: string }[] }[] } | null;
+  // The answer's findings: what they told us about a door straight outside (server/model/entrance.ts).
+  findings?: { ruleId?: string; status?: string }[];
 };
 
 const SIDES: Side[] = ["minZ", "maxX", "maxZ", "minX"];
@@ -216,8 +219,9 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
   fixtures.splice(0, fixtures.length, ...oneOfEach(fixtures, result.detections));
   // An area of its own that the furnace or water heater stands in, whatever its size, is the service room
   // the designs keep (the scan's furnace room): not the main area, and not a copy lying on its edge.
+  // (A room named for what else it is, a laundry room, keeps that: its water heater gets walled off in it.)
   for (const r of rooms.slice(1))
-    if (fixtures.some((f) => (f.kind === "furnace" || f.kind === "water_heater") && inPolygon(f.at, r.polygon) && edgeDist(r.polygon, f.at) > 0.05)) r.kind = "mechanical";
+    if (!/laundry|bath|kitchen|bed/i.test(r.name) && fixtures.some((f) => (f.kind === "furnace" || f.kind === "water_heater") && inPolygon(f.at, r.polygon) && edgeDist(r.polygon, f.at) > 0.05)) r.kind = "mechanical";
   rooms.push(...closets(rooms, walls, fixtures));
   openings.push(...watchedWindows(rooms, walls, openings, result.watch));
 
@@ -434,7 +438,7 @@ export function planOf(existing: Existing, room: Room): Plan {
   };
 }
 
-const ZONE_KIND: Record<string, RoomKind> = { bedroom: "bedroom", bathroom: "bathroom", kitchen: "kitchen", living: "living", mechanical: "mechanical", stairs: "stairs" };
+const ZONE_KIND: Record<string, RoomKind> = { bedroom: "bedroom", bathroom: "bathroom", kitchen: "kitchen", living: "living", mechanical: "mechanical", stairs: "stairs", laundry: "laundry" };
 
 // A wall around one side of a rectangle that isn't already the area's own wall.
 function freeSides(r: Box, main: Box) {
@@ -493,8 +497,8 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
   const taken = new Set([main.id, ...extras.map((x) => x.room.id)]);
   const rooms: Room[] = existing.rooms.filter((r) => !taken.has(r.id)).map((r) => ({ ...r, unit: r.kind === "stairs" || r.kind === "mechanical" ? ("shared" as const) : (1 as const) }));
   const ceilingM = main.ceilingM ?? existing.ceilingM;
-  const newWall = (a: Pt, b: Pt, rating: Wall["rating"] = null): Wall => {
-    const w: Wall = { id: nextId("new", walls), a: [r3(a[0]), r3(a[1])], b: [r3(b[0]), r3(b[1])], thicknessM: NEW_WALL_M, kind: "new", rating };
+  const newWall = (a: Pt, b: Pt, rating: Wall["rating"] = null, why?: string): Wall => {
+    const w: Wall = { id: nextId("new", walls), a: [r3(a[0]), r3(a[1])], b: [r3(b[0]), r3(b[1])], thicknessM: NEW_WALL_M, kind: "new", rating, ...(why ? { why } : {}) };
     walls.push(w);
     return w;
   };
@@ -504,7 +508,7 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
   // One room's layout: its walls and doors, then its rooms. `box`: the room's own, `ceiling` its height;
   // `closedToo`: more floor a stair door can't open onto (a kept bathroom's).
   const lay = (layout: Layout, box: Box, ceiling: number | null, closedToo: Box[] = []) => {
-    const layoutWalls = layout.walls.map((w) => newWall([w.x0, w.z0], [w.x1, w.z1]));
+    const layoutWalls = layout.walls.map((w) => newWall([w.x0, w.z0], [w.x1, w.z1], null, w.why));
     for (const d of layout.doors) {
       const w = layoutWalls.find((x) => {
         const p = project(x, [d.x, d.z]);
@@ -524,7 +528,7 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
         const flight = fixtures.find((f) => f.kind === "stairs" && inBox(f.at, run, 0.05));
         const r = stairRoom(run, box, closed, flight?.bottom);
         rooms.push({ id: nextId("stairs", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "stairs", name: "Stairs to the main floor", unit: "shared", ceilingM: ceiling });
-        const sides = freeSides(r, box).map((s) => newWall(s.a, s.b, "30min"));
+        const sides = freeSides(r, box).map((s) => newWall(s.a, s.b, "30min", WHY.stairs));
         const rc: Pt = [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
         // The door: off the stair run, opening onto open floor of the suite, nearest the middle of it.
         const options = sides.flatMap((w) => {
@@ -552,16 +556,18 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
         const r: Box = { minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 };
         rooms.push({ id: nextId("mechanical", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "mechanical", name: z.name, unit: "shared", ceilingM: ceiling });
         // Where it meets the stair room, the stair's wall is its wall too.
-        const sides = freeSides(r, box).flatMap((s) => uncovered(s.a, s.b, walls).map(([a, b]) => newWall(a, b, "30min")));
+        const sides = freeSides(r, box).flatMap((s) => uncovered(s.a, s.b, walls).map(([a, b]) => newWall(a, b, "30min", WHY.service)));
         const w = sides.filter((s) => wallLength(s) >= DOOR_M + 0.1).sort((a, b) => dist(along(a, wallLength(a) / 2), centre) - dist(along(b, wallLength(b) / 2), centre))[0];
         if (w) door(w, wallLength(w) / 2, "20min");
         continue;
       }
-      rooms.push({ id: nextId(kind, rooms), polygon: rectPoly(z.x0, z.z0, z.x1, z.z1), kind, name: z.name, unit: 2, ceilingM: ceiling, ceilingRating: "15min" });
+      // A laundry room's own washer and dryer, where they were: kept, not built.
+      rooms.push({ id: nextId(kind, rooms), polygon: rectPoly(z.x0, z.z0, z.x1, z.z1), kind, name: z.name, unit: 2, ceilingM: ceiling, ceilingRating: "15min", ...(kind === "laundry" ? { kept: true } : {}) });
     }
   };
 
   lay(layout, mb, ceilingM);
+  const mainLiving = new Set(rooms.filter((r) => r.kind === "living").map((r) => r.id));
   for (const extra of extras) {
     // The room next door: its layout in its own box, and the rest of it what it becomes, all the suite's.
     const before = rooms.length;
@@ -599,7 +605,7 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
   const band = layout.zones.find((z) => z.kind === "living");
   const inMain = rooms.filter((x) => x.kind !== "living" && !extras.some((e) => e.room.id === x.id) && (x.unit === 2 || x.unit === "shared")).map((x) => bounds(x.polygon));
   const offBand = band ? outside(mb, { minX: band.x0, maxX: band.x1, minZ: band.z0, maxZ: band.z1 }) : [];
-  for (const r of rooms.filter((x) => x.kind === "living")) r.polygon = minusBoxes(main.polygon, [...offBand, ...inMain.filter((b) => b.minX < mb.maxX + 0.01 && b.maxX > mb.minX - 0.01 && b.minZ < mb.maxZ + 0.01 && b.maxZ > mb.minZ - 0.01)]);
+  for (const r of rooms.filter((x) => x.kind === "living" && mainLiving.has(x.id))) r.polygon = minusBoxes(main.polygon, [...offBand, ...inMain.filter((b) => b.minX < mb.maxX + 0.01 && b.maxX > mb.minX - 0.01 && b.minZ < mb.maxZ + 0.01 && b.maxZ > mb.minZ - 0.01)]);
   // The leftover floor of the area is the suite's hall and open space; the rooms the scan saw elsewhere
   // stay the house's.
   const design: Design = {
@@ -678,8 +684,8 @@ function twoBedroom(plan: Plan, one: Layout): Layout | null {
     const z = alongX ? { x0: r2(a0), x1: r2(a1), z0: bed.z0, z1: bed.z1 } : { x0: bed.x0, x1: bed.x1, z0: r2(a0), z1: r2(a1) };
     const inner = alongX ? (Math.abs(bed.z0 - b.minZ) < 0.05 ? bed.z1 : bed.z0) : Math.abs(bed.x0 - b.minX) < 0.05 ? bed.x1 : bed.x0;
     const walls = [...one.walls];
-    walls.push(alongX ? { x0: z.x0, z0: inner, x1: z.x1, z1: inner } : { x0: inner, z0: z.z0, x1: inner, z1: z.z1 });
-    for (const a of [a0, a1]) if (a - lo > 0.05 && hi - a > 0.05) walls.push(alongX ? { x0: r2(a), z0: z.z0, x1: r2(a), z1: z.z1 } : { x0: z.x0, z0: r2(a), x1: z.x1, z1: r2(a) });
+    walls.push(alongX ? { x0: z.x0, z0: inner, x1: z.x1, z1: inner, why: WHY.secondBedroom } : { x0: inner, z0: z.z0, x1: inner, z1: z.z1, why: WHY.secondBedroom });
+    for (const a of [a0, a1]) if (a - lo > 0.05 && hi - a > 0.05) walls.push(alongX ? { x0: r2(a), z0: z.z0, x1: r2(a), z1: z.z1, why: WHY.secondBedroom } : { x0: z.x0, z0: r2(a), x1: z.x1, z1: r2(a), why: WHY.secondBedroom });
     const doorAt = (a0 + a1) / 2;
     const doors = [...one.doors, alongX ? { x: r2(doorAt), z: inner, along: "x" as const, widthM: DOOR_M } : { x: inner, z: r2(doorAt), along: "z" as const, widthM: DOOR_M }];
     return { ...one, zones: [...one.zones.map((x) => (x === bed ? { ...x, name: "Bedroom 1" } : x)), { kind: "bedroom", name: "Bedroom 2", ...z, areaM2: r2((z.x1 - z.x0) * (z.z1 - z.z0)) }], walls, doors };
@@ -692,16 +698,7 @@ const DEFAULT_FINISHES: Finishes = { style: "light", floor: "Light oak laminate"
 // tightest; a new one is drawn 3.5 to 5).
 const BATH_NAME = /\b(bath(room)?|washroom|powder room|toilet)\b/i;
 const KEPT_BATH_M2 = 2.5;
-
-// The doors of a room the scan saw: on its walls, or in a wall across it.
-function doorsOf(existing: Existing, room: Room) {
-  return existing.openings.filter((o) => {
-    const w = o.kind === "door" ? existing.walls.find((x) => x.id === o.wallId) : undefined;
-    if (!w) return false;
-    const p = along(w, o.offsetM);
-    return inPolygon(p, room.polygon) || edgeDist(room.polygon, p) < 0.3;
-  });
-}
+const NO_ROOMS: ZoneKind[] = ["bedroom", "bathroom", "kitchen", "living"];
 
 // The rooms through a door from the main one that a suite could take in: not the stairs, a furnace room or
 // a closet.
@@ -715,103 +712,202 @@ function neighbours(existing: Existing, main: Room): Room[] {
   );
 }
 
-// Every design worth showing for this basement: one bedroom on the window, a studio, the bedroom on
-// another wall, and two bedrooms where they fit. Each is checked and fixed before it's shown.
-// Furnished after the fixes, so nothing stands where a fix moved a wall; each piece takes the colour
-// their board gave it (server/ideas/deck.ts colourFurniture).
+// The designs worth showing for this basement: two or three that are truly different, best first, each
+// with a sentence on why. What's already there stays where it is and is the suite's: a bathroom, a
+// kitchen, a laundry room (never a second bathroom, never moved). A bedroom gets a window that can be its
+// escape window, away from the furnace and water heater and never against their room's walls when that
+// can be helped; the living space is by the way in; the kitchen by the pipes. Every arrangement is built,
+// checked and fixed, scored on those rules, and the best of each kind kept. Furnished after the fixes,
+// so nothing stands where a fix moved a wall; each piece takes the colour their board gave it
+// (server/ideas/deck.ts colourFurniture).
 export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finishes>; colours?: Mood["colours"]; pick?: LayoutOptions | null; now?: string } = {}): Design[] {
-  const main = mainRoom(existing);
-  if (!main) return [];
   const now = opts.now ?? new Date().toISOString();
-  const plan = planOf(existing, main);
   const finishes = { ...DEFAULT_FINISHES, ...(opts.finishes ?? {}) };
-  // A bathroom the scan already has, through a door from the main room, is the suite's: kept as it is, not
-  // built again. Only a room you walk into and out of the same way: one with a second door is a passage
-  // (the plan drew the hall to it in with it), and where in it the bathroom stands isn't known.
-  const scanned = neighbours(existing, main).find((r) => (r.kind === "bathroom" || BATH_NAME.test(r.name)) && doorsOf(existing, r).length === 1) ?? null;
-  const keepBath: Extra[] | null = scanned
-    ? [{ room: scanned, layout: suggestLayout(planOf(existing, scanned), { kind: "one_bedroom", without: ["bedroom", "bathroom", "kitchen", "living"] }), rest: { kind: "bathroom", name: scanned.name, kept: true } }]
-    : null;
-  const build = (meta: Meta, layout: Layout, extras: Extra[] = []) => autofix(designFromLayout(existing, main, layout, meta, finishes, now, extras), existing, now);
+  const isBath = (r: Room) => r.kind === "bathroom" || BATH_NAME.test(r.name);
+  const isKitchen = (r: Room) => r.kind === "kitchen" || /\bkitchen(ette)?\b/i.test(r.name);
+  const isLaundry = (r: Room) => r.kind === "laundry" || /\blaundry\b/i.test(r.name);
+  const open = (r: Room) => !["stairs", "mechanical", "closet"].includes(r.kind) && !isBath(r) && !isKitchen(r);
+  const fallback = mainRoom(existing);
+  if (!fallback) return [];
+  const mains = existing.rooms.filter(open).sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon)).slice(0, 3);
+  if (!mains.length) mains.push(fallback);
+  const xz = (p: Pt) => ({ x: p[0], z: p[1] });
+  const mech = existing.fixtures.filter((f) => f.kind === "furnace" || f.kind === "water_heater");
+  const avoid = [...mech.map((f) => xz(f.at)), ...existing.rooms.filter((r) => r.kind === "mechanical").map((r) => xz(centroid(r.polygon)))];
+  const pipes = [...existing.fixtures.filter((f) => f.kind === "plumbing").map((f) => xz(f.at)), ...existing.rooms.filter((r) => isBath(r) || isLaundry(r) || isKitchen(r)).map((r) => xz(centroid(r.polygon)))];
+  const hasBath = existing.rooms.some(isBath);
+  const holdsMech = (r: Room) => mech.some((f) => inPolygon(f.at, r.polygon));
+  const hasWindow = (r: Room) => existing.openings.some((o) => o.kind === "window" && edgeDist(r.polygon, along(existing.walls.find((w) => w.id === o.wallId)!, o.offsetM)) < 0.3);
+  // A room kept as it is gets no new walls inside it, its stairs included (they're the suite's then, with a
+  // rated door at the top: server/model/checks.ts "stairs-top"); only its furnace or water heater is walled off.
+  const asIs = (r: Room, rest: Extra["rest"]): Extra => {
+    const l = suggestLayout(planOf(existing, r), { kind: "one_bedroom", without: NO_ROOMS });
+    return { room: r, layout: rest.kept ? { ...l, zones: l.zones.filter((z) => z.kind !== "stairs") } : l, rest };
+  };
   const furnish = (d: Design) => {
     const f = furnishDesign(d);
     return opts.colours ? { ...f, proposed: { ...f.proposed, furniture: colourFurniture(f.proposed.furniture, opts.colours) } } : f;
   };
-  const passes = (d: Design, ids: string[]) => checkDesign(d, existing).every((c) => !ids.includes(c.id) || c.ok !== false);
+  const passes = (checks: Check[], ids: string[]) => checks.every((c) => !ids.includes(c.id) || c.ok !== false);
   // A home: a kitchen at least a galley, a three-piece bathroom (one already there can be smaller) and
   // somewhere to sleep, each big enough, and enough living space. A way out of every room, its alarms,
   // and an escape window where someone sleeps (one the fixes can add, at least).
-  const home = (d: Design) => {
+  const home = (d: Design, checks: Check[]) => {
     const suite = d.proposed.rooms.filter((r) => r.unit === 2);
     const sized = (kind: string, least: number) => suite.some((r) => r.kind === kind && polygonArea(r.polygon) >= (r.kept ? KEPT_BATH_M2 : least) - 0.01);
     const beds = suite.filter((r) => r.kind === "bedroom");
-    return sized("kitchen", GALLEY_MIN_M2) && sized("bathroom", BATH_MIN_M2) && passes(d, ["rooms", "living-space", "way-out", "smoke-alarms", ...beds.map((r) => `bedroom-size:${r.id}`), ...beds.map((r) => `escape:${r.id}`)]);
+    return sized("kitchen", GALLEY_MIN_M2) && sized("bathroom", BATH_MIN_M2) && passes(checks, ["rooms", "living-space", "way-out", "smoke-alarms", ...beds.map((r) => `bedroom-size:${r.id}`), ...beds.map((r) => `escape:${r.id}`)]);
   };
-  // When the main room can't hold one on its own (no room for a bathroom, or too little living space), a
-  // room through a door from it takes the bathroom, or else the bedroom; the rest of that room joins the
-  // suite as it was (a laundry room stays one, now the suite's). Its furnace or water heater gets its
-  // service room there, as in the main room. A room the scan saw as a bathroom (or a bedroom) is tried as
-  // that first, as it is. `base`: rooms next door the suite already takes (a kept bathroom).
-  const roomier = (meta: Meta, kind: Layout["kind"], alone: Design, base: Extra[] = []) => {
-    if (home(alone)) return alone;
-    const moves = (base.length ? (kind === "studio" ? [] : ["bedroom"]) : kind === "studio" ? ["bathroom"] : ["bathroom", "bedroom"]) as ("bathroom" | "bedroom")[];
-    const already = (room: Room, moved: string) => room.kind === moved || new RegExp(`\\b${moved}\\b`, "i").test(room.name);
-    const tries = neighbours(existing, main)
-      .filter((room) => !base.some((b) => b.room.id === room.id))
-      .flatMap((room) => moves.map((moved) => ({ room, moved })))
-      .sort((a, b) => Number(already(b.room, b.moved)) - Number(already(a.room, a.moved)));
-    for (const { room, moved } of tries) {
-      const there = planOf(existing, room);
-      const as = already(room, moved);
-      const here = suggestLayout(plan, { kind, without: base.length ? ["bathroom", moved] : [moved] });
-      const theirs = suggestLayout(there, { kind: "one_bedroom", without: moved === "bathroom" && !as ? ["bedroom", "kitchen", "living"] : ["bedroom", "bathroom", "kitchen", "living"] });
-      const rest = moved === "bedroom" ? { kind: "bedroom" as const, name: as ? room.name : "Bedroom" } : as ? { kind: "bathroom" as const, name: room.name } : { kind: room.kind, name: room.name };
-      const d = build(meta, here, [...base, { room, layout: theirs, rest }]);
-      if (home(d)) return d;
-    }
-    return alone;
+  // How near a room comes to the furnace and water heater (0 inside), and whether it shares a wall with
+  // their room.
+  const nearMech = (r: Room) => (avoid.length ? Math.min(...avoid.map((p) => (inPolygon([p.x, p.z], r.polygon) ? 0 : edgeDist(r.polygon, [p.x, p.z])))) : 9);
+  const againstService = (d: Design, r: Room) => d.proposed.rooms.some((m) => m.kind === "mechanical" && overlapArea(grown(m.polygon, 0.25), r.polygon) > 0.05);
+  // Where they come in: a door straight outside from the suite, else the stairs' door.
+  const entry = (d: Design): Pt | null => {
+    const out = outsideDoors(d.proposed.walls, d.proposed.openings).filter((o) => existing.entrance?.status !== "needed" || o.status === "new");
+    const stairs = d.proposed.rooms.find((r) => r.kind === "stairs");
+    const stairDoor = stairs ? d.proposed.openings.find((o) => o.kind === "door" && o.rating === "20min" && edgeDist(stairs.polygon, along(d.proposed.walls.find((w) => w.id === o.wallId)!, o.offsetM)) < 0.2) : undefined;
+    const o = out[0] ?? stairDoor;
+    return o ? along(d.proposed.walls.find((w) => w.id === o.wallId)!, o.offsetM) : null;
   };
-  // Each idea with the scan's own bathroom kept when that makes a home; else as if it had none.
-  const idea = (meta: Meta, layout: (o: LayoutOptions) => Layout | null, kind: Layout["kind"], tryMore = true) => {
-    if (keepBath) {
-      const l = layout({ without: ["bathroom"] });
-      const d = l && build(meta, l, keepBath);
-      if (d) {
-        const best = tryMore ? roomier(meta, kind, d, keepBath) : d;
-        if (home(best)) return best;
-      }
-    }
-    const l = layout({});
-    if (!l) return null;
-    const d = build(meta, l);
-    return tryMore ? roomier(meta, kind, d) : d;
+  type Try = { d: Design; checks: Check[]; home: boolean; score: number; bedRoom: string | null; byEntry: boolean; byPipes: boolean };
+  const tries: Try[] = [];
+  const build = (main: Room, meta: Meta, layout: Layout | null, extras: Extra[]) => {
+    if (!layout) return;
+    const d = autofix(designFromLayout(existing, main, layout, meta, finishes, now, extras), existing, now);
+    const checks = checkDesign(d, existing);
+    const suite = d.proposed.rooms.filter((r) => r.unit === 2);
+    const beds = suite.filter((r) => r.kind === "bedroom");
+    const living = suite.filter((r) => r.kind === "living");
+    const kitchen = suite.find((r) => r.kind === "kitchen");
+    const e = entry(d);
+    const byEntry = Boolean(e && living.some((r) => inPolygon(e, r.polygon) || edgeDist(r.polygon, e) < 1.0));
+    const toPipes = kitchen && pipes.length ? Math.min(...pipes.map((p) => Math.hypot(p.x - centroid(kitchen.polygon)[0], p.z - centroid(kitchen.polygon)[1]))) : null;
+    const newWalls = d.proposed.walls.filter((w) => w.kind === "new").reduce((t, w) => t + wallLength(w), 0);
+    let score = (home(d, checks) ? 100 : 0) - checks.filter((c) => c.ok === false).length * 5;
+    for (const b of beds) score -= Math.max(0, 1.5 - nearMech(b)) * 4 + (againstService(d, b) ? 5 : 0);
+    // A room next door taken in for space (not kept for what it is) costs: the suite stays in as few rooms
+    // as make it a home.
+    const takenIn = extras.filter((x) => !x.rest.kept).length;
+    score += (byEntry ? 3 : 0) - (toPipes === null ? 0 : Math.min(3, toPipes * 0.4)) - newWalls * 0.15 + suite.filter((r) => r.kept).length * 2 - takenIn * 8;
+    const own = beds.find((b) => existing.rooms.some((x) => x.id === b.id));
+    tries.push({ d, checks, home: home(d, checks), score, bedRoom: own?.id ?? (beds[0] ? "main" : null), byEntry, byPipes: toPipes !== null && toPipes < 3 });
   };
   const oneMeta: Meta = { id: "one_bedroom", name: "One bedroom", layout: "one_bedroom" };
   const studioMeta: Meta = { id: "studio", name: "Studio", layout: "studio" };
-  const kept: Design[] = [idea(oneMeta, (o) => suggestLayout(plan, { kind: "one_bedroom", ...o }), "one_bedroom")!, idea(studioMeta, (o) => suggestLayout(plan, { kind: "studio", ...o }), "studio")!];
-  // Another idea is worth showing only when it's a home and fails nothing the first one passes.
-  const firstFails = new Set(checkDesign(kept[0], existing).filter((c) => c.ok === false).map((c) => c.id.split(":")[0]));
-  const noWorse = (d: Design) => checkDesign(d, existing).every((c) => c.ok !== false || firstFails.has(c.id.split(":")[0]));
-  // The bedroom on another wall: the next window first, then the longest walls. Only one that still
-  // fits a bathroom, kitchen and enough living space is worth showing.
-  const one = suggestLayout(plan, { kind: "one_bedroom" });
-  const used = one.window?.side ?? null;
-  const windowSides = plan.openings.filter((o) => o.kind === "window").sort((a, b) => b.widthM - a.widthM).map((o) => o.side);
-  const lengthOf = (s: Side) => (s === "minZ" || s === "maxZ" ? plan.widthM : plan.depthM);
-  const sides = [...new Set([...windowSides, ...(["minZ", "maxZ", "minX", "maxX"] as Side[]).sort((a, b) => lengthOf(b) - lengthOf(a))])].filter((s) => s !== used);
-  for (const side of sides) {
-    const d = idea({ id: `bedroom_${side}`, name: "Bedroom on another wall", layout: "one_bedroom" }, (o) => suggestLayout(plan, { kind: "one_bedroom", side, ...o }), "one_bedroom", false);
-    if (d && home(d) && noWorse(d)) {
-      kept.push(d);
-      break;
+  const twoMeta: Meta = { id: "two_bedroom", name: "Two bedrooms", layout: "two_bedroom" };
+  for (const main of mains) {
+    const plan = planOf(existing, main);
+    const near = neighbours(existing, main);
+    const keptBath = near.find(isBath) ?? null, keptKitchen = near.find(isKitchen) ?? null, keptLaundry = isLaundry(main) ? null : (near.find(isLaundry) ?? null);
+    // Never a second bathroom: a room that can't reach the one there doesn't hold the suite.
+    if (hasBath && !keptBath) continue;
+    const kept: Extra[] = [
+      ...(keptBath ? [asIs(keptBath, { kind: "bathroom", name: keptBath.name, kept: true })] : []),
+      ...(keptKitchen ? [asIs(keptKitchen, { kind: "kitchen", name: keptKitchen.name, kept: true })] : []),
+      ...(keptLaundry ? [asIs(keptLaundry, { kind: "laundry", name: keptLaundry.name, kept: true })] : []),
+    ];
+    const without: ZoneKind[] = [...(keptBath ? (["bathroom"] as const) : []), ...(keptKitchen ? (["kitchen"] as const) : [])];
+    // A laundry room holds no bedroom: its water heater and machines stay, and so does the noise.
+    const lo: LayoutOptions = { avoid, plumbing: pipes, without: isLaundry(main) ? [...without, "bedroom"] : without, laundry: isLaundry(main) };
+    const free = near.filter((r) => open(r) && !kept.some((k) => k.room.id === r.id));
+    for (const kind of ["one_bedroom", "studio"] as const) {
+      const meta = kind === "studio" ? studioMeta : oneMeta;
+      build(main, meta, suggestLayout(plan, { kind, ...lo }), kept);
+      // No bathroom anywhere yet: a room next door takes one (a laundry room keeps its washer and dryer,
+      // and stays the laundry room).
+      if (!hasBath)
+        for (const r of [...free, ...(keptLaundry ? [keptLaundry] : [])]) {
+          const theirs = suggestLayout(planOf(existing, r), { kind: "one_bedroom", without: ["bedroom", "kitchen", "living"], avoid, plumbing: pipes });
+          const others = kept.filter((k) => k.room.id !== r.id);
+          build(main, meta, suggestLayout(plan, { kind, ...lo, without: [...without, "bathroom"] }), [...others, { room: r, layout: theirs, rest: isLaundry(r) ? { kind: "laundry", name: r.name, kept: true } : { kind: "living", name: "Living" } }]);
+        }
+      // The laundry room next door as living space too, its washer and dryer kept where the pipes are.
+      if (keptLaundry) {
+        const living: Extra = { room: keptLaundry, layout: suggestLayout(planOf(existing, keptLaundry), { kind: "one_bedroom", without: NO_ROOMS, laundry: true, plumbing: pipes }), rest: { kind: "living", name: "Living" } };
+        build(main, meta, suggestLayout(plan, { kind, ...lo }), [...kept.filter((k) => k.room.id !== keptLaundry.id), living]);
+      }
+      if (kind === "studio") continue;
+      // The bedroom on another window.
+      for (const side of isLaundry(main) ? [] : [...new Set(plan.openings.filter((o) => o.kind === "window").map((o) => o.side))]) build(main, { id: `bedroom_${side}`, name: "Bedroom on another wall", layout: "one_bedroom" }, suggestLayout(plan, { kind, side, ...lo }), kept);
+      // The bedroom in a room next door with a window and nothing to keep away from in it: the whole room,
+      // or its own corner with the rest living space (and its bathroom too, when there's none).
+      for (const r of free.filter((x) => !isLaundry(x) && hasWindow(x) && !holdsMech(x))) {
+        const named = r.kind === "bedroom" || /\bbed(room)?\b/i.test(r.name);
+        const rMeta: Meta = { id: `bedroom_in_${r.id}`, name: named ? "Bedroom in its own room" : `Bedroom in the ${r.name.toLowerCase()}`, layout: "one_bedroom" };
+        const here = suggestLayout(plan, { kind, ...lo, without: [...without, "bedroom"] });
+        build(main, rMeta, here, [...kept, asIs(r, { kind: "bedroom", name: named ? r.name : "Bedroom" })]);
+        const theirs = suggestLayout(planOf(existing, r), { kind: "one_bedroom", without: ["kitchen", "living", ...(hasBath ? (["bathroom"] as const) : [])], avoid, plumbing: pipes });
+        build(main, rMeta, suggestLayout(plan, { kind, ...lo, without: [...without, "bedroom", ...(hasBath ? [] : (["bathroom"] as const))] }), [...kept, { room: r, layout: theirs, rest: { kind: "living", name: "Living" } }]);
+      }
+      // Two bedrooms, where they fit.
+      const two = twoBedroom(plan, suggestLayout(plan, { kind: "one_bedroom", ...lo }));
+      if (two) build(main, twoMeta, two, kept);
     }
   }
-  // Two bedrooms, where they fit with enough living space left.
-  const two = idea({ id: "two_bedroom", name: "Two bedrooms", layout: "two_bedroom" }, (o) => twoBedroom(plan, suggestLayout(plan, { kind: "one_bedroom", ...o })), "one_bedroom", false);
-  if (two && home(two) && noWorse(two)) kept.push(two);
+  // The best of each kind that's a home (else the best there is), then one more only if it's truly
+  // different: its bedroom somewhere else.
+  const ranked = [...tries].sort((a, b) => b.score - a.score);
+  const homes = ranked.filter((t) => t.home);
+  const pool = homes.length ? homes : ranked;
+  const best = (f: (t: Try) => boolean) => pool.find(f) ?? null;
+  // A one-bedroom leads when it's a home: it's what a second home usually wants.
+  const picks = [best((t) => t.d.layout !== "studio"), best((t) => t.d.layout === "studio")].filter((t): t is Try => t !== null).sort((a, b) => Number(b.home) - Number(a.home) || Number(b.d.layout !== "studio") - Number(a.d.layout !== "studio") || b.score - a.score);
+  const bedAt = (t: Try) => t.d.proposed.rooms.filter((r) => r.unit === 2 && r.kind === "bedroom").map((r) => centroid(r.polygon));
+  const different = (t: Try) => picks.every((p) => p.d.layout !== t.d.layout || bedAt(p).every((a) => bedAt(t).every((b) => dist(a, b) > 1.5)));
+  const third = pool.find((t) => !picks.includes(t) && t.home && different(t) && t.score >= (picks[0]?.score ?? 0) - 15);
+  if (third) picks.push(third);
+  // Each its own id, and a sentence on why.
+  const ids = new Set<string>();
+  const shown = picks.map((t) => {
+    let id = t.d.id;
+    for (let n = 2; ids.has(id); n++) id = `${t.d.id}_${n}`;
+    ids.add(id);
+    return { ...t.d, id, why: whyOf(t, existing, avoid.length > 0, mech) };
+  });
   const pick = opts.pick;
-  const chosen = (pick?.kind === "studio" && kept.find((d) => d.id === "studio")) || (pick?.side && kept.find((d) => d.id === `bedroom_${pick.side}`)) || kept[0];
-  return kept.map((d) => ({ ...furnish(d), chosen: d === chosen }));
+  const chosen = (pick?.kind === "studio" && shown.find((d) => d.layout === "studio")) || (pick?.side && shown.find((d) => d.id === `bedroom_${pick.side}`)) || shown[0];
+  return shown.map((d) => ({ ...furnish(d), chosen: d === chosen }));
+}
+
+// One plain sentence on why a design is the way it is: what it keeps, where they sleep, what's by the
+// way in and the pipes.
+function whyOf(t: { d: Design; byEntry: boolean; byPipes: boolean }, existing: Existing, anyMech: boolean, mech: Fixture[]): string {
+  const suite = t.d.proposed.rooms.filter((r) => r.unit === 2);
+  const parts: string[] = [];
+  const kept = suite.filter((r) => r.kept && existing.rooms.some((x) => x.id === r.id));
+  const keptLaundry = suite.some((r) => r.kept && r.kind === "laundry");
+  const named = kept.map((r) => (r.kind === "laundry" ? "laundry room" : r.kind === "kitchen" ? "kitchen" : "bathroom"));
+  const keeps = [...new Set([...named, ...(keptLaundry && !named.includes("laundry room") ? ["laundry"] : [])])];
+  if (keeps.length) parts.push(`keeps your ${keeps.length > 1 ? `${keeps.slice(0, -1).join(", ")} and ${keeps.at(-1)}` : keeps[0]}`);
+  const beds = suite.filter((r) => r.kind === "bedroom");
+  const what = mech.some((f) => f.kind === "furnace") ? (mech.some((f) => f.kind === "water_heater") ? "the furnace and water heater" : "the furnace") : "the water heater";
+  const clear = beds.length > 0 && anyMech && beds.every((b) => !t.d.proposed.rooms.some((m) => m.kind === "mechanical" && overlapArea(grown(m.polygon, 0.25), b.polygon) > 0.05) && mech.every((f) => !inPolygon(f.at, b.polygon) && edgeDist(b.polygon, f.at) >= 1.5));
+  if (t.d.layout === "studio") parts.push(`one open room to live, sleep and cook in${clear ? `, the bed away from ${what}` : ""}`);
+  else if (beds.length > 1) parts.push(`two bedrooms, each on a window${clear ? `, away from ${what}` : ""}`);
+  else if (beds.length) {
+    const own = existing.rooms.find((x) => x.id === beds[0].id);
+    parts.push(`${own ? `the bedroom is the room you call ${own.name.toLowerCase().startsWith("bedroom") ? "the bedroom" : `the ${own.name.toLowerCase()}`}` : "the bedroom on the window wall"}${clear ? `, away from ${what}` : ""}`);
+  }
+  if (t.byEntry) parts.push("living space by the way in");
+  else if (t.byPipes) parts.push("kitchen by the plumbing");
+  const s = parts.slice(0, 3).join("; ");
+  return s ? `${s[0].toUpperCase()}${s.slice(1)}.` : "";
+}
+
+// A polygon's box grown on every side.
+const grown = (poly: Pt[], by: number): Pt[] => {
+  const b = bounds(poly);
+  return rectPoly(b.minX - by, b.minZ - by, b.maxX + by, b.maxZ + by);
+};
+
+// The design to recommend: the best of them, which the seed puts first, and its reason in one line (the
+// first two parts of its sentence: "Keeps your bathroom; the bedroom on the window wall, away from the
+// furnace."). A design saved before designs said why gets a plain one.
+export function recommendedOf(designs: Design[]): { designId: string; reason: string } {
+  const d = designs[0];
+  const parts = (d.why ?? "").replace(/\.$/, "").split("; ").filter(Boolean);
+  return { designId: d.id, reason: parts.length ? `${parts.slice(0, 2).join("; ")}.` : `${d.name}: the layout that fits your basement best.` };
 }
 
 export function emptyMood(): Model["mood"] {
@@ -825,8 +921,11 @@ export function seedModel(
   state: { tape?: Tape; ideas?: { kind?: "one_bedroom" | "studio" | null; side?: Side | null }; mood?: Mood | null } = {},
   now = new Date().toISOString(),
 ): Model | null {
-  const existing = existingFromScan(result, state.tape ?? {});
-  if (!existing) return null;
+  const found = existingFromScan(result, state.tape ?? {});
+  if (!found) return null;
+  // Its own way in, before any layout: the designs put a new entrance where it has none.
+  const existing: Existing = { ...found, entrance: entranceOf(found, saidOutside(result.findings)) };
   const mood = state.mood ?? emptyMood();
-  return { version: 1, existing, designs: seedDesigns(existing, { pick: state.ideas ?? null, finishes: mood.finishes, colours: mood.colours, now }), mood };
+  const designs = seedDesigns(existing, { pick: state.ideas ?? null, finishes: mood.finishes, colours: mood.colours, now });
+  return { version: 1, existing, designs, mood, ...(designs.length ? { recommended: recommendedOf(designs) } : {}) };
 }

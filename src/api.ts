@@ -301,6 +301,8 @@ export type ScanResult = {
   vision?: Vision;
   verdict: "yes" | "fix" | "no";
   headline: string;
+  // Whether it has its own way in, before anything else (server/model/entrance.ts).
+  entrance?: { status: "own" | "needed" | "unknown"; why: string };
   route: "second_unit" | "basement_finish";
   wants: string;
   summary: string;

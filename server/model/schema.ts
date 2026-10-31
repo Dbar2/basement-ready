@@ -11,7 +11,7 @@ const id = z.string().trim().max(60);
 const pt = z.tuple([m, m]);
 const rating = z.enum(["30min", "15min"]).nullable();
 
-const WallSchema = z.object({ id, a: pt, b: pt, thicknessM: size, kind: z.enum(["foundation", "existing", "new"]), rating, guess: z.boolean().optional() });
+const WallSchema = z.object({ id, a: pt, b: pt, thicknessM: size, kind: z.enum(["foundation", "existing", "new"]), rating, guess: z.boolean().optional(), why: z.string().max(160).optional() });
 const OpeningSchema = z.object({
   id,
   wallId: id,
@@ -54,6 +54,7 @@ export const ExistingSchema = z.object({
     factor: num.min(0.2).max(5).optional(),
   }),
   confirmedAt: z.string().max(40).nullable(),
+  entrance: z.object({ status: z.enum(["own", "needed", "unknown"]), why: z.string().max(400) }).optional(),
 });
 
 export const DesignSchema = z.object({
@@ -65,12 +66,14 @@ export const DesignSchema = z.object({
   finishes: FinishesSchema,
   chosen: z.boolean(),
   updatedAt: z.string().max(40),
+  why: z.string().max(300).optional(),
 });
 
 export const ModelSchema = z.object({
   version: z.literal(1),
   existing: ExistingSchema,
   designs: z.array(DesignSchema).max(8),
+  recommended: z.object({ designId: id, reason: z.string().max(200) }).optional(),
   mood: z.object({
     liked: z.array(id).max(200),
     disliked: z.array(id).max(200),
