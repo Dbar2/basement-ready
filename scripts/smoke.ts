@@ -1,6 +1,7 @@
 // Post-deploy smoke test. Usage: pnpm smoke https://web-production-xxxx.up.railway.app [--scan path/to/video.mp4]
 // Without --scan it only reads (free). With --scan it runs one real scan (~$0.15 of Meta API).
 import { readFileSync } from "node:fs";
+import { scanHeaders } from "./scanAccess";
 
 const [base, flag, videoPath, city = "waterloo-on"] = process.argv.slice(2);
 if (!base) {
@@ -18,8 +19,8 @@ async function check(name: string, fn: () => Promise<string>) {
   }
 }
 
-async function get(path: string) {
-  const res = await fetch(new URL(path, base));
+async function get(path: string, headers: Record<string, string> = {}) {
+  const res = await fetch(new URL(path, base), { headers });
   if (!res.ok) throw new Error(`${path} → ${res.status}`);
   return res;
 }
@@ -58,13 +59,16 @@ if (flag === "--scan" && videoPath) {
     form.append("municipality", city);
     const created = await fetch(new URL("/api/scans", base), { method: "POST", body: form });
     if (!created.ok) throw new Error(`create → ${created.status} ${await created.text()}`);
-    const { id } = await created.json();
+    const made = await created.json();
+    const { id } = made;
+    // Scans are private: read it back as the device that made it.
+    const mine = scanHeaders(made);
     const started = Date.now();
     for (;;) {
-      const s = await (await get(`/api/scans/${id}`)).json();
+      const s = await (await get(`/api/scans/${id}`, mine)).json();
       if (s.status === "done") {
         const frame = s.result.detections[0]?.frame;
-        if (frame !== undefined) await get(`/api/scans/${id}/frames/${frame}`);
+        if (frame !== undefined) await get(`/api/scans/${id}/frames/${frame}`, mine);
         if (s.result.municipality !== city) throw new Error(`answered for ${s.result.municipality}, expected ${city}`);
         return `${s.result.city}: ${s.result.headline} in ${Math.round((Date.now() - started) / 1000)} s → ${new URL(`/scans/${id}`, base)}`;
       }

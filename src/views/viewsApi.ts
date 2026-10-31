@@ -1,5 +1,6 @@
 // The pictures API (server/views/routes.ts) and the edits a tap makes, through the model's own edits.
 import { applyEdits } from "../../server/model/edit";
+import { authHeaders } from "../api";
 import type { Design, Edit } from "../../server/model/types";
 import type { PictureMeta } from "../../server/views/photoreal";
 import type { AngleView } from "./AngleRender";
@@ -21,7 +22,8 @@ export async function postPicture(scanId: string, angleId: string, guide: Blob, 
   const form = new FormData();
   form.append("guide", guide, `${angleId}.jpg`);
   form.append("meta", JSON.stringify(meta));
-  const res = await fetch(`/api/scans/${scanId}/views/${angleId}`, { method: "POST", body: form });
+  // A write: only the device that filmed it (its claim) or its signed-in owner (server/privacy.ts).
+  const res = await fetch(`/api/scans/${scanId}/views/${angleId}`, { method: "POST", body: form, headers: await authHeaders() });
   if (!res.ok) throw new Error(`picture ${res.status}`);
   return res.json();
 }

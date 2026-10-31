@@ -53,7 +53,8 @@ export function ScanPage() {
     return (
       <main className="not-found">
         <Logo />
-        <h1>We couldn't find that scan.</h1>
+        <h1>We couldn't open that scan.</h1>
+        <p className="muted">Scans are private: open it on the phone or computer you filmed with, or sign in to the account you saved it to.</p>
         <Link to="/" className="btn btn-primary">Scan a basement</Link>
       </main>
     );

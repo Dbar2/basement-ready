@@ -391,7 +391,25 @@ export function rememberClaim(basementId: string, claimToken: string) {
   } catch {
     // Private mode: the scan still works, it just can't be claimed later from this browser.
   }
+  syncClaimsCookie();
 }
+
+// Scans are private (server/privacy.ts). What the browser loads by itself (a frame, the video, a 3D file,
+// the event stream) can't send the x-claims header, so the same claims ride along as a cookie,
+// "basementId.claimToken|…". The server only counts it on reads. It covers the whole site, so /admin
+// knows this browser's own scans too. The iPhone app's web view writes br-claims before this runs, so
+// its takes open too.
+export function syncClaimsCookie() {
+  try {
+    const all = JSON.parse(localStorage.getItem("br-claims") ?? "[]") as { basementId: string; claimToken: string }[];
+    const value = encodeURIComponent(all.slice(-20).map((c) => `${c.basementId}.${c.claimToken}`).join("|"));
+    const secure = location.protocol === "https:" ? "; Secure" : "";
+    document.cookie = value ? `br_claims=${value}; Path=/; Max-Age=31536000; SameSite=Lax${secure}` : `br_claims=; Path=/; Max-Age=0${secure}`;
+  } catch {
+    // Private mode or no storage: JSON calls still send the header.
+  }
+}
+if (typeof document !== "undefined") syncClaimsCookie();
 
 type ScanInput = {
   who?: Who;

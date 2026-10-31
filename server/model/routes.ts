@@ -4,7 +4,8 @@
 import { readFileSync } from "node:fs";
 import type { Context, Hono } from "hono";
 import { clientIp, metaKey, overSpend } from "../limits";
-import { basementFor, loadWorkspace, parseClaims } from "../workspace";
+import { basementFor, loadWorkspace } from "../workspace";
+import { adminRead, requestClaims } from "../privacy";
 import { describeChange } from "./describe";
 import { currentModel } from "./current";
 import { DesignSchema, ExistingSchema, ModelSchema } from "./schema";
@@ -35,7 +36,7 @@ export function mountModel(app: Hono, currentUser: (c: Context) => Promise<strin
     const id = c.req.param("id") ?? "";
     if (!UUID.test(id)) return null;
     const userId = await currentUser(c);
-    const a = await basementFor(id, { userId, claims: parseClaims(c.req.header("x-claims")) });
+    const a = await basementFor(id, { userId, claims: requestClaims(c), admin: adminRead(c) });
     return a.basement ? a : null;
   }
 

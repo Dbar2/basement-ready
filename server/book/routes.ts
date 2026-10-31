@@ -14,7 +14,8 @@ import { pricedForBasement, pricedSample } from "../priced";
 import type { Answers } from "../recheck";
 import { packFor } from "../rules";
 import { picturesOfDesign } from "../views/routes";
-import { basementFor, loadWorkspace, parseClaims, ProfileSchema, StateSchema, type Profile, type StoredState } from "../workspace";
+import { basementFor, loadWorkspace, ProfileSchema, StateSchema, type Profile, type StoredState } from "../workspace";
+import { adminRead, requestClaims } from "../privacy";
 import { buildBook, timeline } from "./book";
 import { STYLES, type StyleId } from "../ideas/styles";
 import { fromVideo, loadPictures, named, picturesFor, type Picture } from "./pictures";
@@ -37,7 +38,7 @@ export function mountBook(app: Hono, currentUser: (c: Context) => Promise<string
       return { ok: true as const, id, result, state: sample.state, profile: sample.profile, municipality: "waterloo-on", address: "The sample basement" };
     }
     if (!UUID.test(id)) return { ok: false as const, status: 404 as const, error: "Not found" };
-    const a = await basementFor(id, { userId: await currentUser(c), claims: parseClaims(c.req.header("x-claims")) });
+    const a = await basementFor(id, { userId: await currentUser(c), claims: requestClaims(c), admin: adminRead(c) });
     if (!a.basement || !a.result) return { ok: false as const, status: 404 as const, error: "Not found" };
     if (!a.allowed) return { ok: false as const, status: 403 as const, error: "Open this on the device you scanned with, or sign in." };
     const w = await loadWorkspace(a.basement.id);

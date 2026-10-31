@@ -21,7 +21,8 @@ import { areaText } from "./model/suite";
 import { overSpend } from "./limits";
 import { pricedForBasement, pricedSample } from "./priced";
 import { keys, storage } from "./storage";
-import { basementFor, cleanPatch, loadWorkspace, parseClaims, profileFromOtherBasements, saveWorkspace, StateSchema, ProfileSchema, type Profile, type StoredState } from "./workspace";
+import { basementFor, cleanPatch, loadWorkspace, profileFromOtherBasements, saveWorkspace, StateSchema, ProfileSchema, type Profile, type StoredState } from "./workspace";
+import { adminRead, requestClaims } from "./privacy";
 
 const UUID = /^[0-9a-f-]{36}$/;
 const SAMPLE = "public/samples/sample";
@@ -185,7 +186,7 @@ export function mountWorkspace(app: Hono, currentUser: (c: Context) => Promise<s
     const id = c.req.param("id") ?? "";
     if (!UUID.test(id)) return null;
     const userId = await currentUser(c);
-    const a = await basementFor(id, { userId, claims: parseClaims(c.req.header("x-claims")) });
+    const a = await basementFor(id, { userId, claims: requestClaims(c), admin: adminRead(c) });
     if (!a.basement) return null;
     // Every document here is priced on the design they picked: one quote, one list of fixes.
     const result = a.result?.findings && a.allowed ? await pricedForBasement(id, a.basement.id, { ...a.result, household: a.basement.household ?? a.result.household }, await savedAnswers(a.basement.id)) : a.result;
