@@ -1,6 +1,9 @@
 /* The reference page's own layout (src/dev/UiReference.tsx). Everything it shows uses the app's classes. */
 .ref { width: 100%; max-width: 1240px; margin: 0 auto; padding-bottom: var(--space-6); display: grid; gap: var(--space-5); }
-.ref > .flow-title { padding-inline: var(--gutter); }
+.ref-page { min-height: 100dvh; background: var(--color-bg); }
+.ref-head { padding: 28px var(--gutter) 0; }
+.ref-head h1 { font-size: var(--text-display); text-wrap: balance; }
+.ref-head .lede { max-width: 62ch; margin: 12px 0 0; color: var(--color-ink-muted); text-wrap: pretty; }
 .ref-sec { display: grid; gap: var(--space-3); margin: 0 var(--gutter); padding-top: 14px; border-top: var(--line-ink); }
 .ref-sec h2 { font-size: var(--text-h2); }
 .ref-two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--space-4); }

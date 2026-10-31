@@ -2,7 +2,7 @@
 
 Locked Oct 30, 2026. David picked it over "Open Room" and "Grade Line" (boards in the private notes, `brand-ui/`). It sits on top of the Fresh Air brand (`brand/brand.md`): same colours, type and logo. Every value here is a token in `brand/tokens.css`. The living reference is `/dev/ui` on a dev server (`src/dev/UiReference.tsx`); the production build drops it.
 
-**The idea:** every screen is one sheet of an architect's drawing set. The plan, the 3D and the photos are drawn on the sheet; hairlines divide it; a sheet index runs across the top and a title strip along the bottom. It looks like the permit set we hand over at the end, made friendly.
+**The idea:** every screen is one sheet of an architect's drawing set. The plan, the 3D and the photos are drawn on the sheet; hairlines divide it; three milestones run across the top. It looks like the permit set we hand over at the end, made friendly.
 
 **One rule above the rest:** one clear thing per screen, and one primary action. If a screen needs two mint buttons, it is two screens.
 
@@ -11,7 +11,7 @@ Locked Oct 30, 2026. David picked it over "Open Room" and "Grade Line" (boards i
 - **Grid:** 8 px. Gaps are 4, 8, 16, 24, 40 or 64 (`--space-1` … `--space-6`). Nothing in between.
 - **Side margin:** `--gutter` (16 px on a phone, up to 56 px on desktop). Text never touches the edge.
 - **Reading width:** running text stops at 62 characters. Ledes are one sentence; if it needs two, the second goes below the thing it explains.
-- **The page:** step bar (sticky, top) → the title → the one thing (a plan, the 3D, a deck, a list) → the title strip (sticky, bottom) holding the way back and the one way forward.
+- **The page:** after the upload there are two. The guide: the milestones on top → the basement → the thread → the ask bar. The home base: the goal → the milestones → Continue along the bottom. The website keeps the plain sheet: the title → the one thing → its action.
 - **Desktop:** the one thing gets the width; supporting facts sit in a 320 px column on the right, divided by hairlines, never in boxes.
 - **Phone (390):** one column. The one thing comes first after the title, before any controls that change it.
 - **No cards.** A border, fill and corner together mark a separate object, and a sheet has very few: the drawing frame around a plan or the 3D, a photo, an input. Groups of content are separated by a hairline (`--line`) or an ink rule (`--line-ink`) with a heading, not by boxes.
@@ -40,25 +40,38 @@ Hanken Grotesk for words, Geist Mono for figures.
 
 ## One primary action per screen
 
-- **Primary (`.btn-primary`):** solid mint, forest text 17 px 700, 6 px corners, 48 px tall (52 in the title strip on a phone), an arrow `→` when it moves on. No shadow, no lift on hover; it darkens to `--color-mint-press`. Its label says what happens ("Design it in 3D"), at most four words, and never wraps.
+- **Primary (`.btn-primary`):** solid mint, forest text 17 px 700, 6 px corners, 48 px tall, an arrow `→` when it moves on. No shadow, no lift on hover; it darkens to `--color-mint-press`. Its label says what happens ("Design it in 3D"), at most four words, and never wraps.
 - **Secondary (`.link-quiet`):** an underlined text link in ink, the underline in ink too. "Fix a wall", "Download PDF", "Try the example".
 - **Choices (`.btn-ghost`, `.chip`):** a hairline rectangle, 6 px corners (4 px for chips), ink text. Picked: ink fill, card text. Never mint, so they never compete with the primary.
 - **Toggles (`.segmented`):** ink-framed rectangles, the picked one filled ink. For view switches only (3D / Plan, m / ft).
 - **Destructive:** a text link in `--color-stop`, confirmed on the sheet.
 - Tap targets are at least 44 × 44 px on a phone, even when the drawn control is smaller.
 
-## The step bar (sheet index)
+## The milestones
 
-- Six sheets: `01 Style  02 Plan  03 Layout  04 Design  05 Pictures  06 Book`. Numbers in Geist Mono, names in Hanken 600.
-- The current sheet: ink text with a 2 px ink underline that draws in from the left when you arrive. Done sheets: ink. Sheets ahead: muted. All six are links (`src/flow/FlowNav.tsx`).
-- No circles, pills or check marks.
-- Phone: the numbers only, with the current sheet's name beside its number (`01 02 [03 Layout] 04 05 06`), in one line.
+- Three, across the top of the guide: `Answer  Design  Build`, in Hanken 600 at 15 px. No numbers.
+- The current one: ink, 800, with a 2 px ink underline that draws in from the left when it changes. Done ones: ink, with a ✓ before the name. Ones ahead: muted. They say where you are (`aria-current="step"`); the guide moves you on, so they aren't links (`src/guide/GuideScreen.tsx`, `src/guide/progress.ts`).
+- Left of them, the logo's mark. Inside the app it always goes to the home base, never to the website.
 - Below the bar, a 1 px ink rule: the top edge of the sheet.
 
-## The title strip
+## The guide
 
-- The bottom of every step: a 1 px ink rule, then `← Plan` on the left, the title block in the middle (desktop only), and the primary on the right.
-- **Title block:** a small ink box with the sheet number (`03 / 06`) and the sheet's name in `--text-tiny` mono. Desktop only. It's information, not decoration: it says where you are.
+- The one screen after the upload (`src/guide/GuideScreen.tsx`). On a phone: the top bar, the visual pane (about 40% of the height), the thread, the ask bar, all inside the screen's height; only the thread scrolls. On a computer (from 1000 px): the basement on the left, the thread and the ask bar in a 440 px column on the right.
+- **The visual pane** always shows the basement: the video while it measures, the plan with the fix marked, a drawing that explains a term, the plan to edit, the 3D, before and after. It is never empty: while the next one loads, the last one stays, with a progress line.
+- **The guide's messages:** the mark, then 16 px text, three short sentences at most, then the why in small text: "Why I'm asking:" under a question, "Why it matters:" under anything else. Only the newest message has choices: hairline buttons, and one mint button for the way on, with `→`.
+- **Their messages:** ink blocks on the right, in card-coloured text.
+- **Cards** under a message, for what buttons can't carry (a tape number, a window's size, the owner): a hairline frame, 6 px corners.
+- **The ask bar:** "Ask anything about your basement" and a hairline Send button; voice where the browser has it.
+- **Above the fold** at 390 × 844 and 1280 × 800: the current question, its choices and the visual, together, with no scroll.
+- Class names are `gs-*`: the filming screen already owns `guide-*`.
+
+## The home base
+
+- `/scans/:id`, where the logo goes (`src/guide/Home.tsx`). The goal is the heading ("A legal second home downstairs"), with one muted line under it.
+- The three milestones as hairline rows under an ink rule: a drawing (64 × 48, or 96 × 72 on a computer), the name, one line, and where it stands: Done ✓ in `--color-ok`, Next in `--color-fix`, Later muted.
+- Then quiet links: Your book (PDF), Share with a designer, Scan another basement.
+- Continue along the bottom, under an ink rule: the one mint button, named for the next milestone ("Continue with the permit").
+- Until they've had their answer, `/scans/:id` opens the guide instead.
 
 ## Lists
 
@@ -105,7 +118,8 @@ Hanken Grotesk for words, Geist Mono for figures.
 
 | Section | Motion |
 |---|---|
-| Step bar | The current sheet's underline draws in from the left (`--dur-2`, `--ease-draw`). |
+| Milestones | The current milestone's underline draws in from the left (`--dur-2`, `--ease-draw`). |
+| Guide | Each new message rises into place once (`--dur-2`). |
 | Home | The scroll story's own motion: the walk, the scan and the plan arrive one at a time as you scroll (`src/marketing/Home.tsx`). |
 | Wait screen | The 3D assembles piece by piece as the scan reports; the time-left line fills; swiped cards leave sideways. |
 | Plan | Walls stroke in once (`--dur-draw`, `--ease-draw`); a dragged wall's length updates live. |

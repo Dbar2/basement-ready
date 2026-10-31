@@ -5,15 +5,10 @@ import { useParams } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Mark } from "../components/Logo";
 import { Card, Visual } from "./mount";
-import type { GuideAction, GuideMessage, GuideState, Milestone } from "./types";
+import { isMilestone, MILESTONES } from "./progress";
+import type { GuideAction, GuideMessage, GuideState } from "./types";
 import { useGuide } from "./useGuide";
 import "./guide.css";
-
-const MILESTONES: { id: Milestone; label: string }[] = [
-  { id: "answer", label: "Answer" },
-  { id: "design", label: "Design" },
-  { id: "build", label: "Build" },
-];
 
 type Props = {
   scanId: string;
@@ -92,6 +87,9 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act }: 
   );
 }
 
+// A message that ends in a question says why it asks; any other says why it matters.
+const asks = (m: GuideMessage) => m.text.trim().endsWith("?");
+
 // One message: the guide's (with its why, its card and its choices while it's the newest) or theirs.
 function Message({ scanId, m, live, busy, act }: { scanId: string; m: GuideMessage; live: boolean; busy: boolean; act: Props["act"] }) {
   if (m.from === "you") return <p className="gs-you">{m.text}</p>;
@@ -102,7 +100,11 @@ function Message({ scanId, m, live, busy, act }: { scanId: string; m: GuideMessa
       </span>
       <div className="gs-msg-body">
         <p>{m.text}</p>
-        {m.why && <p className="gs-why">{m.why}</p>}
+        {m.why && (
+          <p className="gs-why">
+            <b>{asks(m) ? "Why I'm asking:" : "Why it matters:"}</b> {m.why}
+          </p>
+        )}
         {m.card && <Card scanId={scanId} card={m.card} act={act} />}
         {live && m.choices && m.choices.length > 0 && (
           <div className="gs-choices">
@@ -147,6 +149,19 @@ export function GuideRoute() {
   useEffect(() => {
     document.title = "Your guide | Basement Ready";
   }, []);
+  // ?at=design (a Continue on the home base, an older link): once the thread loads, the guide moves to
+  // that milestone if it isn't there already, and the address drops the ?at so a refresh resumes.
+  const moved = useRef(false);
+  useEffect(() => {
+    if (!state || moved.current) return;
+    moved.current = true;
+    const url = new URL(window.location.href);
+    const at = url.searchParams.get("at");
+    if (!at) return;
+    url.searchParams.delete("at");
+    window.history.replaceState(window.history.state, "", url);
+    if (isMilestone(at) && at !== state.milestone) act({ type: "go", to: at });
+  }, [state, act]);
   if (!state)
     return (
       <div className="gs gs-loading" aria-busy={!error}>
