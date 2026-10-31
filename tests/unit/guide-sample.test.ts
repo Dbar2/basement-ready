@@ -96,11 +96,14 @@ describe("the example, fully scripted", () => {
     expect(r.state.step).toBe("build");
     await go("Start");
     await go("Done");
+    expect(r.state.step).toBe("build.submit");
+    expect(r.messages.at(-1)!.card).toEqual({ kind: "download", id: "submit" });
+    await go("Done");
     await go("Got it");
     await go("Hire it all");
     expect(r.state.step).toBe("done");
     expect(r.state.done).toEqual({ answer: true, design: true, build: true });
-    expect(r.messages.at(-1)!.card).toEqual({ kind: "download", id: "submit" });
+    expect(r.messages.at(-1)!.card).toEqual({ kind: "download", id: "book" });
     expect(new Set(steps)).toEqual(
       new Set([
         "wait.q:exit_from_suite",
@@ -112,6 +115,7 @@ describe("the example, fully scripted", () => {
         "design.look",
         "build",
         "build.permit:tape",
+        "build.submit",
         "build.money:receipts",
         "build.builders",
         "done",
@@ -145,7 +149,7 @@ describe("the example, fully scripted", () => {
     const answered = sampleCtx({ answers: { exit_from_suite: true, plumbing_fixtures_and_shutoff: true }, chosen: null, look: "deep", confirmed: false }, NOW);
     expect(answered.asks).toEqual([]);
     expect(answered.result?.verdict).toBeTruthy();
-    expect(answered.build.map((b) => b.id)).toEqual(["tape", "receipts", "builders"]);
+    expect(answered.build.map((b) => b.step)).toEqual(["build.permit:tape", "build.submit", "build.money:receipts", "build.builders"]);
   });
 });
 

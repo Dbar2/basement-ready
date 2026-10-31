@@ -10,9 +10,20 @@ import type { Model } from "../model/types";
 import { entryFor, type Entry } from "./glossary";
 import type { CardRef, Choice, GuideAction, GuideMessage, GuideState, LookKey, Milestone, StepId, VisualRef } from "../../src/guide/types";
 
-// What the build still needs, in order (server/guide/build.ts makes it). Each item is one step; its
-// card (or a choice) sends {type: "permitItem", itemId: id} once it's given, or put off.
-export type BuildItem = { id: string; step: StepId; text: string; why: string; card?: CardRef; visual: VisualRef; choices?: Choice[]; minutes?: number };
+// What the build needs, in order (server/guide/build.ts, track F, makes it). Each item is one step. Its
+// card saves through the workspace, then sends {type: "permitItem", itemId: <its step>, value: {said}};
+// the list is worked out again, and a done item (or one they put off) is passed.
+export type BuildItem = {
+  step: StepId; // "build.permit:<id>", "build.submit", "build.money:<question>", "build.builders"
+  section?: "permit" | "money" | "builders";
+  message: string;
+  why: string;
+  card?: CardRef;
+  choices?: Choice[];
+  visual: VisualRef;
+  done?: boolean;
+  minutes?: number;
+};
 
 type FixGroup = { category: string; title: string; ruleIds?: string[]; costLow?: number | null; costHigh?: number | null; costSource?: unknown; why?: string[] };
 export type ResultLike = {
@@ -32,6 +43,7 @@ export type Ctx = {
   look: LookKey | "none" | null; // the look they picked, or "none" for their own words
   build: BuildItem[];
   household?: string | null;
+  failed?: { text: string; retry: boolean } | null; // the scan stopped: what happened, and whether trying again can help
   now: string;
 };
 
@@ -54,6 +66,7 @@ const DESIGN_STEPS = ["design.plan", "design.layouts", "design.look"];
 
 export function stepOf(ctx: Ctx, t: Pick<Thread, "passed">): StepId {
   const passed = new Set(t.passed);
+  if (!ctx.result && ctx.failed) return "failed";
   if (!ctx.result) return ctx.asks[0] ? askStep(ctx.asks[0]) : "wait";
   if (!passed.has("answer")) {
     const first = ctx.asks.find(beforeAnswer);
@@ -66,7 +79,7 @@ export function stepOf(ctx: Ctx, t: Pick<Thread, "passed">): StepId {
     if (!passed.has("design.look")) return "design.look";
   }
   if (!passed.has("build")) return "build";
-  return ctx.build.find((b) => !passed.has(b.step))?.step ?? "done";
+  return ctx.build.find((b) => !b.done && !passed.has(b.step))?.step ?? "done";
 }
 
 export function milestoneOf(step: StepId): Milestone {
@@ -75,10 +88,12 @@ export function milestoneOf(step: StepId): Milestone {
   return "answer";
 }
 
+// The answer is done once it's been said (the home base opens from then on), design once they're past
+// the look, build once it's all given.
 function doneOf(t: Pick<Thread, "passed">, step: StepId): Record<Milestone, boolean> {
-  const passed = new Set(t.passed);
   const m = milestoneOf(step);
-  return { answer: passed.has("answer") || m !== "answer", design: m === "build", build: step === "done" };
+  const answered = step === "answer" || t.passed.includes("answer") || m !== "answer";
+  return { answer: answered, design: m === "build", build: step === "done" };
 }
 
 // ---- What it says --------------------------------------------------------------------------------
@@ -249,7 +264,8 @@ function lookSaid(ctx: Ctx): Said {
 }
 
 function buildSaid(ctx: Ctx, t: Pick<Thread, "passed">): Said {
-  const items = ctx.build.filter((b) => !t.passed.includes(b.step));
+  // What only they can give for the permit set; money and builders come after it.
+  const items = ctx.build.filter((b) => !b.done && !t.passed.includes(b.step) && (b.section ? b.section === "permit" : b.step.startsWith("build.permit:")));
   const n = items.length;
   const minutes = n && items.every((b) => b.minutes) ? items.reduce((s, b) => s + b.minutes!, 0) : 0;
   const need = n ? ` ${cap(num(n))} ${n === 1 ? "thing" : "things"} only you can give${minutes ? `, about ${minutes} minutes` : ""}. Ready?` : " Nothing's missing.";
@@ -266,14 +282,20 @@ function buildSaid(ctx: Ctx, t: Pick<Thread, "passed">): Said {
 }
 
 const doneSaid = (): Said => ({
-  text: "That's everything I need. **Your permit set is ready.** Download the submit copy, read it through once, and hand it to the City.",
-  card: { kind: "download", id: "submit" },
+  text: "That's everything I need. **Your permit set is ready to hand to the City**, and your book has the whole plan: the answer, the design, the money and who builds it.",
+  card: { kind: "download", id: "book" },
   choices: [{ label: "Back to my basement", action: { type: "go", to: "home" } }],
   visual: { kind: "permit" },
 });
 
 // What the guide says at a step.
 export function said(ctx: Ctx, t: Pick<Thread, "passed" | "messages">, step: StepId): Said {
+  if (step === "failed")
+    return {
+      text: ctx.failed!.text,
+      ...(ctx.failed!.retry ? { choices: [{ label: "Try again", action: { type: "ask", text: "Try again" }, primary: true }] } : {}),
+      visual: { kind: "video" },
+    };
   if (step === "wait") return { text: "Still measuring. I'll have your answer in a minute or two.", visual: { kind: "video" } };
   if (step.startsWith("wait.")) {
     const a = ctx.asks.find((x) => askStep(x) === step)!;
@@ -286,7 +308,7 @@ export function said(ctx: Ctx, t: Pick<Thread, "passed" | "messages">, step: Ste
   if (step === "build") return buildSaid(ctx, t);
   if (step === "done") return doneSaid();
   const item = ctx.build.find((b) => b.step === step)!;
-  return { text: item.text, why: item.why, card: item.card, choices: item.choices, visual: item.visual };
+  return { text: item.message, why: item.why, card: item.card, choices: item.choices, visual: item.visual };
 }
 
 // ---- Moving on -----------------------------------------------------------------------------------
@@ -336,6 +358,11 @@ function youSaid(t: Thread, action: GuideAction, ctx: Ctx): string | null {
       return action.look === "none" ? "None of these" : LOOK_NAMES[action.look];
     case "answer":
       return typeof action.value === "boolean" ? (action.value ? "Yes" : "No") : String(action.value ?? "");
+    case "permitItem": {
+      // A card says what it saved: "Walls 7.56 m and 5.52 m, ceiling 2.08 m".
+      const s = (action.value as { said?: unknown } | null)?.said;
+      return typeof s === "string" && s.trim() ? s.trim().slice(0, 200) : null;
+    }
     case "explain":
       return `What's ${article(entryFor(action.term)?.name ?? action.term.replace(/_/g, " "))}?`;
     default:
@@ -352,7 +379,7 @@ function passing(t: Thread, action: GuideAction, ctx: Ctx): string[] {
     case "chooseDesign":
       return ["design.layouts"];
     case "permitItem":
-      return ctx.build.filter((b) => b.id === action.itemId).map((b) => b.step);
+      return ctx.build.filter((b) => b.step === action.itemId || b.step.endsWith(`:${action.itemId}`)).map((b) => b.step);
     case "go": {
       if (action.to === "home") return [];
       // Inside the milestone already: past its opening step ("Start" on the build intro).
