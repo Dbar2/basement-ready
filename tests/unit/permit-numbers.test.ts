@@ -10,7 +10,8 @@ import { buildBook } from "../../server/book/book";
 import { diyPlan } from "../../server/diy/plan";
 import { suggestLayout } from "../../server/layout";
 import { currentModel } from "../../server/model/current";
-import { chosenDesign } from "../../server/model/legacy";
+import { floorArea, polygonArea } from "../../server/model/geometry";
+import { chosenDesign, layoutOf } from "../../server/model/legacy";
 import { areaText, sqftOf, suiteAreaM2 } from "../../server/model/suite";
 import { briefEmail } from "../../server/permit/designer";
 import { FIELD_MAPS, fillAcroForm } from "../../server/permit/forms";
@@ -211,6 +212,78 @@ describe("the plan's room names", () => {
     expect(unit2.filter((n) => !seen.get(n))).toEqual([]);
     expect([...seen].filter(([, n]) => n > plans.length)).toEqual([]);
   }, SLOW);
+});
+
+describe("one design on every sheet", () => {
+  it("cuts the ceiling plan into the floor plan's sheets, each showing the same rooms", async () => {
+    const out = await bigPackage();
+    const pdf = await readPdf(out.bytes);
+    const plans = out.sheets.filter((s) => /^A2/.test(s.number)), ceilings = out.sheets.filter((s) => /^A4/.test(s.number));
+    expect(plans.length).toBeGreaterThan(1);
+    expect(ceilings.map((s) => s.number)).toEqual(plans.map((s) => s.number.replace("A2", "A4")));
+    const names = permitModel(big, {})!.design.proposed.rooms.filter((r) => r.unit === 2).map((r) => r.name.toUpperCase());
+    const named = (page: number) => names.filter((n) => pdf.pages[page].text.replace(/\s+/g, " ").includes(`${n} `)).sort();
+    plans.forEach((p, i) => expect(named(ceilings[i].page), ceilings[i].number).toEqual(named(p.page)));
+    // Each at the floor plan's scale, said in its title block too.
+    for (const c of ceilings) expect(pdf.pages[c.page].text).toMatch(/Scale 1:\d+ on 11 x 17/);
+    // A room the cut crosses says where the rest of it is: its size is the whole room's.
+    const all = plans.map((p) => pdf.pages[p.page].text.replace(/\s+/g, " ")).join(" ");
+    expect(all).toMatch(/CONTINUES ON A2\.\d/);
+  }, SLOW);
+
+  it("keeps the beam, duct and bulkhead labels off the room names on the ceiling plan", async () => {
+    for (const [result, out] of [[sample, await buildPermitPackage({ ...base, result: sample, state: {}, copy: "review" })], [big, await bigPackage()]] as const) {
+      const drawing = await pageDrawing(out.bytes);
+      const bold = await (await PDFDocument.create()).embedFont(StandardFonts.HelveticaBold);
+      const names = new Set(permitModel(result, {})!.design.proposed.rooms.map((r) => r.name.toUpperCase()));
+      let checked = 0;
+      for (const sh of out.sheets.filter((x) => /^A4/.test(x.number))) {
+        const labels = drawing[sh.page].labels.filter((l) => !l.turned);
+        const box = (l: (typeof labels)[number]) => ({ x0: l.x, x1: l.x + bold.widthOfTextAtSize(l.text, l.size), y0: l.y - 0.21 * l.size, y1: l.y + 0.72 * l.size });
+        const rooms = labels.filter((l) => names.has(l.text)).map((l) => box(l));
+        const overhead = labels.filter((l) => /^(EXISTING BEAM|EXISTING DUCT|BULKHEAD)/.test(l.text)).map((l) => ({ text: l.text, ...box(l) }));
+        for (const o of overhead)
+          for (const r of rooms) {
+            checked++;
+            expect(o.x0 < r.x1 && r.x0 < o.x1 && o.y0 < r.y1 && r.y0 < o.y1, `${sh.number}: "${o.text}" over a room's name`).toBe(false);
+          }
+      }
+      expect(checked).toBeGreaterThan(0);
+    }
+  }, SLOW);
+});
+
+describe("one room, one area", () => {
+  it("is the living room's own floor on the drawings, the book, the answer and the studio", async () => {
+    const model = currentModel(sample, {}, "sample")!.model;
+    const design = chosenDesign(model)!;
+    const living = design.proposed.rooms.find((r) => r.kind === "living")!;
+    const own = floorArea(living, design.proposed.rooms);
+    // The layout draws the living room around the stairs; the stairs aren't living floor.
+    expect(polygonArea(living.polygon) - own).toBeGreaterThan(0.5);
+    const text = `${own.toFixed(1)} m²`;
+    expect(sheet(await pdfOf(sample), "A2")).toContain(`LIVING AND DINING ${text}`);
+    // The answer's plan (its zones) and the book's plan.
+    expect(layoutOf(model.existing, design)!.layout.zones.find((z) => z.kind === "living")!.areaM2).toBeCloseTo(own, 6);
+    const book = await readPdf((await buildBook({ address: "The sample basement", municipality: "waterloo-on", result: pricedSample(sample, {}), model, pictures: [], mood: [], today: "2026-10-30" })).bytes);
+    const bookText = book.pages.map((p) => p.text.replace(/\s+/g, " ")).join(" ");
+    expect(bookText).toContain(text);
+    expect(bookText).not.toContain(`${(own + 0.77).toFixed(1)} m²`);
+    // Unit 2's floor is its rooms' own floors added up.
+    const rooms = design.proposed.rooms.filter((r) => r.unit === 2 && r.kind !== "stairs" && r.kind !== "mechanical");
+    expect(suiteAreaM2(design)).toBeCloseTo(rooms.reduce((t, r) => t + floorArea(r, design.proposed.rooms), 0), 1);
+  });
+});
+
+describe("one window, one room", () => {
+  it("puts W1 in the room it opens into, on every sheet", async () => {
+    const w1 = permitModel(sample, {})!.windows.find((w) => w.tag === "W1")!;
+    expect(w1).toMatchObject({ escape: true, room: "Bedroom" });
+    const pdf = await pdfOf(sample);
+    const all = pdf.pages.map((p) => p.text.replace(/\s+/g, " ")).join(" ");
+    expect(sheet(pdf, "A5")).toContain("W1, bedroom");
+    expect(all).not.toMatch(/W1, bathroom/i);
+  });
 });
 
 describe("one unit area and one fee", () => {

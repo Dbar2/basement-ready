@@ -274,19 +274,25 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
 const overlapOf = (a: Box, t: Box): Box => ({ minX: Math.max(a.minX, t.minX), maxX: Math.min(a.maxX, t.maxX), minZ: Math.max(a.minZ, t.minZ), maxZ: Math.min(a.maxZ, t.maxZ) });
 const boxArea = (b: Box) => Math.max(0, b.maxX - b.minX) * Math.max(0, b.maxZ - b.minZ);
 
-export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean; tile?: Box; tiles?: Box[]; whole?: Box }) {
+// `continues`: a sheet's number by its tile, so a room the cut crosses says where the rest of it is (its
+// size is the whole room's, wider than this sheet's own dimensions).
+// Returns the boxes the labels take on the page, so other labels can keep off them.
+export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean; tile?: Box; tiles?: Box[]; whole?: Box; continues?: (i: number) => string }): PageBox[] {
   const rooms = m.design.proposed.rooms;
+  const taken: PageBox[] = [];
   for (const r of rooms) {
     if (r.kind === "stairs") continue;
     const full = bounds(r.polygon);
     const t = o.tile;
     const cut = Boolean(t && (full.minX < t.minX - 0.01 || full.maxX > t.maxX + 0.01 || full.minZ < t.minZ - 0.01 || full.maxZ > t.maxZ + 0.01));
     const b = cut && t ? overlapOf(full, t) : full;
+    let elsewhere: string[] = [];
     if (t && o.tiles?.length) {
       const share = (x: Box) => boxArea(overlapOf(full, x)) / Math.max(1e-9, boxArea(full));
       if (o.whole && share(o.whole) < 0.5) continue;
       const best = o.tiles.reduce((bi, x, i) => (share(x) > share(o.tiles![bi]) + 1e-6 ? i : bi), 0);
       if (o.tiles[best] !== t && share(t) < 0.4) continue;
+      if (cut && o.continues) elsewhere = o.tiles.flatMap((x, i) => (x !== t && share(x) > 0.05 ? [o.continues!(i)] : []));
     }
     if (b.maxX - b.minX < 0.3 || b.maxZ - b.minZ < 0.3) continue;
     // A kitchen that's only a counter along the wall: its fixtures say what it is.
@@ -303,11 +309,16 @@ export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: 
     if (r.unit === 2) lines.push([`${ftIn(full.maxX - full.minX)} x ${ftIn(full.maxZ - full.minZ)}`, 5.5, false]);
     const clg = r.ceilingM ?? m.ceilingM;
     if (o.ceiling && clg) lines.push([`CLG ${ftIn(clg)} (${Math.round(clg * 1000)})`, 5.5, false]);
+    if (elsewhere.length) lines.push([`CONTINUES ON ${elsewhere.join(", ")}`, 5.5, false]);
     const tall = (b.maxZ - b.minZ) * v.k;
     const width = (t: string, size: number, bold: boolean) => s.textWidth(t, size, bold ? s.fonts.bold : s.fonts.regular) + 6;
     const turned = width(name, 7, true) > wide && width(name, 7, true) <= tall && wide >= 30;
     const room = turned ? tall : wide;
     let y = (turned ? cx - (lines.length * 7.5) / 2 + 5 : cy + (lines.length * 7.5) / 2 - 5);
+    const shown = lines.filter(([t, size, bold]) => width(t, size, bold) <= room);
+    const half = Math.max(0, ...shown.map(([t, size, bold]) => width(t, size, bold))) / 2;
+    const run = shown.reduce((h, [, size]) => h + size + 2.2, 0);
+    if (shown.length) taken.push(turned ? { x0: y - 7, x1: y + run, y0: cy - half, y1: cy + half } : { x0: cx - half, x1: cx + half, y0: y - run + 2, y1: y + 7 });
     for (const [t, size, bold] of lines) {
       if (width(t, size, bold) > room) continue;
       const style = { size, align: "center" as const, font: bold ? s.fonts.bold : s.fonts.regular, color: bold ? INK : MUTED };
@@ -327,9 +338,15 @@ export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: 
       const [x, y] = v.P([b.minX, b.minZ]);
       s.rect(x + 6, y - 20, 50, 14, { fill: PAPER, width: 0.9 });
       s.text("UNIT 2", x + 31, y - 15.5, { size: 7.5, font: s.fonts.bold, align: "center" });
+      taken.push({ x0: x + 6, x1: x + 56, y0: y - 20, y1: y - 6 });
     }
   }
+  return taken;
 }
+
+// A box on the page, in points.
+export type PageBox = { x0: number; y0: number; x1: number; y1: number };
+export const boxesMeet = (a: PageBox, b: PageBox, pad = 2) => a.x0 < b.x1 + pad && b.x0 < a.x1 + pad && a.y0 < b.y1 + pad && b.y0 < a.y1 + pad;
 
 // Smoke and CO alarms: a circle with S.A., C.O. or both, rays for the strobe, and a dashed line
 // joining them all (they're interconnected).

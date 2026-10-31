@@ -95,6 +95,23 @@ export const rectPoly = (x0: number, z0: number, x1: number, z1: number): Pt[] =
 
 export const roomArea = (r: Pick<Room, "polygon">) => polygonArea(r.polygon);
 
+// A room's own floor: its outline less what a stair or a furnace room drawn inside it takes (a design's
+// living room is drawn around the stairs). Every page, sheet and sum of rooms reads this, so a room has
+// one area everywhere.
+export function floorArea(room: Pick<Room, "polygon" | "kind">, rooms: readonly Pick<Room, "polygon" | "kind">[]) {
+  const own = polygonArea(room.polygon);
+  if (room.kind === "stairs" || room.kind === "mechanical") return own;
+  const a = bounds(room.polygon);
+  const inner = rooms
+    .filter((r) => r !== room && (r.kind === "stairs" || r.kind === "mechanical"))
+    .reduce((s, r) => {
+      const b = bounds(r.polygon);
+      const w = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX), d = Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ);
+      return s + (w > 0 && d > 0 ? w * d : 0);
+    }, 0);
+  return Math.max(0, own - inner);
+}
+
 // The edges of a polygon as (a, b) pairs.
 export const edges = (poly: Pt[]): [Pt, Pt][] => poly.map((p, i) => [p, poly[(i + 1) % poly.length]]);
 

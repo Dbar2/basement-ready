@@ -7,7 +7,7 @@ import type { Pt } from "../model/types";
 import { AERIAL_YEAR, type SiteGeometry } from "../property";
 import type { Profile, StoredState } from "../workspace";
 import type { CityPermit } from "./data";
-import { drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type Scale, type View } from "./draw";
+import { boxesMeet, drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type PageBox, type Scale, type View } from "./draw";
 import { homesAfter } from "../eligibility";
 import { areaText, suiteAreaM2 } from "../model/suite";
 import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, escapeOk, PROPOSED_ESCAPE, type PermitModel, type PermitWindow, type PWall, unitOutline, unitRooms, wallLen } from "./model";
@@ -371,7 +371,7 @@ export function basementPlan(ctx: SheetCtx): Printed[] {
       drawFixtures(s, v, m.design.proposed.fixtures);
       drawRoomFixtures(s, v, m);
       drawWalls(s, v, m, { mode: "plan", review: review(ctx), windows: m.windows });
-      drawRoomLabels(s, v, m, { ceiling: true, unitTag: true, ...(lay.tiles.length > 1 ? { tile, tiles: lay.tiles, whole: box } : {}) });
+      drawRoomLabels(s, v, m, { ceiling: true, unitTag: true, ...(lay.tiles.length > 1 ? { tile, tiles: lay.tiles, whole: box, continues: numberOf } : {}) });
       drawAlarms(s, m.design.proposed.alarms.map((x) => ({ kind: x.kind, at: v.P(x.at) })));
     };
     const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
@@ -503,83 +503,133 @@ export function mainFloor(ctx: SheetCtx): Printed {
 
 // ---- A4 Ceiling plan ------------------------------------------------------------------------
 
-export function ceilingPlan(ctx: SheetCtx): Printed {
+// Cut into the same sheets as the floor plan (A2.1 under A4.1, and so on), so each pair shows the same
+// part of the same design at the same scale.
+export function ceilingPlan(ctx: SheetCtx): Printed[] {
   const m = ctx.model;
-  const { s, a, page } = newSheet(ctx, "A4", SHEETS[4].title, null);
-  if (!m) return { number: "A4", title: SHEETS[4].title, notes: [], scale: null, page };
-  const lay = planFrame(a, m);
-  const tile = lay.tiles.length > 1 ? bounds(unitOutline(m).flat()) : lay.tiles[0];
+  if (!m) {
+    const { page } = newSheet(ctx, "A4", SHEETS[4].title, null);
+    return [{ number: "A4", title: SHEETS[4].title, notes: [], scale: null, page }];
+  }
+  const probe = new Sheet(ctx.doc.addPage(TABLOID), ctx.fonts);
+  const a0 = frame(probe, ctx.project, { number: "A4", title: SHEETS[4].title, scale: null });
+  ctx.doc.removePage(ctx.doc.getPageCount() - 1);
+  const lay = planFrame(a0, m);
   const scale = lay.scale;
-  const v = makeView({ x: lay.area.x + PAD, y: a.y + PAD, w: lay.area.w - 2 * PAD, h: a.h - 2 * PAD }, tile, scale);
-  const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
-  if (lay.cropped) breakLines(s, v, tile, planBox(m));
-  s.clipped(Math.max(lay.area.x, cx0 - 2), Math.max(a.y, cy0 - 2), Math.min(lay.area.w, cx1 - cx0 + 4), Math.min(a.h, cy1 - cy0 + 4), () => {
-    // The rated ceiling: all of unit 2.
-    for (const p of unitOutline(m)) s.hatch(p.map(v.P), 7, { width: 0.25, color: FAINT });
-    drawWalls(s, v, m, { mode: "ceiling", review: review(ctx), windows: m.windows });
-    drawRoomLabels(s, v, m, { ceiling: true, unitTag: false });
-    // Beams, ducts and bulkheads, dashed, with the clear height under each.
-    for (const f of m.design.proposed.fixtures) {
-      if (!(f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead" || f.kind === "post")) continue;
-      const sz = f.sizeM ?? [0.3, 0.3];
-      const [x0, y0] = v.P([f.at[0] - sz[0] / 2, f.at[1] + sz[1] / 2]), [x1, y1] = v.P([f.at[0] + sz[0] / 2, f.at[1] - sz[1] / 2]);
-      if (f.kind === "post") {
-        s.rect(x0, y0, Math.max(5, x1 - x0), Math.max(5, y1 - y0), { fill: INK, width: 0.4 });
-        s.text("POST", x1 + 4, (y0 + y1) / 2 - 2, { size: 5.5 });
-        continue;
-      }
-      s.rect(x0, y0, x1 - x0, y1 - y0, { width: 0.9, dash: [6, 3], fill: f.kind === "bulkhead" ? TONE : undefined });
-      const h = f.heightM ?? null;
-      const label = `${f.kind === "beam" ? "EXISTING BEAM" : f.kind === "duct" ? "EXISTING DUCT" : "BULKHEAD, RATED, CONTINUOUS"}${h ? `: ${ftIn(h)} (${Math.round(h * 1000)}) CLEAR${h < 1.85 ? ", UNDER 1.85 m" : ""}` : ""}${review(ctx) && f.guess ? " (placed from the video: check where it runs)" : ""}`;
-      const horizontal = Math.abs(x1 - x0) >= Math.abs(y0 - y1);
-      const tw = s.textWidth(label, 5.8);
-      if (horizontal) {
-        s.rect((x0 + x1) / 2 - tw / 2 - 2, (y0 + y1) / 2 - 3.5, tw + 4, 9, { fill: PAPER, stroke: false });
-        s.text(label, (x0 + x1) / 2, (y0 + y1) / 2 - 1.5, { size: 5.8, align: "center", font: s.fonts.bold });
-      } else s.text(label, (x0 + x1) / 2 + 2, (y0 + y1) / 2, { size: 5.8, align: "center", font: s.fonts.bold, rotate: 90 });
-    }
-    // The duct smoke detector, at the furnace's return.
-    const furnace = m.design.proposed.fixtures.find((f) => f.kind === "furnace");
-    if (furnace) {
-      const [fx, fy] = v.P(furnace.at);
-      s.rect(fx - 9, fy + 8, 18, 9, { fill: PAPER, width: 0.7 });
-      s.text("DSD", fx, fy + 10.5, { size: 5.5, align: "center", font: s.fonts.bold });
-      s.text("duct smoke detector, return duct", fx + 12, fy + 10.5, { size: 5.3, color: MUTED });
-    }
-  });
-  // The heights, checked.
-  let y = a.y + a.h;
-  heading(s, a.x, y - 8, "Basement ceiling plan", scale.label);
-  y -= 22;
-  y -= legendBox(s, a.x, y, LEGEND_W - 6, "LEGEND", [
-    LEGEND.rated15(s),
-    { draw: (x, yy) => s.rect(x, yy - 3, 26, 6, { width: 0.9, dash: [6, 3] }), label: "Beam, duct or bulkhead overhead, with the clear height under it" },
-    { draw: (x, yy) => s.rect(x + 10, yy - 3, 6, 6, { fill: INK, width: 0.4 }), label: "Post" },
-  ]) + 10;
+  const split = lay.tiles.length > 1;
+  const numberOf = (i: number) => (split ? `A4.${i + 1}` : "A4");
   const ceiling = m.ceilingM, beam = m.beamM;
   const checks: [string, string, boolean | null][] = [
     ["Finished ceiling in unit 2", ceiling ? `${both(ceiling)}; 1.95 m (6'-5") required` : "1.95 m (6'-5\") required", ceiling ? ceiling >= 1.95 : null],
     ["Clear under beams and ducts", beam ? `${both(beam)}; 1.85 m (6'-1") required` : "1.85 m (6'-1\") required", beam ? beam >= 1.85 : null],
   ];
-  s.text("HEIGHTS (9.5.3.1.(2) AND (3))", a.x, y, { size: 6.5, font: s.fonts.bold });
-  y -= 12;
-  for (const [label, value, ok] of checks) {
-    s.text(ok === true ? "MEETS" : ok === false ? "BELOW" : "", a.x, y, { size: 6, font: s.fonts.bold });
-    s.text(label, a.x + 34, y, { size: 6.5, font: s.fonts.bold });
-    y = s.wrap(value, a.x + 34, y - 8, LEGEND_W - 40, { size: 6.3 }) - 4;
-  }
   const lines = [
     "The 15-minute ceiling (15.9 mm Type X gypsum board, assembly C1 on A6) covers all of unit 2, continuous over and around every bulkhead, beam and duct, sealed at every penetration.",
     "Supply and return ducts in unit 2 are best dropped to the floor. A duct smoke detector shuts off the furnace when one system serves both units (A7).",
     "Pot lights and fans in the rated ceiling are boxed in drywall in the joist space.",
   ];
-  y -= 4;
-  lines.forEach((t, i) => {
-    y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6.3, leading: 7.8 }) - 3;
+  return lay.tiles.map((tile, i) => {
+    const { s, a, page } = newSheet(ctx, numberOf(i), SHEETS[4].title, scale.label);
+    const area0 = { ...lay.area, y: a.y, h: a.h };
+    const v = makeView({ x: area0.x + PAD, y: area0.y + PAD, w: area0.w - 2 * PAD, h: area0.h - 2 * PAD }, tile, scale);
+    const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
+    const draw = () => {
+      // The rated ceiling: all of unit 2.
+      for (const p of unitOutline(m)) s.hatch(p.map(v.P), 7, { width: 0.25, color: FAINT });
+      drawWalls(s, v, m, { mode: "ceiling", review: review(ctx), windows: m.windows });
+      // Beams, ducts and bulkheads, dashed, with the clear height under each: the bands first, the room
+      // names over them, then each band's label where it covers no name.
+      const overheads = m.design.proposed.fixtures.filter((f) => f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead" || f.kind === "post");
+      const corners = (f: (typeof overheads)[number]) => {
+        const sz = f.sizeM ?? [0.3, 0.3];
+        return [...v.P([f.at[0] - sz[0] / 2, f.at[1] + sz[1] / 2]), ...v.P([f.at[0] + sz[0] / 2, f.at[1] - sz[1] / 2])] as [number, number, number, number];
+      };
+      for (const f of overheads) {
+        const [x0, y0, x1, y1] = corners(f);
+        if (f.kind === "post") s.rect(x0, y0, Math.max(5, x1 - x0), Math.max(5, y1 - y0), { fill: INK, width: 0.4 });
+        else s.rect(x0, y0, x1 - x0, y1 - y0, { width: 0.9, dash: [6, 3], fill: f.kind === "bulkhead" ? TONE : undefined });
+      }
+      const taken = drawRoomLabels(s, v, m, { ceiling: true, unitTag: false, ...(split ? { tile, tiles: lay.tiles, whole: lay.whole, continues: numberOf } : {}) });
+      for (const f of overheads) {
+        const [x0, y0, x1, y1] = corners(f);
+        if (f.kind === "post") {
+          s.text("POST", x1 + 4, (y0 + y1) / 2 - 2, { size: 5.5 });
+          continue;
+        }
+        const h = f.heightM ?? null;
+        const what = `${f.kind === "beam" ? "EXISTING BEAM" : f.kind === "duct" ? "EXISTING DUCT" : "BULKHEAD, RATED, CONTINUOUS"}${h ? `: ${ftIn(h)} (${Math.round(h * 1000)}) CLEAR${h < 1.85 ? ", UNDER 1.85 m" : ""}` : ""}`;
+        const texts = review(ctx) && f.guess ? [`${what} (placed from the video: check where it runs)`, `${what} (check where it runs)`, what] : [what];
+        // Along the part of it this sheet shows, or just beside it: inside the sheet, over no room's
+        // name and no other label. Too long for any such spot, its note gets shorter, then goes.
+        const lx0 = Math.max(Math.min(x0, x1), cx0), lx1 = Math.min(Math.max(x0, x1), cx1), ly0 = Math.max(Math.min(y0, y1), cy1), ly1 = Math.min(Math.max(y0, y1), cy0);
+        const horizontal = Math.abs(x1 - x0) >= Math.abs(y0 - y1);
+        const boxAt = (tw: number, t: number, d: number): PageBox =>
+          horizontal
+            ? { x0: lx0 + t * (lx1 - lx0) - tw / 2 - 2, x1: lx0 + t * (lx1 - lx0) + tw / 2 + 2, y0: (ly0 + ly1) / 2 - 3.5 + d, y1: (ly0 + ly1) / 2 + 5.5 + d }
+            : { x0: (lx0 + lx1) / 2 - 5 + d, x1: (lx0 + lx1) / 2 + 5 + d, y0: ly0 + t * (ly1 - ly0) - tw / 2 - 2, y1: ly0 + t * (ly1 - ly0) + tw / 2 + 2 };
+        const onSheet = (b: PageBox) => b.x0 >= cx0 && b.x1 <= cx1 && b.y0 >= cy1 && b.y1 <= cy0;
+        const spots = [0.5, 0.3, 0.7, 0.15, 0.85, 0.05, 0.95].flatMap((t) => [0, 11, -11, 22, -22, 33, -33, 44, -44].map((d) => [t, d] as const));
+        let pick: { text: string; at: PageBox } | null = null;
+        for (const text of texts) {
+          const tw = s.textWidth(text, 5.8);
+          const spot = spots.find(([t, d]) => onSheet(boxAt(tw, t, d)) && !taken.some((b) => boxesMeet(boxAt(tw, t, d), b)));
+          if (spot) {
+            pick = { text, at: boxAt(tw, ...spot) };
+            break;
+          }
+        }
+        if (!pick) {
+          // Nowhere clear: the short text where it covers the least.
+          const text = texts[texts.length - 1], tw = s.textWidth(text, 5.8);
+          const cover = (b: PageBox) => taken.reduce((sum, o) => sum + Math.max(0, Math.min(b.x1, o.x1) - Math.max(b.x0, o.x0)) * Math.max(0, Math.min(b.y1, o.y1) - Math.max(b.y0, o.y0)), 0);
+          const inside = spots.filter(([t, d]) => onSheet(boxAt(tw, t, d)));
+          const best = (inside.length ? inside : spots).reduce((x, y) => (cover(boxAt(tw, ...y)) < cover(boxAt(tw, ...x)) ? y : x));
+          pick = { text, at: boxAt(tw, ...best) };
+        }
+        const { text, at } = pick;
+        taken.push(at);
+        if (horizontal) {
+          s.rect(at.x0, at.y0, at.x1 - at.x0, 9, { fill: PAPER, stroke: false });
+          s.text(text, (at.x0 + at.x1) / 2, at.y0 + 2, { size: 5.8, align: "center", font: s.fonts.bold });
+        } else s.text(text, (at.x0 + at.x1) / 2 + 2, (at.y0 + at.y1) / 2, { size: 5.8, align: "center", font: s.fonts.bold, rotate: 90 });
+      }
+      // The duct smoke detector, at the furnace's return.
+      const furnace = m.design.proposed.fixtures.find((f) => f.kind === "furnace");
+      if (furnace) {
+        const [fx, fy] = v.P(furnace.at);
+        s.rect(fx - 9, fy + 8, 18, 9, { fill: PAPER, width: 0.7 });
+        s.text("DSD", fx, fy + 10.5, { size: 5.5, align: "center", font: s.fonts.bold });
+        s.text("duct smoke detector, return duct", fx + 12, fy + 10.5, { size: 5.3, color: MUTED });
+      }
+    };
+    if (split || lay.cropped) s.clipped(cx0 - 2, cy0 - 2, cx1 - cx0 + 4, cy1 - cy0 + 4, draw);
+    else draw();
+    if (split) matchLines(s, v, tile, lay.whole, lay.tiles, numberOf);
+    if (lay.cropped) breakLines(s, v, tile, planBox(m));
+    // The heights, checked.
+    let y = a.y + a.h;
+    heading(s, a.x, y - 8, "Basement ceiling plan", scale.label);
+    y -= 22;
+    y -= legendBox(s, a.x, y, LEGEND_W - 6, "LEGEND", [
+      LEGEND.rated15(s),
+      { draw: (x, yy) => s.rect(x, yy - 3, 26, 6, { width: 0.9, dash: [6, 3] }), label: "Beam, duct or bulkhead overhead, with the clear height under it" },
+      { draw: (x, yy) => s.rect(x + 10, yy - 3, 6, 6, { fill: INK, width: 0.4 }), label: "Post" },
+    ]) + 10;
+    s.text("HEIGHTS (9.5.3.1.(2) AND (3))", a.x, y, { size: 6.5, font: s.fonts.bold });
+    y -= 12;
+    for (const [label, value, ok] of checks) {
+      s.text(ok === true ? "MEETS" : ok === false ? "BELOW" : "", a.x, y, { size: 6, font: s.fonts.bold });
+      s.text(label, a.x + 34, y, { size: 6.5, font: s.fonts.bold });
+      y = s.wrap(value, a.x + 34, y - 8, LEGEND_W - 40, { size: 6.3 }) - 4;
+    }
+    y -= 4;
+    lines.forEach((t, j) => {
+      y = s.wrap(`${j + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6.3, leading: 7.8 }) - 3;
+    });
+    s.scaleBar(a.x, a.y + 18, v.k, scale.label);
+    stampScale(s, scale.label);
+    return { number: numberOf(i), title: SHEETS[4].title, notes: [...checks.map((c) => `${c[0]}: ${c[1]}`), ...lines], scale, page };
   });
-  s.scaleBar(a.x, a.y + 18, v.k, scale.label);
-  stampScale(s, scale.label);
-  return { number: "A4", title: SHEETS[4].title, notes: [...checks.map((c) => `${c[0]}: ${c[1]}`), ...lines], scale, page };
 }
 
 // ---- A5 Elevations ------------------------------------------------------------------------------

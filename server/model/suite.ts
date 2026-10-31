@@ -2,7 +2,7 @@
 // set. The answer's steps, Money, the brief, the book, the quote, the materials plan and the drawings
 // all read these, so a suite is never 30.9 m² in one place and 32 m² in another, or its fee worked on
 // another floor. Pure, so the studio's live quote uses them too.
-import { polygonArea } from "./geometry";
+import { floorArea } from "./geometry";
 import type { Design } from "./types";
 
 export const SQFT_PER_M2 = 10.7639;
@@ -10,9 +10,11 @@ export const SQFT_PER_M2 = 10.7639;
 // Unit 2's rooms, less the stairs and the furnace room: the floor that's finished and lived in, to the
 // nearest 0.1 m² (what every page prints).
 export function suiteAreaM2(design: Pick<Design, "proposed"> | null | undefined): number | null {
-  const rooms = (design?.proposed.rooms ?? []).filter((r) => r.unit === 2 && r.kind !== "stairs" && r.kind !== "mechanical");
+  const all = design?.proposed.rooms ?? [];
+  const rooms = all.filter((r) => r.unit === 2 && r.kind !== "stairs" && r.kind !== "mechanical");
   if (!rooms.length) return null;
-  return Math.round(rooms.reduce((s, r) => s + polygonArea(r.polygon), 0) * 10) / 10;
+  // Each room's own floor (geometry.ts floorArea): a living room drawn around the stairs doesn't count them.
+  return Math.round(rooms.reduce((s, r) => s + floorArea(r, all), 0) * 10) / 10;
 }
 
 export const sqftOf = (m2: number) => Math.round(m2 * SQFT_PER_M2);
