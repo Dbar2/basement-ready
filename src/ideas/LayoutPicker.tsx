@@ -5,6 +5,7 @@
 // (server/quote). On a phone they swipe between them; on a computer they sit side by side.
 import { useMemo } from "react";
 import { checkDesign, tally } from "../../server/model/checks";
+import { fixCount, fixesWord } from "../../server/model/fixes";
 import { bounds, centroid, polygonArea } from "../../server/model/geometry";
 import type { Design, Model } from "../../server/model/types";
 import { quote } from "../../server/quote/quote";
@@ -13,21 +14,24 @@ import "./ideas.css";
 
 const cad = (n: number) => `$${Math.round(n / 1000)}k`;
 
-export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: string; model: Model; municipality?: string; onPick: (id: string) => void }) {
+// `fixes`: the answer's list (server/priced.ts); each card counts it with its own design's fixes, as the
+// headline would if that design were picked.
+export function LayoutPicker({ scanId, model, municipality, fixes, onPick }: { scanId: string; model: Model; municipality?: string; fixes?: { category: string; fromDesign?: boolean }[]; onPick: (id: string) => void }) {
   const { covers, renderer } = useDesignCovers(scanId, model.designs);
   const facts = useMemo(
     () =>
       new Map(
         model.designs.map((d) => {
           const count = tally(checkDesign(d, model.existing));
+          const fixNo = fixes ? fixCount(fixes.filter((g) => !g.fromDesign), d, model.existing) : null;
           const q = quote(model, d, { municipality });
           const suite = d.proposed.rooms.filter((r) => r.unit === 2);
           const beds = suite.filter((r) => r.kind === "bedroom").length;
           const area = suite.reduce((s, r) => s + polygonArea(r.polygon), 0);
-          return [d.id, { count, low: q.totalLow, high: q.totalHigh, beds, area }];
+          return [d.id, { count, fixNo, low: q.totalLow, high: q.totalHigh, beds, area }];
         }),
       ),
-    [model, municipality],
+    [model, municipality, fixes],
   );
 
   return (
@@ -55,9 +59,9 @@ export function LayoutPicker({ scanId, model, municipality, onPick }: { scanId: 
                     <dt>{d.layout === "studio" || !f.beds ? "Studio" : `${f.beds} bedroom${f.beds > 1 ? "s" : ""}`}</dt>
                     <dd className="mono">{Math.round(f.area)} m²</dd>
                   </div>
-                  <div data-state={f.count.fix ? "fix" : "ok"}>
+                  <div data-state={f.fixNo ? "fix" : "ok"}>
                     <dt>Meets {f.count.ok} checks</dt>
-                    <dd className="mono">{f.count.fix ? `${f.count.fix} to fix` : "all met"}</dd>
+                    <dd className="mono" data-fixes={f.fixNo ?? undefined}>{f.fixNo == null ? "" : fixesWord(f.fixNo)}</dd>
                   </div>
                   <div>
                     <dt>Hired out, rough</dt>

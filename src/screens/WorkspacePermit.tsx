@@ -414,15 +414,24 @@ export function PermitTab(props: TabProps) {
   const { r, scanId, ws, save } = props;
   const [plan, setPlan] = useState<DiyPlan | null>(null);
   const [status, setStatus] = useState<PermitStatus | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
+  const [statusTry, setStatusTry] = useState(0);
+  const statusAsk = useRef(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     void getDiy(scanId).then(setPlan).catch(() => setPlan(null));
   }, [scanId, ws.state.tape, ws.state.ideas]);
+  // What's left, asked again whenever the workspace changes. Only the newest answer counts (a save
+  // fires several asks), and an ask that fails keeps what we knew: it never reads as "nothing left".
   useEffect(() => {
-    void getPermitStatus(scanId).then(setStatus).catch(() => setStatus(null));
-  }, [scanId, ws.state, ws.profile]);
+    const ask = ++statusAsk.current;
+    setStatusFailed(false);
+    void getPermitStatus(scanId)
+      .then((s) => ask === statusAsk.current && setStatus(s))
+      .catch(() => ask === statusAsk.current && setStatusFailed(true));
+  }, [scanId, ws.state, ws.profile, statusTry]);
   const permit = plan?.permit ?? null;
   const run = async (key: string, f: () => Promise<void>) => {
     setBusy(key);
@@ -443,9 +452,21 @@ export function PermitTab(props: TabProps) {
       <section className="block">
         <h2>{!status ? "Your permit set" : status.left ? `${status.left} thing${status.left === 1 ? "" : "s"} left before you can submit` : "Ready to submit"}</h2>
         <p className="lede">
-          {status?.left
-            ? `Drawings to scale from your scan, the City of ${plan?.city ?? r.city ?? "your city"}'s forms filled in. Answer each one below; the submit copy comes when nothing is left.`
-            : `The clean set for the City of ${plan?.city ?? r.city ?? "your city"}: no draft marks, nothing left to fill in. Sign the statement box on each sheet, then upload it.`}
+          {!status
+            ? statusFailed
+              ? "We couldn't check what's left just now."
+              : "Checking what's left before you can submit…"
+            : status.left
+              ? `Drawings to scale from your scan, the City of ${plan?.city ?? r.city ?? "your city"}'s forms filled in. Answer each one below; the submit copy comes when nothing is left.`
+              : `The clean set for the City of ${plan?.city ?? r.city ?? "your city"}: no draft marks, nothing left to fill in. Sign the statement box on each sheet, then upload it.`}
+          {statusFailed && (
+            <>
+              {" "}
+              <button className="link-quiet" onClick={() => setStatusTry((n) => n + 1)}>
+                Try again
+              </button>
+            </>
+          )}
         </p>
         {ws.profile && <ProfileLine {...props} />}
         {status && <Readiness {...props} status={status} />}

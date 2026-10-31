@@ -3,6 +3,7 @@
 // lined up with the inspections the city books.
 import { cityPermit, forCity, ontarioDiy, type Cite, type CityPermit, type Inspection, type ProItem, type Trade } from "../permit/data";
 import { basementGeometry } from "../permit/plans";
+import { quote } from "../quote/quote";
 import { packFor } from "../rules";
 import { currentModel } from "../model/current";
 import { chosenDesign } from "../model/legacy";
@@ -25,7 +26,9 @@ export type DiyPlan = {
   takeoff: Takeoff;
   permits: Cost[];
   hires: Cost[];
-  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null };
+  // The quote's two totals (server/quote/quote.ts), as the book has them: built yourself (materials, the
+  // pros the law still needs, contingency and HST) and hired out. Without a design, the takeoff's sum.
+  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null; fromQuote: boolean };
   steps: BuildStep[];
 };
 
@@ -66,7 +69,9 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
 
   const permits: Cost[] = [];
   // On unit 2's floor in the chosen design, as every other page has it (server/model/suite.ts).
-  const fee = permitFee(pack, suiteAreaM2(chosenDesign(currentModel(result, state)?.model ?? null)) ?? result?.plan?.areaM2 ?? null);
+  const model = currentModel(result, state)?.model ?? null;
+  const design = chosenDesign(model);
+  const fee = permitFee(pack, suiteAreaM2(design) ?? result?.plan?.areaM2 ?? null);
   if (fee?.amount) permits.push({ id: "building_permit", item: `Building permit, ${authority === "your municipality" ? "your municipality" : authority}`, lowCAD: fee.amount, highCAD: fee.amount, source: fee.source ? { title: fee.source.title, url: fee.source.url, checked: (fee.source as { retrieved?: string }).retrieved ?? "" } : null, estimate: fee.estimate });
   if (permit?.plumbing?.perFixtureCAD) {
     const fixtures = (geo?.layout?.zones.some((z) => z.kind === "bathroom") ? 3 : 0) + (geo?.layout?.zones.some((z) => z.kind === "kitchen") ? 1 : 0);
@@ -93,6 +98,7 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
   const tax = t.hstCAD;
   const low = t.materialsCAD + tax + [...permits, ...hires].filter(live).reduce((s, c) => s + c.lowCAD, 0);
   const high = t.materialsCAD + tax + [...permits, ...hires].filter(live).reduce((s, c) => s + c.highCAD, 0);
+  const q = model && design ? quote(model, design, { municipality }) : null;
   return {
     city,
     permit,
@@ -105,7 +111,9 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
     takeoff: t,
     permits,
     hires,
-    totals: { diyLow: Math.round(low), diyHigh: Math.round(high), hiredLow: result?.cost?.low ?? null, hiredHigh: result?.cost?.high ?? null },
+    totals: q
+      ? { diyLow: q.diy.low, diyHigh: q.diy.high, hiredLow: q.totalLow, hiredHigh: q.totalHigh, fromQuote: true }
+      : { diyLow: Math.round(low), diyHigh: Math.round(high), hiredLow: result?.cost?.low ?? null, hiredHigh: result?.cost?.high ?? null, fromQuote: false },
     steps: buildOrder(permit?.inspections ?? [], { egressNew, authority }),
   };
 }

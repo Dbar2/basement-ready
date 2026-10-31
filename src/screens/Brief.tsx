@@ -132,21 +132,29 @@ export function Brief() {
 
       <div className="brief-grid">
         <section>
+          {/* The fixes the headline counts, then the work any suite needs (as the answer has them). */}
           <h2>What has to change</h2>
-          <ul className="brief-list">
+          <ul className="brief-list" data-fixes={r.fixGroups.length}>
             {r.fixGroups.map((g) => (
               <li key={g.category}>
                 <span>{g.title}</span>
-                <span className="mono">{range(g.costLow, g.costHigh) ?? "in the quote"}</span>
-              </li>
-            ))}
-            {(r.standard ?? []).map((s) => (
-              <li key={s.ruleId}>
-                <span>{s.text}</span>
-                <span className="mono">{range(s.costLow, s.costHigh) ?? "in the quote"}</span>
+                <span className="mono">{range(g.costLow, g.costHigh) ?? (g.priced === false ? "not priced yet" : "in the quote")}</span>
               </li>
             ))}
           </ul>
+          {(r.standard ?? []).length > 0 && (
+            <>
+              <h2>What every basement suite needs</h2>
+              <ul className="brief-list">
+                {(r.standard ?? []).map((s) => (
+                  <li key={s.ruleId}>
+                    <span>{s.text}</span>
+                    <span className="mono">{range(s.costLow, s.costHigh) ?? "in the quote"}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
         <section>
           <h2>For the designer to confirm</h2>

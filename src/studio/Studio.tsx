@@ -6,6 +6,7 @@ import { useParams } from "@tanstack/react-router";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { checkDesign, tally } from "../../server/model/checks";
+import { fixCount, fixesWord } from "../../server/model/fixes";
 import { applyEdit, applyEdits } from "../../server/model/edit";
 import { wallLength } from "../../server/model/geometry";
 import type { Check, Design, Edit, Model, Opening, Pt, Wall } from "../../server/model/types";
@@ -46,13 +47,20 @@ export function Studio() {
   const { scanId } = useParams({ from: "/scans/$scanId/studio" });
   const [model, setModel] = useState<Model | null>(null);
   const [municipality, setMunicipality] = useState<string | undefined>(undefined);
+  // The basement's own fixes from the answer: the studio counts them with the design's, as the headline does.
+  const [base, setBase] = useState<{ category: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     document.title = "Your basement, designed | Basement Ready";
     loadModel(scanId)
       .then((r) => setModel(r.model))
       .catch((e) => setError(e instanceof Error ? e.message : "We couldn't open your design."));
-    void getScan(scanId).then((s) => setMunicipality(s.result?.municipality)).catch(() => {});
+    void getScan(scanId)
+      .then((s) => {
+        setMunicipality(s.result?.municipality);
+        setBase((s.result?.fixGroups ?? []).filter((g) => !g.fromDesign));
+      })
+      .catch(() => {});
   }, [scanId]);
   return (
     <MotionConfig reducedMotion="user">
@@ -61,7 +69,7 @@ export function Studio() {
         {error ? (
           <p className="error studio-wait">{error}</p>
         ) : model && model.designs.length ? (
-          <Editor scanId={scanId} initial={model} municipality={municipality} />
+          <Editor scanId={scanId} initial={model} municipality={municipality} base={base} />
         ) : model ? (
           <p className="studio-wait muted">There's no design for this basement yet: it needs a measured plan.</p>
         ) : (
@@ -75,7 +83,7 @@ export function Studio() {
   );
 }
 
-function Editor({ scanId, initial, municipality }: { scanId: string; initial: Model; municipality?: string }) {
+function Editor({ scanId, initial, municipality, base }: { scanId: string; initial: Model; municipality?: string; base: { category: string }[] | null }) {
   const reduced = useReducedMotion();
   const [model, setModel] = useState(initial);
   const first = initial.designs.find((d) => d.chosen) ?? initial.designs[0];
@@ -95,6 +103,7 @@ function Editor({ scanId, initial, municipality }: { scanId: string; initial: Mo
   // The checks follow what's committed; the cost follows the finger.
   const checks = useMemo(() => checkDesign(hist.present, existing), [hist.present, existing]);
   const count = tally(checks);
+  const fixes = useMemo(() => (base ? fixCount(base, hist.present, existing) : null), [base, hist.present, existing]);
   const quote = useMemo(() => quoteFor(model, design, municipality), [model, design, municipality]);
 
   // Each committed change goes into the model, which saves itself a moment later.
@@ -258,9 +267,9 @@ function Editor({ scanId, initial, municipality }: { scanId: string; initial: Mo
 
       <aside className="studio-side" aria-label="Checks and cost">
         <div className="studio-bar">
-          <button className="status-chip" data-state={count.fix ? "fix" : "ok"} aria-expanded={panel === "checks"} onClick={() => setPanel((p) => (p === "checks" ? null : "checks"))}>
+          <button className="status-chip" data-state={fixes ? "fix" : "ok"} aria-expanded={panel === "checks"} onClick={() => setPanel((p) => (p === "checks" ? null : "checks"))}>
             <span className="dot" />
-            Meets {count.ok} checks{count.fix ? ` · ${count.fix} to fix` : ""}
+            Meets {count.ok} checks{fixes != null ? ` · ${fixesWord(fixes)}` : ""}
           </button>
           <button className="status-chip" data-state="cost" aria-expanded={panel === "cost"} onClick={() => setPanel((p) => (p === "cost" ? null : "cost"))}>
             <span data-total data-low={quote.totalLow} data-high={quote.totalHigh}>{cad(quote.totalLow)}–{cad(quote.totalHigh)} hired out</span>
@@ -297,7 +306,7 @@ function Editor({ scanId, initial, municipality }: { scanId: string; initial: Mo
           )}
           {panel === "describe" && (
             <motion.div key="describe" className="side-card" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-              <Describe scanId={scanId} design={hist.present} model={model} municipality={municipality} onPreview={hist.preview} onApply={(d) => hist.commit(d)} />
+              <Describe scanId={scanId} design={hist.present} model={model} municipality={municipality} base={base} onPreview={hist.preview} onApply={(d) => hist.commit(d)} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -364,7 +373,7 @@ function Checks({ checks, onFix, onShow }: { checks: Check[]; onFix: (c: Check) 
 
 // "Describe a change": their words, muse-spark's proposal, what it does to the checks and the cost,
 // then Apply. The proposal shows in the 3D and the plan while it's open.
-function Describe({ scanId, design, model, municipality, onPreview, onApply }: { scanId: string; design: Design; model: Model; municipality?: string; onPreview: (d: Design | null) => void; onApply: (d: Design) => void }) {
+function Describe({ scanId, design, model, municipality, base, onPreview, onApply }: { scanId: string; design: Design; model: Model; municipality?: string; base: { category: string }[] | null; onPreview: (d: Design | null) => void; onApply: (d: Design) => void }) {
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -372,6 +381,8 @@ function Describe({ scanId, design, model, municipality, onPreview, onApply }: {
   useEffect(() => () => onPreview(null), [onPreview]);
   const before = useMemo(() => tally(checkDesign(design, model.existing)), [design, model.existing]);
   const after = useMemo(() => (proposal ? tally(checkDesign(proposal.result, model.existing)) : null), [proposal, model.existing]);
+  const fixesBefore = useMemo(() => (base ? fixCount(base, design, model.existing) : null), [base, design, model.existing]);
+  const fixesAfter = useMemo(() => (base && proposal ? fixCount(base, proposal.result, model.existing) : null), [base, proposal, model.existing]);
   const costBefore = useMemo(() => quoteFor(model, design, municipality), [model, design, municipality]);
   const costAfter = useMemo(() => (proposal ? quoteFor(model, proposal.result, municipality) : null), [model, proposal, municipality]);
   const send = async () => {
@@ -414,7 +425,7 @@ function Describe({ scanId, design, model, municipality, onPreview, onApply }: {
           {proposal.edits.length > 0 && after && costAfter && (
             <p className="muted small">
               Checks met {before.ok} → {after.ok}
-              {after.fix !== before.fix ? `, to fix ${before.fix} → ${after.fix}` : ""} · cost {cad(costBefore.totalLow)} → {cad(costAfter.totalLow)}
+              {fixesBefore != null && fixesAfter != null && fixesAfter !== fixesBefore ? `, fixes ${fixesBefore} → ${fixesAfter}` : ""} · cost {cad(costBefore.totalLow)} → {cad(costAfter.totalLow)}
             </p>
           )}
           {proposal.dropped.length > 0 && <p className="muted small">Left out: {proposal.dropped.join(" ")}</p>}

@@ -5,7 +5,8 @@
 // a result priced here, so they show one quote and count one list of fixes.
 import type { DesignPricing, FixGroup } from "./assess";
 import { type Layout, rejudgeEscape } from "./layout";
-import { checkDesign, openingsOn } from "./model/checks";
+import { checkDesign } from "./model/checks";
+import { designFixes } from "./model/fixes";
 import { currentModel } from "./model/current";
 import { chosenDesign, layoutOf } from "./model/legacy";
 import { suiteAreaM2 } from "./model/suite";
@@ -27,31 +28,27 @@ export function designPricing(result: { municipality?: string }, model: Model | 
   const lineCost: DesignPricing["lineCost"] = {};
   const egress = lines.filter((l) => l.id.startsWith("egress_"));
   if (egress.length) lineCost.egress = { low: egress.reduce((s, l) => s + l.low, 0), high: egress.reduce((s, l) => s + l.high, 0) };
-  // An escape window the design needs is a fix, whether or not the scan named it: the design puts a new
-  // window in a bedroom (the scan saw none there), or its sleeping place has no way out yet.
-  const fixes: FixGroup[] = [];
+  // The design's own fixes (server/model/fixes.ts, which the layout cards and the studio count too): an
+  // escape window it needs, whether or not the scan named it, and every check it still fails (the duct
+  // under 1.85 m), each in the rules' words.
   const { pack } = packFor(municipality);
-  const bedrooms = design.proposed.rooms.filter((r) => r.kind === "bedroom" && r.unit === 2);
-  const rule = pack.rules.find((r) => r.id === "egress_window_bedroom_area");
-  const failing = checkDesign(design, model.existing).filter((c) => c.id.startsWith("escape:") && c.ok === false);
-  const added = bedrooms.some((b) => openingsOn(b, design, "window").some((o) => o.status === "new"));
-  if (rule && (added || failing.length)) {
-    fixes.push({
-      category: rule.category,
-      title: rule.title,
-      description: rule.fix?.description ?? "",
-      ruleIds: [rule.id],
+  const fixes: FixGroup[] = designFixes(design, model.existing).map((f) => {
+    const rule = f.ruleId ? pack.rules.find((r) => r.id === f.ruleId) : undefined;
+    return {
+      category: rule?.category ?? f.category,
+      title: rule?.title ?? f.title,
+      description: rule?.fix?.description ?? "",
+      ruleIds: f.ruleId ? [f.ruleId] : [],
       evidence: [],
-      why: failing.length
-        ? failing.map((c) => `In your design (${design.name}): ${c.detail}`)
-        : [`In your design (${design.name}), the bedroom has no window to climb out of, so it gets a new escape window in its outside wall.`],
+      why: f.why,
       costLow: null,
       costHigh: null,
       costSource: null,
-      sources: [rule.source],
-      priced: !failing.length,
-    });
-  }
+      sources: rule ? [rule.source] : [],
+      priced: f.priced,
+      fromDesign: true,
+    };
+  });
   return { name: design.name, cost: { low: q.totalLow, high: q.totalHigh }, fixes, lineCost, suiteAreaM2: suiteAreaM2(design) };
 }
 
