@@ -41,7 +41,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 ## One primary action per screen
 
 - **Primary (`.btn-primary`):** solid mint, forest text 17 px 700, 6 px corners, 48 px tall (52 in the title strip on a phone), an arrow `→` when it moves on. No shadow, no lift on hover; it darkens to `--color-mint-press`. Its label says what happens ("Design it in 3D"), at most four words, and never wraps.
-- **Secondary (`.link-quiet`):** an underlined text link in ink with a mint-line underline. "Fix a wall", "Download PDF", "Try the example".
+- **Secondary (`.link-quiet`):** an underlined text link in ink, the underline in ink too. "Fix a wall", "Download PDF", "Try the example".
 - **Choices (`.btn-ghost`, `.chip`):** a hairline rectangle, 6 px corners (4 px for chips), ink text. Picked: ink fill, card text. Never mint, so they never compete with the primary.
 - **Toggles (`.segmented`):** ink-framed rectangles, the picked one filled ink. For view switches only (3D / Plan, m / ft).
 - **Destructive:** a text link in `--color-stop`, confirmed on the sheet.
@@ -138,6 +138,7 @@ From David's rules and the audit:
 - Gradient washes fading images into text.
 - Pulsing dots, shimmer skeletons, glows on buttons.
 - Pale cyan buttons; pill-shaped buttons with words; more than one mint button on a screen.
+- Mint as a line: no mint or mint-line underlines, thin borders or text. Mint-line is kept for focus rings and the thick selection stroke on a plan.
 - Mono for sentences.
 - A dark slab on the light sheet (the 3D included); dark mode by default.
 - Status shown only by colour.
