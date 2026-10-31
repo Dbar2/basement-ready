@@ -2,7 +2,7 @@
 // every step to scan_events, so the scan screen (and a refresh) can follow along.
 import { eq } from "drizzle-orm";
 import { execFile } from "node:child_process";
-import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
@@ -11,6 +11,8 @@ import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
 import { enqueuePhotos, photosSoFar, settlePhotos } from "./photos";
 import { findInPhotos, mergePhotoFinds } from "./photoFinds";
+import { pointInPhoto, pointInVideo, withoutNamed } from "./pointFinds";
+import { jpegSize } from "./concepts";
 import { videoFinds } from "./videoFinds";
 import { MIN_PHOTOS_3D, type PhotoTake } from "./photoInput";
 import { cleanPlans, plansWords, PLANS_ID } from "./plans";
@@ -45,16 +47,14 @@ export const CONCEPTS: { concept: string; kind: string; label: string; video?: s
   { concept: "staircase", kind: "stairs", label: "Stairs" },
   { concept: "ceiling duct", video: "metal duct", kind: "duct", label: "Duct" },
   { concept: "support beam", kind: "beam", label: "Beam" },
-  { concept: "furnace", kind: "mechanical", label: "Furnace" },
   { concept: "electrical panel", kind: "mechanical", label: "Electrical panel" },
   { concept: "water heater", kind: "mechanical", label: "Water heater" },
-  // Pipes already in the floor: where a bathroom is cheapest (server/layout.ts puts it there).
-  { concept: "plumbing rough-in", kind: "mechanical", label: "Plumbing rough-in" },
   { concept: "floor drain", kind: "mechanical", label: "Floor drain" },
-  // A boxed-in duct or beam: it sets the headroom under it, like a duct.
-  { concept: "ceiling bulkhead", kind: "duct", label: "Bulkhead" },
   { concept: "door", kind: "exit", label: "Door" },
 ];
+// SAM 3.1 never matches "furnace", "ceiling bulkhead" or "plumbing rough-in" by name (scripts/practice): a
+// furnace, a bulkhead and pipes already in the floor (where a bathroom is cheapest, server/layout.ts) are
+// found by pointing instead, with water heaters and panels the name missed (server/pointFinds.ts).
 
 export type Detection = {
   id: string;
@@ -318,6 +318,17 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   );
   // Concept order, not the order SAM answered in: the same video always asks Spark the same thing.
   detections.sort((a, b) => CONCEPTS.findIndex((c) => c.concept === a.concept) - CONCEPTS.findIndex((c) => c.concept === b.concept));
+  // What SAM can't find by name: once the watch says when each was filmed, Spark marks it on a frame there
+  // and SAM tracks it through the video (server/pointFinds.ts), while the 3D measures.
+  const framePath = (n: number) => join(work, "frames", `${String(n).padStart(4, "0")}.jpg`);
+  const [frameW, frameH] = jpegSize(readFileSync(framePath(0))) ?? [720, 1280];
+  const pointedP = watching.watch
+    .then((w) => pointInVideo(w, { frameUrl: (n) => dataUrl(framePath(n), "image/jpeg"), fileId, frameCount, fps: ANALYSIS_FPS, w: frameW, h: frameH }))
+    .catch((err) => {
+      console.error(`[points] ${scanId}: ${err instanceof Error ? err.message : err}`);
+      return { finds: [], costUsd: 0 };
+    });
+  inflight.push(pointedP);
   // The photos start now, from the finds and the wide shot, and land while the 3D measures.
   void uploads.then(() => enqueuePhotos(scanId)).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
 
@@ -344,6 +355,12 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   // Without the 3D, the phone's room marks still name the areas.
   const ranges = basement3d ? basement3d.spans.map((span, index) => ({ index, ...span })) : roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
   const scans3d: (Scan3d | null)[] = basement3d ? basement3d.scans : ranges.map(() => null);
+  const pointed = await pointedP;
+  const extra = withoutNamed(pointed.finds, detections);
+  for (const [label, finds] of Map.groupBy(extra, (d) => d.label)) {
+    await emit("find", `Found ${plural(finds.length, label)}`, { kind: finds[0].kind, label, detections: finds });
+  }
+  detections.push(...extra);
   const low = lowOverhead(scans3d, detections);
   if (low.length) {
     for (const d of low) detections.splice(detections.indexOf(d), 1);
@@ -362,7 +379,7 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
         return null;
       })
     : null;
-  const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
+  const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME + pointed.costUsd;
   return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan, watching };
 }
 
@@ -441,11 +458,19 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   await emit("stage", "find");
   const images = new Map<number, string>();
   const image = (n: number) => images.get(n) ?? images.set(n, dataUrl(framePath(n), "image/jpeg")).get(n)!;
+  let pointCost = 0;
   const found = await findInPhotos(
     frameCount,
     CONCEPTS,
     (concept, n) => samImage(concept, image(n)),
     (n, finds) => emit("find", finds.length ? `Found ${findWords(finds)} in photo ${n + 1}` : `Nothing found in photo ${n + 1}`, { photo: n, room: take.rooms[roomOf(n)].name, detections: finds }),
+    8,
+    async (n) => {
+      const [w, h] = jpegSize(readFileSync(framePath(n))) ?? [1280, 960];
+      const p = await pointInPhoto(n, image(n), w, h);
+      pointCost += p.costUsd;
+      return p.finds;
+    },
   );
   images.clear();
   // The photos of what it could look like start now, from the finds.
@@ -474,7 +499,7 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names }, roomNames(ranges, await watching.watch, 1));
   // The 3D's own sense of size, with no walk or tape to check it against.
   if (rooms.some((r) => r.has3d)) await emit("log", "Sizes from photos are a close guess, within about 20%. One tape measurement on the next step makes them true to size.");
-  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage, watching };
+  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage + pointCost, watching };
 }
 
 export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {

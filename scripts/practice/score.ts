@@ -10,6 +10,7 @@
 //     --ids a,b           only these photos
 //     --spark none|all|labelled|<id,id>   which photos the reader reads (default none). labelled: those
 //                         whose label says what Spark should find
+//     --no-points         leave out the marks (server/pointFinds.ts): SAM's names alone
 //     --model <id>        the reader (default the app's, server/assess.ts): e.g. muse-wonder-1.0
 //     --concepts <file>   a JSON list of { concept, kind, label } to try instead of the app's
 //     --out <file>        every photo's finds, SAM's raw boxes and Spark's reading (JSON)
@@ -24,7 +25,9 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readWithSpark } from "../../server/assess";
-import { dataUrl, samImage, tokenCost } from "../../server/meta";
+import { jpegSize } from "../../server/concepts";
+import { dataUrl, responses, samImage, tokenCost } from "../../server/meta";
+import { pointInPhoto } from "../../server/pointFinds";
 import { findInPhotos, mergePhotoFinds } from "../../server/photoFinds";
 import { sniffPhoto, uprightPhoto } from "../../server/photoInput";
 import { CONCEPTS, type Detection } from "../../server/pipeline";
@@ -51,6 +54,8 @@ const LEDGER = arg("ledger", join(replayDirs[0], "practice-spend.jsonl"));
 const concepts: typeof CONCEPTS = arg("concepts") ? JSON.parse(readFileSync(arg("concepts"), "utf8")) : CONCEPTS;
 // Estimates for calls not saved yet. A Spark read of one photo has cost $0.01–0.04, a Wonder read about $0.06.
 const SPARK_ESTIMATE = MODEL && /wonder/.test(MODEL) ? 0.08 : 0.045;
+const POINT_ESTIMATE = 0.007; // Spark marking one photo (server/pointFinds.ts)
+const NO_POINTS = process.argv.includes("--no-points");
 
 const all: Record<string, Label> = JSON.parse(readFileSync(LABELS, "utf8")).photos;
 const ids = Object.keys(all)
@@ -82,7 +87,7 @@ async function prepared(id: string): Promise<string> {
   return path;
 }
 
-type Misses = { sam: number; spark: number };
+type Misses = { sam: number; spark: number; point: number };
 
 async function runPhoto(id: string, misses: Misses): Promise<PhotoResult> {
   const path = await prepared(id);
@@ -99,7 +104,19 @@ async function runPhoto(id: string, misses: Misses): Promise<PhotoResult> {
       else failed.push(`${concept}: ${err instanceof Error ? err.message.slice(0, 120) : err}`);
       throw err;
     }
-  }, undefined, 11);
+  }, undefined, 11, NO_POINTS ? undefined : async (n) => {
+    // As a photo take does (server/pipeline.ts): Spark marks what SAM can't find by name, SAM outlines it.
+    const [w, h] = jpegSize(readFileSync(path)) ?? [1280, 960];
+    const miss = (err: unknown) => {
+      if (err instanceof ReplayMiss) misses.point++;
+      else failed.push(`points: ${err instanceof Error ? err.message.slice(0, 120) : err}`);
+      throw err;
+    };
+    const ask = (body: unknown) => responses(body).catch(miss);
+    const sam = (text: string, image: string) => samImage(text, image).catch(miss);
+    const { finds } = await pointInPhoto(n, url, w, h, ask, sam);
+    return finds;
+  });
   const { finds: detections } = mergePhotoFinds(found, () => 0, () => null);
   let spark: Reading | null = null;
   if (sparkIds.has(id)) {
@@ -126,7 +143,7 @@ async function runPhoto(id: string, misses: Misses): Promise<PhotoResult> {
 }
 
 async function pass(): Promise<{ results: PhotoResult[]; misses: Misses }> {
-  const misses: Misses = { sam: 0, spark: 0 };
+  const misses: Misses = { sam: 0, spark: 0, point: 0 };
   const results: PhotoResult[] = [];
   const queue = [...ids];
   await Promise.all(
@@ -237,10 +254,11 @@ process.env.REPLAY_LOG = log;
 // First, replay only: free, and it counts what isn't saved yet.
 process.env.META_CACHE = "replay";
 let { results, misses } = await pass();
-const estimate = misses.sam * PRICES.samImage + misses.spark * SPARK_ESTIMATE;
-console.log(`${ids.length} photos, ${sparkIds.size} for Spark. Not saved yet: ${misses.sam} SAM looks, ${misses.spark} Spark reads (about $${estimate.toFixed(2)}). Ledger: $${ledgerTotal().toFixed(2)} of $${BUDGET}.`);
+// A photo's marks: one Spark call, and a SAM look a mark once those are known (about one a photo).
+const estimate = misses.sam * PRICES.samImage + misses.spark * SPARK_ESTIMATE + misses.point * (POINT_ESTIMATE + PRICES.samImage);
+console.log(`${ids.length} photos, ${sparkIds.size} for Spark. Not saved yet: ${misses.sam} SAM looks, ${misses.point} photos to mark, ${misses.spark} Spark reads (about $${estimate.toFixed(2)}). Ledger: $${ledgerTotal().toFixed(2)} of $${BUDGET}.`);
 if (DRY) process.exit(0);
-if (misses.sam || misses.spark) {
+if (misses.sam || misses.spark || misses.point) {
   if (ledgerTotal() + estimate > BUDGET) {
     console.error(`Stopping: that would take the ledger past $${BUDGET}. Nothing was called.`);
     process.exit(2);

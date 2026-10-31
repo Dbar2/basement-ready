@@ -114,8 +114,8 @@ final class MultipartTests: XCTestCase {
     XCTAssertTrue(DevTrust.isLocal("192.168.1.4"))
     XCTAssertTrue(DevTrust.isLocal("172.20.1.1"))
     XCTAssertFalse(DevTrust.isLocal("172.40.1.1"))
-    XCTAssertFalse(DevTrust.isLocal("basementready.com"))
-    XCTAssertFalse(DevTrust.allows(host: "basementready.com"))
+    XCTAssertFalse(DevTrust.isLocal("www.basementready.com"))
+    XCTAssertFalse(DevTrust.allows(host: "www.basementready.com"))
   }
 }
 
