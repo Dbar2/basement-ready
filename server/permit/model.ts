@@ -37,6 +37,9 @@ export type PermitWindow = {
 // and A6 both draw it so, and both say the height is to be taped.
 export const UNTAPED_HEIGHT_M = 0.6;
 export const drawnHeightM = (w: Pick<PermitWindow, "heightM">) => w.heightM ?? UNTAPED_HEIGHT_M;
+// What every sheet calls the bedroom's window: an escape window only once a size that meets the rule is
+// known; until its height is taped, "escape size to be taped".
+export const escapeStatus = (w: Pick<PermitWindow, "escape" | "meets">) => (!w.escape ? null : w.meets ? "ESCAPE" : w.meets === null ? "ESCAPE SIZE TO BE TAPED" : "TOO SMALL TO ESCAPE");
 // How tall a window this wide has to open to be an escape window, in mm.
 export const escapeHeightNeededMm = (widthM: number) => Math.ceil(Math.max(0.38, 0.35 / widthM) * 1000);
 

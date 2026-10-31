@@ -4,7 +4,7 @@
 // interconnection, room names with areas and ceiling heights, and areas outside the work X'd out.
 // Every line comes from the permit model (server/permit/model.ts).
 import type { Opening, Pt, Room } from "../model/types";
-import { at, bounds, type Box, centroid, dir, inPolygon, type PermitModel, type PFixture, project, type PWall, roomArea, wallLen } from "./model";
+import { escapeStatus, at, bounds, type Box, centroid, dir, inPolygon, type PermitModel, type PFixture, project, type PWall, roomArea, wallLen } from "./model";
 import { area, dimText, FAINT, ftIn, INK, MUTED, PAPER, ptPerMetre, type Sheet, sizeText, TONE, TONE2, TONE3 } from "./pdf";
 
 export type Area = { x: number; y: number; w: number; h: number };
@@ -116,12 +116,13 @@ function drawWindow(s: Sheet, v: View, w: PWall, op: Opening, m: PermitModel, o:
   // The tag goes inside, clear of the dimension chains outside.
   const side = w.kind === "foundation" ? -outward(w, rooms) : 1;
   const tagAt = v.P(add(at(w, op.offsetM), n, side * 0.42));
-  const label = `${info.tag} ${sizeText(info.widthM, info.heightM)}`;
-  const status = info.change === "keep" ? "EXISTING" : info.change === "new" ? "NEW" : "ENLARGED";
+  // Its width alone until the height is taped; an escape window only once its size meets the rule.
+  const label = `${info.tag} ${info.heightM == null ? `${sizeText(info.widthM, null)} WIDE` : sizeText(info.widthM, info.heightM)}`;
+  const status = [info.change === "keep" ? "EXISTING" : info.change === "new" ? "NEW" : "ENLARGED", escapeStatus(info)].filter(Boolean).join(", ");
   const tw = Math.max(s.textWidth(label, 6.2, s.fonts.bold), s.textWidth(status, 5.5)) + 8;
   s.rect(tagAt[0] - tw / 2, tagAt[1] - 9, tw, 19, { fill: PAPER, width: 0.6 });
   s.text(label, tagAt[0], tagAt[1] + 2.5, { size: 6.2, font: s.fonts.bold, align: "center" });
-  s.text(status + (info.escape ? ", ESCAPE" : ""), tagAt[0], tagAt[1] - 5.5, { size: 5.3, align: "center" });
+  s.text(status, tagAt[0], tagAt[1] - 5.5, { size: 5.3, align: "center" });
 }
 
 function drawDoor(s: Sheet, v: View, w: PWall, op: Opening, rooms: Room[]) {

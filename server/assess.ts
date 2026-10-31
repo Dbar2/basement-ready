@@ -421,7 +421,7 @@ export function buildResult(
     let why = f?.why ?? null;
     if (m) {
       status = m.status;
-      const reading = `The scan reads about ${m.measured.value.toFixed(2)} m finished (±${Math.round(m.measured.marginM * 100)} cm); the rule needs ${m.measured.limit} m.`;
+      const reading = `The scan reads about ${m.measured.value.toFixed(2)} m finished; the rule needs ${m.measured.limit} m.`;
       why = reading;
     }
     const measuredQuestion = m?.status === "needs_measurement" ? `${why} Measure the lowest point with a tape to confirm.` : null;

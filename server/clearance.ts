@@ -84,7 +84,7 @@ export function clearanceRule(rooms: Measured[], limit: number): ClearanceDecisi
   const pct = low.m.trusted ? low.m.expectedErrorPct : Math.max(low.m.expectedErrorPct, 20);
   const margin = low.m.scaleSource === "user_measurement" ? 0.05 : (finished * pct) / 100;
   const status = finished - margin >= limit ? "likely_ok" : finished + margin < limit ? "likely_fix" : "designer_checks";
-  const reading = `The scan reads about ${m2(finished)} under the ${low.label.toLowerCase()} in ${placeName(low.room)} once finished (±${Math.round(margin * 100)} cm); the rule needs ${limit} m.`;
+  const reading = `The scan reads about ${m2(finished)} under the ${low.label.toLowerCase()} in ${placeName(low.room)} once finished; the rule needs ${limit} m.`;
   const then = status === "likely_fix" ? " It has to be rerouted or raised, or the suite's rooms kept out from under it." : status === "designer_checks" ? " Your designer confirms it with a tape." : "";
   return {
     status,
