@@ -82,7 +82,7 @@ describe("the Build milestone's list", () => {
     const submit = sampleBuildList({ profile, state }).next;
     expect(submit.step).toBe("build.submit");
     expect(submit.card).toEqual({ kind: "download", id: "submit" });
-    expect(submit.message).toBe("Everything's ready. Download the submit copy and hand it in on the City of Waterloo building permit portal.");
+    expect(submit.message).toBe("Everything's ready. Download the submit copy, with no draft marks and every form filled, and hand it in on the City of Waterloo building permit portal.");
 
     state = { ...state, permit: { ...state.permit, submittedAt: "2026-11-01" } };
     expect(next().step).toBe("done");
@@ -122,8 +122,8 @@ describe("the Build milestone's list", () => {
     const l = sampleBuildList({ profile: null, state: taped({}) });
     for (const i of l.items) {
       expect(`${i.message} ${i.why}`).not.toMatch(/qualif|approved/i);
-      // Every question says why; the last step asks nothing.
-      if (i.step !== "done") expect(i.why.length).toBeGreaterThan(10);
+      // Every question says why; the submit copy and the last step ask nothing.
+      if (i.step !== "done" && i.step !== "build.submit") expect(i.why.length).toBeGreaterThan(10);
     }
   });
 });
