@@ -37,23 +37,33 @@ function sampleModel(p: SampleProgress): Ctx["model"] {
   return { ...m, designs, existing: { ...m.existing, confirmedAt: p.confirmed ? "2026-10-30T00:00:00.000Z" : null } };
 }
 
-// The example's build: one tape number, its money and who builds it.
+// The example's build, in track F's order: one tape number, the submit copy, its money and who builds it.
 function sampleBuild(money: number): BuildItem[] {
   return [
     {
-      id: "tape",
       step: "build.permit:tape",
-      text: "**Start with a tape measure.** Measure the long wall under the window, inside face to inside face, and every size on the permit set follows it.",
+      section: "permit",
+      message: "**Start with a tape measure.** Measure the long wall under the window, inside face to inside face, and every size on the permit set follows it.",
       why: "sizes from a video are close, and the City checks them.",
       card: { kind: "tape", id: "tape" },
       visual: { kind: "permit" },
       minutes: 2,
-      choices: [{ label: "Done", action: { type: "permitItem", itemId: "tape", value: "done" }, primary: true }],
+      choices: [{ label: "Done", action: { type: "permitItem", itemId: "build.permit:tape", value: { said: "Done" } }, primary: true }],
     },
     {
-      id: "receipts",
+      step: "build.submit",
+      section: "permit",
+      message: "**Your permit set is ready.** Download the submit copy, read it through once, and hand it to the City.",
+      why: "it's the set the City reviews for your permit.",
+      card: { kind: "download", id: "submit" },
+      visual: { kind: "permit" },
+      minutes: 1,
+      choices: [{ label: "Done", action: { type: "permitItem", itemId: "build.submit", value: { said: "Downloaded it" } }, primary: true }],
+    },
+    {
       step: "build.money:receipts",
-      text: money
+      section: "money",
+      message: money
         ? `**You may get up to $${money.toLocaleString("en-CA")} back.** Keep every receipt from the build: the claims ask for them.`
         : "**Keep every receipt from the build.** If a program fits later, its claim asks for them.",
       why: "money back is paid on what you spent, after the work.",
@@ -61,20 +71,20 @@ function sampleBuild(money: number): BuildItem[] {
       minutes: 1,
       choices: [
         { label: "What's the tax credit?", action: { type: "explain", term: "tax_credit" } },
-        { label: "Got it", action: { type: "permitItem", itemId: "receipts", value: "done" }, primary: true },
+        { label: "Got it", action: { type: "permitItem", itemId: "build.money:receipts", value: { said: "Got it" } }, primary: true },
       ],
     },
     {
-      id: "builders",
       step: "build.builders",
-      text: "**Who builds it?** A contractor for all of it, or you do some and hire the rest.",
+      section: "builders",
+      message: "**Who builds it?** A contractor for all of it, or you do some and hire the rest.",
       why: "the electrical and the plumbing need licensed trades either way.",
       card: { kind: "buildPath", id: "path" },
       visual: { kind: "builders" },
       minutes: 1,
       choices: [
-        { label: "I'll do some", action: { type: "permitItem", itemId: "builders", value: "mix" } },
-        { label: "Hire it all", action: { type: "permitItem", itemId: "builders", value: "hire" }, primary: true },
+        { label: "I'll do some", action: { type: "permitItem", itemId: "build.builders", value: { said: "I'll do some" } } },
+        { label: "Hire it all", action: { type: "permitItem", itemId: "build.builders", value: { said: "Hire it all" } }, primary: true },
       ],
     },
   ];

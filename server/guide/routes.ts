@@ -23,6 +23,7 @@ import { pricedForBasement } from "../priced";
 import { packFor, type Household } from "../rules";
 import { TRIAGE } from "../triage";
 import { loadWorkspace, saveWorkspace, type StoredState } from "../workspace";
+import { failureOf } from "../failure";
 import { answer, askSpark, SAMPLE_LINE } from "./ask";
 import { entryFor, sourcesFor } from "./glossary";
 import { cleanSample, SAMPLE_DESCRIBE, SAMPLE_WALL, sampleAct, sampleCtx, samplePack, sampleStart } from "./sample";
@@ -108,7 +109,8 @@ async function contextFor(a: Access, now: string) {
     look: true,
   });
   const look = (LOOK_VALUES as readonly string[]).includes(answers[LOOK_ID] as string) ? (answers[LOOK_ID] as LookKey | "none") : null;
-  const ctx: Ctx = { found: [], asks, result, model, look, build: await buildFor(id, basement.id), household, now };
+  const failed = !result && scan?.status === "error" ? failureOf(scan.error) : null;
+  const ctx: Ctx = { found: [], asks, result, model, look, build: await buildFor(id, basement.id), household, failed, now };
   return { ctx, pack, state: w.state as GuideStored, municipality };
 }
 
@@ -212,6 +214,12 @@ async function apply(app: Hono, c: Context, a: Access, action: GuideAction, befo
       return { reply: explainReply(action.term, e ? sourcesFor(e, pack) : []) };
     }
     case "ask": {
+      // "Try again" on a scan that stopped: the scan's own retry (the video is kept).
+      if (ctx.failed && /^try again$/i.test(action.text.trim())) {
+        const res = await app.request(`/api/scans/${c.req.param("id")}/retry`, { method: "POST", headers: pick(c, ["x-claims", "authorization", "cookie"]) });
+        if (!res.ok) return { error: { text: ((await res.json().catch(() => ({}))) as { error?: string }).error ?? "That didn't start again. Try in a minute.", status: 400 } };
+        return {};
+      }
       const input = { text: action.text, step: thread.step, ctx, pack, sample: false };
       const local = await answer(input, { spark: false });
       if (local.by !== "unavailable") return { reply: local };

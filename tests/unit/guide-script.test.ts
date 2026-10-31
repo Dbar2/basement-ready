@@ -51,8 +51,10 @@ function model(over: { guesses?: number; fixtureGuesses?: number; confirmed?: bo
 }
 
 const items: BuildItem[] = [
-  { id: "tape", step: "build.permit:tape", text: "Measure one wall.", why: "the City checks sizes.", card: { kind: "tape", id: "tape" }, visual: { kind: "permit" }, minutes: 2 },
-  { id: "owner", step: "build.permit:owner", text: "Who owns the house?", why: "the forms ask.", card: { kind: "owner", id: "owner" }, visual: { kind: "permit" }, minutes: 3 },
+  { step: "build.permit:tape", section: "permit", message: "Measure one wall.", why: "the City checks sizes.", card: { kind: "tape", id: "tape" }, visual: { kind: "permit" }, minutes: 2 },
+  { step: "build.permit:owner", section: "permit", message: "Who owns the house?", why: "the forms ask.", card: { kind: "owner", id: "owner" }, visual: { kind: "permit" }, minutes: 3 },
+  { step: "build.submit", section: "permit", message: "Download the submit copy.", why: "it's what the City takes.", card: { kind: "download", id: "submit" }, visual: { kind: "permit" }, done: true },
+  { step: "build.money:senior", section: "money", message: "Is someone moving in 65 or older?", why: "it decides the tax credit.", visual: { kind: "money" } },
 ];
 
 function ctx(over: Partial<Ctx> = {}): Ctx {
@@ -102,6 +104,18 @@ describe("the guide's wait: one question at a time while it measures", () => {
     ]);
     expect(r.thread.step).toBe("wait.q:rent");
     expect(r.messages[1].why).toBe("it decides which money fits.");
+  });
+
+  it("a scan that stopped says what happened, offers to try again when that can help, and waits again once it does", () => {
+    const busy = { text: "Our AI service is busy right now. Your video is saved: try again in a few minutes.", retry: true };
+    const t = start(ctx({ result: null, failed: busy, asks: [exit] }));
+    expect(t.step).toBe("failed");
+    expect(last(t).text).toBe(busy.text);
+    expect(last(t).choices).toEqual([{ label: "Try again", action: { type: "ask", text: "Try again" }, primary: true }]);
+    expect(last(start(ctx({ result: null, failed: { text: "We couldn't read this video file.", retry: false } }))).choices).toBeUndefined();
+    const again = act(t, { type: "ask", text: "Try again" }, ctx({ result: null, asks: [exit] }));
+    expect(again.messages.map((m) => m.text)).toEqual(["Try again", "**Is there a door from the basement straight outside?** A side door or walk-out that opens to the yard."]);
+    expect(again.thread.step).toBe("wait.q:exit_from_suite");
   });
 
   it("with every question answered, it's still measuring", () => {
@@ -182,6 +196,11 @@ describe("the guide's answer", () => {
   it("a no still shows the plan", () => {
     const m = last(start(ctx({ result: { ...result, verdict: "no", headline: "Not as a second unit here.", fixGroups: [] } })));
     expect(m.choices?.at(-1)?.label).toBe("Show me the plan anyway");
+  });
+
+  it("is done once it's been said, which opens the home base", () => {
+    expect(start(ctx({ result: null, asks: [exit] })).done.answer).toBe(false);
+    expect(start(ctx()).done).toEqual({ answer: true, design: false, build: false });
   });
 
   it("costs are whole thousands", () => {
@@ -296,17 +315,23 @@ describe("the guide's build", () => {
     expect(m.visual).toEqual({ kind: "permit" });
   });
 
-  it("'Start' goes through each item, then done with the download", () => {
+  it("'Start' goes through each item, skipping what's done, with the card's words as their bubble; then done with the book", () => {
     let t = at([...designed, "design.look"]);
     t = act(t, { type: "go", to: "build" }, ctx()).thread;
     expect(t.step).toBe("build.permit:tape");
     expect(last(t)).toMatchObject({ text: "Measure one wall.", why: "the City checks sizes.", card: { kind: "tape", id: "tape" } });
-    t = act(t, { type: "permitItem", itemId: "tape", value: { mm: 5500 } }, ctx()).thread;
+    const tape = act(t, { type: "permitItem", itemId: "build.permit:tape", value: { said: "Walls 7.56 m and 5.52 m, ceiling 2.08 m" } }, ctx());
+    expect(tape.messages[0]).toMatchObject({ from: "you", text: "Walls 7.56 m and 5.52 m, ceiling 2.08 m" });
+    t = tape.thread;
     expect(t.step).toBe("build.permit:owner");
-    const r = act(t, { type: "permitItem", itemId: "owner", value: "later" }, ctx());
+    // Put off (its own id is enough), and the submit copy is already done: on to the money.
+    t = act(t, { type: "permitItem", itemId: "owner", value: { said: "Later" } }, ctx()).thread;
+    expect(t.step).toBe("build.money:senior");
+    const r = act(t, { type: "permitItem", itemId: "build.money:senior", value: null }, ctx());
+    expect(r.messages.map((m) => m.from)).toEqual(["guide"]);
     expect(r.thread.step).toBe("done");
     expect(r.thread.done).toEqual({ answer: true, design: true, build: true });
-    expect(last(r.thread).card).toEqual({ kind: "download", id: "submit" });
+    expect(last(r.thread).card).toEqual({ kind: "download", id: "book" });
   });
 
   it("an item the build list no longer has (given elsewhere) is skipped", () => {
