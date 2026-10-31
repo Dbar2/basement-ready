@@ -129,6 +129,25 @@ export class PermitTab {
   }
 
   // How many things are left before the clean submit copy: 0 when it's ready.
+  // One readiness item: its row, opened by its button.
+  item(label: RegExp) {
+    return this.page.locator(".ws-ready-group li", { has: this.page.getByRole("button", { name: label }) });
+  }
+
+  // Kitchener's water-meter question (Building Bulletin BB 2026-04): pick an option, say where, save. The
+  // item is done once saved; opened again, it shows the answer.
+  async answerWaterMeter(option: string, where: string) {
+    const row = this.item(/Water meter: which option, and where it is/);
+    await row.getByRole("button", { name: /Water meter: which option/ }).click();
+    await row.getByRole("group", { name: "How the water is metered" }).getByRole("button", { name: option }).click();
+    await row.getByLabel("Where").fill(where);
+    await row.getByRole("button", { name: "Save" }).click();
+    await expect(row).toHaveAttribute("data-done", "true", { timeout: 15_000 });
+    await row.getByRole("button", { name: /Water meter: which option/ }).click();
+    await expect(row.getByRole("group", { name: "How the water is metered" }).getByRole("button", { name: option })).toHaveAttribute("aria-pressed", "true");
+    await expect(row.getByLabel("Where")).toHaveValue(where);
+  }
+
   // "What needs a licensed pro": the work only a licensed pro may do, as the house's city has it.
   get licensedPro() {
     return this.page.locator("section", { has: this.page.getByRole("heading", { level: 2, name: "What needs a licensed pro" }) });
