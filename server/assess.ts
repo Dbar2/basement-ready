@@ -3,10 +3,12 @@ import { execFile } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
-import { dataUrl, outputText, responses, tokenCost } from "./meta";
+import { dataUrl, readReply, responses, tokenCost } from "./meta";
 import type { Detection } from "./pipeline";
 import type { Measurements } from "./scan3d";
 import type { Property } from "./property";
+import type { Watch } from "./watch";
+import { clearanceRule, placeName } from "./clearance";
 import { evaluate, moneyAndSteps } from "./recheck";
 import { coreRules, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
 import { ASK_OPTIONS, fromRecords, TRIAGE } from "./triage";
@@ -19,8 +21,19 @@ export type Status = "likely_ok" | "likely_fix" | "needs_measurement" | "needs_a
 type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?: string; question?: string };
 
 // `photos`: a photo take of that many photos, not a video (server/photoInput.ts). `model`: who reads the
-// evidence, for comparing models; the app uses ASSESS_MODEL.
-export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number; model?: string };
+// evidence, for comparing models; the app uses ASSESS_MODEL. `watch`: what Muse Wonder saw in the whole
+// take (server/watch.ts), which settles the fire rules in code (fireRules).
+export type AssessContext = {
+  dir: string;
+  household: Household;
+  municipality: string;
+  property?: Property | null;
+  photos?: number;
+  model?: string;
+  watch?: Pick<Watch, "rooms" | "doors"> | null;
+  // Every measured room, for the headroom across the whole basement (clearanceRule).
+  rooms?: { name: string; measurements: Measurements | null }[];
+};
 
 // The verdict agent's model: Muse Spark 1.3 unless ASSESS_MODEL says otherwise (scripts/eval/assess-ab.ts compares).
 export const ASSESS_MODEL = process.env.ASSESS_MODEL || "muse-spark-1.3";
@@ -37,7 +50,7 @@ Trust rules, follow them exactly:
 1. Only claim something about the basement if a detection supports it, and cite the detection ids in "evidence".
 2. Never invent measurements. If a rule needs a number (ceiling height, window opening size, headroom), use "needs_measurement" and write one short tape-measure question.
 3. If a rule depends on facts a video can't show (zoning, parking, how many units exist), use "needs_answer" with a plain question.
-4. Use "likely_fix" only when the proof frames clearly show a problem, for example a small high basement window, exposed joists with no fire-rated ceiling, or a furnace open to the space.
+4. Use "likely_fix" only when the proof frames clearly show a problem, for example exposed joists with no fire-rated ceiling, or a furnace open to the space. Never judge by eye whether a window is big enough to escape through: that comes from its measured size, so use "needs_measurement".
 5. Use "likely_ok" only when the frames clearly show it complies.
 Write plain, short sentences a homeowner understands. Never say "you qualify" or "approved".
 
@@ -67,10 +80,21 @@ async function proofFrames(work: string, detections: Detection[]) {
   return out;
 }
 
-function parseJson(text: string): any {
+// Spark's answer. Now and then it sends one cut off partway and then the whole one again, both in the
+// same reply: the answer is the first object with findings that runs whole to the end of the text.
+// Otherwise the text is read as it stands, which throws on a cut-off answer, so the call is retried.
+export function parseJson(text: string): any {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end < start) throw new Error("Spark did not return JSON");
+  for (let at = start; at >= 0 && at < end; at = text.indexOf("{", at + 1)) {
+    try {
+      const answer = JSON.parse(text.slice(at, end + 1));
+      if (Array.isArray(answer?.findings)) return answer;
+    } catch {
+      // Not whole from here: try the next object.
+    }
+  }
   return JSON.parse(text.slice(start, end + 1));
 }
 
@@ -113,7 +137,8 @@ async function askSpark(ctx: AssessContext, place: Coverage, rules: Rule[], dete
         ...(/wonder/.test(model) ? { reasoning: { effort: "medium" } } : {}),
       });
       costUsd += tokenCost(model, r.usage)?.usd ?? 0;
-      return { model: parseJson(outputText(r)), costUsd };
+      // A reply cut off partway and then sent again whole is read from the whole one.
+      return { model: readReply(r, parseJson), costUsd };
     } catch (err) {
       lastErr = err;
     }
@@ -210,14 +235,43 @@ type VerdictFinding = {
   fix: Rule["fix"] | null;
 };
 
-// Pure: the verdict, the fix list and the rough cost, from the findings as they stand.
-// Used for the first answer and again every time the homeowner answers a question.
-export function verdictFrom(findings: VerdictFinding[]) {
+export type FixGroup = {
+  category: string;
+  title: string;
+  description: string;
+  ruleIds: string[];
+  evidence: string[];
+  why: string[];
+  costLow: number | null;
+  costHigh: number | null;
+  costSource: any;
+  sources: Rule["source"][];
+  priced?: boolean; // false: a fix the quote can't price yet (the design has no place for it)
+  fromDesign?: boolean; // the design brought it (server/model/fixes.ts), not the rules
+};
+
+// The design they picked, once there is one (server/priced.ts): its quote is the cost, a fix it needs
+// that the rules didn't name joins the list, and each fix's cost is the quote's own line for it.
+export type DesignPricing = {
+  name: string;
+  cost: { low: number; high: number };
+  fixes: FixGroup[];
+  lineCost: Record<string, { low: number; high: number }>;
+  // Unit 2's floor in that design (server/model/suite.ts): what the permit fee is worked on.
+  suiteAreaM2: number | null;
+  // Whether it has its own way in, from the scan and their answer (server/model/entrance.ts).
+  entrance?: { status: "own" | "needed" | "unknown"; why: string };
+};
+
+// Pure: the verdict, the fix list and the cost, from the findings as they stand (and the design, when
+// there is one). Used for the first answer and again every time the homeowner answers a question, so
+// the headline, What has to change and every cost on screen count the same fixes.
+export function verdictFrom(findings: VerdictFinding[], design: DesignPricing | null = null) {
   // Zoning can't be fixed with a renovation: if it fails, this lot can't take a second unit.
   const blockers = findings.filter((f) => f.status === "likely_fix" && f.category === "zoning");
   // One "thing to fix" per category: the egress area and egress size rules are one new window,
   // and the fire ceiling and beam boxing are one drywall job. Group cost = the largest item, not the sum.
-  const fixGroups = [...Map.groupBy(findings.filter((f) => f.status === "likely_fix" && f.category !== "zoning"), (f) => f.category)].map(
+  const ruleGroups: FixGroup[] = [...Map.groupBy(findings.filter((f) => f.status === "likely_fix" && f.category !== "zoning"), (f) => f.category)].map(
     ([category, items]) => {
       const priced = items.filter((f) => f.fix?.costLowCAD != null && f.fix?.costHighCAD != null);
       return {
@@ -234,10 +288,18 @@ export function verdictFrom(findings: VerdictFinding[]) {
       };
     },
   );
+  // With a design, its own fixes join, and every cost is the quote's.
+  const have = new Set(ruleGroups.map((g) => g.category));
+  const fixGroups = design
+    ? [...ruleGroups, ...design.fixes.filter((f) => !have.has(f.category))].map((g) => {
+        const line = design.lineCost[g.category];
+        return { ...g, costLow: line?.low ?? null, costHigh: line?.high ?? null, costSource: line ? "quote" : null, priced: g.priced ?? true };
+      })
+    : ruleGroups;
   // Standard suite work: stated and priced, but not a "fix" against this basement.
   const standard = findings
     .filter((f) => f.status === "standard")
-    .map((f) => ({ ruleId: f.ruleId, title: f.title, text: f.why ?? "", costLow: f.fix?.costLowCAD ?? null, costHigh: f.fix?.costHighCAD ?? null }));
+    .map((f) => ({ ruleId: f.ruleId, title: f.title, text: f.why ?? "", costLow: design ? null : (f.fix?.costLowCAD ?? null), costHigh: design ? null : (f.fix?.costHighCAD ?? null) }));
   const priced = fixGroups.filter((g) => g.costLow != null);
   const pricedStandard = standard.filter((s) => s.costLow != null && s.costHigh != null);
   const fixesLow = priced.reduce((s, g) => s + g.costLow!, 0);
@@ -245,26 +307,33 @@ export function verdictFrom(findings: VerdictFinding[]) {
   const standardLow = pricedStandard.reduce((s, x) => s + x.costLow!, 0);
   const standardHigh = pricedStandard.reduce((s, x) => s + x.costHigh!, 0);
   const cost = {
-    low: fixesLow + standardLow,
-    high: fixesHigh + standardHigh,
+    low: design ? design.cost.low : fixesLow + standardLow,
+    high: design ? design.cost.high : fixesHigh + standardHigh,
     fixesLow,
     fixesHigh,
     standardLow,
     standardHigh,
     pricedFixes: priced.length,
     unpricedFixes: fixGroups.length - priced.length,
+    // Where the total comes from: the quote for their design, or the rules' rough sum before there's one.
+    design: design?.name ?? null,
   };
   const n = fixGroups.length;
   const open = findings.filter((f) => f.status === "needs_answer" || f.status === "needs_measurement" || f.status === "designer_checks").length;
   const verdict: "yes" | "fix" | "no" = blockers.length ? "no" : n > 0 ? "fix" : "yes";
+  // First of all, its own way in (server/model/entrance.ts): where there's none, it says so before anything
+  // else, and the new entrance is the first fix.
+  const exit = findings.find((f) => f.ruleId === "exit_from_suite");
+  const entrance = design?.entrance ?? { status: exit?.status === "likely_fix" ? ("needed" as const) : exit?.status === "likely_ok" ? ("own" as const) : ("unknown" as const), why: exit?.why ?? "" };
+  if (entrance.status === "needed") fixGroups.sort((a, b) => Number(b.category === "exit") - Number(a.category === "exit"));
   const headline = blockers.length
     ? "Not as a second unit here. You could still finish it as part of your home."
     : n > 0
-      ? `Yes, your basement can be a second home after ${n} fix${n === 1 ? "" : "es"}.`
+      ? `${entrance.status === "needed" ? "It needs its own way in first. " : ""}Yes, your basement can be a second home after ${n} fix${n === 1 ? "" : "es"}.`
       : open
         ? "Looks like yes. Your designer confirms a few details."
         : "Yes, your basement can be a second home.";
-  return { fixGroups, standard, cost, verdict, headline, blockers: blockers.map((b) => b.ruleId) };
+  return { fixGroups, standard, cost, verdict, headline, blockers: blockers.map((b) => b.ruleId), entrance };
 }
 
 type Triageable = { ruleId: string; check: Rule["check"]; status: Status; why: string | null; question: string | null; evidence: string[]; fix: Rule["fix"] | null };
@@ -298,11 +367,45 @@ export function triage<F extends Triageable>(f: F, rule: Rule, property?: Proper
 }
 
 // Pure: turns Spark's reading into the answer. The trust rule, grouping and money all live here.
+// The two fire rules, decided in code from what the scan found, the same way on every take of a basement:
+// open joists or exposed ducts over the suite mean a fire-rated ceiling is a fix; a furnace with no door to
+// close means fire-rated walls and a door around it. A finished ceiling, or a furnace room with a door, is
+// the designer's to confirm. Spark's reading doesn't decide them: whether it was handed a frame of the
+// ceiling to cite changes from take to take. Read from the watch pass (each room's ceiling, what hangs
+// below it, its fixtures and doors) and SAM's finds (an exposed ceiling duct, a furnace).
+type Decided = { status: Status; why: string; evidence: string[] };
+export function fireRules(watch: AssessContext["watch"], detections: { id: string; label?: string }[]): Record<string, Decided> {
+  const rooms = watch?.rooms ?? [];
+  const inside = rooms.filter((r) => r.entered);
+  const named = (rs: typeof rooms) => rs.map((r) => placeName(r.name)).join(" and ");
+  const open = inside.filter((r) => r.ceiling === "exposed_joists" || r.ceiling === "mixed");
+  const ducted = inside.filter((r) => r.low.some((l) => l.kind === "duct"));
+  const ducts = detections.filter((d) => d.label === "Duct").map((d) => d.id);
+  const fire: Decided = open.length
+    ? { status: "likely_fix", why: `Open joists over ${named(open)}: the ceiling between the two homes needs fire-rated drywall.`, evidence: ["watch"] }
+    : ducted.length || ducts.length
+      ? { status: "likely_fix", why: `Exposed ductwork${ducted.length ? ` in ${named(ducted)}` : ""}: it gets boxed in with fire-rated drywall to separate the two homes.`, evidence: ducts.length ? ducts : ["watch"] }
+      : inside.length && inside.every((r) => r.ceiling === "drywall")
+        ? { status: "designer_checks", why: "The ceiling is finished drywall. Your designer confirms it's fire-rated between the two homes.", evidence: ["watch"] }
+        : { status: "designer_checks", why: "Your designer confirms the ceiling between the two homes is fire-rated.", evidence: [] };
+
+  const furnaceRooms = rooms.filter((r) => r.fixtures.some((f) => f.kind === "furnace"));
+  const hasDoor = (id: string) => (watch?.doors ?? []).some((d) => (d.from === id || d.to === id) && (d.kind === "door" || d.kind === "exterior_door"));
+  const openFurnace = furnaceRooms.filter((r) => !hasDoor(r.id));
+  const furnaceFound = detections.some((d) => d.label === "Furnace");
+  const service: Decided = openFurnace.length
+    ? { status: "likely_fix", why: `The furnace in ${named(openFurnace)} has no door to close: it needs fire-rated walls and a door around it.`, evidence: ["watch"] }
+    : furnaceRooms.length || furnaceFound
+      ? { status: "designer_checks", why: "The furnace room has a door. Your designer confirms its walls and door are fire-rated.", evidence: furnaceRooms.length ? ["watch"] : [] }
+      : { status: "standard", why: TRIAGE.service_room_separation.text, evidence: [] };
+  return { fire_separation_between_units: fire, service_room_separation: service };
+}
+
 export function buildResult(
-  ctx: Pick<AssessContext, "household" | "municipality" | "property">,
+  ctx: Pick<AssessContext, "household" | "municipality" | "property" | "watch" | "rooms">,
   { pack, city, coverage, authority, note }: Coverage,
   model: { route?: string; wants?: string; summary?: string; vision?: any; findings?: ModelFinding[] },
-  detections: Pick<Detection, "id">[],
+  detections: (Pick<Detection, "id"> & Partial<Pick<Detection, "label">>)[],
   measurements?: Measurements | null,
 ) {
   const rules = coreRules(pack);
@@ -325,7 +428,7 @@ export function buildResult(
     let why = f?.why ?? null;
     if (m) {
       status = m.status;
-      const reading = `The scan reads about ${m.measured.value.toFixed(2)} m finished (±${Math.round(m.measured.marginM * 100)} cm); the rule needs ${m.measured.limit} m.`;
+      const reading = `The scan reads about ${m.measured.value.toFixed(2)} m finished; the rule needs ${m.measured.limit} m.`;
       why = reading;
     }
     const measuredQuestion = m?.status === "needs_measurement" ? `${why} Measure the lowest point with a tape to confirm.` : null;
@@ -349,8 +452,15 @@ export function buildResult(
 
   // Who confirms what public records couldn't: "The City", or "The Township of Woolwich".
   const confirms = coverage === "full" ? "The City" : authority === "your municipality" ? "Your municipality" : `The ${authority}`;
-  const triaged = findings.map((f) => triage(f, rules.find((r) => r.id === f.ruleId)!, ctx.property, confirms));
-  const { fixGroups, standard, cost, verdict, headline } = verdictFrom(triaged);
+  // The fire rules and the headroom are decided in code from what was found and measured.
+  const clearance = ctx.rooms ? clearanceRule(ctx.rooms, Number(rules.find((r) => r.id === "clearance_beams_ducts_suite")?.check.value ?? 1.85)) : null;
+  const decided: Record<string, Decided & { measured?: unknown }> = { ...fireRules(ctx.watch, detections), ...(clearance ? { clearance_beams_ducts_suite: clearance } : {}) };
+  const triaged = findings.map((f) => {
+    const rule = rules.find((r) => r.id === f.ruleId)!;
+    const d = decided[f.ruleId];
+    return d ? { ...f, ...d, question: null, fix: d.status === "likely_fix" || d.status === "standard" ? rule.fix : null } : triage(f, rule, ctx.property, confirms);
+  });
+  const { fixGroups, standard, cost, verdict, headline, entrance } = verdictFrom(triaged);
 
   return {
     vision: cleanVision(model.vision),
@@ -361,6 +471,7 @@ export function buildResult(
     coverageNote: note,
     verdict,
     headline,
+    entrance,
     route: model.route === "basement_finish" ? "basement_finish" : "second_unit",
     wants: model.wants ?? "",
     summary: model.summary ?? "",

@@ -77,7 +77,7 @@ export function takeoff(geo: Geometry, opts: { egressNeeded?: boolean | null } =
   const L: Layout | null = geo.layout;
   const H = Math.min(2.44, geo.ceilingM ?? 2.3);
   if (geo.ceilingM == null) assumptions.push("Wall height taken as 2.3 m: tape your ceiling height on the Permit tab to sharpen the counts.");
-  if (geo.estimated) assumptions.push("Sizes come from the phone video (about ±5–20%). Buy against taped measurements before you order.");
+  if (geo.estimated) assumptions.push("Sizes come from the phone video until taped. Buy against taped measurements before you order.");
 
   // One line: `need` in `needUnit`, divided by what one store unit covers (`per`), rounded up after waste.
   const add = (id: string, group: Group, item: string, need: number, needUnit: string, waste: number, basis: string, o: { per?: number; only?: string | null; buyUnit?: string } = {}) => {

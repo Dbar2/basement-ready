@@ -3,6 +3,7 @@
 // in data/rules/prices-on.json; labour at published rates; then contingency, HST, and what it comes
 // to if you hire it all out or build it yourself. A price or rate nobody published stays missing:
 // the line says so and adds nothing. Pure and fast, so the 3D studio reruns it on every edit.
+import { areaText, feeFor, sqftOf, suiteAreaM2 } from "../model/suite";
 import type { Design, Furniture, Model, Opening, Pt, Room, Wall } from "../model/types";
 import { catalog, furniturePrice, rate, shelf, type Rate } from "./catalog";
 
@@ -216,15 +217,21 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   const ceilingM = suite.find((r) => r.ceilingM)?.ceilingM ?? model.existing.ceilingM;
   const H = Math.min(2.44, ceilingM ?? 2.3);
   if (ceilingM == null) assumptions.push("Wall height taken as 2.3 m until the ceiling is measured.");
-  if (model.existing.scale.source === "model") assumptions.push("Sizes come from the video (about ±5–20%); tape the main walls before you order.");
+  if (model.existing.scale.source === "model") assumptions.push("Sizes come from the video until taped: tape the main walls before you order.");
 
   const area = (rs: Room[]) => rs.reduce((s, r) => s + polyArea(r.polygon), 0);
   const ceilingArea = area(suite.filter((r) => r.kind !== "stairs"));
-  const floorRooms = suite.filter((r) => !["stairs", "mechanical", "storage"].includes(r.kind));
+  // A room kept as the scan found it (a bathroom already there) keeps its floor, fixtures and fan: only
+  // the suite's fire-rated ceiling goes over it, like the rest.
+  const kept = suite.filter((r) => r.kept);
+  const floorRooms = suite.filter((r) => !["stairs", "mechanical", "storage"].includes(r.kind) && !r.kept);
   const floorArea = area(floorRooms);
-  const baths = suite.filter((r) => r.kind === "bathroom");
+  const baths = suite.filter((r) => r.kind === "bathroom" && !r.kept);
+  for (const r of kept) assumptions.push(`${r.name} is kept as it is: its fixtures, floor and fan aren't priced, only the fire-rated ceiling over it.`);
   const kitchens = suite.filter((r) => r.kind === "kitchen");
-  const laundry = P.rooms.filter((r) => r.kind === "laundry" && r.unit !== 1);
+  // A laundry room the suite takes as it was has its washer box and dryer vent already.
+  const laundry = P.rooms.filter((r) => r.kind === "laundry" && r.unit !== 1 && !r.kept);
+  const keptLaundry = P.rooms.some((r) => r.kind === "laundry" && r.unit !== 1 && r.kept);
   const inSuite = (p: Pt) => suite.some((r) => nearRoom(p, r));
 
   // Walls: what's new, what's kept, what the suite finishes, and what comes out.
@@ -242,8 +249,12 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   const opens = P.openings.map((o) => ({ o, w: walls.get(o.wallId) ?? null })).filter((x) => x.w);
   const doors = opens.filter((x) => x.o.kind === "door");
   const windows = opens.filter((x) => x.o.kind === "window");
-  const ratedDoors = doors.filter((x) => x.o.rating === "20min");
-  const newDoors = doors.filter((x) => x.o.status === "new" && !x.o.rating);
+  // Stairs open to the suite (in a room kept as it is) get a 20-minute door at their top, in the house.
+  const stairsTop = P.fixtures.filter((f) => f.kind === "stairs" && suite.some((r) => nearRoom(f.at, r, 0)) && !P.rooms.some((r) => r.kind === "stairs" && nearRoom(f.at, r, 0))).length;
+  const ratedDoors = [...doors.filter((x) => x.o.rating === "20min"), ...Array.from({ length: stairsTop }, () => null)];
+  // A new door in an outside wall is the suite's own entrance (server/model/entrance.ts), priced whole.
+  const entrances = doors.filter((x) => x.o.status === "new" && x.w!.kind === "foundation");
+  const newDoors = doors.filter((x) => x.o.status === "new" && !x.o.rating && x.w!.kind !== "foundation");
   const newWindows = windows.filter((x) => x.o.status === "new");
   const holeArea = (xs: typeof opens) => xs.reduce((s, x) => s + x.o.widthM * (x.o.heightM ?? (x.o.kind === "door" ? DOOR_H : 0.6)), 0);
   const holesIn = (ws: Wall[]) => opens.filter((x) => ws.includes(x.w!));
@@ -310,7 +321,9 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
 
   // ---- Drywall and taping ----
   const ratedM2 = Math.max(0, 2 * L(ratedNew) * H + L(keptRated) * H - holeArea(holesIn([...ratedNew, ...keptRated])));
-  const typeX = ceilingArea + ratedM2;
+  // The furnace room serves both homes: Type X under its ceiling too (9.10.10.3).
+  const serviceCeiling = area(P.rooms.filter((r) => r.kind === "mechanical" && r.unit !== 2));
+  const typeX = ceilingArea + serviceCeiling + ratedM2;
   const mr = Math.max(0, L(bathWalls) * H - holeArea(holesIn(bathWalls)));
   const regular = Math.max(0, 2 * L(plainNew) * H + foundWallM2 - holeArea(holesIn(plainNew)) * 2 - mr);
   const board = typeX + mr + regular;
@@ -320,7 +333,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
     item: "Hang the drywall",
     qty: board * FT2,
     unit: "sq ft",
-    basis: `5/8" Type X on the whole suite ceiling (${r1(ceilingArea)} m², the 15-minute floor separation) and both sides of the rated walls (${r1(ratedM2)} m²); moisture-resistant board in the bathroom; 1/2" everywhere else (9.10.9).`,
+    basis: `5/8" Type X on the whole suite ceiling (${r1(ceilingArea)} m², the 15-minute floor separation)${serviceCeiling > 0 ? `, the furnace room's ceiling (${r1(serviceCeiling)} m²)` : ""} and both sides of the rated walls (${r1(ratedM2)} m²); moisture-resistant board in the bathroom; 1/2" everywhere else (9.10.9).`,
     parts: [
       part("drywall_typex_58", "5/8\" Type X drywall", typeX * FT2, WASTE.drywall, SHEET_FT2),
       part("drywall_mr_12", "1/2\" moisture-resistant drywall", mr * FT2, WASTE.drywall, SHEET_FT2),
@@ -437,7 +450,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
       parts: [part("laundry_box", "Washer outlet box", laundry.length, 0, 1), part("pex_12", "1/2\" PEX", 6 * laundry.length, 0.1, 30.48), part("abs_1_5", "1-1/2\" ABS pipe", 3 * laundry.length, 0.1, 3.66)],
       labour: { rate: "lab_plumber", qty: 4 * laundry.length },
     });
-  } else assumptions.push("No laundry room in this design: the examiner asks for laundry for both units, so add one or say where it's shared.");
+  } else if (!keptLaundry) assumptions.push("No laundry room in this design: the examiner asks for laundry for both units, so add one or say where it's shared.");
 
   // ---- Heating, fans and vents ----
   add({
@@ -498,6 +511,17 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
     parts: [part("door_fire_20min", "20-minute rated door", ratedDoors.length, 0, 1), part("door_closer", "Spring (self-closing) hinges", 3 * ratedDoors.length, 0, 1), part("lever_passage", "Passage levers", ratedDoors.length, 0, 1)],
     labour: { rate: "lab_door", qty: ratedDoors.length },
   });
+  for (const x of entrances) {
+    add({
+      id: `entrance_${x.o.id}`,
+      trade: "doors_windows",
+      item: "A separate entrance: cut the foundation, a walk-up stairwell and an outside door",
+      qty: 1,
+      unit: "entrance",
+      basis: `The basement home's own way in (Ontario Building Code, Division B, Table 11.5.1.1.-C, C139): a ${Math.round(x.o.widthM * 1000)} mm door at the side or back, a lintel, steps up to grade with a drain and a guard. Installed price for a separate side entry (Toronto figure).`,
+      labour: { rate: "pack_entrance", qty: 1 },
+    });
+  }
   for (const x of newWindows) {
     add({
       id: `egress_${x.o.id}`,
@@ -537,7 +561,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   });
 
   // ---- Paint ----
-  const wallsPaint = Math.max(0, board - ceilingArea);
+  const wallsPaint = Math.max(0, board - ceilingArea - serviceCeiling);
   add({
     id: "paint_walls",
     trade: "paint",
@@ -598,10 +622,12 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   // ---- Permits and fees ----
   const slug = opts.municipality ?? "waterloo-on";
   const fee = catalog.fees?.permit[slug] ?? null;
-  const suiteFt2 = area(suite) * FT2;
-  const permitCAD = fee ? Math.max(fee.minimumCAD ?? 0, (fee.perUnitCAD ?? 0) + fee.perSqftCAD * suiteFt2 + (fee.extrasCAD ?? 0)) : null;
+  // The suite's floor and its fee, as every other page prints them (server/model/suite.ts).
+  const suiteM2 = suiteAreaM2(design) ?? 0;
+  const permit = fee ? feeFor(fee, suiteM2) : null;
+  const suiteFt2 = permit?.sqft ?? sqftOf(suiteM2);
   lines.push(
-    feeLine("permit_building", "Building permit", suiteFt2, "sq ft", permitCAD == null ? null : { low: money(permitCAD), high: money(permitCAD) }, fee ? { kind: "fee", title: fee.title, url: fee.url, checked: fee.checked } : null, fee ? `${fee.perUnitCAD ? `$${fee.perUnitCAD} for the new unit plus ` : ""}$${fee.perSqftCAD.toFixed(2)} per sq ft of the suite (${Math.round(suiteFt2)} sq ft)${fee.minimumCAD ? `, $${fee.minimumCAD} minimum` : ""}${fee.estimate ? "; the City confirms the exact fee" : ""}.` : "This municipality's permit fee isn't in our data yet: ask its building department."),
+    feeLine("permit_building", "Building permit", suiteFt2, "sq ft", permit == null ? null : { low: money(permit.amount), high: money(permit.amount) }, fee ? { kind: "fee", title: fee.title, url: fee.url, checked: fee.checked } : null, fee ? `${fee.perUnitCAD ? `$${fee.perUnitCAD} for the new unit plus ` : ""}$${fee.perSqftCAD.toFixed(2)} per sq ft of the suite (${areaText(suiteM2)})${fee.minimumCAD ? `, $${fee.minimumCAD} minimum` : ""}${fee.estimate ? "; the City confirms the exact fee" : ""}.` : "This municipality's permit fee isn't in our data yet: ask its building department."),
   );
   const esa = catalog.fees?.esa ?? null;
   const outlets = devices + lights + P.alarms.length + baths.length;
@@ -628,8 +654,8 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   designer.diy = { low: 0, high: designer.high };
   lines.push(designer);
   add({ id: "pro_hvac", trade: "pros", item: "HVAC heat-loss calculation and design (BCIN)", qty: 1, unit: "job", basis: "Sizes the heating and ventilation for the second unit (CSA F280).", labour: { rate: "hvac_design", qty: 1 }, pro: true });
-  if (newWindows.length || beamMoved)
-    add({ id: "pro_engineer", trade: "pros", item: "Structural engineer's letter and lintel detail", qty: 1, unit: "job", basis: newWindows.length ? "A new opening in the foundation wall needs a lintel the engineer designs." : "A beam or post moves.", labour: { rate: "engineer_egress", qty: 1 }, pro: true });
+  if (newWindows.length || entrances.length || beamMoved)
+    add({ id: "pro_engineer", trade: "pros", item: "Structural engineer's letter and lintel detail", qty: 1, unit: "job", basis: newWindows.length || entrances.length ? "A new opening in the foundation wall needs a lintel the engineer designs." : "A beam or post moves.", labour: { rate: "engineer_egress", qty: 1 }, pro: true });
 
   // Building it yourself, the escape window still needs a concrete cutter (the installed price has one).
   const cut = rate("concrete_cutting");

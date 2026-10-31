@@ -164,7 +164,7 @@
   padding-top: env(safe-area-inset-top);
   border-bottom: 1px solid var(--color-ink);
 }
-.cap-eyebrow { font-family: var(--font-mono); font-size: 13px; color: var(--color-ink-muted); }
+.cap-eyebrow { font-size: var(--text-small); color: var(--color-ink-muted); }
 .cap-page-body { flex: 1; display: grid; align-content: start; gap: var(--space-3); padding: var(--space-4) 0 var(--space-5); animation: cap-rise var(--dur-2) var(--ease-out) both; }
 .cap-title { font-family: var(--font-display); font-weight: 900; font-size: clamp(44px, 12vw, 76px); letter-spacing: -0.045em; line-height: 0.92; }
 .cap-title--sm { font-size: clamp(34px, 9vw, 52px); }
@@ -185,7 +185,7 @@
 .how-dot { fill: var(--color-mint); stroke: var(--color-ink); stroke-width: 1.6; }
 .cap-how b { display: block; font-family: var(--font-display); font-weight: 800; font-size: 19px; letter-spacing: -0.02em; line-height: 1.15; }
 .cap-how .cap-muted { display: block; margin-top: 2px; font-size: 15px; line-height: 1.35; }
-.cap-fine--left { text-align: left; font-family: var(--font-mono); font-size: 12px; }
+.cap-fine--left { text-align: left; font-size: var(--text-tiny); }
 .cap-shotlist { border-top: 1px solid var(--color-ink); }
 .cap-shotlist li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--color-border); }
 .cap-shotlist b { display: block; font-weight: 600; }
@@ -265,7 +265,7 @@
   color: var(--color-ink);
   font-weight: 600;
   font-size: 15px;
-  box-shadow: var(--shadow-card);
+  border: var(--line-ink);
 }
 .cap-plate--center { position: absolute; top: 50%; left: 50%; z-index: 2; translate: -50% -50%; width: max-content; max-width: min(320px, 80%); text-align: center; }
 
@@ -280,7 +280,7 @@
   background: color-mix(in srgb, var(--color-ink) 45%, transparent);
   animation: cap-fade var(--dur-2) var(--ease-out) both;
 }
-.cap-confirm-card { display: grid; gap: 12px; width: min(440px, 100%); padding: var(--space-4); border-radius: var(--cap-r); background: var(--color-card); box-shadow: var(--shadow-card); }
+.cap-confirm-card { display: grid; gap: 12px; width: min(440px, 100%); padding: var(--space-4); border: var(--line-ink); border-radius: var(--cap-r); background: var(--color-bg); box-shadow: var(--shadow-float); }
 .cap-confirm-card h2 { font-family: var(--font-display); font-weight: 800; font-size: 26px; letter-spacing: -0.03em; line-height: 1.05; }
 .cap-confirm-card p { color: var(--color-ink-muted); }
 .cap-confirm-actions { display: grid; gap: var(--space-2); margin-top: 4px; }
@@ -333,7 +333,7 @@
 .cap-facts div { display: flex; justify-content: space-between; gap: var(--space-3); padding: 10px 0; border-bottom: 1px solid var(--color-border); }
 .cap-facts dt { color: var(--color-ink-muted); }
 .cap-facts dd { font-family: var(--font-mono); font-size: 15px; text-align: right; }
-.cap-note { padding: 12px 14px; border-left: 3px solid var(--color-ink); border-radius: 0 var(--cap-r-sm) var(--cap-r-sm) 0; background: var(--color-surface); font-size: 15px; }
+.cap-note { padding: 12px 14px; border: var(--line); border-radius: var(--cap-r-sm); font-size: 15px; }
 .cap-review > .cap-page-actions { grid-area: actions; }
 
 @media (min-width: 900px) {
@@ -404,17 +404,17 @@
 .guide-top > * { pointer-events: auto; }
 .guide-bar { display: flex; align-items: center; gap: 8px; }
 .guide-icon-btn { display: grid; place-items: center; flex: none; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--color-ink) 55%, transparent); color: var(--color-card); }
-.guide-rec { display: inline-flex; align-items: center; gap: 7px; margin-right: auto; padding: 7px 12px; border-radius: var(--radius-pill); background: color-mix(in srgb, var(--color-ink) 55%, transparent); color: var(--color-card); font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
-.guide-rec > i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-stop); animation: guide-blink 1.6s steps(2, jump-none) infinite; }
+.guide-rec { display: inline-flex; align-items: center; gap: 7px; margin-right: auto; padding: 7px 12px; border-radius: var(--radius-1); background: color-mix(in srgb, var(--color-ink) 55%, transparent); color: var(--color-card); font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+/* Recording: a steady red mark beside the time, no blinking. */
+.guide-rec > i { width: 8px; height: 8px; border-radius: 50%; background: var(--color-stop); }
 .guide-rec b { font-weight: 500; color: var(--color-mint); }
 .guide-rec--ready { font-family: var(--font-body); font-size: 13px; font-weight: 600; }
 .guide-rec .cap-mic-bars i { background: color-mix(in srgb, var(--color-card) 35%, transparent); }
 .guide-rec .cap-mic-bars i[data-on="true"] { background: var(--color-mint); }
-.guide-done { min-height: 40px; padding: 8px 16px; border: 0; border-radius: var(--radius-pill); background: var(--color-mint); color: var(--color-mint-ink); font-weight: 800; font-size: 15px; }
+.guide-done { min-height: 44px; padding: 8px 16px; border: 0; border-radius: var(--radius-2); background: var(--color-mint); color: var(--color-mint-ink); font-weight: 800; font-size: 15px; }
 .guide-done[data-waiting="true"] { background: color-mix(in srgb, var(--color-ink) 55%, transparent); color: var(--color-card); font-weight: 600; font-size: 13px; }
-@keyframes guide-blink { 50% { opacity: 0.25; } }
 
-.guide-voice { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--color-ink) 92%, transparent); color: var(--color-card); }
+.guide-voice { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--radius-2); background: color-mix(in srgb, var(--color-ink) 92%, transparent); color: var(--color-card); }
 .guide-voice p { font-weight: 600; font-size: 17px; line-height: 1.3; animation: guide-in var(--dur-2) var(--ease-out) both; }
 .guide-voice-icon { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--color-mint); }
 .guide-voice-icon svg { width: 22px; height: 22px; }
@@ -431,7 +431,7 @@
 /* which way to turn or tilt for the part that isn't filmed yet */
 .guide-turn { position: absolute; z-index: 4; top: 40%; display: grid; justify-items: center; gap: 6px; color: var(--color-mint); filter: drop-shadow(0 2px 8px color-mix(in srgb, var(--color-ink) 50%, transparent)); animation: guide-in var(--dur-2) var(--ease-out) both; pointer-events: none; }
 .guide-turn svg { width: 72px; height: 72px; animation: guide-nudge 1.4s var(--ease-out) infinite; }
-.guide-turn span { display: grid; justify-items: center; max-width: 170px; padding: 5px 10px; border-radius: 10px; background: var(--color-ink); color: var(--color-card); text-align: center; line-height: 1.2; }
+.guide-turn span { display: grid; justify-items: center; max-width: 170px; padding: 5px 10px; border-radius: var(--radius-1); background: var(--color-ink); color: var(--color-card); text-align: center; line-height: 1.2; }
 .guide-turn b { font-weight: 800; font-size: 14px; }
 .guide-turn em { font-style: normal; font-size: 12px; opacity: 0.8; }
 .guide-turn[data-dir="left"] { left: 12px; }
@@ -452,12 +452,12 @@
 .guide-bottom { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; display: grid; gap: 10px; padding: 0 10px max(10px, env(safe-area-inset-bottom)); }
 
 /* bottom, while filming: the task and the big map of the basement so far */
-.map-panel { position: relative; z-index: 6; display: flex; flex-direction: column; gap: 10px; min-height: 0; margin-top: -16px; padding: 14px 12px max(12px, env(safe-area-inset-bottom)); border-radius: 16px 16px 0 0; background: var(--color-ink); color: var(--color-card); }
+.map-panel { position: relative; z-index: 6; display: flex; flex-direction: column; gap: 10px; min-height: 0; margin-top: -16px; padding: 14px 12px max(12px, env(safe-area-inset-bottom)); border-radius: 0; background: var(--color-ink); color: var(--color-card); }
 .map-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: start; }
 .map-panel .guide-task { font-size: 21px; }
 .map-count { display: flex; align-items: center; gap: 12px; padding-top: 4px; font-family: var(--font-mono); font-size: 12px; color: color-mix(in srgb, var(--color-card) 72%, transparent); white-space: nowrap; }
 .map-skip { min-height: 32px; margin: -6px 0; padding: 0 4px; border: 0; background: none; color: var(--color-card); font-family: var(--font-body); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
-.map-view { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; container-type: size; border-radius: 12px; background: color-mix(in srgb, var(--color-ink) 90%, var(--color-mint)); }
+.map-view { position: relative; flex: 1 1 0; min-height: 0; overflow: hidden; container-type: size; border-radius: var(--radius-2); background: color-mix(in srgb, var(--color-ink) 90%, var(--color-mint)); }
 .map-art, .map-canvas { position: absolute !important; inset: 0; }
 .map-status { position: absolute; left: 12px; right: 60px; bottom: 10px; display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 12px; font-weight: 500; line-height: 1.3; color: var(--color-card); pointer-events: none; }
 .map-dash { flex: none; width: 22px; height: 4px; overflow: visible; }
@@ -471,14 +471,14 @@
 .map-north { fill: color-mix(in srgb, var(--color-card) 65%, transparent); font-family: var(--font-mono); font-size: 11px; text-anchor: middle; }
 .map-cone { fill: var(--color-mint); fill-opacity: 0.55; }
 .map-you { fill: var(--color-mint); stroke: var(--color-ink); stroke-width: 4; }
-.guide-lens { padding: 1px 6px; border-radius: var(--radius-pill); background: var(--color-mint); color: var(--color-mint-ink); font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
+.guide-lens { padding: 1px 6px; border-radius: var(--radius-1); background: var(--color-mint); color: var(--color-mint-ink); font-family: var(--font-mono); font-size: 11px; font-weight: 600; }
 
-.guide-card { justify-self: stretch; display: grid; gap: 12px; padding: 16px 18px 14px; border-radius: 12px; background: var(--color-card); color: var(--color-ink); box-shadow: var(--shadow-card); }
+.guide-card { justify-self: stretch; display: grid; gap: 12px; padding: 16px 18px 14px; border: var(--line-ink); border-radius: var(--radius-2); background: var(--color-bg); color: var(--color-ink); }
 .guide-task { font-family: var(--font-display); font-weight: 800; font-size: 24px; letter-spacing: -0.025em; line-height: 1.08; animation: guide-in var(--dur-2) var(--ease-out) both; }
 .guide-link { justify-self: start; padding: 2px 0; border: 0; background: none; color: var(--color-ink-muted); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 .guide-nudge { font-size: 14px; font-weight: 600; }
 .guide-card--start { gap: 10px; }
-.guide-tips { font-family: var(--font-mono); font-size: 12px; color: var(--color-ink-muted); }
+.guide-tips { font-size: var(--text-small); color: var(--color-ink-muted); }
 .guide-start { min-height: 56px; font-size: 18px; }
 
 @media (min-width: 900px) {

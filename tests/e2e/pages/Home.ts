@@ -10,6 +10,7 @@ export class Home {
     await expect(this.page.getByRole("heading", { level: 1 })).toBeVisible();
   }
 
+  // The hero and the closing call to action both offer these: the first is the hero's.
   async trySample() {
     await this.page.getByRole("button", { name: "Try the example" }).first().click();
     await this.page.waitForURL("**/scans/sample");

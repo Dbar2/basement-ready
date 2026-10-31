@@ -4,7 +4,7 @@
 // interconnection, room names with areas and ceiling heights, and areas outside the work X'd out.
 // Every line comes from the permit model (server/permit/model.ts).
 import type { Opening, Pt, Room } from "../model/types";
-import { at, bounds, type Box, centroid, dir, inPolygon, type PermitModel, type PFixture, project, type PWall, roomArea, wallLen } from "./model";
+import { escapeStatus, at, bounds, type Box, centroid, dir, inPolygon, type PermitModel, type PFixture, project, type PWall, roomArea, wallLen } from "./model";
 import { area, dimText, FAINT, ftIn, INK, MUTED, PAPER, ptPerMetre, type Sheet, sizeText, TONE, TONE2, TONE3 } from "./pdf";
 
 export type Area = { x: number; y: number; w: number; h: number };
@@ -116,12 +116,13 @@ function drawWindow(s: Sheet, v: View, w: PWall, op: Opening, m: PermitModel, o:
   // The tag goes inside, clear of the dimension chains outside.
   const side = w.kind === "foundation" ? -outward(w, rooms) : 1;
   const tagAt = v.P(add(at(w, op.offsetM), n, side * 0.42));
-  const label = `${info.tag} ${sizeText(info.widthM, info.heightM)}`;
-  const status = info.change === "keep" ? "EXISTING" : info.change === "new" ? "NEW" : "ENLARGED";
+  // Its width alone until the height is taped; an escape window only once its size meets the rule.
+  const label = `${info.tag} ${info.heightM == null ? `${sizeText(info.widthM, null)} WIDE` : sizeText(info.widthM, info.heightM)}`;
+  const status = [info.change === "keep" ? "EXISTING" : info.change === "new" ? "NEW" : "ENLARGED", escapeStatus(info)].filter(Boolean).join(", ");
   const tw = Math.max(s.textWidth(label, 6.2, s.fonts.bold), s.textWidth(status, 5.5)) + 8;
   s.rect(tagAt[0] - tw / 2, tagAt[1] - 9, tw, 19, { fill: PAPER, width: 0.6 });
   s.text(label, tagAt[0], tagAt[1] + 2.5, { size: 6.2, font: s.fonts.bold, align: "center" });
-  s.text(status + (info.escape ? ", ESCAPE" : ""), tagAt[0], tagAt[1] - 5.5, { size: 5.3, align: "center" });
+  s.text(status, tagAt[0], tagAt[1] - 5.5, { size: 5.3, align: "center" });
 }
 
 function drawDoor(s: Sheet, v: View, w: PWall, op: Opening, rooms: Room[]) {
@@ -175,8 +176,16 @@ export function drawFixtures(s: Sheet, v: View, fixtures: PFixture[]) {
         if (alongX) s.line(x0 + t * (x1 - x0), y0, x0 + t * (x1 - x0), y1, { width: 0.4 });
         else s.line(x0, y0 + t * (y1 - y0), x1, y0 + t * (y1 - y0), { width: 0.4 });
       }
-      // The run arrow, up the stair.
-      const [ax, ay, bx, by] = alongX ? [x0 + 4, (y0 + y1) / 2, x1 - 6, (y0 + y1) / 2] : [(x0 + x1) / 2, y0 + 4, (x0 + x1) / 2, y1 - 6];
+      // The run arrow, up the stair: from its foot (`bottom`, where you step off it) when the scan knows
+      // it, else from the low end.
+      const mid = alongX ? (y0 + y1) / 2 : (x0 + x1) / 2;
+      const ends: Pt[] = alongX ? [[x0, mid], [x1, mid]] : [[mid, y0], [mid, y1]];
+      const foot = f.bottom ? (alongX ? v.X(f.bottom[0]) : v.Y(f.bottom[1])) : null;
+      const k = alongX ? 0 : 1;
+      const [from, to] = foot != null && Math.abs(foot - ends[1][k]) < Math.abs(foot - ends[0][k]) ? [ends[1], ends[0]] : ends;
+      const run = Math.hypot(to[0] - from[0], to[1] - from[1]) || 1;
+      const u = [(to[0] - from[0]) / run, (to[1] - from[1]) / run];
+      const [ax, ay, bx, by] = [from[0] + 4 * u[0], from[1] + 4 * u[1], to[0] - 6 * u[0], to[1] - 6 * u[1]];
       s.line(ax, ay, bx, by, { width: 0.6 });
       const ang = Math.atan2(by - ay, bx - ax);
       s.poly([[bx, by], [bx - 5 * Math.cos(ang - 0.45), by - 5 * Math.sin(ang - 0.45)], [bx - 5 * Math.cos(ang + 0.45), by - 5 * Math.sin(ang + 0.45)]], { fill: INK, width: 0.3 });
@@ -216,6 +225,9 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
   const furn = m.design.proposed.furniture ?? [];
   const LABEL: Record<string, string> = { toilet: "WC", vanity: "LAV", shower: "SHOWER", kitchen: "COUNTER", fridge: "FRIDGE", washer_dryer: "W/D" };
   const fixed = furn.filter((f) => LABEL[f.kind]);
+  // Fixtures in a room kept as the scan found it are already there: "WC (E)".
+  const kept = m.design.proposed.rooms.filter((r) => r.kept);
+  const there = (p: Pt) => kept.some((r) => inPolygon(p, r.polygon));
   if (fixed.length) {
     for (const f of fixed) {
       const [w, d] = f.sizeM;
@@ -223,20 +235,20 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
       const corners: Pt[] = [[-w / 2, -d / 2], [w / 2, -d / 2], [w / 2, d / 2], [-w / 2, d / 2]].map(([x, z]) => [f.at[0] + x * Math.cos(r) - z * Math.sin(r), f.at[1] + x * Math.sin(r) + z * Math.cos(r)]);
       s.poly(corners.map(v.P), { width: 0.5, color: MUTED, fill: PAPER });
       const [cx, cy] = v.P(f.at);
-      s.text(LABEL[f.kind], cx, cy - 2, { size: 4.6, align: "center", color: MUTED });
+      s.text(there(f.at) ? `${LABEL[f.kind]} (E)` : LABEL[f.kind], cx, cy - 2, { size: 4.6, align: "center", color: MUTED });
     }
     return;
   }
   const outer = bounds(m.design.proposed.rooms.filter((r) => r.unit === 2).flatMap((r) => r.polygon));
   for (const room of m.design.proposed.rooms.filter((r) => r.unit === 2 && (r.kind === "bathroom" || r.kind === "kitchen"))) {
     const z = bounds(room.polygon);
-    const items = room.kind === "bathroom" ? ["WC", "LAV", "SHOWER"] : ["FRIDGE", "SINK", "RANGE"];
+    const items = (room.kind === "bathroom" ? ["WC", "LAV", "SHOWER"] : ["FRIDGE", "SINK", "RANGE"]).map((x) => (room.kept ? `${x} (E)` : x));
     const alongX = z.maxX - z.minX >= z.maxZ - z.minZ;
     const atMin = alongX ? Math.abs(z.minZ - outer.minZ) < Math.abs(outer.maxZ - z.maxZ) : Math.abs(z.minX - outer.minX) < Math.abs(outer.maxX - z.maxX);
     const len = alongX ? z.maxX - z.minX : z.maxZ - z.minZ;
     const depth = Math.min(0.6, alongX ? z.maxZ - z.minZ : z.maxX - z.minX);
     items.forEach((label, i) => {
-      const wide = label === "SHOWER" ? Math.min(0.9, len / 3) : Math.min(0.6, len / 3.4);
+      const wide = label.startsWith("SHOWER") ? Math.min(0.9, len / 3) : Math.min(0.6, len / 3.4);
       const a = (len / items.length) * (i + 0.5) - wide / 2;
       let x0: number, z0: number, x1: number, z1: number;
       if (alongX) {
@@ -252,37 +264,66 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
       }
       const [px0, py0] = v.P([x0, z1]), [px1, py1] = v.P([x1, z0]);
       s.rect(px0, py0, px1 - px0, py1 - py0, { width: 0.5, color: MUTED, fill: PAPER });
-      if (label === "WC") s.circle((px0 + px1) / 2, (py0 + py1) / 2, Math.min(px1 - px0, py1 - py0) / 3, { width: 0.4, color: MUTED });
+      if (label.startsWith("WC")) s.circle((px0 + px1) / 2, (py0 + py1) / 2, Math.min(px1 - px0, py1 - py0) / 3, { width: 0.4, color: MUTED });
       s.text(label, (px0 + px1) / 2, (py0 + py1) / 2 - 2, { size: label.length > 4 ? 4.2 : 4.8, align: "center", color: MUTED });
     });
   }
 }
 
 // Room names, areas, sizes and ceiling heights.
-export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean }) {
+// On a plan cut into sheets (`tile`, this sheet's part of `tiles`, which together cover `whole`), a room
+// is named in the middle of its part on the sheet that holds most of it, and on any other that shows at
+// least 40% of it, so no name runs off a match line. One mostly outside the plan (a unit 1 room beside
+// the work) isn't named on the sliver of it that shows.
+const overlapOf = (a: Box, t: Box): Box => ({ minX: Math.max(a.minX, t.minX), maxX: Math.min(a.maxX, t.maxX), minZ: Math.max(a.minZ, t.minZ), maxZ: Math.min(a.maxZ, t.maxZ) });
+const boxArea = (b: Box) => Math.max(0, b.maxX - b.minX) * Math.max(0, b.maxZ - b.minZ);
+
+// `continues`: a sheet's number by its tile, so a room the cut crosses says where the rest of it is (its
+// size is the whole room's, wider than this sheet's own dimensions).
+// Returns the boxes the labels take on the page, so other labels can keep off them.
+export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean; tile?: Box; tiles?: Box[]; whole?: Box; continues?: (i: number) => string }): PageBox[] {
   const rooms = m.design.proposed.rooms;
+  const taken: PageBox[] = [];
   for (const r of rooms) {
     if (r.kind === "stairs") continue;
-    const b = bounds(r.polygon);
+    const full = bounds(r.polygon);
+    const t = o.tile;
+    const cut = Boolean(t && (full.minX < t.minX - 0.01 || full.maxX > t.maxX + 0.01 || full.minZ < t.minZ - 0.01 || full.maxZ > t.maxZ + 0.01));
+    const b = cut && t ? overlapOf(full, t) : full;
+    let elsewhere: string[] = [];
+    if (t && o.tiles?.length) {
+      const share = (x: Box) => boxArea(overlapOf(full, x)) / Math.max(1e-9, boxArea(full));
+      if (o.whole && share(o.whole) < 0.5) continue;
+      const best = o.tiles.reduce((bi, x, i) => (share(x) > share(o.tiles![bi]) + 1e-6 ? i : bi), 0);
+      if (o.tiles[best] !== t && share(t) < 0.4) continue;
+      if (cut && o.continues) elsewhere = o.tiles.flatMap((x, i) => (x !== t && share(x) > 0.05 ? [o.continues!(i)] : []));
+    }
+    if (b.maxX - b.minX < 0.3 || b.maxZ - b.minZ < 0.3) continue;
     // A kitchen that's only a counter along the wall: its fixtures say what it is.
-    if (r.kind === "kitchen" && Math.min(b.maxX - b.minX, b.maxZ - b.minZ) < 1.2) continue;
+    if (r.kind === "kitchen" && Math.min(full.maxX - full.minX, full.maxZ - full.minZ) < 1.2) continue;
     // Leave a stair or furnace room drawn inside this one out of where the label goes.
     const inner = rooms.filter((x) => x !== r && (x.kind === "stairs" || x.kind === "mechanical")).map((x) => bounds(x.polygon));
-    let c = centroid(r.polygon);
+    let c: Pt = cut ? [(b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2] : centroid(r.polygon);
     for (const ib of inner) if (c[0] > ib.minX - 0.4 && c[0] < ib.maxX + 0.4 && c[1] > ib.minZ - 0.4 && c[1] < ib.maxZ + 0.4) c = [c[0], ib.maxZ + 0.9 < b.maxZ ? ib.maxZ + 0.9 : ib.minZ - 0.9];
     const [cx, cy] = v.P(c);
     const wide = (b.maxX - b.minX) * v.k;
     const name = (r.unit === 2 ? r.name : `${r.name}${r.unit === 1 ? " (unit 1)" : r.unit === "shared" && r.kind !== "mechanical" ? " (shared)" : ""}`).toUpperCase();
     const lines: [string, number, boolean][] = [[name, 7, true]];
     lines.push([area(roomArea(r, rooms)), 5.8, false]);
-    if (r.unit === 2) lines.push([`${ftIn(b.maxX - b.minX)} x ${ftIn(b.maxZ - b.minZ)}`, 5.5, false]);
+    if (r.unit === 2) lines.push([`${ftIn(full.maxX - full.minX)} x ${ftIn(full.maxZ - full.minZ)}`, 5.5, false]);
     const clg = r.ceilingM ?? m.ceilingM;
     if (o.ceiling && clg) lines.push([`CLG ${ftIn(clg)} (${Math.round(clg * 1000)})`, 5.5, false]);
+    if (r.kept) lines.push(["EXISTING, NO CHANGE", 5.5, false]);
+    if (elsewhere.length) lines.push([`CONTINUES ON ${elsewhere.join(", ")}`, 5.5, false]);
     const tall = (b.maxZ - b.minZ) * v.k;
     const width = (t: string, size: number, bold: boolean) => s.textWidth(t, size, bold ? s.fonts.bold : s.fonts.regular) + 6;
     const turned = width(name, 7, true) > wide && width(name, 7, true) <= tall && wide >= 30;
     const room = turned ? tall : wide;
     let y = (turned ? cx - (lines.length * 7.5) / 2 + 5 : cy + (lines.length * 7.5) / 2 - 5);
+    const shown = lines.filter(([t, size, bold]) => width(t, size, bold) <= room);
+    const half = Math.max(0, ...shown.map(([t, size, bold]) => width(t, size, bold))) / 2;
+    const run = shown.reduce((h, [, size]) => h + size + 2.2, 0);
+    if (shown.length) taken.push(turned ? { x0: y - 7, x1: y + run, y0: cy - half, y1: cy + half } : { x0: cx - half, x1: cx + half, y0: y - run + 2, y1: y + 7 });
     for (const [t, size, bold] of lines) {
       if (width(t, size, bold) > room) continue;
       const style = { size, align: "center" as const, font: bold ? s.fonts.bold : s.fonts.regular, color: bold ? INK : MUTED };
@@ -302,9 +343,15 @@ export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: 
       const [x, y] = v.P([b.minX, b.minZ]);
       s.rect(x + 6, y - 20, 50, 14, { fill: PAPER, width: 0.9 });
       s.text("UNIT 2", x + 31, y - 15.5, { size: 7.5, font: s.fonts.bold, align: "center" });
+      taken.push({ x0: x + 6, x1: x + 56, y0: y - 20, y1: y - 6 });
     }
   }
+  return taken;
 }
+
+// A box on the page, in points.
+export type PageBox = { x0: number; y0: number; x1: number; y1: number };
+export const boxesMeet = (a: PageBox, b: PageBox, pad = 2) => a.x0 < b.x1 + pad && b.x0 < a.x1 + pad && a.y0 < b.y1 + pad && b.y0 < a.y1 + pad;
 
 // Smoke and CO alarms: a circle with S.A., C.O. or both, rays for the strobe, and a dashed line
 // joining them all (they're interconnected).
@@ -415,12 +462,22 @@ export function drawChains(s: Sheet, v: View, m: PermitModel, clipBox?: Box) {
     const side = n[0] * e.out[0] + n[1] * e.out[1] > 0 ? 1 : -1;
     const off1 = face + 0.18 + 14 / v.k, off2 = off1 + 16 / v.k;
     const w0 = { ...edge, id: "edge", thicknessM: face, kind: "existing", rating: null } as PWall;
-    for (let i = 0; i + 1 < sorted.length; i++) chainSeg(s, v, w0, sorted[i], sorted[i + 1], n, side * off1, i, face);
-    if (sorted.length > 2) chainSeg(s, v, w0, 0, L, n, side * off2, 0, face);
+    // On a plan cut into sheets, only what's on this sheet: a dimension that crosses the match line
+    // stops there and says so, and the overall goes on the sheet that shows the whole edge. A line the
+    // sheet's edge cut short would read shorter than its label at the sheet's scale.
+    const horizontal = Math.abs(e.b[1] - e.a[1]) < 1e-6;
+    const lo = clipBox ? Math.max(0, horizontal ? clipBox.minX - e.a[0] : clipBox.minZ - e.a[1]) : 0;
+    const hi = clipBox ? Math.min(L, horizontal ? clipBox.maxX - e.a[0] : clipBox.maxZ - e.a[1]) : L;
+    for (let i = 0; i + 1 < sorted.length; i++) {
+      const t0 = Math.max(sorted[i], lo), t1 = Math.min(sorted[i + 1], hi);
+      if (t1 - t0 < 0.05) continue;
+      chainSeg(s, v, w0, t0, t1, n, side * off1, i, face, t0 > sorted[i] || t1 < sorted[i + 1] ? "TO MATCH LINE" : undefined);
+    }
+    if (sorted.length > 2 && lo <= 0.001 && hi >= L - 0.001) chainSeg(s, v, w0, 0, L, n, side * off2, 0, face);
   }
 }
 
-function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, off: number, i: number, face: number) {
+function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, off: number, i: number, face: number, note?: string) {
   const a = add(at(w, t0), n, off), b = add(at(w, t1), n, off);
   const [ax, ay] = v.P(a), [bx, by] = v.P(b);
   s.line(ax, ay, bx, by, { width: 0.45, color: MUTED });
@@ -431,7 +488,7 @@ function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, of
     s.line(px - 3, py - 3, px + 3, py + 3, { width: 0.8 });
   }
   const len = t1 - t0;
-  const label = dimText(len);
+  const label = note ? `${dimText(len)} ${note}` : dimText(len);
   const span = Math.hypot(bx - ax, by - ay);
   const ang = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI;
   const up = ang > 90 || ang < -90 ? ang + 180 : ang;

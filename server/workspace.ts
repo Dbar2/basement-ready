@@ -41,6 +41,8 @@ const PermitSchema = z.object({
   upstairs: z.object({ bedrooms: z.array(z.object({ floor: z.number().int().min(1).max(3), at: point })).max(12), none: z.boolean().nullable().optional() }).optional(),
   reviewed: z.array(z.object({ sheet: text(12), key: text(40) })).max(40).optional(),
   designer: z.object({ name: optText(100), bcin: optText(12), firm: optText(120), firmBcin: optText(12), email: optText(120), phone: optText(30) }).optional(),
+  // Kitchener: how the two units' water is metered, and where the meter is (Building Bulletin BB 2026-04).
+  waterMeter: z.object({ option: z.enum(["single", "room", "compartment"]).nullable().optional(), where: optText(160) }).optional(),
 });
 
 // Each section is replaced whole when the client saves it.

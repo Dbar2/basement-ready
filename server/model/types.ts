@@ -16,6 +16,7 @@ export type Wall = {
   kind: "foundation" | "existing" | "new";
   rating: Rating;
   guess?: boolean; // the camera never saw it: its place is a guess until they confirm the plan
+  why?: string; // a new wall's reason, in words they can read ("Closes off the bedroom")
 };
 
 export type Opening = {
@@ -30,6 +31,7 @@ export type Opening = {
   swing?: "left" | "right" | null; // doors: the hinge side, looking from `a` to `b`
   rating?: "20min" | null; // a door in a fire separation: closer, positive latch
   detectionId?: string; // the SAM find it came from
+  guess?: boolean; // its width (or for a window only seen on video, its place) is a guess until they check it
 };
 
 export type RoomKind = "bedroom" | "bathroom" | "kitchen" | "living" | "mechanical" | "stairs" | "closet" | "storage" | "laundry" | "hall" | "other";
@@ -42,6 +44,7 @@ export type Room = {
   unit: 1 | 2 | "shared";
   ceilingM?: number | null;
   ceilingRating?: Rating; // the floor above, as a fire separation: 15 minutes over the suite
+  kept?: boolean; // finished as the scan found it (a bathroom already there): kept, not built new
 };
 
 export type FixtureKind = "furnace" | "water_heater" | "panel" | "plumbing" | "beam" | "duct" | "bulkhead" | "post" | "stairs";
@@ -54,6 +57,7 @@ export type Fixture = {
   heightM?: number | null; // beams, ducts, bulkheads: floor to their underside
   detectionId?: string;
   guess?: boolean; // seen on video but not placed by the 3D: they drag it where it is
+  bottom?: Pt; // stairs: the foot of the flight, where you step off it
 };
 
 export type Alarm = { id: string; kind: "smoke" | "co" | "combo"; at: Pt; why: string };
@@ -101,6 +105,9 @@ export type Existing = {
   // 3D is drawn at the same scale as the plan.
   scale: { source: "arkit" | "model" | "user_measurement" | "tape"; tapeM?: { wallId: string; lengthM: number }[]; factor?: number };
   confirmedAt: string | null; // when they said yes, this is my basement
+  // Whether it has its own way in (server/model/entrance.ts): from the scan and what they told us, read
+  // fresh from the answer every time (server/model/current.ts).
+  entrance?: { status: "own" | "needed" | "unknown"; why: string };
 };
 
 // One design for the suite. `proposed` is the whole design as built: existing walls it keeps are in it too.
@@ -112,20 +119,22 @@ export type Design = {
   finishes: Finishes;
   chosen: boolean;
   updatedAt: string;
+  why?: string; // one plain sentence on why it's laid out so (server/model/seed.ts whyOf)
 };
 
 // What they swiped: card ids, and the style and finishes those cards point to. `colours`: each piece of
 // furniture's colour, from the style the board loved most for its room (server/ideas/deck.ts).
 export type Mood = { liked: string[]; disliked: string[]; style: string | null; finishes: Partial<Finishes>; colours?: Partial<Record<FurnitureKind, string>> };
 
-export type Model = { version: 1; existing: Existing; designs: Design[]; mood: Mood };
+// `recommended`: the design the guide puts first, and why in one plain line (server/model/seed.ts).
+export type Model = { version: 1; existing: Existing; designs: Design[]; mood: Mood; recommended?: { designId: string; reason: string } };
 
 // A change to a design: what the editor's drags, the one-tap fixes and muse-spark's proposals produce.
 export type Edit =
   | { op: "move_wall"; wallId: string; a: Pt; b: Pt }
   | { op: "add_wall"; wall: Wall }
   | { op: "remove_wall"; wallId: string }
-  | { op: "set_wall"; wallId: string; rating?: Rating; kind?: Wall["kind"]; thicknessM?: number }
+  | { op: "set_wall"; wallId: string; rating?: Rating; kind?: Wall["kind"]; thicknessM?: number; guess?: false } // guess false: they say a guessed wall is right
   | { op: "add_opening"; opening: Opening }
   | { op: "move_opening"; openingId: string; offsetM: number }
   | { op: "set_opening"; openingId: string; widthM?: number; heightM?: number | null; sillM?: number | null; rating?: "20min" | null; swing?: "left" | "right" | null }

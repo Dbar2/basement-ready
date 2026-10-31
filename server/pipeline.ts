@@ -1,8 +1,8 @@
 // One scan: phone video in, a verdict with proof out. Runs inside a worker job and writes
 // every step to scan_events, so the scan screen (and a refresh) can follow along.
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { execFile } from "node:child_process";
-import { mkdirSync, readdirSync, rmSync, existsSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
@@ -11,17 +11,19 @@ import { recheck, type AnswerValue } from "./recheck";
 import { db, schema } from "./db";
 import { enqueuePhotos, photosSoFar, settlePhotos } from "./photos";
 import { findInPhotos, mergePhotoFinds } from "./photoFinds";
+import { pointInPhoto, pointInVideo, withoutNamed } from "./pointFinds";
+import { jpegSize } from "./concepts";
+import { videoFinds } from "./videoFinds";
 import { MIN_PHOTOS_3D, type PhotoTake } from "./photoInput";
 import { cleanPlans, plansWords, PLANS_ID } from "./plans";
 import { dataUrl, samImage, samVideo, transcribe, uploadFile } from "./meta";
 import type { Property } from "./property";
 import type { Household } from "./rules";
-import { bestFrame, parseSam } from "./sam";
 import { suggestLayout } from "./layout";
 import { buildPlan, locate, rescalePlan, type Plan } from "./plan";
 import { areaName, mainRoom, MAX_TAKE_S, MIN_ROOM_FRAMES, roomName, roomRanges, withIdeas, withoutGuide, type Idea, type Room, type RoomMark, type Span } from "./rooms";
 import { basementViewpoints, mergeMesh, mergeSurfels, scanBasement, type BasementProgress, type BasementScan, type RoomPlacement } from "./basement";
-import { readBasementPlan } from "./floorplan";
+import { measureBasementPlan, measuredPlan, reviewBasementPlan } from "./floorplan";
 import type { BasementPlan } from "../src/api";
 import { cameraLookup } from "./capture";
 import { doorHeights, doorScale, lowOverhead, meshFaces, rescaleMeasurements, runScan3d, scan3dReady, summarize, type Measurements, type Scan3d } from "./scan3d";
@@ -30,6 +32,7 @@ import { causeOf, FAILURE, stored } from "./failure";
 import { charge, PRICES } from "./spend";
 import { labelled } from "./demo";
 import { roomNames } from "./watch";
+import { sortClearances } from "./clearance";
 import { checkPlanLater, startWatch, type Watching } from "./watchScan";
 
 const run = promisify(execFile);
@@ -37,22 +40,22 @@ const run = promisify(execFile);
 export const ANALYSIS_FPS = 5;
 const SAM_USD_PER_FRAME = 0.2 / 1000; // Meta pricing, 50-frame minimum per request
 
-// What SAM looks for. One concept per request, per the SAM docs.
-export const CONCEPTS: { concept: string; kind: string; label: string }[] = [
+// What SAM looks for. One concept per request, per the SAM docs. `video`: other words for a whole video,
+// where they track better (scripts/practice: "metal duct" finds the round ducts and plenums that "ceiling
+// duct" misses in a walk, but outlines flues and window wells in a single photo).
+export const CONCEPTS: { concept: string; kind: string; label: string; video?: string }[] = [
   { concept: "basement window", kind: "window", label: "Window" },
   { concept: "staircase", kind: "stairs", label: "Stairs" },
-  { concept: "ceiling duct", kind: "duct", label: "Duct" },
+  { concept: "ceiling duct", video: "metal duct", kind: "duct", label: "Duct" },
   { concept: "support beam", kind: "beam", label: "Beam" },
-  { concept: "furnace", kind: "mechanical", label: "Furnace" },
   { concept: "electrical panel", kind: "mechanical", label: "Electrical panel" },
   { concept: "water heater", kind: "mechanical", label: "Water heater" },
-  // Pipes already in the floor: where a bathroom is cheapest (server/layout.ts puts it there).
-  { concept: "plumbing rough-in", kind: "mechanical", label: "Plumbing rough-in" },
   { concept: "floor drain", kind: "mechanical", label: "Floor drain" },
-  // A boxed-in duct or beam: it sets the headroom under it, like a duct.
-  { concept: "ceiling bulkhead", kind: "duct", label: "Bulkhead" },
   { concept: "door", kind: "exit", label: "Door" },
 ];
+// SAM 3.1 never matches "furnace", "ceiling bulkhead" or "plumbing rough-in" by name (scripts/practice): a
+// furnace, a bulkhead and pipes already in the floor (where a bathroom is cheapest, server/layout.ts) are
+// found by pointing instead, with water heaters and panels the name missed (server/pointFinds.ts).
 
 export type Detection = {
   id: string;
@@ -163,6 +166,31 @@ export async function saveBasement3d(scanId: string, b: BasementScan) {
   ]);
 }
 
+// How far to trust a size on the wait screen. Re-filming slowly helps a web take, whose 3D finds its own
+// camera path; an app take's camera path is the phone's, and what's rough there is the depth itself
+// (a floor 10 cm thick in the 3D), so a tape measurement is what fixes it, as for photos.
+export function caveatFor(m: Measurements, photos = false) {
+  if (!m.trusted) return photos || m.scaleSource === "arkit" ? " (rough: a tape measurement fixes it)" : " (rough: re-film slowly for exact sizes)";
+  return m.scaleSource === "model" ? " (estimated)" : "";
+}
+
+// An app take's sizes on the wait screen: the whole plan's rooms, named as the watch named them. An area is
+// a stretch of the walk (the stairs, half a room), so its own box isn't a room's size. Without a plan,
+// each area's as before.
+export function sizeLines(plan: BasementPlan | null | undefined, rooms: Room[]): { text: string; data: unknown }[] {
+  const areas = rooms.filter((r) => r.measurements);
+  if (!plan?.rooms.length) return areas.map((r) => ({ text: `${rooms.length > 1 ? `${r.name}: ` : "Measured "}${[r.measurements!.ceilingHeightM != null && `ceiling ${r.measurements!.ceilingHeightM.toFixed(2)} m`, r.measurements!.widthM != null && r.measurements!.depthM != null && `${r.measurements!.widthM.toFixed(1)} × ${r.measurements!.depthM.toFixed(1)} m`].filter(Boolean).join(" · ")}${caveatFor(r.measurements!)}`, data: r.measurements }));
+  const caveat = areas.length && areas.every((r) => r.measurements!.trusted) ? "" : areas[0]?.measurements ? caveatFor({ ...areas[0].measurements, trusted: false }) : "";
+  return plan.rooms.map((r, i) => {
+    const xs = r.polygon.map((p) => p[0]), zs = r.polygon.map((p) => p[1]);
+    const w = Math.max(...xs) - Math.min(...xs), d = Math.max(...zs) - Math.min(...zs);
+    const ceiling = r.ceilingM ?? plan.ceilingM;
+    const name = r.name || `Room ${i + 1}`;
+    const sizes = [ceiling != null && `ceiling ${ceiling.toFixed(2)} m`, `${r.areaM2.toFixed(1)} m², ${w.toFixed(1)} × ${d.toFixed(1)} m`].filter(Boolean);
+    return { text: `${plan.rooms.length > 1 ? `${name}: ` : "Measured "}${sizes.join(" · ")}${caveat}`, data: { room: r.id, areaM2: r.areaM2, widthM: w, depthM: d, ceilingHeightM: ceiling } };
+  });
+}
+
 export async function finishRooms(
   scanId: string,
   ranges: { index: number; from: number; to: number }[],
@@ -174,6 +202,8 @@ export async function finishRooms(
   photos?: { names: (string | null)[] },
   // What the watch pass saw and heard in each area ("Mom's room"), when nobody typed a name.
   watched: (string | null)[] = [],
+  // An app take: the wait screen's sizes are the whole plan's rooms (sizeLines), not each area's.
+  quiet = false,
 ): Promise<Room[]> {
   const furnaceFrames = detections.filter((d) => d.label === "Furnace").map((d) => d.frame);
   const named = new Set<string>();
@@ -211,13 +241,12 @@ export async function finishRooms(
         measurements.ceilingHeightM != null && `ceiling ${measurements.ceilingHeightM.toFixed(2)} m`,
         measurements.widthM != null && measurements.depthM != null && `${measurements.widthM.toFixed(1)} × ${measurements.depthM.toFixed(1)} m`,
       ].filter(Boolean);
-      const rough = photos ? " (rough: a tape measurement fixes it)" : " (rough: re-film slowly for exact sizes)";
-      const caveat = !measurements.trusted ? rough : measurements.scaleSource === "model" ? " (estimated)" : "";
-      await emit("measure", `${ranges.length > 1 ? `${name}: ` : "Measured "}${sizes.join(" · ")}${caveat}`, measurements);
+      if (!quiet) await emit("measure", `${ranges.length > 1 ? `${name}: ` : "Measured "}${sizes.join(" · ")}${caveatFor(measurements, Boolean(photos))}`, measurements);
     }
     rooms.push({ index: r.index, name, startS: r.from / ANALYSIS_FPS, endS: r.to / ANALYSIS_FPS, has3d: Boolean(s3), plan, measurements, placement: placements?.[r.index] ?? null });
   }
-  return rooms;
+  // Headroom that can't be headroom is set aside across the whole basement (server/clearance.ts).
+  return sortClearances(rooms);
 }
 
 type Emit = (type: ScanEventType, text: string, data?: unknown) => Promise<void>;
@@ -241,7 +270,9 @@ type Stage = {
   sparkP: ReturnType<typeof readWithSpark>;
   uploads: Promise<unknown>;
   samCost: number;
-  floorPlan?: BasementPlan | null; // app takes: the whole basement's plan (server/floorplan.ts)
+  floorPlan?: BasementPlan | null; // app takes: the whole basement's plan (server/floorplan.ts), as measured
+  // Spark's review of that plan, run once the answer is out (reviewPlanLater): null when there's no plan.
+  reviewPlan?: (() => Promise<BasementPlan | null>) | null;
   watching: Watching;
 };
 
@@ -303,25 +334,9 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   const detections: Detection[] = [];
   await Promise.all(
     CONCEPTS.map(async (c) => {
-      const raw = await samVideo(c.concept, fileId, frameCount).catch(() => "");
-      // Ignore flickers: an object must hold for half a second to count.
-      const tracks = parseSam(raw).filter((t) => t.frames.length >= Math.ceil(ANALYSIS_FPS / 2)).slice(0, 6);
-      const found: Detection[] = tracks.map((t, i) => {
-        const b = bestFrame(t);
-        const r = (n: number) => Math.round(n * 1000) / 1000;
-        return {
-          id: `${c.kind}-${c.label.toLowerCase().replace(/\s+/g, "-")}-${i + 1}`,
-          kind: c.kind,
-          label: c.label,
-          concept: c.concept,
-          frame: b.frame,
-          seconds: b.frame / ANALYSIS_FPS,
-          box: { x: b.box.x1 / b.box.w, y: b.box.y1 / b.box.h, w: (b.box.x2 - b.box.x1) / b.box.w, h: (b.box.y2 - b.box.y1) / b.box.h },
-          framesSeen: t.frames.length,
-          confidence: b.box.c ?? null,
-          track: t.frames.map((f) => [f.frame, r(f.box.x1 / f.box.w), r(f.box.y1 / f.box.h), r((f.box.x2 - f.box.x1) / f.box.w), r((f.box.y2 - f.box.y1) / f.box.h)]),
-        };
-      });
+      const raw = await samVideo(c.video ?? c.concept, fileId, frameCount).catch(() => "");
+      // What holds for half a second, and one long, level beam at a time (server/videoFinds.ts).
+      const found = videoFinds(c, raw, ANALYSIS_FPS);
       detections.push(...found);
       await emit("find", found.length ? `Found ${plural(found.length, c.label)}` : `No ${c.label.toLowerCase()} seen`, {
         kind: c.kind,
@@ -332,6 +347,17 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   );
   // Concept order, not the order SAM answered in: the same video always asks Spark the same thing.
   detections.sort((a, b) => CONCEPTS.findIndex((c) => c.concept === a.concept) - CONCEPTS.findIndex((c) => c.concept === b.concept));
+  // What SAM can't find by name: once the watch says when each was filmed, Spark marks it on a frame there
+  // and SAM tracks it through the video (server/pointFinds.ts), while the 3D measures.
+  const framePath = (n: number) => join(work, "frames", `${String(n).padStart(4, "0")}.jpg`);
+  const [frameW, frameH] = jpegSize(readFileSync(framePath(0))) ?? [720, 1280];
+  const pointedP = watching.watch
+    .then((w) => pointInVideo(w, { frameUrl: (n) => dataUrl(framePath(n), "image/jpeg"), fileId, frameCount, fps: ANALYSIS_FPS, w: frameW, h: frameH }))
+    .catch((err) => {
+      console.error(`[points] ${scanId}: ${err instanceof Error ? err.message : err}`);
+      return { finds: [], costUsd: 0 };
+    });
+  inflight.push(pointedP);
   // The photos start now, from the finds and the wide shot, and land while the 3D measures.
   void uploads.then(() => enqueuePhotos(scanId)).catch((err) => console.error(`[photos] ${scanId}: ${err instanceof Error ? err.message : err}`));
 
@@ -358,26 +384,38 @@ async function videoStage({ scanId, videoKey, inputs, work, ctx, emit, inflight 
   // Without the 3D, the phone's room marks still name the areas.
   const ranges = basement3d ? basement3d.spans.map((span, index) => ({ index, ...span })) : roomRanges(inputs.rooms ?? null, frameCount, ANALYSIS_FPS);
   const scans3d: (Scan3d | null)[] = basement3d ? basement3d.scans : ranges.map(() => null);
+  const pointed = await pointedP;
+  const extra = withoutNamed(pointed.finds, detections);
+  for (const [label, finds] of Map.groupBy(extra, (d) => d.label)) {
+    await emit("find", `Found ${plural(finds.length, label)}`, { kind: finds[0].kind, label, detections: finds });
+  }
+  detections.push(...extra);
   const low = lowOverhead(scans3d, detections);
   if (low.length) {
     for (const d of low) detections.splice(detections.indexOf(d), 1);
     await emit("log", `Left out ${plural(low.length, "find")} too low to be a beam or duct`);
   }
-  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements, undefined, roomNames(ranges, await watching.watch, ANALYSIS_FPS));
+  const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, basement3d?.placements, undefined, roomNames(ranges, await watching.watch, ANALYSIS_FPS), Boolean(basement3d?.tracked));
   if (basement3d) {
     await saveBasement3d(scanId, basement3d);
     await emit("model", "", { area: "all", files: files3d(scanId, "room=all", basement3d.scans.some((s3) => s3.mesh)), path: cm(basement3d.path) });
   }
   // An app take's areas share the phone's world: one plan of the whole basement, with SAM's finds in it,
-  // checked against the depth and by Spark. Without it the plan is drawn from each area's box, as before.
-  const floorPlan = basement3d?.tracked
-    ? await readBasementPlan(work, basement3d, detections, { said: transcript.transcript, log: (text) => emit("log", text), save: (png) => storage.put(keys.basement3d(scanId, "plan.png"), png, "image/png") }).catch((err) => {
+  // checked against the depth. It goes out with the answer as measured; Spark's look at it takes a minute
+  // or more, so it runs after the answer (reviewPlanLater). Without it the plan is drawn from each area's
+  // box, as before.
+  const savePlan = (png: Buffer) => storage.put(keys.basement3d(scanId, "plan.png"), png, "image/png");
+  const read = basement3d?.tracked
+    ? await measureBasementPlan(work, basement3d, detections, { save: savePlan }).catch((err) => {
         console.error(`[plan] ${scanId}: ${err instanceof Error ? err.message : err}`);
         return null;
       })
     : null;
-  const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME;
-  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan, watching };
+  const floorPlan = read && basement3d ? measuredPlan(read, basement3d) : null;
+  if (basement3d?.tracked) for (const line of sizeLines(floorPlan, rooms)) await emit("measure", line.text, line.data);
+  const reviewPlan = read && basement3d ? () => reviewBasementPlan(read, basement3d, { said: transcript.transcript, log: async (t) => console.log(`[plan] ${scanId}: ${t}`), save: savePlan }) : null;
+  const samCost = CONCEPTS.length * Math.max(50, frameCount) * SAM_USD_PER_FRAME + pointed.costUsd;
+  return { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan, reviewPlan, watching };
 }
 
 // "Found 2 windows, a door and the stairs"
@@ -455,11 +493,19 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   await emit("stage", "find");
   const images = new Map<number, string>();
   const image = (n: number) => images.get(n) ?? images.set(n, dataUrl(framePath(n), "image/jpeg")).get(n)!;
+  let pointCost = 0;
   const found = await findInPhotos(
     frameCount,
     CONCEPTS,
     (concept, n) => samImage(concept, image(n)),
     (n, finds) => emit("find", finds.length ? `Found ${findWords(finds)} in photo ${n + 1}` : `Nothing found in photo ${n + 1}`, { photo: n, room: take.rooms[roomOf(n)].name, detections: finds }),
+    8,
+    async (n) => {
+      const [w, h] = jpegSize(readFileSync(framePath(n))) ?? [1280, 960];
+      const p = await pointInPhoto(n, image(n), w, h);
+      pointCost += p.costUsd;
+      return p.finds;
+    },
   );
   images.clear();
   // The photos of what it could look like start now, from the finds.
@@ -488,7 +534,7 @@ async function photoStage({ scanId, inputs, work, ctx, emit, inflight }: StageIn
   const rooms = await finishRooms(scanId, ranges, scans3d, detections, emit, undefined, { names }, roomNames(ranges, await watching.watch, 1));
   // The 3D's own sense of size, with no walk or tape to check it against.
   if (rooms.some((r) => r.has3d)) await emit("log", "Sizes from photos are a close guess, within about 20%. One tape measurement on the next step makes them true to size.");
-  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage, watching };
+  return { frameCount, detections, transcript: { transcript: "", turns: [] }, rooms, sparkP, uploads: Promise.resolve(), samCost: frameCount * CONCEPTS.length * PRICES.samImage + pointCost, watching };
 }
 
 export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
@@ -512,7 +558,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     const inputs = (scan.inputs ?? {}) as ScanInputs;
     const ctx: AssessContext = { dir: work, household: basement.household as Household, municipality: basement.municipality, property: basement.property as Property | null };
     const stageInput = { scanId, videoKey: scan.videoKey, inputs, work, ctx, emit, inflight };
-    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan, watching } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
+    const { frameCount, detections, transcript, rooms, sparkP, uploads, samCost, floorPlan, reviewPlan, watching } = inputs.photos ? await photoStage(stageInput, inputs.photos) : await videoStage(stageInput);
 
     // The rules check one room's numbers: the best-scanned one.
     const main = mainRoom(rooms);
@@ -522,7 +568,7 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
     // They may have answered "who's it for" while this ran.
     const [latest] = await db.select().from(schema.basements).where(eq(schema.basements.id, basement.id));
     const household = (latest?.household ?? basement.household) as Household;
-    const assessment = finishAssessment({ ...ctx, household }, await sparkP, detections, measurements);
+    const assessment = finishAssessment({ ...ctx, household, watch: await watching.watch, rooms }, await sparkP, detections, measurements);
     await uploads;
 
     const assessed = {
@@ -565,11 +611,14 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
       .set({ status: "done", result, frameCount, transcript: transcript.transcript, costUsd: samCost + assessment.costUsd + ((await watching.watch)?.costUsd ?? 0), finishedAt: new Date() })
       .where(eq(schema.scans.id, scanId));
     await emit("done", "Your answer is ready");
+    // The as-built 3D: the plan painted with the video (server/asBuilt.ts), in the background.
+    void import("./asBuilt").then((m) => m.paintAsBuiltLater(scanId));
     // Photos that finished while this was written go in now; photos that never started, start.
     await settlePhotos(scanId);
     await enqueuePhotos(scanId);
-    // Muse Wonder checks the plan against the take for "Is this your basement?" (server/planCheck.ts).
-    inflight.push(checkPlanLater(scanId, result, watching));
+    // Spark's look at the plan, then Muse Wonder's check of it against the take for "Is this your basement?"
+    // (server/planCheck.ts), on the plan as it then stands.
+    inflight.push(reviewPlanLater(scanId, reviewPlan ?? null).then((reviewed) => checkPlanLater(scanId, reviewed ? { ...result, floorPlan: reviewed } : result, watching)));
   } catch (err) {
     // The real cause, in plain words; a missing key or an unreadable file won't fix itself on a retry.
     const cause = causeOf(err);
@@ -587,5 +636,24 @@ export async function runScan(scanId: string, opts: { lastAttempt: boolean }) {
   } finally {
     await Promise.allSettled(inflight);
     rmSync(work, { recursive: true, force: true });
+  }
+}
+
+// After the answer: Spark's review of an app take's plan (server/floorplan.ts). When it changes the plan,
+// the answer's plan becomes the reviewed one; pages that read the plan pick it up from there (a design
+// they've already saved keeps the plan it was drawn on). Never throws.
+export async function reviewPlanLater(scanId: string, review: (() => Promise<BasementPlan | null>) | null): Promise<BasementPlan | null> {
+  if (!review) return null;
+  try {
+    const reviewed = await review();
+    if (!reviewed) return null;
+    await db
+      .update(schema.scans)
+      .set({ result: sql`jsonb_set(${schema.scans.result}, '{floorPlan}', ${JSON.stringify(reviewed)}::jsonb)` })
+      .where(and(eq(schema.scans.id, scanId), isNotNull(schema.scans.result)));
+    return reviewed;
+  } catch (err) {
+    console.error(`[plan review] ${scanId}: ${err instanceof Error ? err.message : err}`);
+    return null;
   }
 }

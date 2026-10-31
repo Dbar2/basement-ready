@@ -7,12 +7,23 @@ import type { Pt } from "../model/types";
 import { AERIAL_YEAR, type SiteGeometry } from "../property";
 import type { Profile, StoredState } from "../workspace";
 import type { CityPermit } from "./data";
-import { drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type Scale, type View } from "./draw";
-import { bounds, type Box, centroid, dir, escapeOk, type PermitModel, type PWall, unitArea, unitOutline, unitRooms, wallLen } from "./model";
+import { boxesMeet, drawAlarms, drawChains, drawFixtures, drawOutside, drawRoomFixtures, drawRoomLabels, drawUnit, drawWalls, LEGEND, legendBox, makeView, outward, PAD, type Area, type PageBox, type Scale, type View } from "./draw";
+import { homesAfter } from "../eligibility";
+import { areaText, suiteAreaM2 } from "../model/suite";
+import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, escapeOk, escapeStatus, PROPOSED_ESCAPE, keptBathroom, type PermitModel, type PermitWindow, type PWall, unitOutline, unitRooms, wallLen } from "./model";
+
+// What a window's tag says about escape (model.ts escapeStatus): only a size that meets the rule is called
+// an escape window.
+const escapeLabel = (w: PermitWindow) => {
+  const st = escapeStatus(w);
+  return !st ? "" : st === "ESCAPE" ? " ESCAPE WINDOW" : ` WINDOW: ${st}`;
+};
 import { citeText, notesFor } from "./notes";
+import { faceHeightM, STOREY_M, TOP_CEILING_M, upo } from "./spatial";
 import { area, both, DETAIL_SCALES, dimText, FAINT, fitScale, frame, ftIn, INK, largestFit, mmBoth, MUTED, OWNER_EXEMPTION, PAPER, PLAN_SCALES, type Project, ptPerMetre, Sheet, sizeText, SITE_SCALES, SMALL_SCALES, TABLOID, TONE, TONE2, TONE3, watermark, type Fonts } from "./pdf";
 import type { Geometry } from "./plans";
-import type { Readiness } from "./readiness";
+import { asksWaterMeter, type Readiness } from "./readiness";
+import { packFor } from "../rules";
 
 export type SheetCtx = {
   doc: PDFDocument;
@@ -69,7 +80,7 @@ export function scopeOfWork(o: { model?: PermitModel | null; geo?: Geometry | nu
   const studio = m ? m.design.layout === "studio" || !unitRooms(m).some((r) => r.kind === "bedroom") : o.geo?.layout?.kind === "studio";
   const parts = [
     `Create a second dwelling unit (additional residential unit), ${studio ? "a studio (bachelor) unit" : "a one-bedroom unit"}, in the basement of the existing house`,
-    "new partition walls, a bathroom and a kitchen",
+    keptBathroom(m) ? "new partition walls and a kitchen; the existing bathroom becomes unit 2's, with no change to it" : "new partition walls, a bathroom and a kitchen",
     "a fire separation between the two units",
     "hard-wired, interconnected smoke and CO alarms in both units",
   ];
@@ -93,14 +104,20 @@ export function coverSheet(ctx: SheetCtx): Printed {
   const colW = (a.w - 40) / 2;
   const rows: [string, string][] = [];
   if (p?.zone) rows.push(["Zoning", `${p.zone.code}${p.zone.label ? `, ${p.zone.label}` : ""}${p.zone.bylaw ? ` (${p.zone.bylaw})` : ""}`]);
-  const units = (p?.unitsRegistered ?? 1) + 1;
-  rows.push(["Units after the work", `${units}: the house (unit 1) and the basement unit (unit 2)`]);
+  // The homes there now (at least the house) and the new one: as the forms and the money count them.
+  const units = homesAfter(p);
+  rows.push(["Units after the work", units === 2 ? "2: the house (unit 1) and the basement unit (unit 2)" : `${units}: the ${units - 1} homes there now and the basement unit (unit ${units})`]);
   if (m) {
-    rows.push(["Unit 2 floor area", area(unitArea(m))]);
+    const suite = suiteAreaM2(m.design);
+    if (suite != null) rows.push(["Unit 2 floor area", areaText(suite)]);
     const beds = m.design.layout === "studio" ? 0 : unitRooms(m).filter((r) => r.kind === "bedroom").length;
     rows.push(["Unit 2 bedrooms", beds ? String(beds) : "Studio (no separate bedroom)"]);
     if (m.ceilingM) rows.push(["Finished ceiling in unit 2", `${both(m.ceilingM)} (1.95 m required)`]);
-    if (m.beamM) rows.push(["Clear under beams and ducts", `${both(m.beamM)} (1.85 m required)`]);
+    // Under the limit is never plain data: from the video the designer confirms it; measured, it's a fix.
+    if (m.beamM) {
+      const under = m.beamM < 1.85 ? (m.estimated ? "; from the video, the designer confirms it by tape" : ": raised or rerouted, or the suite kept out from under it") : "";
+      rows.push(["Clear under beams and ducts", `${both(m.beamM)} (1.85 m required${under})`]);
+    }
   }
   if (p?.building?.storeys) rows.push(["Existing house", `${p.building.storeys} storey${p.building.storeys === 1 ? "" : "s"} over the basement`]);
   rows.push(["Building Code", "O. Reg. 163/24 (2024 Building Code), Part 9, with Part 11 alternatives for an existing house"]);
@@ -170,6 +187,29 @@ function keyPlan(s: Sheet, ctx: SheetCtx, b: Area) {
 
 // ---- A1 Site plan ----------------------------------------------------------------------------
 
+// The parking the city's zoning asks for a house with a basement unit, in the rules' own words and with
+// the by-law they come from (data/rules/*.json zoning_parking).
+export function parkingLine(municipality: string): string | null {
+  const rule = packFor(municipality).pack.rules.find((r) => r.id === "zoning_parking");
+  // The by-law's name, without our note on which copy of it was read.
+  const bylaw = rule?.source.title.replace(/\s*\([^()]*\)\s*$/, "");
+  return rule ? `Parking required by zoning (${bylaw}): ${rule.plain} The spaces are shown on the plan of survey.` : null;
+}
+
+// Kitchener: how the two units' water is metered and where the meter is (Building Bulletin BB 2026-04),
+// as the owner chose on the Permit tab. Until they choose, the review copy says to; the submit copy
+// isn't offered until they have (server/permit/readiness.ts).
+export function waterMeterLine(municipality: string, state: StoredState): string | null {
+  if (!asksWaterMeter(municipality)) return null;
+  const w = state.permit?.waterMeter;
+  const head = "Water meter (Kitchener Utilities; City of Kitchener Building Bulletin BB 2026-04): ";
+  const where = w?.where?.trim();
+  if (!w?.option || !where) return `${head}choose one meter for both units, or a meter for each unit in a meter room or an outside compartment, on the Permit tab.`;
+  if (w.option === "single") return `${head}single meter option, one water meter for both units, at ${where}.`;
+  if (w.option === "room") return `${head}multi-meter option, a meter for each unit in an interior meter room at ${where}, entered from outside or a shared area, not through either unit; a key or door code goes to the City.`;
+  return `${head}multi-meter option, a meter for each unit in an exterior recessed compartment at ${where}, to Kitchener Utilities drawing WMSD-302.`;
+}
+
 export function sitePlan(ctx: SheetCtx): Printed {
   const { s, a, page } = newSheet(ctx, "A1", SHEETS[1].title, null);
   const notes: string[] = [];
@@ -185,7 +225,9 @@ export function sitePlan(ctx: SheetCtx): Printed {
     const lines = [
       "The lot lines, the house, the driveway with its parking, the walkway to the unit's entrance and the window wells are shown on the plan of survey submitted with this application, marked up with the unit's entrance.",
       ...listLot(),
-    ];
+      parkingLine(ctx.municipality),
+      waterMeterLine(ctx.municipality, ctx.state),
+    ].filter((t): t is string => Boolean(t));
     let y = a.y + a.h - 40;
     for (const t of lines) y = s.wrap(t, a.x + 20, y, a.w - 40, { size: 11 }) - 8;
     notes.push(...lines);
@@ -244,7 +286,9 @@ export function sitePlan(ctx: SheetCtx): Printed {
     features.length ? `Unit 2's entrance, parking and walkway as traced on the Region of Waterloo's ${AERIAL_YEAR} aerial photo (open data).` : "Unit 2's entrance, parking and walkway: as marked on the plan of survey.",
     ...listLot(),
     "Window wells at escape windows: 550 mm clear in front of the window (A6).",
-  ];
+    parkingLine(ctx.municipality),
+    waterMeterLine(ctx.municipality, ctx.state),
+  ].filter((t): t is string => Boolean(t));
   let ny = a.y + legendH - 12;
   s.line(a.x, a.y + legendH, a.x + a.w, a.y + legendH, { width: 0.5, color: FAINT });
   lines.forEach((t, i) => {
@@ -364,7 +408,7 @@ export function basementPlan(ctx: SheetCtx): Printed[] {
       drawFixtures(s, v, m.design.proposed.fixtures);
       drawRoomFixtures(s, v, m);
       drawWalls(s, v, m, { mode: "plan", review: review(ctx), windows: m.windows });
-      drawRoomLabels(s, v, m, { ceiling: true, unitTag: true });
+      drawRoomLabels(s, v, m, { ceiling: true, unitTag: true, ...(lay.tiles.length > 1 ? { tile, tiles: lay.tiles, whole: box, continues: numberOf } : {}) });
       drawAlarms(s, m.design.proposed.alarms.map((x) => ({ kind: x.kind, at: v.P(x.at) })));
     };
     const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
@@ -399,6 +443,23 @@ function planLegend(s: Sheet, ctx: SheetCtx, a: Area, v: View, m: PermitModel) {
   keyNotes.forEach((t, i) => {
     y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6, leading: 7.4 }) - 2;
   });
+  // The examiner's notes for this unit, numbered on the plan as a City examiner would mark them; the full
+  // text and sources are on A7. Set as large as fits above the scale bar.
+  const water = waterMeterLine(ctx.municipality, ctx.state);
+  const plan = [...projectNotes(ctx).flatMap((n) => (n.plan ? [n.plan] : [])), ...(water ? [water] : [])];
+  const floor = a.y + 62;
+  y -= 6;
+  for (const size of [6, 5.6, 5.2, 4.8, 4.4]) {
+    const leading = size * 1.22;
+    const height = 12 + plan.reduce((h, t, i) => h + s.measure(`${i + 1}. ${t}`, LEGEND_W - 8, size, s.fonts.regular, leading) + 1.5, 0);
+    if (y - height < floor && size > 4.4) continue;
+    s.text("NOTES (FULL TEXT AND SOURCES ON A7)", a.x, y - 4, { size: 6.5, font: s.fonts.bold });
+    y -= 12;
+    plan.forEach((t, i) => {
+      y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size, leading }) - 1.5;
+    });
+    break;
+  }
   s.scaleBar(a.x, a.y + 18, v.k, v.scale.label);
   if (review(ctx) && m.design.proposed.walls.some((w: PWall) => w.guess)) s.wrap("Dashed outlines: walls the camera didn't see. Check them before you submit.", a.x, a.y + 46, LEGEND_W - 8, { size: 6, color: MUTED });
 }
@@ -496,83 +557,133 @@ export function mainFloor(ctx: SheetCtx): Printed {
 
 // ---- A4 Ceiling plan ------------------------------------------------------------------------
 
-export function ceilingPlan(ctx: SheetCtx): Printed {
+// Cut into the same sheets as the floor plan (A2.1 under A4.1, and so on), so each pair shows the same
+// part of the same design at the same scale.
+export function ceilingPlan(ctx: SheetCtx): Printed[] {
   const m = ctx.model;
-  const { s, a, page } = newSheet(ctx, "A4", SHEETS[4].title, null);
-  if (!m) return { number: "A4", title: SHEETS[4].title, notes: [], scale: null, page };
-  const lay = planFrame(a, m);
-  const tile = lay.tiles.length > 1 ? bounds(unitOutline(m).flat()) : lay.tiles[0];
+  if (!m) {
+    const { page } = newSheet(ctx, "A4", SHEETS[4].title, null);
+    return [{ number: "A4", title: SHEETS[4].title, notes: [], scale: null, page }];
+  }
+  const probe = new Sheet(ctx.doc.addPage(TABLOID), ctx.fonts);
+  const a0 = frame(probe, ctx.project, { number: "A4", title: SHEETS[4].title, scale: null });
+  ctx.doc.removePage(ctx.doc.getPageCount() - 1);
+  const lay = planFrame(a0, m);
   const scale = lay.scale;
-  const v = makeView({ x: lay.area.x + PAD, y: a.y + PAD, w: lay.area.w - 2 * PAD, h: a.h - 2 * PAD }, tile, scale);
-  const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
-  if (lay.cropped) breakLines(s, v, tile, planBox(m));
-  s.clipped(Math.max(lay.area.x, cx0 - 2), Math.max(a.y, cy0 - 2), Math.min(lay.area.w, cx1 - cx0 + 4), Math.min(a.h, cy1 - cy0 + 4), () => {
-    // The rated ceiling: all of unit 2.
-    for (const p of unitOutline(m)) s.hatch(p.map(v.P), 7, { width: 0.25, color: FAINT });
-    drawWalls(s, v, m, { mode: "ceiling", review: review(ctx), windows: m.windows });
-    drawRoomLabels(s, v, m, { ceiling: true, unitTag: false });
-    // Beams, ducts and bulkheads, dashed, with the clear height under each.
-    for (const f of m.design.proposed.fixtures) {
-      if (!(f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead" || f.kind === "post")) continue;
-      const sz = f.sizeM ?? [0.3, 0.3];
-      const [x0, y0] = v.P([f.at[0] - sz[0] / 2, f.at[1] + sz[1] / 2]), [x1, y1] = v.P([f.at[0] + sz[0] / 2, f.at[1] - sz[1] / 2]);
-      if (f.kind === "post") {
-        s.rect(x0, y0, Math.max(5, x1 - x0), Math.max(5, y1 - y0), { fill: INK, width: 0.4 });
-        s.text("POST", x1 + 4, (y0 + y1) / 2 - 2, { size: 5.5 });
-        continue;
-      }
-      s.rect(x0, y0, x1 - x0, y1 - y0, { width: 0.9, dash: [6, 3], fill: f.kind === "bulkhead" ? TONE : undefined });
-      const h = f.heightM ?? null;
-      const label = `${f.kind === "beam" ? "EXISTING BEAM" : f.kind === "duct" ? "EXISTING DUCT" : "BULKHEAD, RATED, CONTINUOUS"}${h ? `: ${ftIn(h)} (${Math.round(h * 1000)}) CLEAR${h < 1.85 ? ", UNDER 1.85 m" : ""}` : ""}${review(ctx) && f.guess ? " (placed from the video: check where it runs)" : ""}`;
-      const horizontal = Math.abs(x1 - x0) >= Math.abs(y0 - y1);
-      const tw = s.textWidth(label, 5.8);
-      if (horizontal) {
-        s.rect((x0 + x1) / 2 - tw / 2 - 2, (y0 + y1) / 2 - 3.5, tw + 4, 9, { fill: PAPER, stroke: false });
-        s.text(label, (x0 + x1) / 2, (y0 + y1) / 2 - 1.5, { size: 5.8, align: "center", font: s.fonts.bold });
-      } else s.text(label, (x0 + x1) / 2 + 2, (y0 + y1) / 2, { size: 5.8, align: "center", font: s.fonts.bold, rotate: 90 });
-    }
-    // The duct smoke detector, at the furnace's return.
-    const furnace = m.design.proposed.fixtures.find((f) => f.kind === "furnace");
-    if (furnace) {
-      const [fx, fy] = v.P(furnace.at);
-      s.rect(fx - 9, fy + 8, 18, 9, { fill: PAPER, width: 0.7 });
-      s.text("DSD", fx, fy + 10.5, { size: 5.5, align: "center", font: s.fonts.bold });
-      s.text("duct smoke detector, return duct", fx + 12, fy + 10.5, { size: 5.3, color: MUTED });
-    }
-  });
-  // The heights, checked.
-  let y = a.y + a.h;
-  heading(s, a.x, y - 8, "Basement ceiling plan", scale.label);
-  y -= 22;
-  y -= legendBox(s, a.x, y, LEGEND_W - 6, "LEGEND", [
-    LEGEND.rated15(s),
-    { draw: (x, yy) => s.rect(x, yy - 3, 26, 6, { width: 0.9, dash: [6, 3] }), label: "Beam, duct or bulkhead overhead, with the clear height under it" },
-    { draw: (x, yy) => s.rect(x + 10, yy - 3, 6, 6, { fill: INK, width: 0.4 }), label: "Post" },
-  ]) + 10;
+  const split = lay.tiles.length > 1;
+  const numberOf = (i: number) => (split ? `A4.${i + 1}` : "A4");
   const ceiling = m.ceilingM, beam = m.beamM;
   const checks: [string, string, boolean | null][] = [
     ["Finished ceiling in unit 2", ceiling ? `${both(ceiling)}; 1.95 m (6'-5") required` : "1.95 m (6'-5\") required", ceiling ? ceiling >= 1.95 : null],
     ["Clear under beams and ducts", beam ? `${both(beam)}; 1.85 m (6'-1") required` : "1.85 m (6'-1\") required", beam ? beam >= 1.85 : null],
   ];
-  s.text("HEIGHTS (9.5.3.1.(2) AND (3))", a.x, y, { size: 6.5, font: s.fonts.bold });
-  y -= 12;
-  for (const [label, value, ok] of checks) {
-    s.text(ok === true ? "MEETS" : ok === false ? "BELOW" : "", a.x, y, { size: 6, font: s.fonts.bold });
-    s.text(label, a.x + 34, y, { size: 6.5, font: s.fonts.bold });
-    y = s.wrap(value, a.x + 34, y - 8, LEGEND_W - 40, { size: 6.3 }) - 4;
-  }
   const lines = [
     "The 15-minute ceiling (15.9 mm Type X gypsum board, assembly C1 on A6) covers all of unit 2, continuous over and around every bulkhead, beam and duct, sealed at every penetration.",
     "Supply and return ducts in unit 2 are best dropped to the floor. A duct smoke detector shuts off the furnace when one system serves both units (A7).",
     "Pot lights and fans in the rated ceiling are boxed in drywall in the joist space.",
   ];
-  y -= 4;
-  lines.forEach((t, i) => {
-    y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6.3, leading: 7.8 }) - 3;
+  return lay.tiles.map((tile, i) => {
+    const { s, a, page } = newSheet(ctx, numberOf(i), SHEETS[4].title, scale.label);
+    const area0 = { ...lay.area, y: a.y, h: a.h };
+    const v = makeView({ x: area0.x + PAD, y: area0.y + PAD, w: area0.w - 2 * PAD, h: area0.h - 2 * PAD }, tile, scale);
+    const [cx0, cy0] = v.P([tile.minX, tile.maxZ]), [cx1, cy1] = v.P([tile.maxX, tile.minZ]);
+    const draw = () => {
+      // The rated ceiling: all of unit 2.
+      for (const p of unitOutline(m)) s.hatch(p.map(v.P), 7, { width: 0.25, color: FAINT });
+      drawWalls(s, v, m, { mode: "ceiling", review: review(ctx), windows: m.windows });
+      // Beams, ducts and bulkheads, dashed, with the clear height under each: the bands first, the room
+      // names over them, then each band's label where it covers no name.
+      const overheads = m.design.proposed.fixtures.filter((f) => f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead" || f.kind === "post");
+      const corners = (f: (typeof overheads)[number]) => {
+        const sz = f.sizeM ?? [0.3, 0.3];
+        return [...v.P([f.at[0] - sz[0] / 2, f.at[1] + sz[1] / 2]), ...v.P([f.at[0] + sz[0] / 2, f.at[1] - sz[1] / 2])] as [number, number, number, number];
+      };
+      for (const f of overheads) {
+        const [x0, y0, x1, y1] = corners(f);
+        if (f.kind === "post") s.rect(x0, y0, Math.max(5, x1 - x0), Math.max(5, y1 - y0), { fill: INK, width: 0.4 });
+        else s.rect(x0, y0, x1 - x0, y1 - y0, { width: 0.9, dash: [6, 3], fill: f.kind === "bulkhead" ? TONE : undefined });
+      }
+      const taken = drawRoomLabels(s, v, m, { ceiling: true, unitTag: false, ...(split ? { tile, tiles: lay.tiles, whole: lay.whole, continues: numberOf } : {}) });
+      for (const f of overheads) {
+        const [x0, y0, x1, y1] = corners(f);
+        if (f.kind === "post") {
+          s.text("POST", x1 + 4, (y0 + y1) / 2 - 2, { size: 5.5 });
+          continue;
+        }
+        const h = f.heightM ?? null;
+        const what = `${f.kind === "beam" ? "EXISTING BEAM" : f.kind === "duct" ? "EXISTING DUCT" : "BULKHEAD, RATED, CONTINUOUS"}${h ? `: ${ftIn(h)} (${Math.round(h * 1000)}) CLEAR${h < 1.85 ? ", UNDER 1.85 m" : ""}` : ""}`;
+        const texts = review(ctx) && f.guess ? [`${what} (placed from the video: check where it runs)`, `${what} (check where it runs)`, what] : [what];
+        // Along the part of it this sheet shows, or just beside it: inside the sheet, over no room's
+        // name and no other label. Too long for any such spot, its note gets shorter, then goes.
+        const lx0 = Math.max(Math.min(x0, x1), cx0), lx1 = Math.min(Math.max(x0, x1), cx1), ly0 = Math.max(Math.min(y0, y1), cy1), ly1 = Math.min(Math.max(y0, y1), cy0);
+        const horizontal = Math.abs(x1 - x0) >= Math.abs(y0 - y1);
+        const boxAt = (tw: number, t: number, d: number): PageBox =>
+          horizontal
+            ? { x0: lx0 + t * (lx1 - lx0) - tw / 2 - 2, x1: lx0 + t * (lx1 - lx0) + tw / 2 + 2, y0: (ly0 + ly1) / 2 - 3.5 + d, y1: (ly0 + ly1) / 2 + 5.5 + d }
+            : { x0: (lx0 + lx1) / 2 - 5 + d, x1: (lx0 + lx1) / 2 + 5 + d, y0: ly0 + t * (ly1 - ly0) - tw / 2 - 2, y1: ly0 + t * (ly1 - ly0) + tw / 2 + 2 };
+        const onSheet = (b: PageBox) => b.x0 >= cx0 && b.x1 <= cx1 && b.y0 >= cy1 && b.y1 <= cy0;
+        const spots = [0.5, 0.3, 0.7, 0.15, 0.85, 0.05, 0.95].flatMap((t) => [0, 11, -11, 22, -22, 33, -33, 44, -44].map((d) => [t, d] as const));
+        let pick: { text: string; at: PageBox } | null = null;
+        for (const text of texts) {
+          const tw = s.textWidth(text, 5.8);
+          const spot = spots.find(([t, d]) => onSheet(boxAt(tw, t, d)) && !taken.some((b) => boxesMeet(boxAt(tw, t, d), b)));
+          if (spot) {
+            pick = { text, at: boxAt(tw, ...spot) };
+            break;
+          }
+        }
+        if (!pick) {
+          // Nowhere clear: the short text where it covers the least.
+          const text = texts[texts.length - 1], tw = s.textWidth(text, 5.8);
+          const cover = (b: PageBox) => taken.reduce((sum, o) => sum + Math.max(0, Math.min(b.x1, o.x1) - Math.max(b.x0, o.x0)) * Math.max(0, Math.min(b.y1, o.y1) - Math.max(b.y0, o.y0)), 0);
+          const inside = spots.filter(([t, d]) => onSheet(boxAt(tw, t, d)));
+          const best = (inside.length ? inside : spots).reduce((x, y) => (cover(boxAt(tw, ...y)) < cover(boxAt(tw, ...x)) ? y : x));
+          pick = { text, at: boxAt(tw, ...best) };
+        }
+        const { text, at } = pick;
+        taken.push(at);
+        if (horizontal) {
+          s.rect(at.x0, at.y0, at.x1 - at.x0, 9, { fill: PAPER, stroke: false });
+          s.text(text, (at.x0 + at.x1) / 2, at.y0 + 2, { size: 5.8, align: "center", font: s.fonts.bold });
+        } else s.text(text, (at.x0 + at.x1) / 2 + 2, (at.y0 + at.y1) / 2, { size: 5.8, align: "center", font: s.fonts.bold, rotate: 90 });
+      }
+      // The duct smoke detector, at the furnace's return.
+      const furnace = m.design.proposed.fixtures.find((f) => f.kind === "furnace");
+      if (furnace) {
+        const [fx, fy] = v.P(furnace.at);
+        s.rect(fx - 9, fy + 8, 18, 9, { fill: PAPER, width: 0.7 });
+        s.text("DSD", fx, fy + 10.5, { size: 5.5, align: "center", font: s.fonts.bold });
+        s.text("duct smoke detector, return duct", fx + 12, fy + 10.5, { size: 5.3, color: MUTED });
+      }
+    };
+    if (split || lay.cropped) s.clipped(cx0 - 2, cy0 - 2, cx1 - cx0 + 4, cy1 - cy0 + 4, draw);
+    else draw();
+    if (split) matchLines(s, v, tile, lay.whole, lay.tiles, numberOf);
+    if (lay.cropped) breakLines(s, v, tile, planBox(m));
+    // The heights, checked.
+    let y = a.y + a.h;
+    heading(s, a.x, y - 8, "Basement ceiling plan", scale.label);
+    y -= 22;
+    y -= legendBox(s, a.x, y, LEGEND_W - 6, "LEGEND", [
+      LEGEND.rated15(s),
+      { draw: (x, yy) => s.rect(x, yy - 3, 26, 6, { width: 0.9, dash: [6, 3] }), label: "Beam, duct or bulkhead overhead, with the clear height under it" },
+      { draw: (x, yy) => s.rect(x + 10, yy - 3, 6, 6, { fill: INK, width: 0.4 }), label: "Post" },
+    ]) + 10;
+    s.text("HEIGHTS (9.5.3.1.(2) AND (3))", a.x, y, { size: 6.5, font: s.fonts.bold });
+    y -= 12;
+    for (const [label, value, ok] of checks) {
+      s.text(ok === true ? "MEETS" : ok === false ? "BELOW" : "", a.x, y, { size: 6, font: s.fonts.bold });
+      s.text(label, a.x + 34, y, { size: 6.5, font: s.fonts.bold });
+      y = s.wrap(value, a.x + 34, y - 8, LEGEND_W - 40, { size: 6.3 }) - 4;
+    }
+    y -= 4;
+    lines.forEach((t, j) => {
+      y = s.wrap(`${j + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6.3, leading: 7.8 }) - 3;
+    });
+    s.scaleBar(a.x, a.y + 18, v.k, scale.label);
+    stampScale(s, scale.label);
+    return { number: numberOf(i), title: SHEETS[4].title, notes: [...checks.map((c) => `${c[0]}: ${c[1]}`), ...lines], scale, page };
   });
-  s.scaleBar(a.x, a.y + 18, v.k, scale.label);
-  stampScale(s, scale.label);
-  return { number: "A4", title: SHEETS[4].title, notes: [...checks.map((c) => `${c[0]}: ${c[1]}`), ...lines], scale, page };
 }
 
 // ---- A5 Elevations ------------------------------------------------------------------------------
@@ -612,7 +723,7 @@ export function elevations(ctx: SheetCtx): Printed {
     heading(s, a.x + 10, base + (top + houseH) * k + 30, `Elevation ${i + 1}: the wall with ${wins.map((x) => x.tag).join(", ")}`, scale.label);
     // Foundation below grade, the house wall above (schematic).
     const ops = m.design.proposed.openings.filter((o) => o.wallId === w.id && o.kind === "window");
-    const gradeH = Math.max(...wins.map((x) => (x.sillM ?? 0.9) + (x.heightM ?? 0.6)), top - 0.6) + 0.1;
+    const gradeH = Math.max(...wins.map((x) => (x.sillM ?? 0.9) + drawnHeightM(x)), top - 0.6) + 0.1;
     s.rect(X(0), Y(0), L * k, top * k, { fill: TONE2, width: 0.8 });
     s.rect(X(0), Y(top), L * k, houseH * k, { fill: PAPER, width: 0.8 });
     s.text("EXISTING HOUSE WALL ABOVE (NO CHANGE)", X(L / 2), Y(top + houseH / 2), { size: 6.5, align: "center", color: MUTED });
@@ -624,14 +735,15 @@ export function elevations(ctx: SheetCtx): Printed {
     // its well.
     for (const op of ops) {
       const info = m.windows.find((x) => x.id === op.id)!;
-      const wm = info.widthM, hm = info.heightM ?? 0.6, sill = info.sillM ?? 0.9;
+      const wm = info.widthM, hm = drawnHeightM(info), sill = info.sillM ?? 0.9;
       const lx = Math.min(X(op.offsetM - wm / 2), X(op.offsetM + wm / 2)), rx = lx + wm * k;
-      s.rect(lx, Y(sill), wm * k, hm * k, { fill: PAPER, width: info.change === "keep" ? 0.8 : 1.4 });
+      // A height nobody has measured yet is drawn dashed: a placeholder, not a size.
+      s.rect(lx, Y(sill), wm * k, hm * k, { fill: PAPER, width: info.change === "keep" ? 0.8 : 1.4, ...(info.heightM == null ? { dash: [3, 2] } : {}) });
       s.line(lx, Y(sill), rx, Y(sill + hm), { width: 0.3, color: MUTED });
       if (info.was) s.rect(X(op.offsetM) - (info.was.widthM / 2) * k, Y(sill + hm - (info.was.heightM ?? 0.3)), info.was.widthM * k, (info.was.heightM ?? 0.3) * k, { width: 0.6, dash: [3, 2], color: MUTED });
       // The well, behind the grade line.
       s.rect(lx - 0.1 * k, Y(sill - 0.2), (wm + 0.2) * k, (gradeH + 0.1 - sill + 0.2) * k, { width: 0.6, dash: [4, 2] });
-      const tag = [`${info.tag}: ${info.change === "new" ? "NEW" : info.change === "enlarge" ? "ENLARGED" : "EXISTING"}${info.escape ? " ESCAPE WINDOW" : ""}`, sizeText(wm, hm)];
+      const tag = [`${info.tag}: ${info.change === "new" ? "NEW" : info.change === "enlarge" ? "ENLARGED" : "EXISTING"}${escapeLabel(info)}`, info.heightM == null ? `${sizeText(wm, null)} wide, height to be taped` : sizeText(wm, hm)];
       s.text(tag[0], rx + 0.18 * k, Y(sill + hm / 2) + 3, { size: 6.5, font: s.fonts.bold });
       s.text(tag[1], rx + 0.18 * k, Y(sill + hm / 2) - 6, { size: 6.3 });
       s.dim(lx - 6, Y(0), lx - 6, Y(sill), `sill ${dimText(sill)}`, 10, 5.8);
@@ -649,7 +761,7 @@ export function elevations(ctx: SheetCtx): Printed {
       const lot = ctx.state.permit?.lotLines?.find((l) => l.id === x.id)?.mm ?? null;
       const lines = [
         `${x.tag}${x.room ? `, ${x.room.toLowerCase()}` : ""}`,
-        `Clear opening ${sizeText(x.widthM, x.heightM)}: ${x.heightM ? `${(x.widthM * x.heightM).toFixed(2)} m²` : ""}`,
+        x.heightM == null ? `Clear opening ${sizeText(x.widthM, null)} wide, height to be taped${x.escape ? `: an escape window needs it at least ${escapeHeightNeededMm(x.widthM)} mm tall` : ""}` : `Clear opening ${sizeText(x.widthM, x.heightM)}: ${(x.widthM * x.heightM).toFixed(2)} m²${x.escape ? (x.meets ? ", meets 0.35 m²" : ", under 0.35 m²") : ""}`,
         x.was ? `Existing ${sizeText(x.was.widthM, x.was.heightM)} enlarged (dashed)` : x.change === "new" ? "New opening cut in the foundation wall" : "Existing window, no change",
         lot != null ? `To the lot line: ${both(lot / 1000)}` : "",
         x.change !== "keep" ? "Opening and lintel designed by an engineer (A7 note 2)." : "",
@@ -660,6 +772,31 @@ export function elevations(ctx: SheetCtx): Printed {
       by -= 8;
       notes.push(...lines);
     }
+    // Spatial separation for this face (unprotected openings, 9.10.15.4): the glazing this work adds or
+    // enlarges, against what the wall's limiting distance and exposing face allow.
+    const added = wins.filter((x) => x.change !== "keep");
+    const upoLines: [string, boolean][] = [["U.P.O. (UNPROTECTED OPENINGS, 9.10.15.4)", true]];
+    if (!added.length) upoLines.push(["No glazing added or enlarged on this face; its windows stay as they are.", false]);
+    else {
+      const lot = added.map((x) => ctx.state.permit?.lotLines?.find((l) => l.id === x.id)?.mm).find((mm) => mm != null) ?? null;
+      const above = Math.max(0.15, top - gradeH);
+      const faceH = faceHeightM(above, ctx.storeys);
+      const proposed = added.reduce((t, x) => t + x.widthM * (x.heightM ?? PROPOSED_ESCAPE.heightM), 0);
+      if (lot == null) upoLines.push(["Limiting distance: enter this wall's distance to the lot line on the Permit tab.", false]);
+      else {
+        const u = upo(L * faceH, lot / 1000, proposed);
+        upoLines.push(
+          [`Limiting distance ${(lot / 1000).toFixed(2)} m`, false],
+          [`Exposing building face ${L.toFixed(2)} x ${faceH.toFixed(2)} m = ${u.faceM2.toFixed(1)} m²`, false],
+          [u.bySquare ? `Permitted ${(lot / 1000).toFixed(2)}² = ${u.permittedM2.toFixed(2)} m² (9.10.15.4.(1); the table gives ${u.percent}%)` : `Permitted ${u.percent}% (Table 9.10.15.4) = ${u.permittedM2.toFixed(2)} m²`, false],
+          [`Proposed ${u.proposedM2.toFixed(2)} m² (${added.map((x) => x.tag).join(", ")})`, false],
+          [u.ok ? "OK" : "MORE THAN PERMITTED: make the opening smaller or protect it", true],
+        );
+      }
+      upoLines.push([`Face: grade to the top storey's ceiling, ${ctx.storeys} storey${ctx.storeys === 1 ? "" : "s"} at ${STOREY_M} m with a ${TOP_CEILING_M} m top ceiling${review(ctx) ? "; check it on site" : ""}.`, false]);
+    }
+    for (const [t, bold] of upoLines) by = s.wrap(t, bx, by, 220, { size: bold ? 6.8 : 6.4, font: bold ? s.fonts.bold : s.fonts.regular }) - 2;
+    notes.push(...upoLines.map(([t]) => t));
   });
   stampScale(s, scale.label);
   return { number: "A5", title: SHEETS[5].title, notes, scale, page };
@@ -679,7 +816,9 @@ export function details(ctx: SheetCtx): Printed {
   {
     const k = ptPerMetre(20);
     const base = a.y + 200;
-    const sill = esc?.sillM ?? 0.9, h = esc?.heightM ?? 0.76, w = esc?.widthM ?? 0.61;
+    // The bedroom's escape window as A5 draws it; the proposed size only when there isn't one yet.
+    const sill = esc ? (esc.sillM ?? 0.9) : PROPOSED_ESCAPE.sillM, h = esc ? drawnHeightM(esc) : PROPOSED_ESCAPE.heightM, w = esc ? esc.widthM : PROPOSED_ESCAPE.widthM;
+    const heightKnown = !esc || esc.heightM != null;
     const top = Math.max(sill + h + 0.3, (m?.ceilingM ?? 2.1) + 0.1);
     const grade = Math.min(top - 0.15, sill + h + 0.1);
     heading(s, a.x + 10, a.y + a.h - 10, "1. Escape window (bedroom)", "1:20");
@@ -711,17 +850,24 @@ export function details(ctx: SheetCtx): Printed {
     s.text("FINISHED FLOOR", fx - 0.6 * k, Yh(0) - 8, { size: 5.5, color: MUTED });
     s.dim(fx + 0.2 * k, Yh(sill + h / 2), wellIn, Yh(sill + h / 2), "550 (1'-10\") MIN. CLEAR", 8, 5.5);
     s.dim(fx - 0.2 * k, Yh(0), fx - 0.2 * k, Yh(sill), dimText(sill), 10, 5.5);
-    s.dim(fx - 0.2 * k, Yh(sill), fx - 0.2 * k, Yh(sill + h), `${dimText(h)} CLEAR`, 10, 5.5);
+    s.dim(fx - 0.2 * k, Yh(sill), fx - 0.2 * k, Yh(sill + h), heightKnown ? `${dimText(h)} CLEAR` : "HEIGHT TO BE TAPED", 10, 5.5);
     s.text("FOUNDATION", fx + 0.1 * k, Yh(sill / 2), { size: 5.3, rotate: 90, color: PAPER, align: "center" });
     let ty = base - 24;
     const area2 = w * h;
     const checks = [
-      `Clear opening ${sizeText(w, h)} = ${area2.toFixed(2)} m², at least 0.35 m²${escapeOk(w, h) ? " (meets)" : ""}`,
-      `No side under 380 mm: smallest ${Math.round(Math.min(w, h) * 1000)} mm`,
+      ...(heightKnown
+        ? [
+            `Clear opening ${sizeText(w, h)} = ${area2.toFixed(2)} m², at least 0.35 m²: ${escapeOk(w, h) ? "meets" : "does not meet"}`,
+            `No side under 380 mm: smallest ${Math.round(Math.min(w, h) * 1000)} mm`,
+          ]
+        : [
+            `Clear opening ${sizeText(w, null)} wide; its height is to be taped. At least 0.35 m² needs it ${escapeHeightNeededMm(w)} mm tall or more; if it isn't, it's enlarged`,
+            `No side under 380 mm: ${Math.round(w * 1000)} mm wide`,
+          ]),
       `Sill ${Math.round(sill * 1000)} mm above the floor${sill <= 1.0 ? "" : "; a fixed step or built-in below it"} (no Code maximum in a basement, 9.9.10.1.(2); kept at 1.0 m or less where it's new)`,
       "Opens from inside without tools or keys and stays open on its own",
       "Window well 550 mm clear in front; a cover opens from inside without tools",
-      kitchener ? "Built to the City of Kitchener's egress window detail, pp. 23-24 of its second-unit guide" : "To Building Code 9.9.10.1.",
+      kitchener ? "To Building Code 9.9.10.1. and City of Kitchener standard detail 9-17a, Means of Escape Window" : "To Building Code 9.9.10.1.",
     ];
     for (const c of checks) ty = s.wrap(`- ${c}`, a.x + 10, ty, colW - 20, { size: 6.5, leading: 8 }) - 1;
     notes.push(...checks);
@@ -796,10 +942,16 @@ export function details(ctx: SheetCtx): Printed {
 
 // ---- A7 Notes ------------------------------------------------------------------------------------
 
+// The examiner's notes this project needs (server/permit/notes.ts): all of them on A7, the short ones on A2.
+export function projectNotes(ctx: Pick<SheetCtx, "model" | "municipality">) {
+  const m = ctx.model;
+  return notesFor({ fuelBurning: m?.fuelBurning ?? true, stairs: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "stairs") ?? true), escapeNew: Boolean(m?.windows.some((w) => w.change !== "keep")), bathNew: !keptBathroom(m), municipality: ctx.municipality });
+}
+
 export function notesSheet(ctx: SheetCtx): Printed {
   const { s, a, page } = newSheet(ctx, "A7", SHEETS[7].title, null);
   const m = ctx.model;
-  const list = notesFor({ fuelBurning: m?.fuelBurning ?? true, stairs: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "stairs") ?? true), escapeNew: Boolean(m?.windows.some((w) => w.change !== "keep")) });
+  const list = projectNotes(ctx);
   const colW = (a.w - 40) / 3;
   let col = 0, y = a.y + a.h - 20;
   const printed: string[] = [];

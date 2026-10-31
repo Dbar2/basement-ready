@@ -4,11 +4,13 @@
 // every time, finished and coloured by whatever their board reads so far. So every page shows the same
 // design.
 import { ModelSchema } from "./schema";
-import { emptyMood, seedModel } from "./seed";
-import type { Model, Mood } from "./types";
+import { entranceOf, saidOutside } from "./entrance";
+import { emptyMood, recommendedOf, seedModel } from "./seed";
+import type { Model, Mood, Opening } from "./types";
 
 type Tape = { egressWidthMm?: number | null; egressHeightMm?: number | null; egressSillMm?: number | null; ceilingMm?: number | null };
-type StateLike = { model?: unknown; tape?: Tape | null; ideas?: { kind?: "one_bedroom" | "studio" | null; side?: "minX" | "maxX" | "minZ" | "maxZ" | null } | null } | null | undefined;
+type TapedWindow = { id: string; widthMm?: number | null; heightMm?: number | null; sillMm?: number | null };
+type StateLike = { model?: unknown; tape?: Tape | null; ideas?: { kind?: "one_bedroom" | "studio" | null; side?: "minX" | "maxX" | "minZ" | "maxZ" | null } | null; permit?: { windows?: TapedWindow[] | null } | null } | null | undefined;
 
 const SEEDED_AT = "2026-10-30T00:00:00.000Z";
 
@@ -29,11 +31,48 @@ const cache = new Map<string, Model | null>();
 const CACHE_MAX = 40;
 
 export function currentModel(result: unknown, state: StateLike, key?: string): { model: Model; saved: boolean } | null {
+  const found = foundModel(result, state, key);
+  return found && { ...found, model: withRecommended(withEntrance(withTapedWindows(found.model, state?.permit?.windows), result)) };
+}
+
+// The design the guide recommends: kept as it was seeded while that design is still there; a model saved
+// before there was one, or without that design any more, gets the first of its own.
+function withRecommended(model: Model): Model {
+  if (!model.designs.length || (model.recommended && model.designs.some((d) => d.id === model.recommended!.designId))) return model;
+  return { ...model, recommended: recommendedOf(model.designs) };
+}
+
+// Whether it has its own way in, from the answer as it stands now: they may tell us after the model was
+// saved (server/model/entrance.ts).
+function withEntrance(model: Model, result: unknown): Model {
+  const findings = (result as { findings?: { ruleId?: string; status?: string }[] } | null)?.findings;
+  return { ...model, existing: { ...model.existing, entrance: entranceOf(model.existing, saidOutside(findings)) } };
+}
+
+// A window they taped on the Permit tab is that size everywhere: the studio's checks, the answer, the
+// brief, the quote and the drawings all read it from the model, a saved one too (the tape comes later).
+export function withTapedWindows(model: Model, taped: TapedWindow[] | null | undefined): Model {
+  const by = new Map((taped ?? []).map((t) => [t.id, t]));
+  if (!by.size) return model;
+  const size = (o: Opening): Opening => {
+    const t = o.kind === "window" ? by.get(o.id) : undefined;
+    if (!t) return o;
+    return { ...o, ...(t.widthMm ? { widthM: t.widthMm / 1000 } : {}), ...(t.heightMm ? { heightM: t.heightMm / 1000 } : {}), ...(t.sillMm ? { sillM: t.sillMm / 1000 } : {}) };
+  };
+  return {
+    ...model,
+    existing: { ...model.existing, openings: model.existing.openings.map(size) },
+    designs: model.designs.map((d) => ({ ...d, proposed: { ...d.proposed, openings: d.proposed.openings.map(size) } })),
+  };
+}
+
+function foundModel(result: unknown, state: StateLike, key?: string): { model: Model; saved: boolean } | null {
   const saved = savedModel(state);
   if (saved) return { model: saved, saved: true };
   if (!result) return null;
   const mood = savedMood(state) ?? emptyMood();
-  const k = key ? JSON.stringify([key, state?.tape ?? null, state?.ideas?.kind ?? null, state?.ideas?.side ?? null, mood.finishes, mood.colours ?? null]) : null;
+  const said = saidOutside((result as { findings?: { ruleId?: string; status?: string }[] }).findings);
+  const k = key ? JSON.stringify([key, state?.tape ?? null, state?.ideas?.kind ?? null, state?.ideas?.side ?? null, mood.finishes, mood.colours ?? null, said]) : null;
   if (k && cache.has(k)) {
     const hit = cache.get(k)!;
     return hit ? { model: { ...hit, mood }, saved: false } : null;

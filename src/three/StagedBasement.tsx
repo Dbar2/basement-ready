@@ -8,6 +8,7 @@ import { EffectComposer, N8AO } from "@react-three/postprocessing";
 import { createContext, Suspense, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import type { Layout, LayoutZone, Plan, PlanSide } from "../api";
+import { arrange, backOf, RUG_HALF, zoneFrame, type Frame, type Rect } from "./stagedLayout";
 import { Tag, TagRoot, TagTracker } from "./Tags";
 
 const T = 0.12; // wall thickness
@@ -322,84 +323,13 @@ function Ceiling({ plan, h }: { plan: Plan; h: number }) {
 
 // ---------- placing things in a zone ----------
 
-// Which edge of a zone is against the room's wall: furniture backs onto it.
-function backOf(z: LayoutZone, box: Plan["box"], prefer: PlanSide | null) {
-  const edges: { side: PlanSide; touch: boolean }[] = [
-    { side: "maxZ", touch: Math.abs(z.z1 - box.maxZ) < 0.05 },
-    { side: "minZ", touch: Math.abs(z.z0 - box.minZ) < 0.05 },
-    { side: "maxX", touch: Math.abs(z.x1 - box.maxX) < 0.05 },
-    { side: "minX", touch: Math.abs(z.x0 - box.minX) < 0.05 },
-  ];
-  return (prefer && edges.find((e) => e.side === prefer && e.touch)?.side) || edges.find((e) => e.touch)?.side || "maxZ";
-}
-
-// Facing away from the back wall, for something whose front is +Z.
-const YAW: Record<PlanSide, number> = { minZ: 0, maxZ: Math.PI, minX: Math.PI / 2, maxX: -Math.PI / 2 };
-
-// A zone's own frame: u along its back wall, v out into the zone from it.
-function zoneFrame(z: LayoutZone, back: PlanSide) {
-  const alongX = back === "minZ" || back === "maxZ";
-  const uMin = alongX ? z.x0 : z.z0,
-    uMax = alongX ? z.x1 : z.z1;
-  const vStart = back === "maxZ" ? z.z1 : back === "minZ" ? z.z0 : back === "maxX" ? z.x1 : z.x0;
-  const dir = back.startsWith("max") ? -1 : 1;
-  const depth = alongX ? z.z1 - z.z0 : z.x1 - z.x0;
-  const at = (u: number, v: number): [number, number] => (alongX ? [u, vStart + dir * v] : [vStart + dir * v, u]);
-  const p = (u: number, v: number, y = 0): V3 => {
-    const [x, zz] = at(u, v);
-    return [x, y, zz];
-  };
-  // The yaw that turns a +Z front from (u, v) towards (u2, v2).
-  const face = (u: number, v: number, u2: number, v2: number) => {
-    const [x, zz] = at(u, v),
-      [x2, z2] = at(u2, v2);
-    return Math.atan2(x2 - x, z2 - zz);
-  };
-  // A footprint in plan coordinates, for clash checks.
-  const rect = (u0: number, u1: number, v0: number, v1: number) => {
-    const [ax, az] = at(u0, v0),
-      [bx, bz] = at(u1, v1);
-    return { x0: Math.min(ax, bx), x1: Math.max(ax, bx), z0: Math.min(az, bz), z1: Math.max(az, bz) };
-  };
-  return { uMin, uMax, uMid: (uMin + uMax) / 2, len: uMax - uMin, depth, at, p, face, rect, yaw: YAW[back], back };
-}
-type Frame = ReturnType<typeof zoneFrame>;
-type Rect = { x0: number; x1: number; z0: number; z1: number };
-const clash = (a: Rect, b: Rect) => a.x0 < b.x1 - 0.02 && a.x1 > b.x0 + 0.02 && a.z0 < b.z1 - 0.02 && a.z1 > b.z0 + 0.02;
-
-// Where the living space's lounge and dining go: a lounge at one end (sofa, rug, chairs round a
-// coffee table), dining as far from it as it fits, nudged across the band if the stairs are in the way.
-function arrangeLiving(z: LayoutZone, layout: Layout, box: Plan["box"]) {
-  const f = zoneFrame(z, backOf(z, box, null));
-  const blocked = layout.zones.filter((o) => o !== z && o.kind !== "living").map((o) => ({ x0: o.x0, x1: o.x1, z0: o.z0, z1: o.z1 }));
-  const clear = (r: Rect) => !blocked.some((b) => clash(r, b));
-  const half = Math.min(1.3, f.len / 2);
-  const lounge = (v0: number) => f.rect(f.uMid - half, f.uMid + half, v0, v0 + 3.0);
-  let lv = 0;
-  while (lv < f.depth - 3 && !clear(lounge(lv))) lv += 0.2;
-  const dining = (u: number, v: number) => f.rect(u - 0.92, u + 0.92, v - 0.9, v + 0.9);
-  const inBand = (u: number) => u - 0.92 >= f.uMin - 0.05 && u + 0.92 <= f.uMax + 0.05;
-  let spot: { u: number; v: number } | null = null;
-  for (let v = f.depth - 1.75; v >= lv + 3.5 && !spot; v -= 0.2) {
-    for (const du of [0, 0.25, -0.25, 0.45, -0.45]) {
-      if (inBand(f.uMid + du) && clear(dining(f.uMid + du, v))) {
-        spot = { u: f.uMid + du, v };
-        break;
-      }
-    }
-  }
-  const sideboard = spot !== null && f.len >= 2.0 && spot.v + 1.75 >= f.depth - 0.05 && clear(f.rect(f.uMid - 0.9, f.uMid + 0.9, f.depth - 0.45, f.depth));
-  // Footprints of what stands on the floor, for keeping the camera out of the furniture.
-  const taken = [lounge(lv), ...(spot ? [dining(spot.u, spot.v)] : []), ...(sideboard ? [f.rect(f.uMid - 0.9, f.uMid + 0.9, f.depth - 0.45, f.depth)] : [])];
-  return { f, lv, wide: f.len >= 3.6, spot, sideboard, taken };
-}
-
 // Shelves, tiles, art: hung on a room wall, so hidden while the dollhouse has that wall cut down.
-function OnWall({ side, children }: { side: PlanSide; children: ReactNode }) {
+// `inside`: shown only from inside the room (a dark frame seen from above reads as a doorway).
+function OnWall({ side, inside = false, children }: { side: PlanSide; inside?: boolean; children: ReactNode }) {
   const cut = useContext(CutCtx);
   const g = useRef<THREE.Group>(null);
-  useFrame(() => {
-    if (g.current) g.current.visible = (cut?.current[side] ?? 1) > 0.9;
+  useFrame(({ camera }) => {
+    if (g.current) g.current.visible = (cut?.current[side] ?? 1) > 0.9 && (!inside || camera.position.y < 2.4);
   });
   return <group ref={g}>{children}</group>;
 }
@@ -621,37 +551,41 @@ export function Vanity({ w, wall }: { w: number; wall: PlanSide }) {
 function Furniture({ z, layout, plan, h }: { z: LayoutZone; layout: Layout; plan: Plan; h: number }) {
   const m = useMats();
   const box = plan.box;
-  const f = zoneFrame(z, backOf(z, box, z.kind === "bedroom" ? (layout.window?.side ?? null) : null));
-  // Is this stretch of the zone's back wall free of windows and doors (for art)?
-  const wallFree = (u0: number, u1: number) => {
-    const [ax, az] = f.at(u0, 0),
-      [bx, bz] = f.at(u1, 0);
-    const side = f.back;
+  const f = zoneFrame(z, backOf(z, box, null));
+  // Where the bed and the living space's furniture stand, clear of the doors and the way out
+  // (src/three/stagedLayout.ts).
+  const placed = arrange(plan, layout);
+  // Is this stretch of a frame's back wall a wall of the room, free of windows and doors (for art)?
+  const wallFree = (g: Frame, u0: number, u1: number) => {
+    const [ax, az] = g.at(u0, 0),
+      [bx, bz] = g.at(u1, 0);
+    const side = g.back;
     const along = side === "minZ" || side === "maxZ";
+    const onWall = side === "minZ" ? Math.abs(az - box.minZ) < 0.05 : side === "maxZ" ? Math.abs(az - box.maxZ) < 0.05 : side === "minX" ? Math.abs(ax - box.minX) < 0.05 : Math.abs(ax - box.maxX) < 0.05;
     const a0 = Math.min(along ? ax : az, along ? bx : bz) - (along ? box.minX : box.minZ);
     const a1 = Math.max(along ? ax : az, along ? bx : bz) - (along ? box.minX : box.minZ);
-    return !plan.openings.some((o) => o.side === side && o.atM + o.widthM / 2 > a0 && o.atM - o.widthM / 2 < a1);
+    return onWall && !plan.openings.some((o) => o.side === side && o.atM + o.widthM / 2 > a0 && o.atM - o.widthM / 2 < a1);
   };
 
   if (z.kind === "bedroom") {
-    const v = 1.1;
+    const spot = placed.bedroom.get(z);
+    if (!spot) return null;
+    const { f: g, u } = spot;
     return (
       <>
-        <At f={f} u={f.uMid} v={v}>
+        <At f={g} u={u} v={1.1}>
           <Bed />
         </At>
-        {[-1, 1].map((s) =>
-          f.len >= 2.9 ? (
-            <group key={s}>
-              <Model id="side_table_01" p={f.p(f.uMid + s * 1.13, 0.27)} yaw={f.yaw} />
-              <At f={f} u={f.uMid + s * 1.13} v={0.27} y={0.55}>
-                {s < 0 ? <BedsideLamp /> : <Model id="standing_picture_frame_02" p={[0.08, 0, 0]} yaw={Math.PI / 2} s={0.9} />}
-              </At>
-            </group>
-          ) : null,
-        )}
-        {f.depth >= 2.9 && (
-          <At f={f} u={f.uMid} v={2.05}>
+        {spot.tables.map((t) => (
+          <group key={t}>
+            <Model id="side_table_01" p={g.p(t, 0.27)} yaw={g.yaw} />
+            <At f={g} u={t} v={0.27} y={0.55}>
+              {t < u ? <BedsideLamp /> : <Model id="standing_picture_frame_02" p={[0.08, 0, 0]} yaw={Math.PI / 2} s={0.9} />}
+            </At>
+          </group>
+        ))}
+        {spot.rug !== null && (
+          <At f={g} u={spot.rug} v={2.05}>
             <B p={[0, 0.006, 0]} s={[2.3, 0.012, 1.4]} m={m.rug} r={0.004} />
           </At>
         )}
@@ -660,51 +594,66 @@ function Furniture({ z, layout, plan, h }: { z: LayoutZone; layout: Layout; plan
   }
 
   if (z.kind === "living") {
-    const { lv, wide, spot, sideboard } = arrangeLiving(z, layout, box);
-    const hasDining = spot !== null;
-    const du = spot?.u ?? f.uMid,
-      dv = spot?.v ?? 0;
-    const table = { u: f.uMid, v: lv + 1.55 };
+    const spot = placed.living.get(z);
+    if (!spot) return null;
+    const { f: g, u, lv, chairs, dining, sideboard } = spot;
+    const table = { u, v: lv + 1.55 };
     return (
       <>
-        <At f={f} u={f.uMid} v={lv + 0.5}>
+        <At f={g} u={u} v={lv + 0.5}>
           <Sofa />
         </At>
-        <At f={f} u={f.uMid} v={lv + 1.6}>
-          <B p={[0, 0.006, 0]} s={[2.6, 0.012, 1.8]} m={m.rug} r={0.004} />
-        </At>
-        <Model id="modern_coffee_table_01" p={f.p(table.u, table.v)} yaw={f.yaw + Math.PI / 2} />
-        {wide ? (
+        {spot.table && (
           <>
-            <Model id="mid_century_lounge_chair" p={f.p(f.uMid + 1.25, lv + 2.35)} yaw={f.face(f.uMid + 1.25, lv + 2.35, table.u, table.v)} />
-            <Model id="modern_arm_chair_01" p={f.p(f.uMid - 1.25, lv + 2.35)} yaw={f.face(f.uMid - 1.25, lv + 2.35, table.u, table.v)} />
+            <At f={g} u={spot.rug} v={lv + 1.6}>
+              <B p={[0, 0.006, 0]} s={[Math.min(2 * RUG_HALF, g.len), 0.012, 1.8]} m={m.rug} r={0.004} />
+            </At>
+            <Model id="modern_coffee_table_01" p={g.p(table.u, table.v)} yaw={g.yaw + Math.PI / 2} />
           </>
-        ) : (
-          <Model id="mid_century_lounge_chair" p={f.p(f.uMid, lv + 2.75)} yaw={f.face(f.uMid, lv + 2.75, table.u, table.v)} />
         )}
-        {lv < 0.05 && wallFree(f.uMid - 0.4, f.uMid + 0.4) && (
-          <OnWall side={f.back}>
-            <Model id="hanging_picture_frame_01" p={f.p(f.uMid, 0.01, 1.45)} yaw={f.yaw} s={1.1} />
+        {chairs === "two" && (
+          <>
+            <Model id="mid_century_lounge_chair" p={g.p(u + 1.25, lv + 2.35)} yaw={g.face(u + 1.25, lv + 2.35, table.u, table.v)} />
+            <Model id="modern_arm_chair_01" p={g.p(u - 1.25, lv + 2.35)} yaw={g.face(u - 1.25, lv + 2.35, table.u, table.v)} />
+          </>
+        )}
+        {chairs === "one" && <Model id="mid_century_lounge_chair" p={g.p(u, lv + 2.75)} yaw={g.face(u, lv + 2.75, table.u, table.v)} />}
+        {lv < 0.05 && wallFree(g, u - 0.4, u + 0.4) && (
+          <OnWall side={g.back} inside>
+            <Model id="hanging_picture_frame_01" p={g.p(u, 0.01, 1.45)} yaw={g.yaw} s={1.1} />
           </OnWall>
         )}
-        {hasDining && (
+        {dining && (
           <>
-            <At f={f} u={du} v={dv}>
-              <DiningTable w={1.4} d={0.85} />
-              {[-0.35, 0.35].flatMap((x) =>
-                [-1, 1].map((s) => (
-                  <group key={`${x}${s}`} position={[x, 0, s * 0.62]} rotation={[0, s > 0 ? Math.PI : 0, 0]}>
-                    <DiningChair />
-                  </group>
-                )),
+            <At f={dining.f} u={dining.u} v={dining.v}>
+              {dining.seats === 4 ? (
+                <>
+                  <DiningTable w={1.4} d={0.85} />
+                  {[-0.35, 0.35].flatMap((x) =>
+                    [-1, 1].map((s) => (
+                      <group key={`${x}${s}`} position={[x, 0, s * 0.62]} rotation={[0, s > 0 ? Math.PI : 0, 0]}>
+                        <DiningChair />
+                      </group>
+                    )),
+                  )}
+                </>
+              ) : (
+                <>
+                  <DiningTable w={0.8} d={0.8} />
+                  {[-1, 1].map((s) => (
+                    <group key={s} position={[0, 0, s * 0.62]} rotation={[0, s > 0 ? Math.PI : 0, 0]}>
+                      <DiningChair />
+                    </group>
+                  ))}
+                </>
               )}
             </At>
-            <Model id="modern_ceiling_lamp_01" p={f.p(du, dv, h - 1.17 * 0.85)} s={0.85} />
+            <Model id="modern_ceiling_lamp_01" p={dining.f.p(dining.u, dining.v, h - 1.17 * 0.85)} s={0.85} />
             {sideboard && (
               <>
-                <Model id="modern_wooden_cabinet" p={f.p(f.uMid, f.depth - 0.22)} yaw={f.yaw + Math.PI} s={0.72} />
-                <Model id="ceramic_vase_02" p={f.p(f.uMid - 0.5, f.depth - 0.2, 0.49)} />
-                <Model id="ceramic_vase_04" p={f.p(f.uMid - 0.28, f.depth - 0.2, 0.49)} s={0.8} />
+                <Model id="modern_wooden_cabinet" p={g.p(sideboard.u, g.depth - 0.22)} yaw={g.yaw + Math.PI} s={0.72} />
+                <Model id="ceramic_vase_02" p={g.p(sideboard.u - 0.5, g.depth - 0.2, 0.49)} />
+                <Model id="ceramic_vase_04" p={g.p(sideboard.u - 0.28, g.depth - 0.2, 0.49)} s={0.8} />
               </>
             )}
           </>
@@ -834,7 +783,8 @@ function Rig({ plan, layout, view }: { plan: Plan; layout: Layout; view: View })
       // wall middles, take the one that's clear of furniture and walls and sees farthest into the suite.
       const living = layout.zones.find((z) => z.kind === "living");
       const bed = layout.zones.find((z) => z.kind === "bedroom");
-      const taken: Rect[] = living ? arrangeLiving(living, layout, b).taken : [];
+      const placed = arrange(plan, layout);
+      const taken: Rect[] = [...placed.living.values(), ...placed.bedroom.values()].flatMap((s) => s.pieces.map((p) => p.rect));
       if (bed) taken.push({ x0: bed.x0 + 0.3, x1: bed.x1 - 0.3, z0: bed.z0 + 0.3, z1: bed.z1 - 0.3 });
       const closed = layout.zones.filter(
         (z) =>
@@ -866,7 +816,7 @@ function Rig({ plan, layout, view }: { plan: Plan; layout: Layout; view: View })
       return { pos: eye, look: eye.clone().add(far.sub(eye).normalize().multiplyScalar(0.6)) };
     }
     return { pos: new THREE.Vector3(cx + r * 0.62, r * 0.85, cz + r * 0.78), look: new THREE.Vector3(cx, 0.6, cz) };
-  }, [view, cx, cz, r, layout, b]);
+  }, [view, cx, cz, r, layout, plan, b]);
   // Seconds of camera move left: the same one-second glide on a fast laptop or a slow phone.
   const moving = useRef(0);
   useEffect(() => {

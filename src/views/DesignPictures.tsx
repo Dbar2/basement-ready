@@ -159,7 +159,7 @@ export function DesignPictures({
         // Nothing to show yet: the render shows while the photo is made.
         setShown((m) => (m.has(a.id) ? m : new Map(m).set(a.id, { url: r.url, kind: "render", checked: "Making it look real…", hash: r.hash })));
         setMaking((s) => new Set(s).add(a.id));
-        postPicture(scanId, a.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, finishes: design.finishes })
+        postPicture(scanId, a.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, doors: r.doors, finishes: design.finishes })
           .then((p: Picture) => {
             if (hashRef.current !== p.designHash) return;
             // Nothing kept on the server (the example, past its committed pictures): the render stays.
@@ -209,9 +209,9 @@ export function DesignPictures({
     setSelected(id ? { angleId, id } : null);
   };
 
-  if (failed) return <p className="views-empty mono">The pictures aren't available for this scan.</p>;
+  if (failed) return <p className="views-empty">The pictures aren't available for this scan.</p>;
   if (!data) return <div className="views-skeleton" aria-busy="true" />;
-  if (!design || !angles.length) return <p className="views-empty mono">No angles from this scan are good enough to picture yet.</p>;
+  if (!design || !angles.length) return <p className="views-empty">No angles from this scan are good enough to picture yet.</p>;
 
   const size: [number, number] = [angles[0].intrinsics.width, angles[0].intrinsics.height];
   const piece = selected ? design.proposed.furniture.find((f) => f.id === selected.id) ?? null : null;
@@ -225,7 +225,7 @@ export function DesignPictures({
   return (
     <section className="views" data-view={view}>
       <div className="views-head">
-        <p className="views-status mono" aria-live="polite">
+        <p className="views-status" aria-live="polite">
           {updating ? "Updating every angle…" : `${angles.length} angles from where you filmed`}
         </p>
         <div className="segmented small" role="group" aria-label="Show as">
@@ -250,7 +250,7 @@ export function DesignPictures({
               </button>
               <figcaption>
                 <span className="views-label">Virtually staged</span>
-                <span className="views-checked mono">{making.has(a.id) && s?.kind === "render" ? "Making it look real…" : s?.checked ?? "Drawing the design…"}</span>
+                <span className="views-checked">{making.has(a.id) && s?.kind === "render" ? "Making it look real…" : s?.checked ?? "Drawing the design…"}</span>
               </figcaption>
             </figure>
           );
@@ -342,10 +342,10 @@ export function DesignPictures({
             </div>
           )}
           {notice && <p className="views-notice">{notice}</p>}
-          <p className="views-hint mono">Every angle changes with it.</p>
+          <p className="views-hint">Every angle changes with it.</p>
         </div>
       )}
-      {editable && !selected && <p className="views-hint mono">Tap anything in a picture to change it.</p>}
+      {editable && !selected && <p className="views-hint">Tap anything in a picture to change it.</p>}
 
       <Suspense fallback={null}>
         <AngleRenderer design={design} solid={solid} ceilingM={data.ceilingM ?? 2.3} size={size} onReady={onReady} />

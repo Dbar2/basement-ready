@@ -1,9 +1,13 @@
 // "Do it yourself": who may do which part of the work in Ontario, the materials list, the permits
 // and the pros you must still pay, DIY total against the hired total, and the order to build in,
 // lined up with the inspections the city books.
-import { cityPermit, ontarioDiy, type CityPermit, type Inspection, type ProItem, type Trade } from "../permit/data";
+import { cityPermit, forCity, ontarioDiy, type Cite, type CityPermit, type Inspection, type ProItem, type Trade } from "../permit/data";
 import { basementGeometry } from "../permit/plans";
+import { quote } from "../quote/quote";
 import { packFor } from "../rules";
+import { currentModel } from "../model/current";
+import { chosenDesign } from "../model/legacy";
+import { suiteAreaM2 } from "../model/suite";
 import { permitFee } from "../steps";
 import type { StoredState } from "../workspace";
 import { loadPrices, takeoff, type Takeoff } from "./takeoff";
@@ -14,15 +18,17 @@ export type BuildStep = { n: number; title: string; who: string; detail: string;
 export type DiyPlan = {
   city: string;
   permit: CityPermit | null; // who signs, forms, portal, inspections (the pack's permitPackage)
-  needsPro: (ProItem & { live: boolean })[];
+  needsPro: (Omit<ProItem, "cities"> & { citySource: Cite | null; live: boolean })[];
   egressNew: boolean;
   electrical: { text: string; verified: boolean; source: { title: string; url: string } };
   ownerBuilder: { allowed: boolean; detail: string; source: { title: string; url: string } } | null;
-  trades: Trade[];
+  trades: (Omit<Trade, "cities"> & { citySource: Cite | null })[];
   takeoff: Takeoff;
   permits: Cost[];
   hires: Cost[];
-  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null };
+  // The quote's two totals (server/quote/quote.ts), as the book has them: built yourself (materials, the
+  // pros the law still needs, contingency and HST) and hired out. Without a design, the takeoff's sum.
+  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null; fromQuote: boolean };
   steps: BuildStep[];
 };
 
@@ -37,7 +43,7 @@ function service(id: string, item: string, only: string | null = null): Cost | n
 export function buildOrder(inspections: Inspection[], o: { egressNew: boolean; authority: string }): BuildStep[] {
   const find = (re: RegExp) => inspections.find((i) => re.test(`${i.id} ${i.title}`))?.title ?? null;
   const steps: Omit<BuildStep, "n">[] = [
-    { title: "Permits in hand", who: "You", detail: `Building permit from ${o.authority === "your municipality" ? "your municipality" : `the ${o.authority}`}; the electrical permit from ESA before any wiring; keep the approved drawings on site.`, inspection: null },
+    { title: "Permits in hand", who: "You", detail: `Building permit from ${o.authority === "your municipality" ? "your municipality" : `the ${o.authority}`}; the electrical permit from ESA before any wiring; keep the drawings the City stamped on site.`, inspection: null },
   ];
   if (o.egressNew) steps.push({ title: "Cut the escape window", who: "Concrete cutter, to the engineer's design", detail: "Opening, lintel, window and well, before the walls go up.", inspection: find(/footing|structur|excavat/i) });
   steps.push(
@@ -62,7 +68,10 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
   const egressNew = Boolean(geo?.egress && !geo.egress.existing);
 
   const permits: Cost[] = [];
-  const fee = permitFee(pack, result?.plan?.areaM2 ?? null);
+  // On unit 2's floor in the chosen design, as every other page has it (server/model/suite.ts).
+  const model = currentModel(result, state)?.model ?? null;
+  const design = chosenDesign(model);
+  const fee = permitFee(pack, suiteAreaM2(design) ?? result?.plan?.areaM2 ?? null);
   if (fee?.amount) permits.push({ id: "building_permit", item: `Building permit, ${authority === "your municipality" ? "your municipality" : authority}`, lowCAD: fee.amount, highCAD: fee.amount, source: fee.source ? { title: fee.source.title, url: fee.source.url, checked: (fee.source as { retrieved?: string }).retrieved ?? "" } : null, estimate: fee.estimate });
   if (permit?.plumbing?.perFixtureCAD) {
     const fixtures = (geo?.layout?.zones.some((z) => z.kind === "bathroom") ? 3 : 0) + (geo?.layout?.zones.some((z) => z.kind === "kitchen") ? 1 : 0);
@@ -89,18 +98,22 @@ export function diyPlan(result: any, state: StoredState, municipality: string): 
   const tax = t.hstCAD;
   const low = t.materialsCAD + tax + [...permits, ...hires].filter(live).reduce((s, c) => s + c.lowCAD, 0);
   const high = t.materialsCAD + tax + [...permits, ...hires].filter(live).reduce((s, c) => s + c.highCAD, 0);
+  const q = model && design ? quote(model, design, { municipality }) : null;
   return {
     city,
     permit,
-    needsPro: diy.needsPro.map((n) => ({ ...n, live: n.when === "always" || (n.when === "egress_cut" && egressNew) })),
+    // Ontario's wording, with this city's own additions only (server/permit/data.ts forCity).
+    needsPro: diy.needsPro.map((n) => ({ ...forCity(n, municipality), live: n.when === "always" || (n.when === "egress_cut" && egressNew) })),
     egressNew,
     electrical: { text: diy.electrical.text, verified: diy.electrical.verified, source: diy.electrical.source },
     ownerBuilder: permit ? { allowed: permit.ownerBuilder.allowed, detail: permit.ownerBuilder.detail, source: permit.ownerBuilder.source } : null,
-    trades: diy.trades,
+    trades: diy.trades.map((t) => forCity(t, municipality)),
     takeoff: t,
     permits,
     hires,
-    totals: { diyLow: Math.round(low), diyHigh: Math.round(high), hiredLow: result?.cost?.low ?? null, hiredHigh: result?.cost?.high ?? null },
+    totals: q
+      ? { diyLow: q.diy.low, diyHigh: q.diy.high, hiredLow: q.totalLow, hiredHigh: q.totalHigh, fromQuote: true }
+      : { diyLow: Math.round(low), diyHigh: Math.round(high), hiredLow: result?.cost?.low ?? null, hiredHigh: result?.cost?.high ?? null, fromQuote: false },
     steps: buildOrder(permit?.inspections ?? [], { egressNew, authority }),
   };
 }

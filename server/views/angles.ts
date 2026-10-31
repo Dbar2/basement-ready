@@ -283,10 +283,17 @@ export function viewsFromMesh(spots: Spot[], meshPos: Int16Array, boxes: Map<num
 
 // ---------- the design in each view ----------
 
+// A straight wall of the design on the plan (x, z).
+export type Seg = [[number, number], [number, number]];
+const cross = (o: number[], a: number[], b: number[]) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+// The sight line p to q passes through the wall.
+const through = (p: number[], q: number[], [a, b]: Seg) => cross(p, q, a) * cross(p, q, b) < 0 && cross(a, b, p) * cross(a, b, q) < 0;
+
 // What a view makes of the design: the pieces it shows (in the picture, in front of the lens and not
-// behind a real wall), and whether the camera stands where the design puts furniture (a person filmed
-// from there; the picture would be taken from inside the sofa) or right up against a piece.
-export function designInView(v: View, furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[]) {
+// behind a real wall or one of the design's new walls), and whether the camera stands where the design
+// puts furniture (a person filmed from there; the picture would be taken from inside the sofa) or right
+// up against a piece.
+export function designInView(v: View, furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[], walls: Seg[] = []) {
   const P = v.pose, K = v.intrinsics;
   const eye: [number, number] = [P[0][3], P[2][3]];
   const fwd = [P[0][2], P[2][2]];
@@ -311,6 +318,7 @@ export function designInView(v: View, furniture: Pick<Furniture, "id" | "kind" |
         const z = g.z[Math.min(g.h - 1, Math.floor((w / K.height) * g.h)) * g.w + Math.min(g.w - 1, Math.floor((u / K.width) * g.w))];
         if (z < cz - 0.5 || z >= 99) continue; // a real wall in front of it, or nothing measured there to say
       }
+      if (walls.some((s) => through(eye, [p[0], p[2]], s))) continue; // a new wall in front of it
       seen++;
     }
     if (seen >= 2) {
@@ -332,8 +340,19 @@ export function designInView(v: View, furniture: Pick<Furniture, "id" | "kind" |
     });
     if (near) close = true;
   }
-  return { shows, blocked, close, share: Math.min(1, share) };
+  // How much of the picture's width a new wall fills from close by: a picture of a wall.
+  let walled = 0;
+  if (walls.length) {
+    const half = Math.atan(K.width / (2 * K.fx)), yaw = Math.atan2(fwd[0], fwd[1]);
+    for (let i = 0; i < 16; i++) {
+      const a = yaw + half * ((2 * (i + 0.5)) / 16 - 1);
+      const far: [number, number] = [eye[0] + Math.sin(a) * WALL_NEAR_M, eye[1] + Math.cos(a) * WALL_NEAR_M];
+      if (walls.some((s) => through(eye, far, s))) walled++;
+    }
+  }
+  return { shows, blocked, close, share: Math.min(1, share), walled: walled / 16 };
 }
+const WALL_NEAR_M = 2.0; // nearer than this, a wall fills its column of the picture
 
 function inside(p: [number, number], poly: [number, number][]) {
   let inn = false;
@@ -380,7 +399,7 @@ function scoreViews(views: View[]) {
   });
 }
 
-type Scored = { v: View; score: number; why: string; shows: string[]; share: number };
+type Scored = { v: View; score: number; why: string; shows: string[]; share: number; walled?: number };
 
 // Greedy, spread-out picking from a pool: each next pick is scored down by how close it stands to, and
 // how nearly it looks the same way as, the picks so far (frames under 2 s from a pick are out), and up
@@ -422,23 +441,24 @@ const asAngle = (p: Scored): Angle => {
   return { ...v, id: `${p.v.room}-${String(p.v.frame).padStart(4, "0")}`, score: Math.round(p.score * 1000) / 1000, why: p.why, shows: p.shows };
 };
 
-function withDesign(views: View[], furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[]): Scored[] {
+function withDesign(views: View[], furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[], walls: Seg[] = []): Scored[] {
   // With a design: never from inside a piece, less from right up against one, more for each piece shown.
   return scoreViews(views).map((s) => {
-    if (!furniture.length) return { ...s, shows: [] as string[], share: 0 };
-    const d = designInView(s.v, furniture);
-    const k = d.blocked ? 0 : (d.close ? 0.5 : 1) * Math.min(2, 1 + 0.25 * d.shows.length);
-    return { ...s, score: s.score * k, shows: d.shows, share: d.share, why: `${s.why} · shows ${d.shows.length} piece${d.shows.length === 1 ? "" : "s"}${d.close ? ", one right in front" : ""}` };
+    if (!furniture.length) return { ...s, shows: [] as string[], share: 0, walled: 0 };
+    const d = designInView(s.v, furniture, walls);
+    const k = d.blocked ? 0 : (d.close ? 0.5 : 1) * Math.min(2, 1 + 0.25 * d.shows.length) * (1 - d.walled);
+    return { ...s, score: s.score * k, shows: d.shows, share: d.share, walled: d.walled, why: `${s.why} · shows ${d.shows.length} piece${d.shows.length === 1 ? "" : "s"}${d.close ? ", one right in front" : ""}` };
   });
 }
 
 // The design's own pictures: from any room's frames, the `n` best that show it, spread out, each new
 // pick worth more for every piece it shows that fewer than two picks show yet. So the bed turns up in
 // several pictures, from different sides, wherever the video allows.
-export function pickDesignAngles(views: View[], n: number, furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[]): Angle[] {
+export function pickDesignAngles(views: View[], n: number, furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[], walls: Seg[] = []): Angle[] {
   if (!furniture.length) return [];
-  // The design has to be more than a speck: a tenth of the picture or more, the more the better.
-  const pool = withDesign(views, furniture).filter((s) => s.shows.length > 0 && s.share >= 0.1);
+  // The design has to be more than a speck: a tenth of the picture or more, the more the better; and
+  // not half hidden by a new wall close in front of the lens.
+  const pool = withDesign(views, furniture, walls).filter((s) => s.shows.length > 0 && s.share >= 0.1 && (s.walled ?? 0) < 0.5);
   const picks = spreadPick(pool, clamp(Math.round(n), 1, 8), (c, picked) => {
     const count = (id: string) => picked.filter((p) => p.shows.includes(id)).length;
     return Math.sqrt(Math.min(1, c.share * 2)) * (1 + c.shows.reduce((g, id) => g + (count(id) < 2 ? 0.6 : 0.05), 0));
@@ -449,9 +469,9 @@ export function pickDesignAngles(views: View[], n: number, furniture: Pick<Furni
 // The best `perRoom` angles of each room, spread out: each next pick is scored down by how close it
 // stands to, and how nearly it looks the same way as, the ones already picked; frames under 2 s from
 // a pick are out. Rooms keep their order; within a room, the best first. Deterministic.
-export function pickAngles(views: View[], perRoom = 5, furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[] = []): Angle[] {
+export function pickAngles(views: View[], perRoom = 5, furniture: Pick<Furniture, "id" | "kind" | "at" | "rotDeg" | "sizeM">[] = [], walls: Seg[] = []): Angle[] {
   const n = clamp(Math.round(perRoom), 1, 8);
-  const scored = withDesign(views, furniture);
+  const scored = withDesign(views, furniture, walls);
   const rooms = [...new Set(views.map((v) => v.room))].sort((a, b) => a - b);
   return rooms.flatMap((room) => spreadPick(scored.filter((s) => s.v.room === room), n).map(asAngle));
 }

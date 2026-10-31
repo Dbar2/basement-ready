@@ -74,6 +74,13 @@ export class BookTab {
     for (const row of await rows.all()) out[((await row.locator("dt").textContent()) ?? "").trim()] = ((await row.locator("dd").textContent()) ?? "").trim();
     return out;
   }
+
+  // The quote's building-permit line: its amount and how it's counted ("342 sq ft. $392 for the new
+  // unit plus $0.62 per sq ft of the suite (31.8 m² (342 sq ft)).").
+  async permitLine() {
+    const line = this.page.locator(".book-quote li").filter({ has: this.page.locator("strong", { hasText: /^Building permit$/ }) });
+    return { amount: ((await line.locator(".mono").first().textContent()) ?? "").trim(), basis: ((await line.locator("p").first().textContent()) ?? "").trim() };
+  }
 }
 
 // The answer: the decision, what has to change, the scan in 3D and its floor plan.
@@ -91,8 +98,10 @@ export class AnswerTab {
   // The whole-basement floor plan: its label ("Floor plan of the basement, 2 rooms, 41.7 m²") and every
   // word and size drawn on it (room names, overall dimensions).
   async floorPlan() {
-    await this.page.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Plan" }).click();
-    const svg = this.page.locator("svg.plan").first();
+    // The plan tab has more than one View switch; this one is the scan's.
+    const scanned = this.page.locator("section").filter({ has: this.scanned });
+    await scanned.getByRole("tablist", { name: "View" }).getByRole("tab", { name: "Plan" }).click();
+    const svg = scanned.locator("svg.plan").first();
     await expect(svg).toBeVisible();
     return { label: (await svg.getAttribute("aria-label")) ?? "", texts: (await svg.locator("text").allTextContents()).map((t) => t.trim()).filter(Boolean) };
   }
@@ -105,24 +114,56 @@ export class AnswerTab {
 export class PermitTab {
   constructor(readonly page: Page) {}
 
-  // Its readiness count: "14 things left before you can submit", or "Ready to submit".
+  // "Your permit set" until its readiness loads, then "3 things left before you can submit" or "Ready to submit".
+  get heading() {
+    return this.page.getByRole("heading", { level: 2, name: /^(Your permit set|\d+ things? left before you can submit|Ready to submit)$/ });
+  }
+
+  // The same heading, by the name the flow's journeys use.
   get count() {
-    return this.page.getByRole("heading", { name: /things? left before you can submit|Ready to submit/ });
+    return this.heading;
   }
 
   async expectOpen() {
-    await expect(this.count).toBeVisible({ timeout: 30_000 });
+    await expect(this.heading).toBeVisible({ timeout: 30_000 });
   }
 
-  async left() {
-    const text = (await this.count.textContent()) ?? "";
-    return /Ready to submit/.test(text) ? 0 : Number(/(\d+)/.exec(text)?.[1] ?? NaN);
+  // How many things are left before the clean submit copy: 0 when it's ready.
+  // One readiness item: its row, opened by its button.
+  item(label: RegExp) {
+    return this.page.locator(".ws-ready-group li", { has: this.page.getByRole("button", { name: label }) });
   }
 
-  // Downloads the review copy and opens it: page count, sheet numbers and the sheet list.
-  async downloadPackage(saveAs: string) {
+  // Kitchener's water-meter question (Building Bulletin BB 2026-04): pick an option, say where, save. The
+  // item is done once saved; opened again, it shows the answer.
+  async answerWaterMeter(option: string, where: string) {
+    const row = this.item(/Water meter: which option, and where it is/);
+    await row.getByRole("button", { name: /Water meter: which option/ }).click();
+    await row.getByRole("group", { name: "How the water is metered" }).getByRole("button", { name: option }).click();
+    await row.getByLabel("Where").fill(where);
+    await row.getByRole("button", { name: "Save" }).click();
+    await expect(row).toHaveAttribute("data-done", "true", { timeout: 15_000 });
+    await row.getByRole("button", { name: /Water meter: which option/ }).click();
+    await expect(row.getByRole("group", { name: "How the water is metered" }).getByRole("button", { name: option })).toHaveAttribute("aria-pressed", "true");
+    await expect(row.getByLabel("Where")).toHaveValue(where);
+  }
+
+  // "What needs a licensed pro": the work only a licensed pro may do, as the house's city has it.
+  get licensedPro() {
+    return this.page.locator("section", { has: this.page.getByRole("heading", { level: 2, name: "What needs a licensed pro" }) });
+  }
+
+  async left(): Promise<number> {
+    await expect(this.heading).not.toHaveText("Your permit set", { timeout: 30_000 });
+    const text = (await this.heading.textContent()) ?? "";
+    return /^Ready/.test(text) ? 0 : Number(/^(\d+)/.exec(text)?.[1]);
+  }
+
+  // Downloads the review copy (always offered; the submit copy comes when nothing is left) and opens it:
+  // page count, each sheet's number and the sheet list from the title blocks.
+  async downloadPackage(saveAs: string, copy: "review" | "submit" = "review") {
     const download = this.page.waitForEvent("download", { timeout: 120_000 });
-    await this.page.getByRole("button", { name: "Download the review copy" }).click();
+    await this.page.getByRole("button", { name: copy === "submit" ? "Download the submit copy" : "Download the review copy" }).click();
     // A refusal shows as an alert; fail on it rather than wait out the download.
     let downloaded = false;
     void download.then(() => (downloaded = true), () => {});
@@ -141,11 +182,30 @@ export class PermitTab {
   }
 }
 
+// What every permit set must hold, whatever its sheets are called: at least eight drawings, a cover
+// first, and a page for every sheet the title blocks list (and nothing unlisted). A plan too big for
+// one sheet runs over "A2.1", "A2.2": both count as A2.
+export function expectSheets(pdf: Awaited<ReturnType<PermitTab["downloadPackage"]>>) {
+  const numbers = Object.keys(pdf.index);
+  expect(numbers.length, `sheets listed: ${JSON.stringify(pdf.index)}`).toBeGreaterThanOrEqual(8);
+  expect(pdf.index.A0).toMatch(/^Cover/);
+  expect([...new Set(pdf.sheets.map((x) => x.number.split(".")[0]))]).toEqual(numbers);
+  expect(pdf.pageCount).toBeGreaterThanOrEqual(numbers.length);
+}
+
 export class MoneyTab {
   constructor(readonly page: Page) {}
 
   async expectOpen() {
     await expect(this.page.getByRole("heading", { name: "Money you can get" })).toBeVisible({ timeout: 30_000 });
+  }
+
+  // How to apply's permit step: "You or your designer · about 15 business days · $604" and its note
+  // ("$392 per new home + $0.62 per sq ft, for about 342 sq ft").
+  async permitStep() {
+    const step = this.page.locator('.plan-steps li[data-step="permit"]');
+    await expect(step).toBeVisible();
+    return { meta: ((await step.locator(".timeline-meta").textContent()) ?? "").trim(), note: ((await step.locator(".timeline-cost").textContent()) ?? "").trim() };
   }
 }
 

@@ -1,5 +1,6 @@
-// The flow's frame on every step: the steps across the top (the one they're on marked, every other one
-// a link), and at the bottom one clear way forward and a way back. Arriving on a step remembers it.
+// The flow's frame on every step, drawn like a sheet of a drawing set (brand/ui.md): the sheet index across
+// the top (the one they're on underlined, every other one a link), and along the bottom the title strip: a
+// way back, the title block, and one clear way forward. Arriving on a step remembers it.
 import { useRouter } from "@tanstack/react-router";
 import { useEffect, type MouseEvent, type ReactNode } from "react";
 import { AccountNav } from "../auth";
@@ -22,6 +23,8 @@ export function FlowLink({ href, className, children, ...rest }: { href: string;
   );
 }
 
+const sheetNo = (i: number) => String(i + 1).padStart(2, "0");
+
 export function FlowHead({ scanId, step, remember = true }: { scanId: string; step: Step; remember?: boolean }) {
   useEffect(() => {
     if (remember) void rememberStep(scanId, step);
@@ -35,7 +38,7 @@ export function FlowHead({ scanId, step, remember = true }: { scanId: string; st
           {STEPS.map((s, i) => (
             <li key={s.id} data-state={i < at ? "done" : i === at ? "current" : "todo"}>
               <FlowLink href={stepUrl(scanId, s.id)} aria-current={i === at ? "step" : undefined} aria-label={`Step ${i + 1}: ${s.label}`}>
-                <span className="flow-n mono">{i + 1}</span>
+                <span className="flow-n">{sheetNo(i)}</span>
                 <span className="flow-name">{s.short}</span>
               </FlowLink>
             </li>
@@ -64,6 +67,7 @@ export function FlowFoot({
 }) {
   const { prev, next: after } = neighbours(step);
   const forward = next === undefined ? (after ? { label: after.label, href: stepUrl(scanId, after.id) } : null) : next;
+  const at = STEPS.findIndex((s) => s.id === step);
   return (
     <div className="flow-foot">
       {prev ? (
@@ -73,6 +77,16 @@ export function FlowFoot({
       ) : (
         <span />
       )}
+      <span className="title-block" aria-hidden>
+        <span>
+          <b>{sheetNo(at)} / {sheetNo(STEPS.length - 1)}</b>
+          <i>Sheet</i>
+        </span>
+        <span>
+          <b>{STEPS[at].label}</b>
+          <i>Basement Ready</i>
+        </span>
+      </span>
       <span className="flow-foot-right">
         {extra}
         {forward &&

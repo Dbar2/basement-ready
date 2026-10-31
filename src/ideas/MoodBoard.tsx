@@ -58,7 +58,7 @@ export function MoodBoard({ cards, state, dispatch, mood }: { cards: Map<string,
                     <img src={c.url} alt={`${c.title}, virtually staged`} style={{ aspectRatio: String(c.aspect) }} draggable={false} />
                   </button>
                   <div className="board-tile-bar">
-                    <span className="mono">{i === 0 ? "Favourite · virtually staged" : "Virtually staged"}</span>
+                    <span className="aside">{i === 0 ? "Favourite · virtually staged" : "Virtually staged"}</span>
                     <span className="board-tools">
                       <button type="button" onClick={() => dispatch({ type: "move", id, to: i - 1 })} disabled={i === 0} aria-label={`Move ${c.title} earlier`} title="Earlier">
                         ←

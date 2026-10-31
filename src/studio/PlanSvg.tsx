@@ -3,9 +3,10 @@
 // ducts with the headroom under them, alarms, rooms with their areas. Walls, doors and finds can be
 // dragged (or nudged with the arrow keys once picked), and a new wall drawn with a finger.
 import { useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { add, along, bounds, centroid, dist, dot, inPolygon, mul, openingEnds, polygonArea, project, sub, wallLength, wallNormal, type Box } from "../../server/model/geometry";
+import { add, along, bounds, centroid, dist, dot, floorArea, inPolygon, mul, openingEnds, project, sub, wallLength, wallNormal, type Box } from "../../server/model/geometry";
 import type { Alarm, Fixture, Furniture, Opening, Pt, Room, Wall } from "../../server/model/types";
 import { fmtArea, fmtLength, type Units } from "../components/FloorPlan";
+import { placeTags, textBox, type Box as TagBox, type Placed, type Tag } from "./labels";
 
 export type PlanLayer = { walls: Wall[]; openings: Opening[]; rooms: Room[]; fixtures: Fixture[]; alarms?: Alarm[]; furniture?: Furniture[] };
 export type Picked = { kind: "wall" | "opening" | "room" | "fixture"; id: string } | null;
@@ -164,6 +165,56 @@ export function PlanSvg(props: {
   const rated = layer.walls.some((w) => w.rating);
   const isSel = (kind: string, id: string) => selected?.kind === kind && selected.id === id;
 
+  // Room names first, where they are; then each find's label in the first spot clear of them and of the
+  // labels already placed (a long beam label moves along its beam or beside it, then drops its hint).
+  const names = props.roomNames === false
+    ? []
+    : layer.rooms.flatMap((r) => {
+        const c = roomLabel(r);
+        const b = bounds(r.polygon);
+        const wide = (b.maxX - b.minX) * s;
+        if (wide < 60 || (b.maxZ - b.minZ) * s < 30) return [];
+        const area = wide > 120 && floorArea(r, layer.rooms) >= 2 ? ` ${fmtArea(floorArea(r, layer.rooms), units)}` : "";
+        return [{ r, x: X(c[0]), y: Z(c[1]) + 5, area }];
+      });
+  const fixed: TagBox[] = names.map((n) => {
+    const w = n.r.name.length * 26 * 0.56 + n.area.length * 19 * 0.62;
+    return { x0: n.x - w / 2, y0: n.y - 22, x1: n.x + w / 2, y1: n.y + 6 };
+  });
+  for (const o of layer.openings) {
+    const w = wallOf(o.wallId);
+    if (!w) continue;
+    const n = wallNormal(w), mid = along(w, o.offsetM);
+    const k = o.kind === "window" ? 0.38 : 0.3 * (o.swing === "right" ? -1 : 1);
+    fixed.push(textBox(X(mid[0] - n[0] * k), Z(mid[1] - n[1] * k) + 5, o.kind === "window" ? "W 000×000" : `${Math.round(o.widthM * 100)}${o.rating ? " · 20 MIN" : ""}`, 16));
+    // Its drag handle, a 14 px circle on the opening.
+    fixed.push({ x0: X(mid[0]) - 15, y0: Z(mid[1]) - 15, x1: X(mid[0]) + 15, y1: Z(mid[1]) + 15 });
+  }
+  // The stairs and mechanicals' own boxes: a label shouldn't sit on another find either.
+  for (const f of layer.fixtures) {
+    if (OVERHEAD.has(f.kind)) continue;
+    const size = f.sizeM ?? [0.4, 0.4];
+    const half = f.kind === "stairs" ? [size[0] * s / 2, size[1] * s / 2] : [Math.max(22, size[0] * s, size[1] * s) / 2, Math.max(22, size[0] * s, size[1] * s) / 2];
+    if (f.kind !== "stairs") fixed.push({ x0: X(f.at[0]) - half[0], y0: Z(f.at[1]) - half[1], x1: X(f.at[0]) + half[0], y1: Z(f.at[1]) + half[1] });
+  }
+  const tags: Tag[] = layer.fixtures.map((f) => {
+    const size = f.sizeM ?? [0.4, 0.4];
+    const cx = X(f.at[0]), cy = Z(f.at[1]);
+    const w = size[0] * s, h = size[1] * s;
+    if (OVERHEAD.has(f.kind)) {
+      const short = `${FIXTURE_NAME[f.kind].toUpperCase()}${f.heightM != null ? ` · ${fmtLength(f.heightM, units)} CLEAR` : ""}`;
+      const along = w >= h ? [0, -0.3, 0.3, -0.15, 0.15].map((t): [number, number] => [cx + t * w, cy + 5]) : [0, -0.3, 0.3].map((t): [number, number] => [cx, cy + 5 + t * h]);
+      const beside = w >= h ? [[cx, cy - h / 2 - 8], [cx, cy + h / 2 + 20], [cx - 0.3 * w, cy - h / 2 - 8], [cx + 0.3 * w, cy + h / 2 + 20]] : [[cx + w / 2 + 70, cy + 5], [cx - w / 2 - 70, cy + 5]];
+      return { id: f.id, text: short + (f.guess ? " · DRAG TO PLACE" : ""), short, size: 16, spots: [...along, ...(beside as [number, number][])] };
+    }
+    if (f.kind === "stairs") return { id: f.id, text: "STAIRS", size: 16, spots: [[cx, cy + 5], [cx, cy - h / 2 - 8], [cx, cy + h / 2 + 20]] };
+    const box = Math.max(22, Math.max(w, h));
+    const name = FIXTURE_NAME[f.kind].toUpperCase();
+    return { id: f.id, text: name, size: 16, spots: [[cx, cy + box / 2 + 18], [cx, cy - box / 2 - 8], [cx + box / 2 + name.length * 5.5, cy + 5], [cx - box / 2 - name.length * 5.5, cy + 5]] };
+  });
+  // Stairs and mechanicals before the long overhead labels, which have the most room to move.
+  const placed = placeTags(fixed, [...tags.filter((t) => !OVERHEAD.has(layer.fixtures.find((f) => f.id === t.id)!.kind)), ...tags.filter((t) => OVERHEAD.has(layer.fixtures.find((f) => f.id === t.id)!.kind))]);
+
   return (
     <svg
       ref={svgRef}
@@ -218,13 +269,22 @@ export function PlanSvg(props: {
 
       {/* overhead: beams, ducts, bulkheads, dashed with the headroom under them */}
       {layer.fixtures.filter((f) => OVERHEAD.has(f.kind)).map((f) => (
-        <FixtureShape key={f.id} f={f} X={X} Z={Z} s={s} units={units} selected={isSel("fixture", f.id)} />
+        <FixtureShape key={f.id} f={f} X={X} Z={Z} s={s} selected={isSel("fixture", f.id)} tag={placed.get(f.id)} />
       ))}
 
       {/* walls */}
       {layer.walls.map((w) => (
         <g key={w.id} className="model-wall" data-kind={w.kind} data-guess={w.guess || undefined} data-selected={isSel("wall", w.id) || undefined}>
-          <line x1={X(w.a[0])} y1={Z(w.a[1])} x2={X(w.b[0])} y2={Z(w.b[1])} strokeWidth={thick(w)} strokeLinecap="square" />
+          <line
+            x1={X(w.a[0])}
+            y1={Z(w.a[1])}
+            x2={X(w.b[0])}
+            y2={Z(w.b[1])}
+            strokeWidth={thick(w)}
+            strokeLinecap={w.guess ? "butt" : "square"}
+            // A guess is dashed at a scale the wall's own thickness can't fill in, so it never reads as scanned.
+            style={w.guess ? { strokeDasharray: `${Math.max(10, 2 * thick(w))} ${Math.max(8, 1.4 * thick(w))}` } : undefined}
+          />
           {w.rating && <line className="model-rated" x1={X(w.a[0])} y1={Z(w.a[1])} x2={X(w.b[0])} y2={Z(w.b[1])} />}
         </g>
       ))}
@@ -268,7 +328,7 @@ export function PlanSvg(props: {
 
       {/* stairs and mechanicals */}
       {layer.fixtures.filter((f) => !OVERHEAD.has(f.kind)).map((f) => (
-        <FixtureShape key={f.id} f={f} X={X} Z={Z} s={s} units={units} selected={isSel("fixture", f.id)} />
+        <FixtureShape key={f.id} f={f} X={X} Z={Z} s={s} selected={isSel("fixture", f.id)} tag={placed.get(f.id)} />
       ))}
 
       {/* alarms */}
@@ -281,19 +341,12 @@ export function PlanSvg(props: {
       ))}
 
       {/* room names and areas */}
-      {props.roomNames !== false &&
-        layer.rooms.map((r) => {
-          const c = roomLabel(r);
-          const b = bounds(r.polygon);
-          const wide = (b.maxX - b.minX) * s;
-          if (wide < 60 || (b.maxZ - b.minZ) * s < 30) return null;
-          return (
-            <text key={r.id} x={X(c[0])} y={Z(c[1]) + 5} textAnchor="middle" className="plan-zone-name" pointerEvents="none">
-              {r.name}
-              {wide > 120 && polygonArea(r.polygon) >= 2 && <tspan className="plan-zone-area"> {fmtArea(polygonArea(r.polygon), units)}</tspan>}
-            </text>
-          );
-        })}
+      {names.map(({ r, x, y, area }) => (
+        <text key={r.id} x={x} y={y} textAnchor="middle" className="plan-zone-name" pointerEvents="none">
+          {r.name}
+          {area && <tspan className="plan-zone-area">{area}</tspan>}
+        </text>
+      ))}
 
       {/* overall size */}
       <g className="plan-dim">
@@ -368,7 +421,7 @@ export function PlanSvg(props: {
                   }
                 }}
               >
-                <title>{`${w.kind === "new" ? "New wall" : w.kind === "foundation" ? "Outside wall" : "Wall"}, ${fmtLength(wallLength(w), units)}${props.canDragWall?.(w) ? ". Drag to move it." : ""}`}</title>
+                <title>{`${w.kind === "new" ? "New wall" : w.kind === "foundation" ? "Outside wall" : "Wall"}, ${fmtLength(wallLength(w), units)}${w.guess ? ", a guess: we couldn't see it clearly" : ""}${props.canDragWall?.(w) ? ". Drag to move it." : ""}`}</title>
               </line>
             ) : null,
           )}
@@ -407,7 +460,7 @@ export function PlanSvg(props: {
   );
 }
 
-function FixtureShape({ f, X, Z, s, units, selected }: { f: Fixture; X: (x: number) => number; Z: (z: number) => number; s: number; units: Units; selected: boolean }) {
+function FixtureShape({ f, X, Z, s, selected, tag }: { f: Fixture; X: (x: number) => number; Z: (z: number) => number; s: number; selected: boolean; tag?: Placed }) {
   const size = f.sizeM ?? [0.4, 0.4];
   const x0 = X(f.at[0] - size[0] / 2), y0 = Z(f.at[1] - size[1] / 2);
   const w = size[0] * s, h = size[1] * s;
@@ -421,7 +474,7 @@ function FixtureShape({ f, X, Z, s, units, selected }: { f: Fixture; X: (x: numb
           const t = (i + 1) / steps;
           return along ? <line key={i} x1={x0 + t * w} y1={y0} x2={x0 + t * w} y2={y0 + h} /> : <line key={i} x1={x0} y1={y0 + t * h} x2={x0 + w} y2={y0 + t * h} />;
         })}
-        <text x={x0 + w / 2} y={y0 + h / 2 + 5} textAnchor="middle" className="plan-tag">STAIRS</text>
+        {tag && <text x={tag.x} y={tag.y} textAnchor="middle" className="plan-tag">{tag.text}</text>}
       </g>
     );
   }
@@ -429,11 +482,7 @@ function FixtureShape({ f, X, Z, s, units, selected }: { f: Fixture; X: (x: numb
     return (
       <g className="model-overhead" data-kind={f.kind} data-guess={f.guess || undefined} data-selected={selected || undefined}>
         <rect x={x0} y={y0} width={w} height={h} />
-        <text x={X(f.at[0])} y={Z(f.at[1]) + 5} textAnchor="middle" className="plan-tag">
-          {FIXTURE_NAME[f.kind].toUpperCase()}
-          {f.heightM != null ? ` · ${fmtLength(f.heightM, units)} CLEAR` : ""}
-          {f.guess ? " · DRAG TO PLACE" : ""}
-        </text>
+        {tag && <text x={tag.x} y={tag.y} textAnchor="middle" className="plan-tag">{tag.text}</text>}
       </g>
     );
   }
@@ -442,7 +491,7 @@ function FixtureShape({ f, X, Z, s, units, selected }: { f: Fixture; X: (x: numb
     <g className="plan-fixture" data-selected={selected || undefined}>
       <rect x={X(f.at[0]) - box / 2} y={Z(f.at[1]) - box / 2} width={box} height={box} />
       <line x1={X(f.at[0]) - box / 2} y1={Z(f.at[1]) - box / 2} x2={X(f.at[0]) + box / 2} y2={Z(f.at[1]) + box / 2} />
-      <text x={X(f.at[0])} y={Z(f.at[1]) + box / 2 + 18} textAnchor="middle" className="plan-tag">{FIXTURE_NAME[f.kind].toUpperCase()}</text>
+      {tag && <text x={tag.x} y={tag.y} textAnchor="middle" className="plan-tag">{tag.text}</text>}
     </g>
   );
 }

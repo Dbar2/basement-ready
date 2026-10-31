@@ -146,6 +146,50 @@ describe("the photo of an angle", () => {
     expect(m.kind).toBe("photo");
   });
 
+  it("turns down a fridge the design doesn't have, telling the second try, but not the kitchen's own", async () => {
+    // Muse Image made the tall new wall beside the kitchen into a fridge.
+    const prompts: string[] = [];
+    const ok = { "basement window": [input.anchors[0].box], bed: [bed.box], sofa: [sofa.box] };
+    const fridge = { x: 0.5, y: 0.1, w: 0.45, h: 0.85 };
+    const w = work({
+      found: { ...ok, refrigerator: [fridge] },
+      edit: async (_g, prompt) => {
+        prompts.push(prompt);
+        return Buffer.from("photo");
+      },
+    });
+    const m = await makePicture(input, w);
+    expect(m.kind).toBe("render");
+    expect(m.checked).toMatch(/a fridge appeared that isn't in the design/);
+    expect(prompts[0]).not.toMatch(/Above all/);
+    expect(prompts[1]).toMatch(/Above all, add no fridge: the tall plain shapes drawn in are walls\./);
+    // Where the kitchen is drawn, its fridge is the design's.
+    const kitchen: DrawnItem = { id: "k", kind: "kitchen", label: "Kitchen", box: { x: 0.45, y: 0.05, w: 0.55, h: 0.95 }, share: 0.3 };
+    const withKitchen = work({ found: { ...ok, "kitchen cabinets": [kitchen.box], refrigerator: [fridge] } });
+    expect((await makePicture({ ...input, items: [bed, sofa, kitchen] }, withKitchen)).kind).toBe("photo");
+  });
+
+  it("turns down a photo that lost a new wall (no door where the render drew one), telling the second try", async () => {
+    // The stair room's door, as the render drew it, and where SAM finds it in a photo that kept the wall.
+    const door = { x: 0.46, y: 0.15, w: 0.07, h: 0.67 };
+    const ok = { "basement window": [input.anchors[0].box], bed: [bed.box], sofa: [sofa.box] };
+    const prompts: string[] = [];
+    const lost = work({
+      found: ok,
+      edit: async (_g, prompt) => {
+        prompts.push(prompt);
+        return Buffer.from("photo");
+      },
+    });
+    const m = await makePicture({ ...input, doors: [door] }, lost);
+    expect(m.kind).toBe("render");
+    expect(m.checked).toMatch(/a new wall or its door is missing/);
+    expect(prompts[1]).toMatch(/Above all, keep every plain wall drawn in, and the door drawn in it, exactly where they are drawn\./);
+    const kept = await makePicture({ ...input, doors: [door] }, work({ found: { ...ok, door: [{ x: 0.47, y: 0.13, w: 0.07, h: 0.52 }] } }));
+    expect(kept.kind).toBe("photo");
+    expect(kept.checked).toMatch(/the new door where the design puts it/);
+  });
+
   it("shows the render without spending when the day's budget is used up", async () => {
     const w = work({ canSpend: async () => false });
     const m = await makePicture(input, w);
@@ -165,7 +209,33 @@ describe("the photo of an angle", () => {
   it("asks Muse Image to keep the room and each piece, in its colour", () => {
     const p = picturePrompt([bed, sofa], input.finishes);
     expect(p).toMatch(/Keep the camera/);
-    expect(p).toMatch(/the sage bed and the sofa exactly where they are drawn/);
-    expect(p).toMatch(/light oak/);
+    // A piece with no colour of its own is asked for in the colour the 3D draws it.
+    expect(p).toMatch(/the sage bed and the pale sage-grey linen sofa exactly where they are drawn/);
+    expect(p).toMatch(/Floor: light oak, everywhere/);
+  });
+
+  it("says what the plain walls are, clears the clutter, and finishes the ceiling", () => {
+    const p = picturePrompt([bed], input.finishes);
+    expect(p).toMatch(/plain walls drawn in are new drywall walls/);
+    expect(p).toMatch(/floor to the ceiling with baseboards/);
+    expect(p).toMatch(/exercise machines/);
+    expect(p).toMatch(/flat, smooth white drywall ceiling/);
+    expect(p).toMatch(/Add no window or stair/);
+  });
+
+  it("asks every angle of a design for the same finishes, in the words the homeowner picked", () => {
+    // The same design from two angles, different pieces in view: the finish words are the same.
+    const finish = (p: string) => p.slice(p.indexOf("Floor:"));
+    const studio = { style: "warm", floor: "Light oak laminate", walls: "Warm white" };
+    expect(finish(picturePrompt([bed], studio))).toBe(finish(picturePrompt([sofa], studio)));
+    // Warm wood picked in the studio after the light oak default: the warm floor the 3D draws.
+    expect(picturePrompt([], studio)).toMatch(/Floor: warm honey oak plank/);
+    expect(picturePrompt([], { style: "light", floor: "Light oak laminate", walls: "Warm white" })).toMatch(/Floor: light oak laminate,.*all the same warm white\./);
+    // A board's pick: its floor, walls and feel, and its open ceiling.
+    const board = picturePrompt([], { style: "industrial", floor: "Polished concrete floor", walls: "White painted brick wall" });
+    expect(board).toMatch(/Floor: polished concrete,/);
+    expect(board).toMatch(/soft white, with one white painted brick feature wall/);
+    expect(board).toMatch(/joists, ducts and pipes all painted one dark charcoal/);
+    expect(picturePrompt([], { style: "green", floor: "Light oak floor", walls: "Sage walls" })).toMatch(/Floor: light oak,.*all the same sage\..*deep green accent wall/);
   });
 });

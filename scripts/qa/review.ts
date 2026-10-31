@@ -111,7 +111,7 @@ async function buildUnits(shots: Captured[], images: Images): Promise<Unit[]> {
     if (!screen) continue;
     const scan = list[0].scan;
     const key = scan === "sample" ? screen.id : `${screen.id}@${scan}`;
-    const head = `Screen: ${screen.title}${scan === "sample" ? "" : ` (scan ${scan})`}\nRoute: ${list[0].route}\nMeant to show: ${screen.purpose}\nAlso check: ${screen.checks.length ? screen.checks.join(" ") : "(the shared checklist only)"}${screen.captureNote ? `\nAbout the capture: ${screen.captureNote}` : ""}\nFull-page shots: the sticky header and bottom bar appear once, where they sit in the first screen.`;
+    const head = `Screen: ${screen.title}${scan === "sample" ? " (the example basement)" : ` (scan ${scan}: a recorded take, a different basement from the example)`}\nRoute: ${list[0].route}\nMeant to show: ${screen.purpose}\nAlso check: ${screen.checks.length ? screen.checks.join(" ") : "(the shared checklist only)"}${screen.captureNote ? `\nAbout the capture: ${screen.captureNote}` : ""}\nFull-page shots: the sticky header and bottom bar appear once, where they sit in the first screen.`;
 
     if (screen.kind === "page") {
       const sent: Sent[] = [];

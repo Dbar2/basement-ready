@@ -3,6 +3,7 @@
 // email to the right address with what to attach, or the online form's answers laid out to copy.
 // The documents checklist ticks off what the workspace already holds. Nothing here re-asks a
 // question: rent, who lives there and the rest come from the answers already given.
+import { areaText } from "../model/suite";
 import { DEMO_ADDRESS } from "../permit/data";
 import type { Profile, StoredState } from "../workspace";
 
@@ -107,7 +108,7 @@ export function applications(given: ApplyInput): Application[] {
             "Hello,",
             "",
             `Please find attached our application to the Ontario Renovates program for a secondary suite at ${input.address}, ${input.municipality}.`,
-            `The suite will be ${input.bedrooms === 0 ? "a bachelor" : "a one-bedroom"} unit in the basement${input.areaM2 ? `, about ${Math.round(input.areaM2)} m²` : ""}. No work has started.`,
+            `The suite will be ${input.bedrooms === 0 ? "a bachelor" : "a one-bedroom"} unit in the basement${input.areaM2 ? `, ${areaText(input.areaM2)}` : ""}. No work has started.`,
             "",
             "Attached:",
             ...documents.map((d) => `- ${d.label}`),
@@ -121,7 +122,7 @@ export function applications(given: ApplyInput): Application[] {
         documents,
         warnings: [
           "After conditional approval the Region needs 3 quotes from contractors with WSIB coverage and liability insurance. The Build tab tracks them.",
-          "Work started before written approval doesn't qualify.",
+          "Work started before you have it in writing isn't eligible.",
         ],
         link: null,
       });
@@ -262,7 +263,7 @@ export function applications(given: ApplyInput): Application[] {
         },
         form: null,
         documents: [{ label: "Quotes for the work", have: has.quotes > 0, how: has.quotes ? `${has.quotes} on the Build tab.` : "Ask for quotes on the Build tab." }],
-        warnings: ["Only CMHC-approved lenders offer it, and CMHC approves it before construction starts."],
+        warnings: ["Only lenders that work with CMHC offer it, and CMHC signs off before construction starts."],
         link: g.apply?.where?.[0] ?? null,
       });
     }

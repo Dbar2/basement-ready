@@ -11,7 +11,7 @@ const id = z.string().trim().max(60);
 const pt = z.tuple([m, m]);
 const rating = z.enum(["30min", "15min"]).nullable();
 
-const WallSchema = z.object({ id, a: pt, b: pt, thicknessM: size, kind: z.enum(["foundation", "existing", "new"]), rating, guess: z.boolean().optional() });
+const WallSchema = z.object({ id, a: pt, b: pt, thicknessM: size, kind: z.enum(["foundation", "existing", "new"]), rating, guess: z.boolean().optional(), why: z.string().max(160).optional() });
 const OpeningSchema = z.object({
   id,
   wallId: id,
@@ -24,6 +24,7 @@ const OpeningSchema = z.object({
   swing: z.enum(["left", "right"]).nullable().optional(),
   rating: z.enum(["20min"]).nullable().optional(),
   detectionId: id.optional(),
+  guess: z.boolean().optional(),
 });
 const RoomKindSchema = z.enum(["bedroom", "bathroom", "kitchen", "living", "mechanical", "stairs", "closet", "storage", "laundry", "hall", "other"]);
 const RoomSchema = z.object({
@@ -34,9 +35,10 @@ const RoomSchema = z.object({
   unit: z.union([z.literal(1), z.literal(2), z.literal("shared")]),
   ceilingM: num.min(0).max(6).nullable().optional(),
   ceilingRating: rating.optional(),
+  kept: z.boolean().optional(),
 });
 const FixtureKindSchema = z.enum(["furnace", "water_heater", "panel", "plumbing", "beam", "duct", "bulkhead", "post", "stairs"]);
-const FixtureSchema = z.object({ id, kind: FixtureKindSchema, at: pt, sizeM: z.tuple([size, size]).optional(), heightM: num.min(0).max(6).nullable().optional(), detectionId: id.optional(), guess: z.boolean().optional() });
+const FixtureSchema = z.object({ id, kind: FixtureKindSchema, at: pt, sizeM: z.tuple([size, size]).optional(), heightM: num.min(0).max(6).nullable().optional(), detectionId: id.optional(), guess: z.boolean().optional(), bottom: pt.optional() });
 const AlarmSchema = z.object({ id, kind: z.enum(["smoke", "co", "combo"]), at: pt, why: z.string().max(200) });
 const FurnitureKindSchema = z.enum(["bed", "sofa", "armchair", "desk", "dining", "dresser", "tv", "rug", "shelf", "kitchen", "fridge", "vanity", "toilet", "shower", "washer_dryer", "other"]);
 const FurnitureSchema = z.object({ id, kind: FurnitureKindSchema, at: pt, rotDeg: num.min(-720).max(720), sizeM: z.tuple([num.min(0.05).max(12), num.min(0.05).max(12)]), colour: z.string().max(40).optional(), roomId: id.optional() });
@@ -52,6 +54,7 @@ export const ExistingSchema = z.object({
     factor: num.min(0.2).max(5).optional(),
   }),
   confirmedAt: z.string().max(40).nullable(),
+  entrance: z.object({ status: z.enum(["own", "needed", "unknown"]), why: z.string().max(400) }).optional(),
 });
 
 export const DesignSchema = z.object({
@@ -63,12 +66,14 @@ export const DesignSchema = z.object({
   finishes: FinishesSchema,
   chosen: z.boolean(),
   updatedAt: z.string().max(40),
+  why: z.string().max(300).optional(),
 });
 
 export const ModelSchema = z.object({
   version: z.literal(1),
   existing: ExistingSchema,
   designs: z.array(DesignSchema).max(8),
+  recommended: z.object({ designId: id, reason: z.string().max(200) }).optional(),
   mood: z.object({
     liked: z.array(id).max(200),
     disliked: z.array(id).max(200),
@@ -82,7 +87,7 @@ export const EditSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("move_wall"), wallId: id, a: pt, b: pt }),
   z.object({ op: z.literal("add_wall"), wall: WallSchema.extend({ id: id.default("") }) }),
   z.object({ op: z.literal("remove_wall"), wallId: id }),
-  z.object({ op: z.literal("set_wall"), wallId: id, rating: rating.optional(), kind: z.enum(["foundation", "existing", "new"]).optional(), thicknessM: num.min(0.05).max(0.5).optional() }),
+  z.object({ op: z.literal("set_wall"), wallId: id, rating: rating.optional(), kind: z.enum(["foundation", "existing", "new"]).optional(), thicknessM: num.min(0.05).max(0.5).optional(), guess: z.literal(false).optional() }),
   z.object({ op: z.literal("add_opening"), opening: OpeningSchema.extend({ id: id.default("") }) }),
   z.object({ op: z.literal("move_opening"), openingId: id, offsetM: size }),
   z.object({

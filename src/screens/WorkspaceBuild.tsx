@@ -122,7 +122,7 @@ function People(props: TabProps & { scope: string }) {
                 ) : (
                   <span className="muted">Add an email to send a quote request.</span>
                 )}
-                {p.requestedAt && <span className="mono ws-sent">Asked {new Date(p.requestedAt).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}</span>}
+                {p.requestedAt && <span className="ws-sent">Asked {new Date(p.requestedAt).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}</span>}
               </div>
               <div className="ws-quote">
                 <label className="field">
@@ -168,7 +168,7 @@ function People(props: TabProps & { scope: string }) {
             </label>
           </div>
           <div className="ws-actions">
-            <button className="btn btn-primary" onClick={add} disabled={!name.trim()}>
+            <button className="btn btn-ghost" onClick={add} disabled={!name.trim()}>
               Add
             </button>
             <button className="link-quiet" onClick={() => setAdding(null)}>
@@ -286,6 +286,14 @@ function Diy({ plan }: { plan: DiyPlan }) {
                 <a className="ws-source" href={tr.source.url} target="_blank" rel="noreferrer">
                   {tr.source.section ? `${tr.source.title}, ${tr.source.section}` : tr.source.title}
                 </a>
+                {tr.citySource && (
+                  <>
+                    {" · "}
+                    <a className="ws-source" href={tr.citySource.url} target="_blank" rel="noreferrer">
+                      {tr.citySource.section ? `${tr.citySource.title}, ${tr.citySource.section}` : tr.citySource.title}
+                    </a>
+                  </>
+                )}
                 {tr.registry && (
                   <>
                     {" · "}
@@ -308,11 +316,15 @@ function Diy({ plan }: { plan: DiyPlan }) {
             <dd className="mono">{range(t.diyLow, t.diyHigh)}</dd>
           </div>
           <div>
-            <dt>Hiring out the code work</dt>
+            <dt>Hired out</dt>
             <dd className="mono">{range(t.hiredLow, t.hiredHigh)}</dd>
           </div>
         </dl>
-        <p className="lede">Doing it yourself: every material for the finished unit ({money(plan.takeoff.materialsCAD)} plus {money(plan.takeoff.hstCAD)} HST), the permits, and the pros you still pay; your own time isn't counted. Hiring out is the rough cost on your plan for the code work (the fixes and what every suite needs); a contractor quotes the kitchen, bathroom and finishes on top.</p>
+        <p className="lede">
+          {t.fromQuote
+            ? "Your quote's two totals, as your book has them. Doing it yourself: the materials, the permits and the pros the law still needs, with contingency and HST; your own time isn't counted. Hiring out: the whole job done by trades."
+            : `Doing it yourself: every material for the finished unit (${money(plan.takeoff.materialsCAD)} plus ${money(plan.takeoff.hstCAD)} HST), the permits, and the pros you still pay; your own time isn't counted. Hiring out is the rough cost on your plan for the code work.`}
+        </p>
         <ul className="ruled ws-costs">
           {[...plan.permits, ...plan.hires].map((c) => (
             <li key={c.id} data-only={c.only ? true : undefined}>
@@ -344,7 +356,7 @@ function Diy({ plan }: { plan: DiyPlan }) {
               <span className="timeline-num">{s.n}</span>
               <div>
                 <h3>{s.title}</h3>
-                <p className="timeline-meta mono">{s.who}</p>
+                <p className="timeline-meta aside">{s.who}</p>
                 <p className="muted">{s.detail}</p>
                 {s.inspection && <p className="ws-inspection">Inspection: {s.inspection}</p>}
               </div>

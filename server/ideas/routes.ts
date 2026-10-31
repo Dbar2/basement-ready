@@ -13,7 +13,8 @@ import { metaKey, overSpend, USED_UP } from "../limits";
 import { storage } from "../storage";
 import { basementFor, loadWorkspace, parseClaims, saveWorkspace } from "../workspace";
 import type { Model } from "../model/types";
-import { cardKey, cardsSoFar, enqueueCards } from "./cards";
+import { cardKey, cardsSoFar, enqueueCards, retryCards } from "./cards";
+import type { Deck } from "./deck";
 import { STYLES, type StyleId } from "./styles";
 
 const UUID = /^[0-9a-f-]{36}$/;
@@ -60,9 +61,13 @@ export function mountIdeas(app: Hono, currentUser: (c: Context) => Promise<strin
     if (!metaKey()) return c.json({ error: "Cards need the Muse Image key on this server." }, 503);
     if (await overSpend()) return c.json({ error: USED_UP }, 503);
     const [scan] = await db.select({ status: schema.scans.status }).from(schema.scans).where(eq(schema.scans.id, a.id));
-    if (scan?.status === "error") return c.json({ error: "This scan didn't finish." }, 409);
-    // Development only: ?again=1 deals a fresh deck.
-    if (c.req.query("again") === "1" && process.env.NODE_ENV !== "production") await enqueue("cards", { scanId: a.id });
+    // A scan that stopped has no deck to deal: say so as a finished, failed deck rather than an error, since
+    // the wait screen can open the deck in the moment before it learns the scan stopped.
+    if (scan?.status === "error") return c.json({ status: "failed", slots: [], cards: [], dropped: [] } satisfies Deck, 200, { "Cache-Control": "no-store" });
+    // ?again=1 deals a fresh deck: after one failed ("Try again"), or any time in development.
+    const again = c.req.query("again") === "1";
+    if (again && (await cardsSoFar(a.id)).status === "failed") await retryCards(a.id);
+    else if (again && process.env.NODE_ENV !== "production") await enqueue("cards", { scanId: a.id });
     else await enqueueCards(a.id);
     return c.json(await cardsSoFar(a.id), 200, { "Cache-Control": "no-store" });
   });

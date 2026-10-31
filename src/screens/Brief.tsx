@@ -3,7 +3,7 @@
 // qualify for and how to apply. Laid out for paper: "Save as PDF" is the browser's print dialog.
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { aerialUrl, getScan, type ScanResult } from "../api";
+import { aerialUrl, costLabel, getScan, type ScanResult } from "../api";
 import { FloorPlan } from "../components/FloorPlan";
 import { Logo } from "../components/Logo";
 import { conceptUrl } from "../components/StagedViews";
@@ -24,6 +24,10 @@ export function Brief() {
   if (!r) return <main className="result-loading"><Logo /></main>;
 
   const p = r.property;
+  // The design they picked, as the answer shows it (its own checks, from the window's measured size);
+  // before there's one, the starting layout.
+  const plan = r.design?.plan ?? r.plan ?? null;
+  const layout = r.design?.layout ?? r.layout ?? null;
   const today = new Date().toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
   const designer = r.findings.filter((f) => f.status === "designer_checks" || f.status === "needs_measurement" || f.status === "needs_answer");
   const photos = (r.concepts?.items ?? []).filter((c) => c.kept);
@@ -46,7 +50,7 @@ export function Brief() {
       <header className="brief-head">
         <Logo />
         <div>
-          <p className="mono">Basement suite plan · {today}</p>
+          <p className="aside">Basement suite plan · {today}</p>
           <p className="mono">{p ? `${p.address}, ${p.municipality}` : r.city ?? ""}</p>
         </div>
       </header>
@@ -56,12 +60,12 @@ export function Brief() {
         {r.summary && <p>{r.summary}</p>}
         <dl>
           <div>
-            <dt>Rough cost, all in</dt>
-            <dd>{range(r.cost.low, r.cost.high) ?? "To be priced"}</dd>
+            <dt>{costLabel(r)}</dt>
+            <dd data-total data-low={r.cost.low} data-high={r.cost.high}>{range(r.cost.low, r.cost.high) ?? "To be priced"}</dd>
           </div>
           {upTo > 0 && (
             <div>
-              <dt>They qualify for</dt>
+              <dt>They may be eligible for</dt>
               <dd>up to {money(upTo)}</dd>
             </div>
           )}
@@ -84,10 +88,10 @@ export function Brief() {
       <div className="brief-grid">
         <section>
           <h2>Suggested layout</h2>
-          {r.plan ? <FloorPlan plan={r.plan} units="m" layout={r.layout ?? null} /> : <p className="muted">No floor plan from this video.</p>}
-          {r.layout && (
+          {plan ? <FloorPlan plan={plan} units="m" layout={layout} /> : <p className="muted">No floor plan from this video.</p>}
+          {layout && (
             <ul className="brief-checks">
-              {r.layout.checks.map((c) => (
+              {layout.checks.map((c) => (
                 <li key={c.label} data-ok={c.ok === null ? "unknown" : c.ok}>
                   {c.label}. <span className="muted">{c.detail}</span>
                 </li>
@@ -128,21 +132,29 @@ export function Brief() {
 
       <div className="brief-grid">
         <section>
+          {/* The fixes the headline counts, then the work any suite needs (as the answer has them). */}
           <h2>What has to change</h2>
-          <ul className="brief-list">
+          <ul className="brief-list" data-fixes={r.fixGroups.length}>
             {r.fixGroups.map((g) => (
               <li key={g.category}>
                 <span>{g.title}</span>
-                <span className="mono">{range(g.costLow, g.costHigh) ?? "on quote"}</span>
-              </li>
-            ))}
-            {(r.standard ?? []).map((s) => (
-              <li key={s.ruleId}>
-                <span>{s.text}</span>
-                <span className="mono">{range(s.costLow, s.costHigh) ?? "on quote"}</span>
+                <span className="mono">{range(g.costLow, g.costHigh) ?? (g.priced === false ? "not priced yet" : "in the quote")}</span>
               </li>
             ))}
           </ul>
+          {(r.standard ?? []).length > 0 && (
+            <>
+              <h2>What every basement suite needs</h2>
+              <ul className="brief-list">
+                {(r.standard ?? []).map((s) => (
+                  <li key={s.ruleId}>
+                    <span>{s.text}</span>
+                    <span className="mono">{range(s.costLow, s.costHigh) ?? "in the quote"}</span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </section>
         <section>
           <h2>For the designer to confirm</h2>
@@ -158,7 +170,7 @@ export function Brief() {
 
       <div className="brief-grid">
         <section>
-          <h2>Money they qualify for</h2>
+          <h2>Money they may be eligible for</h2>
           <ul className="brief-list">
             {yes.map((g) => (
               <li key={g.id}>

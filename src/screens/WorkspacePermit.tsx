@@ -23,6 +23,46 @@ function Source({ s }: { s: { title: string; url: string; section?: string | nul
 type EditorProps = TabProps & { status: PermitStatus; item: ReadyItem; savePermit: (patch: Partial<PermitInputs>) => Promise<void>; done: () => void };
 
 // Numbers in millimetres, saved together.
+// Kitchener: how the two units' water is metered, and where the meter is (Building Bulletin BB 2026-04).
+const METER_OPTIONS = [
+  { id: "single", label: "One meter for both units", help: "Where the meter is now, or will be, and how the City reaches it (for example, in unit 1's furnace room)." },
+  { id: "room", label: "A meter for each unit, in a meter room", help: "The room's place; it opens from outside or a shared space, not through either unit." },
+  { id: "compartment", label: "A meter for each unit, in an outside compartment", help: "Which wall, and where along it (Kitchener Utilities drawing WMSD-302)." },
+] as const;
+
+function WaterMeter({ now, onSave }: { now: { option?: string | null; where?: string | null } | undefined; onSave: (v: { option: string; where: string }) => Promise<void> }) {
+  const [option, setOption] = useState(now?.option ?? "");
+  const [where, setWhere] = useState(now?.where ?? "");
+  const [busy, setBusy] = useState(false);
+  const chosen = METER_OPTIONS.find((o) => o.id === option);
+  return (
+    <form
+      className="ws-ready-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        void onSave({ option, where: where.trim() }).finally(() => setBusy(false));
+      }}
+    >
+      <div className="ws-chips" role="group" aria-label="How the water is metered">
+        {METER_OPTIONS.map((o) => (
+          <button key={o.id} type="button" className="chip" aria-pressed={option === o.id} onClick={() => setOption(o.id)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+      <label className="field">
+        <span>Where</span>
+        <input className="input" value={where} maxLength={160} onChange={(e) => setWhere(e.target.value)} />
+        {chosen && <span className="field-help">{chosen.help}</span>}
+      </label>
+      <button className="btn btn-ghost" disabled={busy || !option || !where.trim()}>
+        {busy ? "Saving…" : "Save"}
+      </button>
+    </form>
+  );
+}
+
 function MmFields({ fields, onSave }: { fields: { key: string; label: string; value: number | null | undefined; help?: string }[]; onSave: (v: Record<string, number | null>) => Promise<void> }) {
   const [draft, setDraft] = useState<Record<string, string>>(Object.fromEntries(fields.map((f) => [f.key, mm(f.value)])));
   const [busy, setBusy] = useState(false);
@@ -48,7 +88,7 @@ function MmFields({ fields, onSave }: { fields: { key: string; label: string; va
           </label>
         ))}
       </div>
-      <button className="btn btn-primary" disabled={busy || !ready}>
+      <button className="btn btn-ghost" disabled={busy || !ready}>
         {busy ? "Saving…" : "Save"}
       </button>
     </form>
@@ -105,7 +145,7 @@ function Upstairs({ ws, status, savePermit, done }: EditorProps) {
           ))}
       </svg>
       <div className="ws-actions">
-        <button className="btn btn-primary" disabled={!up.bedrooms.length} onClick={done}>
+        <button className="btn btn-ghost" disabled={!up.bedrooms.length} onClick={done}>
           Done
         </button>
         <label className="ws-check">
@@ -177,7 +217,7 @@ function Designer({ scanId, ws, status, savePermit }: EditorProps) {
           {field("email", "Email", "email")}
           {field("phone", "Phone", "tel")}
         </div>
-        <button className="btn btn-primary" disabled={busy || !draft.name.trim() || !draft.bcin.trim()}>
+        <button className="btn btn-ghost" disabled={busy || !draft.name.trim() || !draft.bcin.trim()}>
           {busy ? "Saving…" : "Put them on the drawings"}
         </button>
       </form>
@@ -224,6 +264,9 @@ function Editor(props: EditorProps) {
     const now = (ws.state.permit?.lotLines ?? []).find((x) => x.id === id);
     return <MmFields fields={[{ key: "mm", label: "Wall to the lot line", value: now?.mm }]} onSave={async (v) => { await savePermit({ lotLines: upsert(ws.state.permit?.lotLines, { id, mm: v.mm }) }); done(); }} />;
   }
+  if (kind === "water") {
+    return <WaterMeter now={ws.state.permit?.waterMeter} onSave={async (v) => { await savePermit({ waterMeter: { option: v.option as "single" | "room" | "compartment", where: v.where } }); done(); }} />;
+  }
   if (kind === "owner") {
     if (!ws.profile) return <ProfileForm initial={null} prefill={ws.prefill} onSave={async (profile) => { await save({ profile }); done(); }} />;
     return <ProfileForm initial={ws.profile} prefill={ws.prefill} onSave={async (profile) => { await save({ profile }); done(); }} onCancel={done} />;
@@ -248,7 +291,7 @@ function Editor(props: EditorProps) {
         >
           {opening ? "Opening…" : `Open ${id}`}
         </button>
-        <button className="btn btn-primary" onClick={() => void savePermit({ reviewed: [...reviewed.filter((r) => r.sheet !== id), { sheet: id, key: status.reviewKey }] }).then(done)}>
+        <button className="btn btn-ghost" onClick={() => void savePermit({ reviewed: [...reviewed.filter((r) => r.sheet !== id), { sheet: id, key: status.reviewKey }] }).then(done)}>
           It matches my basement
         </button>
         {error && <p className="error" role="alert">{error}</p>}
@@ -264,6 +307,7 @@ const GROUPS: { group: ReadyItem["group"]; title: string }[] = [
   { group: "owner", title: "You" },
   { group: "upstairs", title: "Upstairs" },
   { group: "lot", title: "Lot line" },
+  { group: "water", title: "Water meter" },
   { group: "designer", title: "Designer" },
   { group: "review", title: "Look over each sheet" },
 ];
@@ -373,7 +417,7 @@ function SiteTracer({ ws, save, r }: TabProps) {
               <p>{KINDS.find((k) => k.kind === mode)!.help}</p>
               <div className="ws-actions">
                 {mode !== "entrance" && (
-                  <button className="btn btn-primary" onClick={done}>
+                  <button className="btn btn-ghost" onClick={done}>
                     Done
                   </button>
                 )}
@@ -414,15 +458,24 @@ export function PermitTab(props: TabProps) {
   const { r, scanId, ws, save } = props;
   const [plan, setPlan] = useState<DiyPlan | null>(null);
   const [status, setStatus] = useState<PermitStatus | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
+  const [statusTry, setStatusTry] = useState(0);
+  const statusAsk = useRef(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     void getDiy(scanId).then(setPlan).catch(() => setPlan(null));
   }, [scanId, ws.state.tape, ws.state.ideas]);
+  // What's left, asked again whenever the workspace changes. Only the newest answer counts (a save
+  // fires several asks), and an ask that fails keeps what we knew: it never reads as "nothing left".
   useEffect(() => {
-    void getPermitStatus(scanId).then(setStatus).catch(() => setStatus(null));
-  }, [scanId, ws.state, ws.profile]);
+    const ask = ++statusAsk.current;
+    setStatusFailed(false);
+    void getPermitStatus(scanId)
+      .then((s) => ask === statusAsk.current && setStatus(s))
+      .catch(() => ask === statusAsk.current && setStatusFailed(true));
+  }, [scanId, ws.state, ws.profile, statusTry]);
   const permit = plan?.permit ?? null;
   const run = async (key: string, f: () => Promise<void>) => {
     setBusy(key);
@@ -443,9 +496,21 @@ export function PermitTab(props: TabProps) {
       <section className="block">
         <h2>{!status ? "Your permit set" : status.left ? `${status.left} thing${status.left === 1 ? "" : "s"} left before you can submit` : "Ready to submit"}</h2>
         <p className="lede">
-          {status?.left
-            ? `Drawings to scale from your scan, the City of ${plan?.city ?? r.city ?? "your city"}'s forms filled in. Answer each one below; the submit copy comes when nothing is left.`
-            : `The clean set for the City of ${plan?.city ?? r.city ?? "your city"}: no draft marks, nothing left to fill in. Sign the statement box on each sheet, then upload it.`}
+          {!status
+            ? statusFailed
+              ? "We couldn't check what's left just now."
+              : "Checking what's left before you can submit…"
+            : status.left
+              ? `Drawings to scale from your scan, the City of ${plan?.city ?? r.city ?? "your city"}'s forms filled in. Answer each one below; the submit copy comes when nothing is left.`
+              : `The clean set for the City of ${plan?.city ?? r.city ?? "your city"}: no draft marks, nothing left to fill in. Sign the statement box on each sheet, then upload it.`}
+          {statusFailed && (
+            <>
+              {" "}
+              <button className="link-quiet" onClick={() => setStatusTry((n) => n + 1)}>
+                Try again
+              </button>
+            </>
+          )}
         </p>
         {ws.profile && <ProfileLine {...props} />}
         {status && <Readiness {...props} status={status} />}
@@ -455,7 +520,7 @@ export function PermitTab(props: TabProps) {
               {busy === "submit" ? "Making the submit copy…" : "Download the submit copy"}
             </button>
           )}
-          <button className={status?.canSubmit ? "btn btn-ghost" : "btn btn-primary"} disabled={busy !== null} onClick={() => void run("review", () => downloadPermit(scanId, "review"))}>
+          <button className="btn btn-ghost" disabled={busy !== null} onClick={() => void run("review", () => downloadPermit(scanId, "review"))}>
             {busy === "review" ? "Making your review copy…" : "Download the review copy"}
           </button>
           {permit && (
@@ -477,7 +542,7 @@ export function PermitTab(props: TabProps) {
         {error && <p className="error" role="alert">{error}</p>}
         {fillable.length > 0 && scanId !== "sample" && (
           <p className="ws-forms">
-            <span className="mono">Forms on their own, still editable:</span>
+            <span className="aside">Forms on their own, still editable:</span>
             {fillable.map((f) => (
               <button key={f.id} className="link-quiet" disabled={busy !== null} onClick={() => void run(f.id, () => downloadForm(scanId, f.id))}>
                 {f.title}
@@ -533,11 +598,17 @@ export function PermitTab(props: TabProps) {
             {plan.needsPro.map((n) => (
               <li key={n.id} data-live={n.live || undefined}>
                 <h3>{n.title}</h3>
-                <p className="mono ws-who">{n.who}</p>
+                <p className="ws-who">{n.who}</p>
                 <p>{n.detail}</p>
                 {!n.live && <p className="muted">Only if your plan includes this.</p>}
                 <p>
                   <Source s={n.source} />
+                  {n.citySource && (
+                    <>
+                      {" · "}
+                      <Source s={n.citySource} />
+                    </>
+                  )}
                   {n.registry && (
                     <>
                       {" · "}

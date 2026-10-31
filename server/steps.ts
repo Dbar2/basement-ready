@@ -8,6 +8,7 @@
 //   5. After occupancy: the payouts that need the occupancy permit.
 //   6. At tax time: the tax credit.
 import type { Link, Program } from "./eligibility";
+import { feeFor } from "./model/suite";
 import type { Household, Pack } from "./rules";
 
 export type Task = {
@@ -41,11 +42,11 @@ type Input = {
   fixGroups: { title: string; costLow: number | null; costHigh: number | null }[];
   standard: { title: string }[];
   cost: { low: number; high: number };
-  // The floor being finished: the scan's plan when there is one, else the house's footprint.
+  // The floor being finished: the chosen design's unit 2 (server/model/suite.ts), else the scan's plan,
+  // else the house's footprint.
   areaM2?: number | null;
 };
 
-const SQFT_PER_M2 = 10.7639;
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 
 type ProcessStep = {
@@ -85,8 +86,7 @@ export function permitFee(pack: Pack, areaM2: number | null | undefined) {
     .join(" + ");
   const deposit = refundable.map((e) => `plus a ${money(e.CAD)} ${e.label}`).join(", ");
   if (!areaM2 || areaM2 <= 0) return { amount: null, note: [rate, deposit].filter(Boolean).join(", "), estimate: Boolean(f.estimate), source: f.source ?? null };
-  const sqft = Math.round(areaM2 * SQFT_PER_M2);
-  const amount = Math.max(f.minimumCAD ?? 0, Math.round((f.perUnitCAD ?? 0) + f.perSqftCAD * sqft + kept));
+  const { sqft, amount } = feeFor({ perUnitCAD: f.perUnitCAD, perSqftCAD: f.perSqftCAD, minimumCAD: f.minimumCAD, extrasCAD: kept }, areaM2);
   return {
     amount,
     note: [`${rate}, for about ${sqft.toLocaleString("en-CA")} sq ft`, deposit, f.note].filter(Boolean).join(". "),

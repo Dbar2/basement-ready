@@ -1,5 +1,6 @@
-// "What it could look like": the real room finished in 3D to a starting layout, and photos of the
-// homeowner's own frames finished by Muse Image (always labelled virtually staged, checked by SAM).
+// "What it could look like": the real room finished in 3D to the design they picked (its rooms and
+// checks, server/priced.ts; a starting layout before there's one), and photos of the homeowner's own
+// frames finished by Muse Image (always labelled virtually staged, checked by SAM).
 import { Suspense, useState } from "react";
 import type { Concept, Layout, Plan } from "../api";
 import { lazy3d, View3DBoundary } from "./View3D";
@@ -12,9 +13,10 @@ export function StagedViews(props: {
   scanId: string;
   plan: Plan | null;
   layout: Layout | null;
+  designName?: string | null; // the design the plan and layout are of, once they've picked one
   concepts: { status: "pending" | "done" | "failed"; items: Concept[] } | null;
 }) {
-  const { scanId, plan, layout, concepts } = props;
+  const { scanId, plan, layout, designName, concepts } = props;
   const has3d = Boolean(plan && layout);
   const photos = concepts?.items ?? [];
   const [view, setView] = useState<"3d" | "photos">(has3d ? "3d" : "photos");
@@ -38,7 +40,7 @@ export function StagedViews(props: {
       </div>
       <p className="lede">
         {shown === "3d"
-          ? "Your real room, at its measured size, with its windows, door and stairs where they are: finished to a starting layout a designer can build from."
+          ? `Your real room, at its measured size, with its windows, door and stairs where they are: finished to ${designName ? `your design, ${designName.toLowerCase()}` : "a starting layout a designer can build from"}.`
           : "Your own footage, finished. Virtually staged: the room shape, windows and stairs are yours, the finishes are a suggestion."}
       </p>
 
@@ -46,7 +48,7 @@ export function StagedViews(props: {
       {has3d && (
         <div hidden={shown !== "3d"}>
           <View3DBoundary>
-            <Suspense fallback={<p className="viewer-empty mono">Building your finished basement in 3D…</p>}>
+            <Suspense fallback={<p className="viewer-empty">Building your finished basement in 3D…</p>}>
               <StagedBasement plan={plan!} layout={layout!} />
             </Suspense>
           </View3DBoundary>
@@ -62,7 +64,7 @@ export function StagedViews(props: {
 
       <div hidden={shown !== "photos"}>
         {concepts?.status === "pending" && photos.length === 0 ? (
-          <p className="viewer-empty mono concepts-wait">Picturing your finished basement…</p>
+          <p className="viewer-empty concepts-wait">Picturing your finished basement…</p>
         ) : photos.length === 0 ? (
           <p className="muted">We couldn't make photos this time. The 3D view shows the same layout.</p>
         ) : (
@@ -70,7 +72,7 @@ export function StagedViews(props: {
             {photos.map((c) => (
               <figure key={c.n} className="concept">
                 <img src={conceptUrl(scanId, c.n)} alt={`${c.title}, virtually staged from your own video`} loading="lazy" />
-                <span className="concept-label mono">Virtually staged</span>
+                <span className="concept-label">Virtually staged</span>
                 <figcaption>
                   <b>{c.title}</b>
                   <span className={c.kept ? "concept-check" : "concept-check concept-check--warn"}>{c.checked}</span>
