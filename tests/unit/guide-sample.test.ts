@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { Hono } from "hono";
 import { describe, expect, it, vi } from "vitest";
 
@@ -17,14 +18,38 @@ const { packFor } = await import("../../server/rules");
 const { cleanSample, foundIn, sampleCtx, sampleStart } = await import("../../server/guide/sample");
 const { cleanAction, confirmed, mountGuide } = await import("../../server/guide/routes");
 const { currentModel } = await import("../../server/model/current");
+const { permitStatus } = await import("../../server/permit/package");
+const { pricedSample } = await import("../../server/priced");
+type Profile = import("../../server/workspace").Profile;
+type StoredState = import("../../server/workspace").StoredState;
+
+// The example's workspace as its cards save it in the browser (as tests/unit/build-list.test.ts does).
+const OWNER: Profile = { owners: [{ first: "Sam", last: "Example" }], phone: "519-555-0100", email: "sam@example.com", postalCode: "N2L 3G1" };
+const sampleResult = (state: StoredState) => pricedSample(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), state);
+function taped(state: StoredState): StoredState {
+  const m = permitStatus({ result: sampleResult(state), municipality: "waterloo-on", state, profile: null }).model!;
+  return {
+    ...state,
+    tape: { ...state.tape, ceilingMm: 2100, beamMm: 1900 },
+    permit: {
+      ...state.permit,
+      walls: m.mainWalls.map((w) => ({ id: w.id, mm: Math.round(w.scanM * 1000) })),
+      windows: m.windows.filter((w) => w.change !== "new").map((w) => ({ id: w.id, widthMm: 700, heightMm: 1000, sillMm: 900 })),
+    },
+  };
+}
+function reviewed(state: StoredState, profile: Profile | null): StoredState {
+  const st = permitStatus({ result: sampleResult(state), municipality: "waterloo-on", state, profile });
+  return { ...state, permit: { ...state.permit, reviewed: st.sheets.map((x) => ({ sheet: x.number, key: st.reviewKey })) } };
+}
 
 const NOW = "2026-10-31T12:00:00.000Z";
 const app = new Hono();
 mountGuide(app, async () => null);
 
 type Body = { messages: { from: string; text: string; choices?: { label: string; action: unknown; primary?: boolean }[]; card?: { kind: string } }[]; state: any };
-async function post(state: unknown, action: unknown): Promise<Body> {
-  const res = await app.request("/api/scans/sample/guide", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, action }) });
+async function post(state: unknown, action: unknown, workspace?: { profile: Profile | null; state: StoredState }): Promise<Body> {
+  const res = await app.request("/api/scans/sample/guide", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ state, action, workspace }) });
   expect(res.status).toBe(200);
   return res.json();
 }
@@ -94,13 +119,44 @@ describe("the example, fully scripted", () => {
     await go("Warm wood");
     await go("Looks good");
     expect(r.state.step).toBe("build");
+    expect(r.messages.at(-1)!.text).toMatch(/^To build it you need a permit\. \*\*I've drawn and filled your permit set\*\* from the scan\. \w+ things only you can give, about \d+ minutes\. Ready\?$/);
+    await go("What's a permit set?");
+    expect(r.messages.at(-1)!.visual).toEqual({ kind: "explain", term: "permit_set" });
     await go("Start");
-    await go("Done");
+    expect(r.state.step).toBe("build.permit:tape");
+
+    // Each card saves the browser's workspace, then tells the guide what it said.
+    let profile: Profile | null = null;
+    let state: StoredState = {};
+    const saved = async (itemId: string, said: string) => {
+      r = await post(r.state, { type: "permitItem", itemId, value: { said } }, { profile, state });
+      steps.push(r.state.step);
+      expect(r.messages[0]).toMatchObject({ from: "you", text: said });
+    };
+    state = taped(state);
+    await saved("tape", "Walls taped, ceiling 2.10 m");
+    expect(r.state.step).toBe("build.permit:owner");
+    // Said once, after their words, though the workspace it came with was already past the tape.
+    expect(r.messages.map((m) => m.from)).toEqual(["you", "guide"]);
+    expect(r.state.messages.filter((m: { text: string }) => m.text === r.messages[1].text)).toHaveLength(1);
+    profile = OWNER;
+    await saved("owner", "Sam Example, 519-555-0100, sam@example.com");
+    expect(r.state.step).toBe("build.permit:upstairs");
+    state = { ...state, permit: { ...state.permit, upstairs: { bedrooms: [], none: true } } };
+    await saved("upstairs", "No bedrooms upstairs");
+    expect(r.state.step).toBe("build.permit:review");
+    state = reviewed(state, profile);
+    await saved("review", "Every sheet matches my basement");
+    expect(r.state.step).toBe("build.money:apply");
+    state = { ...state, apply: { cmhc_refinance_secondary_suite: { sentAt: null } } };
+    await saved("apply", "CMHC refinance: not for me");
+    expect(r.state.step).toBe("build.builders");
+    state = { ...state, build: { path: "hire" } };
+    await saved("path", "Hire it all out");
     expect(r.state.step).toBe("build.submit");
     expect(r.messages.at(-1)!.card).toEqual({ kind: "download", id: "submit" });
-    await go("Done");
-    await go("Got it");
-    await go("Hire it all");
+    state = { ...state, permit: { ...state.permit, submittedAt: "2026-11-01" } };
+    await saved("submit", "Done with the example's permit set");
     expect(r.state.step).toBe("done");
     expect(r.state.done).toEqual({ answer: true, design: true, build: true });
     expect(r.messages.at(-1)!.card).toEqual({ kind: "download", id: "book" });
@@ -115,9 +171,12 @@ describe("the example, fully scripted", () => {
         "design.look",
         "build",
         "build.permit:tape",
-        "build.submit",
-        "build.money:receipts",
+        "build.permit:owner",
+        "build.permit:upstairs",
+        "build.permit:review",
+        "build.money:apply",
         "build.builders",
+        "build.submit",
         "done",
       ]),
     );
@@ -149,7 +208,9 @@ describe("the example, fully scripted", () => {
     const answered = sampleCtx({ answers: { exit_from_suite: true, plumbing_fixtures_and_shutoff: true }, chosen: null, look: "deep", confirmed: false }, NOW);
     expect(answered.asks).toEqual([]);
     expect(answered.result?.verdict).toBeTruthy();
-    expect(answered.build.map((b) => b.step)).toEqual(["build.permit:tape", "build.submit", "build.money:receipts", "build.builders"]);
+    // The build is track F's list for the example, from a blank workspace until the browser sends one.
+    expect(answered.build[0].step).toBe("build.permit:tape");
+    expect(answered.build.at(-1)!.step).toBe("done");
   });
 });
 

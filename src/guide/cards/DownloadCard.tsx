@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { downloadBook } from "../../book/bookApi";
 import { downloadForm, downloadPermit, getDiy, openSheet, shareLink, type DiyPlan } from "../../workspaceApi";
 import type { CardProps } from "../mount";
-import { savePermit, useBuild } from "./data";
+import { savePermit, stepFor, useBuild } from "./data";
 import { CardFrame, Loading, Problem, Saved } from "./parts";
 
 export function DownloadCard(props: CardProps) {
@@ -49,7 +49,7 @@ function ReviewCard({ scanId, card, act }: CardProps) {
     );
   return (
     <CardFrame card={card} label="Look over the drawings">
-      <button type="button" className="gc-save" disabled={busy !== null} onClick={() => run("review", () => downloadPermit(scanId, "review"))}>
+      <button type="button" className="btn btn-ghost gc-btn" disabled={busy !== null} onClick={() => run("review", () => downloadPermit(scanId, "review"))}>
         {busy === "review" ? "Drawing your review copy…" : "Download the review copy"}
       </button>
       <ul className="gc-sheets" aria-label="The sheets">
@@ -65,13 +65,13 @@ function ReviewCard({ scanId, card, act }: CardProps) {
       <div className="gc-row">
         <button
           type="button"
-          className="gc-save"
+          className="btn btn-primary gc-btn"
           disabled={busy !== null}
           onClick={() =>
             run("ok", async () => {
               await savePermit(scanId, { reviewed: status.sheets.map((s) => ({ sheet: s.number, key: status.reviewKey })) });
               setEditing(false);
-              act({ type: "permitItem", itemId: "review", value: { said: "Every sheet matches my basement" } });
+              act({ type: "permitItem", itemId: stepFor("review"), value: { said: "Every sheet matches my basement" } });
             })
           }
         >
@@ -108,8 +108,8 @@ function SubmitCard({ scanId, card, act }: CardProps) {
     );
   return (
     <CardFrame card={card} label="Hand it in">
-      {/* Mint while it's the way on; ink once handed in, when the guide's next button is the one. */}
-      <button type="button" className={handedIn ? "gc-save" : "btn btn-primary gc-primary"} disabled={busy !== null} onClick={() => run("submit", () => downloadPermit(scanId, "submit"))}>
+      {/* Mint while it's the way on; a hairline once handed in, when the guide's next button is the one. */}
+      <button type="button" className={handedIn ? "btn btn-ghost gc-btn" : "btn btn-primary gc-btn"} disabled={busy !== null} onClick={() => run("submit", () => downloadPermit(scanId, "submit"))}>
         {busy === "submit" ? "Making the submit copy…" : "Download the submit copy "}
         <span className="arrow" aria-hidden>
           ↓
@@ -158,7 +158,7 @@ function SubmitCard({ scanId, card, act }: CardProps) {
             run("in", async () => {
               // Today here, not in UTC: a hand-in at 9 PM in Waterloo is still today.
               await savePermit(scanId, { submittedAt: new Date().toLocaleDateString("en-CA") });
-              act({ type: "permitItem", itemId: "submit", value: { said: example ? "Done with the example's permit set" : "I've handed it in" } });
+              act({ type: "permitItem", itemId: stepFor("submit"), value: { said: example ? "Done with the example's permit set" : "I've handed it in" } });
             })
           }
         >
@@ -176,7 +176,7 @@ function BookCard({ scanId, card }: CardProps) {
   const share = scanId !== "sample" && !result?.demo;
   return (
     <CardFrame card={card} label="Your book">
-      <button type="button" className="gc-save" disabled={busy !== null} onClick={() => run("book", () => downloadBook(scanId))}>
+      <button type="button" className="btn btn-ghost gc-btn" disabled={busy !== null} onClick={() => run("book", () => downloadBook(scanId))}>
         {busy === "book" ? "Putting your book together…" : "Download your book (PDF)"}
       </button>
       {share && (

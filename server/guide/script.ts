@@ -4,26 +4,18 @@
 // (server/guide/sample.ts) runs it on its own data. Free text is answered in server/guide/ask.ts.
 //
 // The order: the wait questions while it measures (one at a time, the look among them), the answer,
-// then design (the plan, the layouts, the look), then build (F's list, server/guide/build.ts), then done.
+// then design (the plan, the layouts, the look), then build (F's list, server/guide/build.ts, which opens
+// with the permit set and ends with "done").
 import type { WaitAsk } from "../eligibility";
 import type { Model } from "../model/types";
+import type { BuildItem } from "./build";
 import { entryFor, type Entry } from "./glossary";
 import type { CardRef, Choice, GuideAction, GuideMessage, GuideState, LookKey, Milestone, StepId, VisualRef } from "../../src/guide/types";
 
-// What the build needs, in order (server/guide/build.ts, track F, makes it). Each item is one step. Its
-// card saves through the workspace, then sends {type: "permitItem", itemId: <its step>, value: {said}};
-// the list is worked out again, and a done item (or one they put off) is passed.
-export type BuildItem = {
-  step: StepId; // "build.permit:<id>", "build.submit", "build.money:<question>", "build.builders"
-  section?: "permit" | "money" | "builders";
-  message: string;
-  why: string;
-  card?: CardRef;
-  choices?: Choice[];
-  visual: VisualRef;
-  done?: boolean;
-  minutes?: number;
-};
+// What the build needs, in order, ending with "done" (server/guide/build.ts, track F). Each item is one
+// step. Its card saves through the workspace, then sends {type: "permitItem", itemId, value: {said}}:
+// "said" is their bubble, and the list, worked out again, says what's next.
+export type { BuildItem };
 
 type FixGroup = { category: string; title: string; ruleIds?: string[]; costLow?: number | null; costHigh?: number | null; costSource?: unknown; why?: string[] };
 export type ResultLike = {
@@ -78,8 +70,9 @@ export function stepOf(ctx: Ctx, t: Pick<Thread, "passed">): StepId {
     if (!passed.has("design.layouts")) return "design.layouts";
     if (!passed.has("design.look")) return "design.look";
   }
-  if (!passed.has("build")) return "build";
-  return ctx.build.find((b) => !b.done && !passed.has(b.step))?.step ?? "done";
+  const next = ctx.build.find((b) => !b.done && !passed.has(b.step))?.step ?? "done";
+  // The build opens by saying what the permit set needs from them, unless there's nothing left to ask.
+  return next !== "done" && !passed.has("build") ? "build" : next;
 }
 
 export function milestoneOf(step: StepId): Milestone {
@@ -144,12 +137,15 @@ function askSaid(a: WaitAsk, ctx: Ctx, first: boolean): Said {
         : `While I measure, a few quick questions. ${q}`
       : q
     : `One thing before the answer: ${q}`;
-  const text = a.kind === "rule" && a.hint ? `${lead} ${a.hint}` : lead;
+  // The message ends on its question (the screen labels the why "Why I'm asking:" then); what counts
+  // goes in the why.
+  const text = lead;
   const choices: Choice[] =
     a.kind === "look"
       ? a.options.map((o) => ({ label: o.label, action: { type: "setLook", look: o.value as LookKey | "none" } }))
       : a.options.map((o) => ({ label: o.label, action: { type: "answer", questionId: a.id, value: o.value } }));
-  return { text, why: whyFor(a), choices, visual: { kind: "video" } };
+  const why = a.kind === "rule" && a.hint ? `${whyFor(a)} ${a.hint}` : whyFor(a);
+  return { text, why, choices, visual: { kind: "video" } };
 }
 
 function answerSaid(r: ResultLike): Said {
@@ -263,19 +259,19 @@ function lookSaid(ctx: Ctx): Said {
   };
 }
 
+// "To build it you need a permit": what the permit set still needs from them, and about how long.
 function buildSaid(ctx: Ctx, t: Pick<Thread, "passed">): Said {
-  // What only they can give for the permit set; money and builders come after it.
-  const items = ctx.build.filter((b) => !b.done && !t.passed.includes(b.step) && (b.section ? b.section === "permit" : b.step.startsWith("build.permit:")));
+  const items = ctx.build.filter((b) => !b.done && !t.passed.includes(b.step) && b.step.startsWith("build.permit:"));
   const n = items.length;
-  const minutes = n && items.every((b) => b.minutes) ? items.reduce((s, b) => s + b.minutes!, 0) : 0;
-  const need = n ? ` ${cap(num(n))} ${n === 1 ? "thing" : "things"} only you can give${minutes ? `, about ${minutes} minutes` : ""}. Ready?` : " Nothing's missing.";
+  const minutes = items.reduce((s, b) => s + (b.minutes ?? 0), 0);
+  const need = n ? `${cap(num(n))} ${n === 1 ? "thing" : "things"} only you can give${minutes ? `, about ${minutes} minute${minutes === 1 ? "" : "s"}` : ""}.` : "It has everything it needs from you.";
   return {
-    text: `To build it you need a permit. **I've drawn and filled your permit set** from the scan.${need}`,
+    text: `To build it you need a permit. **I've drawn and filled your permit set** from the scan. ${need} Ready?`,
     why: "the City needs the permit set before any work starts.",
     choices: [
       { label: "What's a permit set?", action: { type: "explain", term: "permit_set" } },
       { label: "Later", action: { type: "go", to: "home" } },
-      { label: n ? "Start" : "See it", action: { type: "go", to: "build" }, primary: true },
+      { label: "Start", action: { type: "go", to: "build" }, primary: true },
     ],
     visual: { kind: "permit" },
   };
@@ -288,14 +284,17 @@ const doneSaid = (): Said => ({
   visual: { kind: "permit" },
 });
 
-// What the guide says at a step.
+// What the guide says at a step. A build step (and "done") is the build list's own item.
 export function said(ctx: Ctx, t: Pick<Thread, "passed" | "messages">, step: StepId): Said {
+  const item = ctx.build.find((b) => b.step === step);
+  if (item) return { text: item.message, ...(item.why ? { why: item.why } : {}), card: item.card, choices: item.choices, visual: item.visual };
   if (step === "failed")
     return {
       text: ctx.failed!.text,
       ...(ctx.failed!.retry ? { choices: [{ label: "Try again", action: { type: "ask", text: "Try again" }, primary: true }] } : {}),
       visual: { kind: "video" },
     };
+  if (step === "build") return buildSaid(ctx, t);
   if (step === "wait") return { text: "Still measuring. I'll have your answer in a minute or two.", visual: { kind: "video" } };
   if (step.startsWith("wait.")) {
     const a = ctx.asks.find((x) => askStep(x) === step)!;
@@ -305,10 +304,7 @@ export function said(ctx: Ctx, t: Pick<Thread, "passed" | "messages">, step: Ste
   if (step === "design.plan") return planSaid(ctx.model!);
   if (step === "design.layouts") return layoutsSaid(ctx);
   if (step === "design.look") return lookSaid(ctx);
-  if (step === "build") return buildSaid(ctx, t);
-  if (step === "done") return doneSaid();
-  const item = ctx.build.find((b) => b.step === step)!;
-  return { text: item.message, why: item.why, card: item.card, choices: item.choices, visual: item.visual };
+  return doneSaid();
 }
 
 // ---- Moving on -----------------------------------------------------------------------------------
@@ -378,12 +374,10 @@ function passing(t: Thread, action: GuideAction, ctx: Ctx): string[] {
       return ["design.plan"];
     case "chooseDesign":
       return ["design.layouts"];
-    case "permitItem":
-      return ctx.build.filter((b) => b.step === action.itemId || b.step.endsWith(`:${action.itemId}`)).map((b) => b.step);
     case "go": {
       if (action.to === "home") return [];
-      // Inside the milestone already: past its opening step ("Start" on the build intro).
-      if (milestoneOf(at) === action.to) return at === "build" || at === "answer" ? [at] : [];
+      // Inside the milestone already: past its opening step (the answer, the build's "Start").
+      if (milestoneOf(at) === action.to) return at === "answer" || at === "build" ? [at] : [];
       const order: Milestone[] = ["answer", "design", "build"];
       const before = order.slice(0, order.indexOf(action.to));
       return [...(before.includes("answer") ? ["answer"] : []), ...(before.includes("design") ? DESIGN_STEPS : [])];

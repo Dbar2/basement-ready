@@ -3,7 +3,7 @@
 // enough to climb out of; a bedroom window that isn't comes back as a fix to the design.
 import { useState } from "react";
 import type { CardProps } from "../mount";
-import { save, upsert, useBuild } from "./data";
+import { save, stepFor, upsert, useBuild } from "./data";
 import { CardFrame, Loading, MmForm, Saved } from "./parts";
 
 // The Code's escape window: at least 0.35 m² clear, and no side under 380 mm (server/permit/model.ts).
@@ -44,7 +44,7 @@ export function WindowCard({ scanId, card, act }: CardProps) {
             const permitNext = { ...permit, windows: upsert(permit.windows, { id: w.id, widthMm: v.widthMm, heightMm: v.heightMm, sillMm: v.sillMm }) };
             await save(scanId, { state: { permit: permitNext, ...(w.escape ? { tape: { ...tape, egressWidthMm: v.widthMm, egressHeightMm: v.heightMm, egressSillMm: v.sillMm } } : {}) } });
             setEditing(false);
-            act({ type: "permitItem", itemId: `window:${w.id}`, value: { said: said(v) } });
+            act({ type: "permitItem", itemId: stepFor(`window:${w.id}`), value: { said: said(v) } });
           }}
         />
       )}

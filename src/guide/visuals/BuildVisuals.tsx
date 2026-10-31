@@ -1,6 +1,6 @@
 // The Build milestone's pictures, in the visual pane above (or beside) the thread. "permit": the set
 // they'll hand in, drawn as a stack of sheets, with "9 of 13 ready" and what's left. "money": what they
-// may be eligible for, program by program. "builders": who does what, from the drawings to move-in,
+// may get, program by program. "builders": who does what, from the drawings to move-in,
 // for the path they picked. All drawn in code (Drawing Set); they read the same data as the cards
 // (src/guide/cards/data.ts), so a saved answer moves them at once.
 import type { ReactNode } from "react";
@@ -31,12 +31,12 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
     { label: "City forms filled", done: true },
     ...groups.filter((g) => status.items.some((i) => i.group === g.group)).map((g) => ({ label: g.label, done: status.items.filter((i) => i.group === g.group).every((i) => i.done) })),
   ];
-  // Five lines fit the pane on a phone: the last done ones, then what's next; the rest show on a
-  // computer and count as "and N more" on a phone (build-visuals.css).
+  // A computer's pane shows every line. A phone's (build-visuals.css, by the pane's own width) shows
+  // what's still open, three at most and the rest as a count; once nothing is, the last three done.
   const todo = all.filter((l) => !l.done);
-  const shown = [...all.filter((l) => l.done).slice(-Math.max(1, 5 - todo.length)), ...todo].slice(0, 5);
-  const more = all.length - shown.length;
-  const lines = all.map((l) => ({ ...l, extra: !shown.includes(l) }));
+  const onPhone = todo.length ? todo.slice(0, 3) : all.slice(-3);
+  const more = Math.max(0, todo.length - onPhone.length);
+  const lines = all.map((l) => ({ ...l, phone: onPhone.includes(l) }));
   return (
     <Pane caption={city ? `Your permit set, ${city}` : "Your permit set"} kind="permit">
       <div className="bv-permit">
@@ -64,7 +64,7 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
           </div>
           <ul className="bv-checks">
             {lines.map((l) => (
-              <li key={l.label} data-done={l.done || undefined} data-extra={l.extra || undefined}>
+              <li key={l.label} data-done={l.done || undefined} data-phone={l.phone || undefined}>
                 <span className="bv-box" aria-hidden>
                   {l.done ? "✓" : ""}
                 </span>
@@ -72,7 +72,7 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
                 <span className="visually-hidden">{l.done ? ", done" : ", to do"}</span>
               </li>
             ))}
-            {more > 0 && <li className="bv-more">and {more} more</li>}
+            {more > 0 && <li className="bv-more">and {more} more to do</li>}
           </ul>
         </div>
       </div>
@@ -91,7 +91,7 @@ export function MoneyVisual({ scanId }: VisualProps<"money">) {
     <Pane caption="Each program makes the final call" kind="money">
       <div className="bv-money">
         <div className="bv-money-head">
-          <p className="bv-sub">You may be eligible for up to</p>
+          <p className="bv-sub">You may get up to</p>
           <p className="bv-big">{dollars(total)}</p>
           {ifYes > 0 && <p className="bv-sub">and up to {dollars(ifYes)} more, one answer away</p>}
         </div>
