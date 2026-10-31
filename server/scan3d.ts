@@ -281,6 +281,8 @@ export type Measurements = {
   trusted: boolean;
   warnings: string[];
   clearances: { detectionId: string; label: string; clearanceM: number }[];
+  // Readings set aside as not headroom (server/clearance.ts sortClearances), with why.
+  doubtful?: { detectionId: string; label: string; clearanceM: number; why: string }[];
 };
 
 // The few numbers the rules use, plus how far to trust them.

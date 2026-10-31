@@ -8,6 +8,7 @@ import type { Detection } from "./pipeline";
 import type { Measurements } from "./scan3d";
 import type { Property } from "./property";
 import type { Watch } from "./watch";
+import { clearanceRule, placeName } from "./clearance";
 import { evaluate, moneyAndSteps } from "./recheck";
 import { coreRules, packFor, rulesForModel, type Coverage, type Household, type Rule } from "./rules";
 import { ASK_OPTIONS, fromRecords, TRIAGE } from "./triage";
@@ -22,7 +23,17 @@ type ModelFinding = { ruleId: string; status: Status; evidence?: string[]; why?:
 // `photos`: a photo take of that many photos, not a video (server/photoInput.ts). `model`: who reads the
 // evidence, for comparing models; the app uses ASSESS_MODEL. `watch`: what Muse Wonder saw in the whole
 // take (server/watch.ts), which settles the fire rules in code (fireRules).
-export type AssessContext = { dir: string; household: Household; municipality: string; property?: Property | null; photos?: number; model?: string; watch?: Pick<Watch, "rooms" | "doors"> | null };
+export type AssessContext = {
+  dir: string;
+  household: Household;
+  municipality: string;
+  property?: Property | null;
+  photos?: number;
+  model?: string;
+  watch?: Pick<Watch, "rooms" | "doors"> | null;
+  // Every measured room, for the headroom across the whole basement (clearanceRule).
+  rooms?: { name: string; measurements: Measurements | null }[];
+};
 
 // The verdict agent's model: Muse Spark 1.3 unless ASSESS_MODEL says otherwise (scripts/eval/assess-ab.ts compares).
 export const ASSESS_MODEL = process.env.ASSESS_MODEL || "muse-spark-1.3";
@@ -358,14 +369,14 @@ type Decided = { status: Status; why: string; evidence: string[] };
 export function fireRules(watch: AssessContext["watch"], detections: { id: string; label?: string }[]): Record<string, Decided> {
   const rooms = watch?.rooms ?? [];
   const inside = rooms.filter((r) => r.entered);
-  const named = (rs: typeof rooms) => rs.map((r) => r.name).join(" and ");
+  const named = (rs: typeof rooms) => rs.map((r) => placeName(r.name)).join(" and ");
   const open = inside.filter((r) => r.ceiling === "exposed_joists" || r.ceiling === "mixed");
   const ducted = inside.filter((r) => r.low.some((l) => l.kind === "duct"));
   const ducts = detections.filter((d) => d.label === "Duct").map((d) => d.id);
   const fire: Decided = open.length
-    ? { status: "likely_fix", why: `Open joists over the ${named(open)}: the ceiling between the two homes needs fire-rated drywall.`, evidence: ["watch"] }
+    ? { status: "likely_fix", why: `Open joists over ${named(open)}: the ceiling between the two homes needs fire-rated drywall.`, evidence: ["watch"] }
     : ducted.length || ducts.length
-      ? { status: "likely_fix", why: `Exposed ductwork${ducted.length ? ` in the ${named(ducted)}` : ""}: it gets boxed in with fire-rated drywall to separate the two homes.`, evidence: ducts.length ? ducts : ["watch"] }
+      ? { status: "likely_fix", why: `Exposed ductwork${ducted.length ? ` in ${named(ducted)}` : ""}: it gets boxed in with fire-rated drywall to separate the two homes.`, evidence: ducts.length ? ducts : ["watch"] }
       : inside.length && inside.every((r) => r.ceiling === "drywall")
         ? { status: "designer_checks", why: "The ceiling is finished drywall. Your designer confirms it's fire-rated between the two homes.", evidence: ["watch"] }
         : { status: "designer_checks", why: "Your designer confirms the ceiling between the two homes is fire-rated.", evidence: [] };
@@ -375,7 +386,7 @@ export function fireRules(watch: AssessContext["watch"], detections: { id: strin
   const openFurnace = furnaceRooms.filter((r) => !hasDoor(r.id));
   const furnaceFound = detections.some((d) => d.label === "Furnace");
   const service: Decided = openFurnace.length
-    ? { status: "likely_fix", why: `The furnace in the ${named(openFurnace)} has no door to close: it needs fire-rated walls and a door around it.`, evidence: ["watch"] }
+    ? { status: "likely_fix", why: `The furnace in ${named(openFurnace)} has no door to close: it needs fire-rated walls and a door around it.`, evidence: ["watch"] }
     : furnaceRooms.length || furnaceFound
       ? { status: "designer_checks", why: "The furnace room has a door. Your designer confirms its walls and door are fire-rated.", evidence: furnaceRooms.length ? ["watch"] : [] }
       : { status: "standard", why: TRIAGE.service_room_separation.text, evidence: [] };
@@ -383,7 +394,7 @@ export function fireRules(watch: AssessContext["watch"], detections: { id: strin
 }
 
 export function buildResult(
-  ctx: Pick<AssessContext, "household" | "municipality" | "property" | "watch">,
+  ctx: Pick<AssessContext, "household" | "municipality" | "property" | "watch" | "rooms">,
   { pack, city, coverage, authority, note }: Coverage,
   model: { route?: string; wants?: string; summary?: string; vision?: any; findings?: ModelFinding[] },
   detections: (Pick<Detection, "id"> & Partial<Pick<Detection, "label">>)[],
@@ -433,7 +444,9 @@ export function buildResult(
 
   // Who confirms what public records couldn't: "The City", or "The Township of Woolwich".
   const confirms = coverage === "full" ? "The City" : authority === "your municipality" ? "Your municipality" : `The ${authority}`;
-  const decided = fireRules(ctx.watch, detections);
+  // The fire rules and the headroom are decided in code from what was found and measured.
+  const clearance = ctx.rooms ? clearanceRule(ctx.rooms, Number(rules.find((r) => r.id === "clearance_beams_ducts_suite")?.check.value ?? 1.85)) : null;
+  const decided: Record<string, Decided & { measured?: unknown }> = { ...fireRules(ctx.watch, detections), ...(clearance ? { clearance_beams_ducts_suite: clearance } : {}) };
   const triaged = findings.map((f) => {
     const rule = rules.find((r) => r.id === f.ruleId)!;
     const d = decided[f.ruleId];
