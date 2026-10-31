@@ -48,7 +48,7 @@ function sampleBuild(money: number): BuildItem[] {
       card: { kind: "tape", id: "tape" },
       visual: { kind: "permit" },
       minutes: 2,
-      choices: [{ label: "Done →", action: { type: "permitItem", itemId: "tape", value: "done" }, primary: true }],
+      choices: [{ label: "Done", action: { type: "permitItem", itemId: "tape", value: "done" }, primary: true }],
     },
     {
       id: "receipts",
@@ -61,7 +61,7 @@ function sampleBuild(money: number): BuildItem[] {
       minutes: 1,
       choices: [
         { label: "What's the tax credit?", action: { type: "explain", term: "tax_credit" } },
-        { label: "Got it →", action: { type: "permitItem", itemId: "receipts", value: "done" }, primary: true },
+        { label: "Got it", action: { type: "permitItem", itemId: "receipts", value: "done" }, primary: true },
       ],
     },
     {
@@ -74,7 +74,7 @@ function sampleBuild(money: number): BuildItem[] {
       minutes: 1,
       choices: [
         { label: "I'll do some", action: { type: "permitItem", itemId: "builders", value: "mix" } },
-        { label: "Hire it all →", action: { type: "permitItem", itemId: "builders", value: "hire" }, primary: true },
+        { label: "Hire it all", action: { type: "permitItem", itemId: "builders", value: "hire" }, primary: true },
       ],
     },
   ];

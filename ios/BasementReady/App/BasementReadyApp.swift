@@ -30,7 +30,7 @@ final class AppModel: ObservableObject {
     case filming(StartAnswers, server: URL)
     case review(Take, StartAnswers, note: String?)
     case sending(retry: (Take, StartAnswers)?) // nil: picked up after a relaunch
-    case result(ScanCreated)
+    case result(ScanCreated, ResultPage)
   }
 
   @Published var stage: Stage = .start
@@ -68,6 +68,29 @@ final class AppModel: ObservableObject {
     uploader.reset()
     stage = .start
   }
+
+  // basementready://new: a new scan, from the web's in-app link. Never in the middle of a take or a
+  // send; from the review it waits too, so a take isn't left behind unsent by a stray link.
+  func open(_ url: URL) {
+    guard AppLink(url) == .newScan else { return }
+    switch stage {
+    case .start, .result: restart()
+    case .filming, .review, .sending: break
+    }
+  }
+}
+
+// The app's own links: basementready://new.
+enum AppLink: Equatable {
+  case newScan
+
+  init?(_ url: URL) {
+    guard url.scheme?.lowercased() == "basementready" else { return nil }
+    switch url.host?.lowercased() ?? url.path {
+    case "new": self = .newScan
+    default: return nil
+    }
+  }
 }
 
 struct RootView: View {
@@ -78,19 +101,21 @@ struct RootView: View {
     Group {
       switch app.stage {
       case .start:
-        StartView(onStart: { answers in app.film(answers) }, onOpenLast: { scan in app.stage = .result(scan) }).preferredColorScheme(.light)
+        StartView(onStart: { answers in app.film(answers) }, onOpenLast: { scan in app.stage = .result(scan, .home) }).preferredColorScheme(.light)
       case .filming(let answers, let server):
         FilmingView(server: server, onDone: { take, note in app.filmed(take, answers: answers, note: note) }, onCancel: { app.stage = .start })
       case .review(let take, let answers, let note):
         ReviewView(take: take, note: note, onSend: { app.send(take, answers) }, onRetake: { app.discard(take) }).preferredColorScheme(.light)
       case .sending(let retry):
         SendingView(uploader: uploader, onRetry: { if let (take, answers) = retry { app.send(take, answers) } else { app.restart() } }, onCancel: { app.restart() }).preferredColorScheme(.light)
-      case .result(let scan):
-        ResultView(scan: scan) { app.restart() }.preferredColorScheme(.light)
+      case .result(let scan, let page):
+        ResultView(scan: scan, page: page, onNewScan: { app.restart() }).preferredColorScheme(.light)
       }
     }
+    .onOpenURL { url in app.open(url) }
     .onChange(of: uploader.state) { _, state in
-      if case .done(let scan) = state { app.stage = .result(scan) }
+      // Just sent: straight into the guide, where the wait happens.
+      if case .done(let scan) = state { app.stage = .result(scan, .guide) }
     }
     .introFlow() // the launch animation, and the filming guide on the first launch
   }

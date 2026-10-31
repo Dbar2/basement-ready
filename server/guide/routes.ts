@@ -258,9 +258,11 @@ function sampleReply(action: GuideAction, thread: { awaiting?: Thread["awaiting"
 
 // ---- Mounting ------------------------------------------------------------------------------------
 
-export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<string | null>) {
+const NO_STORE = { "Cache-Control": "no-store" };
+
+export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<string | null> = async () => null) {
   app.get("/api/scans/:id/guide", async (c) => {
-    if (c.req.param("id") === "sample") return c.json(sampleStart(new Date().toISOString()));
+    if (c.req.param("id") === "sample") return c.json(sampleStart(new Date().toISOString()), 200, NO_STORE);
     const a = await ownerOf(c, currentUser);
     if (!a) return c.json({ error: "Not found" }, 404);
     if (!a.allowed) return c.json({ error: NOT_YOURS }, 403);
@@ -268,7 +270,7 @@ export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<strin
     const was = storedThread(state.guide);
     const { thread, messages } = was ? sync(was, ctx) : { thread: start(ctx), messages: [] };
     if (!was || messages.length) await saveWorkspace(a.basement.id, { state: { guide: thread } as Partial<GuideStored> });
-    return c.json(thread);
+    return c.json(thread, 200, NO_STORE);
   });
 
   app.post("/api/scans/:id/guide", async (c) => {
@@ -281,7 +283,7 @@ export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<strin
       const thread = cleanSample(body?.state, now);
       const reply = await sampleReply(action, thread, sampleCtx(thread.sample, now));
       const r = sampleAct(thread, action, now, reply);
-      return c.json({ messages: r.messages, state: r.thread });
+      return c.json({ messages: r.messages, state: r.thread }, 200, NO_STORE);
     }
 
     const a = await ownerOf(c, currentUser);
@@ -295,6 +297,6 @@ export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<strin
     const after = await contextFor(a, now);
     const r = act(thread, action, after.ctx, applied.reply);
     await saveWorkspace(a.basement.id, { state: { guide: r.thread } as Partial<GuideStored> });
-    return c.json({ messages: r.messages, state: r.thread });
+    return c.json({ messages: r.messages, state: r.thread }, 200, NO_STORE);
   });
 }

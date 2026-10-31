@@ -148,7 +148,7 @@ describe("the guide's answer", () => {
     expect(m.choices?.map((c) => [c.label, Boolean(c.primary)])).toEqual([
       ["What's a fire separation?", false],
       ["Why that cost?", false],
-      ["Show me what it could be →", true],
+      ["Show me what it could be", true],
     ]);
     expect(m.choices?.[0].action).toEqual({ type: "explain", term: "fire_separation" });
     expect(m.visual).toEqual({ kind: "plan", mark: "fire" });
@@ -176,12 +176,12 @@ describe("the guide's answer", () => {
   it("with no fixes and no money, it's the verdict and the cost", () => {
     const m = last(start(ctx({ result: { ...result, verdict: "yes", headline: "Yes, your basement can be a second home.", fixGroups: [], money: null } })));
     expect(m.text).toBe("**Yes, your basement can be a second home.** All in, a contractor would charge roughly $49k–$85k.");
-    expect(m.choices?.map((c) => c.label)).toEqual(["Why that cost?", "Show me what it could be →"]);
+    expect(m.choices?.map((c) => c.label)).toEqual(["Why that cost?", "Show me what it could be"]);
   });
 
   it("a no still shows the plan", () => {
     const m = last(start(ctx({ result: { ...result, verdict: "no", headline: "Not as a second unit here.", fixGroups: [] } })));
-    expect(m.choices?.at(-1)?.label).toBe("Show me the plan anyway →");
+    expect(m.choices?.at(-1)?.label).toBe("Show me the plan anyway");
   });
 
   it("costs are whole thousands", () => {
@@ -198,7 +198,7 @@ describe("the guide's answer", () => {
     const reply = r.messages[1];
     expect(reply.text).toMatch(/^Walls and a ceiling that hold fire and smoke back from the other home for 45 minutes/);
     expect(reply.visual).toEqual({ kind: "explain", term: "fire_separation" });
-    expect(reply.choices?.map((c) => c.label)).toEqual(["Can I do it myself?", "Got it, show me what it could be →"]);
+    expect(reply.choices?.map((c) => c.label)).toEqual(["Can I do it myself?", "Got it, show me what it could be"]);
     expect(reply.choices?.filter((c) => c.primary)).toHaveLength(1);
   });
 });
@@ -213,7 +213,7 @@ describe("the guide's design: the plan, the layouts, the look", () => {
     const m = r.messages[1];
     expect(m.text).toBe("Before I design: **is this your basement?** Two walls are my guesses (dashed). Tap one to fix it, or tell me.");
     expect(m.why).toBe("every room and price is drawn on this plan.");
-    expect(m.choices?.map((c) => c.label)).toEqual(["A wall is off", "Looks right →"]);
+    expect(m.choices?.map((c) => c.label)).toEqual(["A wall is off", "Looks right"]);
     expect(m.visual).toEqual({ kind: "planEdit" });
   });
 
@@ -235,7 +235,7 @@ describe("the guide's design: the plan, the layouts, the look", () => {
     expect(r.thread.step).toBe("design.layouts");
     const m = r.messages[1];
     expect(m.text).toBe("I drew two layouts that keep your stairs, furnace and window where they are. **For family, I'd start with One bedroom**: keeps your bathroom; the bedroom on the window wall.");
-    expect(m.choices?.map((c) => c.label)).toEqual(["Bigger bedroom", "Show Studio", "Use One bedroom →"]);
+    expect(m.choices?.map((c) => c.label)).toEqual(["Bigger bedroom", "Show Studio", "Use One bedroom"]);
     expect(m.choices?.[0].action).toEqual({ type: "describe", text: "Make the bedroom bigger" });
     expect(m.choices?.at(-1)?.action).toEqual({ type: "chooseDesign", designId: "one_bedroom" });
     expect(m.visual).toEqual({ kind: "layouts", designId: "one_bedroom" });
@@ -245,7 +245,7 @@ describe("the guide's design: the plan, the layouts, the look", () => {
     const designs = [design("studio", "Studio", "studio", false, "Open and bright."), design("one_bedroom", "One bedroom", "one_bedroom")];
     const m = last(at(["answer"], ctx({ model: model({ confirmed: true, designs }), household: "renter" })));
     expect(m.text).toMatch(/\*\*For a rental, I'd start with Studio\*\*: open and bright\.$/);
-    expect(m.choices?.map((x) => x.label)).toEqual(["Show One bedroom", "Use Studio →"]);
+    expect(m.choices?.map((x) => x.label)).toEqual(["Show One bedroom", "Use Studio"]);
   });
 
   it("with one layout, it says so", () => {
@@ -261,7 +261,7 @@ describe("the guide's design: the plan, the layouts, the look", () => {
     const m = r.messages[1];
     expect(m.text).toBe("Here's your basement as you filmed it, and with One bedroom in Light oak. **Drag to compare.** Pick another look, or tell me what you'd like.");
     expect(m.visual).toEqual({ kind: "beforeAfter", designId: "one_bedroom", look: "light" });
-    expect(m.choices?.map((x) => x.label)).toEqual(["None of these", "Looks good →"]);
+    expect(m.choices?.map((x) => x.label)).toEqual(["None of these", "Looks good"]);
   });
 
   it("another look stays on the look and shows it", () => {
@@ -292,7 +292,7 @@ describe("the guide's build", () => {
     expect(r.thread.done).toEqual({ answer: true, design: true, build: false });
     const m = r.messages[1];
     expect(m.text).toBe("To build it you need a permit. **I've drawn and filled your permit set** from the scan. Two things only you can give, about 5 minutes. Ready?");
-    expect(m.choices?.map((c) => c.label)).toEqual(["What's a permit set?", "Later", "Start →"]);
+    expect(m.choices?.map((c) => c.label)).toEqual(["What's a permit set?", "Later", "Start"]);
     expect(m.visual).toEqual({ kind: "permit" });
   });
 
@@ -316,7 +316,7 @@ describe("the guide's build", () => {
   it("with nothing missing it says so", () => {
     const m = last(act(at(designed), { type: "go", to: "build" }, ctx({ build: [] })).thread);
     expect(m.text).toMatch(/from the scan\. Nothing's missing\.$/);
-    expect(m.choices?.at(-1)?.label).toBe("See it →");
+    expect(m.choices?.at(-1)?.label).toBe("See it");
   });
 
   it("'Later' goes home and says nothing", () => {

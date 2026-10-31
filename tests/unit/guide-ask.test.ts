@@ -96,7 +96,7 @@ describe("the guide's own buttons, said in words", () => {
     const r = scripted("show me the studio", ctx, pack)!;
     expect(r.text).toBe("Here's Studio: open, with the kitchen by the pipes.");
     expect(r.visual).toEqual({ kind: "layouts", designId: "studio" });
-    expect(r.choices?.map((c) => c.label)).toEqual(["Show One bedroom", "Use Studio →"]);
+    expect(r.choices?.map((c) => c.label)).toEqual(["Show One bedroom", "Use Studio"]);
     expect(scripted("Show the garage", ctx, pack)).toBeNull();
   });
 
@@ -130,7 +130,7 @@ describe("guardrails on what Muse Spark says", () => {
     expect(suggestion({ type: "setWall", wallId: "w1", lengthM: 5.5 }, ctx)).toEqual({ label: "Yes, make it 5.5 m", action: { type: "setWall", wallId: "w1", lengthM: 5.5 }, primary: true });
     expect(suggestion({ type: "setWall", wallId: "nope", lengthM: 5.5 }, ctx)).toBeNull();
     expect(suggestion({ type: "setWall", wallId: "w1", lengthM: 90 }, ctx)).toBeNull();
-    expect(suggestion({ type: "chooseDesign", designId: "studio" }, ctx)?.label).toBe("Use Studio →");
+    expect(suggestion({ type: "chooseDesign", designId: "studio" }, ctx)?.label).toBe("Use Studio");
     expect(suggestion({ type: "chooseDesign", designId: "loft" }, ctx)).toBeNull();
     expect(suggestion({ type: "setLook", look: "deep" }, ctx)?.label).toBe("Deep green");
     expect(suggestion({ type: "setLook", look: "neon" }, ctx)).toBeNull();
