@@ -20,7 +20,7 @@ import { milestones, scanEvents } from "./support/timing";
 
 for (const take of TAKES) {
   test(`${take.label}: film to permit`, async ({ page, journey }, info) => {
-    const why = unavailable(take);
+    const why = unavailable(take, info.project.name);
     test.skip(why !== null, why ?? "");
     test.slow(); // a whole scan, then five tabs, and maybe a wait for another take to finish
     let scanId: string | null = null;
@@ -70,7 +70,7 @@ for (const take of TAKES) {
           capture: { name: "capture.json", mimeType: "application/json", buffer: readFileSync(take.capture!) },
           who: take.who.id,
           household: "unsure",
-          municipality: "waterloo-on",
+          municipality: take.municipality ?? "waterloo-on",
           lens: "wide",
         },
       });
@@ -195,8 +195,21 @@ for (const take of TAKES) {
     await expect.poll(async () => sent !== null && (await ws.permit().left()) === sent, { timeout: 15_000 }).toBe(true);
     page.off("response", onStatus);
     const left = await ws.permit().left();
+    // Kitchener asks how the two units' water is metered (Building Bulletin BB 2026-04); Waterloo doesn't.
+    const kitchener = (take.municipality ?? "waterloo-on").startsWith("kitchener");
+    const METER = "single meter option, one water meter for both units, at unit 1's furnace room.";
+    if (kitchener) {
+      await journey.step("water meter answered", () => ws.permit().answerWaterMeter("One meter for both units", "unit 1's furnace room"));
+      await expect.poll(() => ws.permit().left(), { timeout: 15_000 }).toBe(left - 1);
+    } else await expect(ws.permit().item(/^Water meter/)).toHaveCount(0);
     const pdf = (await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-${take.id}-permit.pdf`))))!;
     expectSheets(pdf);
+    // The answer on the site plan and the unit plan (the submit copy prints the same sheets: tests/unit/water-meter.test.ts).
+    for (const n of ["A1", "A2"]) {
+      const text = pdf.sheets.filter((x) => x.number === n || x.number.startsWith(`${n}.`)).map((x) => pdf.pages[x.page - 1].text.replace(/\s+/g, " ")).join(" ");
+      if (kitchener) expect(text, `${n}: the water meter`).toContain(METER);
+      else expect(text, `${n}: no water meter`).not.toContain("Water meter");
+    }
 
     await journey.step("money", async () => {
       await ws.open("Money");
