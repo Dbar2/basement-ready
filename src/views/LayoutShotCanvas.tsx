@@ -15,6 +15,7 @@ import { layoutCamera } from "./layoutCamera";
 export const SHOT_SIZE: [number, number] = [960, 720];
 const SETTLE_FRAMES = 30; // frames drawn with nothing loading and nothing added before the picture is kept
 const MIN_MS = 1200; // never sooner than this after a design goes in: its pieces load in their own time
+const SHARPEST_MS = 4000; // past this, the first paint (1024) does: a card is small
 const GIVE_UP_MS = 20000; // keep what's there by then, painted or not
 
 function Snapper({ design, existing, atlas, onShot }: { design: Design; existing: Existing; atlas: Atlas | null; onShot: (blob: Blob | null) => void }) {
@@ -51,14 +52,15 @@ function Snapper({ design, existing, atlas, onShot }: { design: Design; existing
   }, [design, existing, camera, size]);
   useFrame(() => {
     if (done.current) return;
-    const painted = !sharpest || gl.domElement.dataset.atlas === sharpest;
+    const on = Number(gl.domElement.dataset.atlas ?? 0);
+    const age = performance.now() - started.current;
+    const painted = !sharpest || on >= Number(sharpest) || (on >= 1024 && age > SHARPEST_MS);
     // Settled: the paint is on, nothing is loading, and nothing was added to the scene for a while.
     let n = 0;
     scene.traverse(() => void n++);
     const same = n === count.current;
     count.current = n;
     quiet.current = !loading && painted && same ? quiet.current + 1 : 0;
-    const age = performance.now() - started.current;
     if ((quiet.current < SETTLE_FRAMES || age < MIN_MS) && age < GIVE_UP_MS) return;
     done.current = true;
     // The frame just drawn is still in the buffer (preserveDrawingBuffer).

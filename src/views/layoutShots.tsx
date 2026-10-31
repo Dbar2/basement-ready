@@ -27,11 +27,13 @@ export function useLayoutShots(scanId: string, model: Model | null): { shots: Re
     (blob: Blob | null, painted: boolean) => {
       if (!current) return;
       const url = blob ? URL.createObjectURL(blob) : null;
+      const key = keys.get(current.id)!;
       // A plain picture while the paint is still being made is shown but drawn again next visit.
-      if (painted) kept.set(keys.get(current.id)!, url);
-      setShots((s) => ({ ...s, [current.id]: url }));
+      if (painted) kept.set(key, url);
+      // Every design that draws the same (the same rooms and furniture) shares the picture.
+      setShots((s) => ({ ...s, ...Object.fromEntries(designs.filter((d) => keys.get(d.id) === key).map((d) => [d.id, url])) }));
     },
-    [current, keys],
+    [current, keys, designs],
   );
   const renderer =
     model && current ? (
