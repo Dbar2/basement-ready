@@ -42,6 +42,11 @@ final class ResultRoutesTests: XCTestCase {
     let guide = await ResultView.firstPage(scan, .guide, session: StubProtocol.session)
     XCTAssertEqual(guide?.path, "/scans/abc/guide")
     XCTAssertEqual(StubProtocol.asked, "/api/scans/abc/guide")
+    // The owner's claim goes with it, the way the web sends it (server/workspace.ts parseClaims reads it).
+    let header = try? XCTUnwrap(StubProtocol.claims)
+    let decoded = header.flatMap { $0.removingPercentEncoding }.flatMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) } as? [[String: String]]
+    XCTAssertEqual(decoded ?? [], [["basementId": "b", "claimToken": "t"]])
+    XCTAssertFalse(header?.contains("\"") ?? true, "URI-encoded, like encodeURIComponent")
     StubProtocol.status = 404
     let older = await ResultView.firstPage(scan, .guide, session: StubProtocol.session)
     XCTAssertEqual(older?.path, "/scans/abc")
@@ -61,6 +66,7 @@ final class ResultRoutesTests: XCTestCase {
 private final class StubProtocol: URLProtocol {
   nonisolated(unsafe) static var status = 200
   nonisolated(unsafe) static var asked: String?
+  nonisolated(unsafe) static var claims: String?
   nonisolated(unsafe) static var body = "{\"milestone\":\"answer\"}"
   static let session: URLSession = {
     let config = URLSessionConfiguration.ephemeral
@@ -72,10 +78,20 @@ private final class StubProtocol: URLProtocol {
   override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
   override func startLoading() {
     Self.asked = request.url?.path
+    Self.claims = request.value(forHTTPHeaderField: "x-claims")
     let res = HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: nil, headerFields: nil)!
     client?.urlProtocol(self, didReceive: res, cacheStoragePolicy: .notAllowed)
     client?.urlProtocol(self, didLoad: Data(Self.body.utf8))
     client?.urlProtocolDidFinishLoading(self)
   }
   override func stopLoading() {}
+}
+
+final class ClaimsHeaderTests: XCTestCase {
+  // Exactly what encodeURIComponent(JSON.stringify([{basementId, claimToken}])) gives in the browser.
+  func testTheClaimMatchesTheWebsOwnHeader() {
+    let scan = ScanCreated(id: "s", basementId: "3f2b8c1e-0000-4000-8000-000000000001", claimToken: "Ab_9-xyzABCDEFGH", server: nil)
+    XCTAssertEqual(scan.claimsHeader,
+                   "%5B%7B%22basementId%22%3A%223f2b8c1e-0000-4000-8000-000000000001%22%2C%22claimToken%22%3A%22Ab_9-xyzABCDEFGH%22%7D%5D")
+  }
 }
