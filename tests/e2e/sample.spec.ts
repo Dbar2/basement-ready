@@ -108,6 +108,12 @@ test("the sample basement: wait screen, plan, layout, studio, pictures, book, pe
     await ws.fillProfileIfAsked();
     await ws.permit().expectOpen();
   });
+  // The example is a Waterloo house: Ontario's rules and Waterloo's, never another city's.
+  await journey.step("licensed pros, Waterloo's rules only", async () => {
+    await ws.permit().licensedPro.scrollIntoViewIfNeeded();
+    await expect(ws.permit().licensedPro).toContainText("Waterloo's guides don't say, so ask the City first.");
+    await expect(ws.permit().licensedPro).not.toContainText(/Kitchener|Cambridge/);
+  });
   const pdf = await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-sample-permit.pdf`)));
   expectSheets(pdf!);
   journey.timing({ take: "sample", kind: "permit", pages: pdf!.pageCount, sheets: pdf!.index });
