@@ -16,6 +16,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, openAsBlob, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { RoomDetector, lookOf } from "../../src/capture/rooms";
+import { scanHeaders } from "../scanAccess";
 
 const arg = (name: string, fallback: string) => {
   const i = process.argv.indexOf(`--${name}`);
@@ -50,6 +51,9 @@ type Truth = {
 
 mkdirSync(OUT, { recursive: true });
 const saved: Record<string, { scanId: string; rooms: string; at: string }> = existsSync(SCANS) ? JSON.parse(readFileSync(SCANS, "utf8")) : {};
+// Scans are private: each one read with the claim it was made with, or ADMIN_TOKEN for one saved from an earlier run.
+const access = new Map<string, Record<string, string>>();
+const headersFor = (scanId: string) => access.get(scanId) ?? scanHeaders();
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const round = (n: number, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 const median = (xs: number[]) => (xs.length ? [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)] : NaN);
@@ -121,7 +125,11 @@ async function upload(truth: Truth, video: string, marks: number[] | null) {
   if (marks && marks.length > 1) form.append("rooms", JSON.stringify(marks.map((startS) => ({ startS }))));
   for (let attempt = 0; ; attempt++) {
     const res = await fetch(`${API}/api/scans`, { method: "POST", body: form });
-    if (res.ok) return (await res.json()).id as string;
+    if (res.ok) {
+      const made = await res.json();
+      access.set(made.id, scanHeaders(made));
+      return made.id as string;
+    }
     const text = await res.text();
     // The API allows a few scans per hour from one address: wait it out rather than fail.
     if (res.status === 429 && attempt < 12) {
@@ -136,7 +144,7 @@ async function upload(truth: Truth, video: string, marks: number[] | null) {
 async function waitFor(scanId: string) {
   const started = Date.now();
   for (;;) {
-    const s = await (await fetch(`${API}/api/scans/${scanId}`)).json();
+    const s = await (await fetch(`${API}/api/scans/${scanId}`, { headers: headersFor(scanId) })).json();
     if (s.status === "done") return s.result;
     if (s.status === "error") throw new Error(`scan ${scanId} failed`);
     if (Date.now() - started > 45 * 60_000) throw new Error(`scan ${scanId} still ${s.status} after 45 min`);
@@ -413,7 +421,7 @@ for (const id of todo) {
   const result = await waitFor(scanId);
   const analysis = join(OUT, "videos", `${id}-${scanId.slice(0, 8)}.mp4`);
   mkdirSync(join(OUT, "videos"), { recursive: true });
-  if (!existsSync(analysis)) writeFileSync(analysis, Buffer.from(await (await fetch(`${API}/api/scans/${scanId}/video`)).arrayBuffer()));
+  if (!existsSync(analysis)) writeFileSync(analysis, Buffer.from(await (await fetch(`${API}/api/scans/${scanId}/video`, { headers: headersFor(scanId) })).arrayBuffer()));
   const s = score(truth, result, analysis, scanId);
   results.push(s);
   mkdirSync(join(OUT, "results"), { recursive: true });
