@@ -29,6 +29,8 @@ h1, h2, h3 {
 }
 /* Mono is for figures only (brand/ui.md); a sentence beside a figure is .aside. */
 .aside { font-size: var(--text-small); color: var(--color-ink-muted); }
+/* Read aloud, never drawn: a label or a state a screen reader needs and the eye already has. */
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 
 button { font: inherit; cursor: pointer; }
 a { color: inherit; }
