@@ -56,7 +56,7 @@ export function LengthInput({
         submit();
       }}
     >
-      <label htmlFor={id} className={compact === true ? "vh" : undefined}>{label}</label>
+      <label htmlFor={id} className={compact === true ? "plan-vh" : undefined}>{label}</label>
       <div>
         <input
           id={id}
