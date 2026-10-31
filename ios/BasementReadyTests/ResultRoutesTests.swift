@@ -26,6 +26,15 @@ final class ResultRoutesTests: XCTestCase {
     XCTAssertEqual(ResultView.route(URL(string: "https://192.168.1.20:8787/")!, server: mac), .safari)
   }
 
+  // The web's in-app "New scan" link (basementready://new) goes back to the app's start screen.
+  func testTheAppsOwnNewScanLink() {
+    XCTAssertEqual(ResultView.route(URL(string: "basementready://new")!, server: server), .newScan)
+    XCTAssertEqual(ResultView.route(URL(string: "BasementReady://new")!, server: server), .newScan)
+    XCTAssertEqual(ResultView.route(URL(string: "basementready://other")!, server: server), .stay)
+    XCTAssertEqual(AppLink(URL(string: "basementready://new")!), .newScan)
+    XCTAssertNil(AppLink(URL(string: "https://example.com/new")!))
+  }
+
   // The guide if the server has it (its API answers), else the home base.
   func testAJustSentTakeOpensTheGuideWhenTheServerHasIt() async {
     let scan = ScanCreated(id: "abc", basementId: "b", claimToken: "t", server: server)
