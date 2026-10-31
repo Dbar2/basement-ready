@@ -329,15 +329,31 @@ export function mainRoom(existing: Existing): Room | null {
   return [...(usable.length ? usable : existing.rooms)].sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon))[0] ?? null;
 }
 
+// The box a room is laid out in: its main part when it's L-shaped, so every room drawn in it stands
+// against its real walls; grown over a thin strip (under a metre) that runs along most of a side, which is
+// still that wall's floor (and its windows).
+const THIN_M = 1.0;
+export function planBox(poly: Pt[]): Box {
+  const b = { ...largestBox(poly) };
+  const all = bounds(poly);
+  const inside = (pts: Pt[]) => pts.filter((p) => inPolygon(p, poly)).length / pts.length;
+  const along = (n: number, at: (t: number) => Pt) => Array.from({ length: n }, (_, i) => at((i + 0.5) / n));
+  if (b.minZ - all.minZ > 0.01 && b.minZ - all.minZ < THIN_M && inside(along(24, (t) => [b.minX + t * (b.maxX - b.minX), (b.minZ + all.minZ) / 2])) >= 0.7) b.minZ = all.minZ;
+  if (all.maxZ - b.maxZ > 0.01 && all.maxZ - b.maxZ < THIN_M && inside(along(24, (t) => [b.minX + t * (b.maxX - b.minX), (b.maxZ + all.maxZ) / 2])) >= 0.7) b.maxZ = all.maxZ;
+  if (b.minX - all.minX > 0.01 && b.minX - all.minX < THIN_M && inside(along(24, (t) => [(b.minX + all.minX) / 2, b.minZ + t * (b.maxZ - b.minZ)])) >= 0.7) b.minX = all.minX;
+  if (all.maxX - b.maxX > 0.01 && all.maxX - b.maxX < THIN_M && inside(along(24, (t) => [(b.maxX + all.maxX) / 2, b.minZ + t * (b.maxZ - b.minZ)])) >= 0.7) b.maxX = all.maxX;
+  return b;
+}
+
 // The main area as the layout planner reads it (server/layout.ts), in the basement's own frame.
 export function planOf(existing: Existing, room: Room): Plan {
-  // Its main part when it's L-shaped, so every room drawn in it stands against its real walls.
-  const b = largestBox(room.polygon);
+  const b = planBox(room.polygon);
   const onSide = (side: Side) => {
     const s = sideWall(b, side);
     return existing.walls.filter((w) => {
       const P = project(s, w.a), Q = project(s, w.b);
-      return Math.abs(P.off) < 0.1 && Math.abs(Q.off) < 0.1;
+      // (A scan's walls stand on their centre lines, half a wall, about 10 cm, out from the room's face.)
+      return Math.abs(P.off) < 0.15 && Math.abs(Q.off) < 0.15;
     });
   };
   const openings: Plan["openings"] = [];
@@ -437,7 +453,7 @@ export type Extra = { room: Room; layout: Layout; rest: { kind: RoomKind; name: 
 
 export function designFromLayout(existing: Existing, main: Room, layout: Layout, meta: Meta, finishes: Finishes, now: string, extra?: Extra): Design {
   // The box the layout was drawn in (planOf): an L-shaped room's main part.
-  const mb = largestBox(main.polygon);
+  const mb = planBox(main.polygon);
   const walls: Wall[] = existing.walls.map((w) => ({ ...w }));
   const openings: Opening[] = existing.openings.map((o) => ({ ...o }));
   const fixtures: Fixture[] = existing.fixtures.map((f) => ({ ...f }));
@@ -513,7 +529,7 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
   if (extra) {
     // The room next door: its layout in its own box, and the rest of it what it becomes, all the suite's.
     const before = rooms.length;
-    lay(extra.layout, largestBox(extra.room.polygon), extra.room.ceilingM ?? ceilingM);
+    lay(extra.layout, planBox(extra.room.polygon), extra.room.ceilingM ?? ceilingM);
     const taken = rooms.slice(before).map((r) => bounds(r.polygon));
     rooms.push({ id: extra.room.id, polygon: minusBoxes(extra.room.polygon, taken), kind: extra.rest.kind, name: extra.rest.name, unit: 2, ceilingM: extra.room.ceilingM ?? ceilingM, ceilingRating: "15min" });
   }
@@ -644,25 +660,34 @@ export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finis
   const passes = (d: Design, ids: string[]) => checkDesign(d, existing).every((c) => !ids.includes(c.id) || c.ok !== false);
   // A home: a kitchen at least a galley, a three-piece bathroom and somewhere to sleep, each big enough,
   // and enough living space.
+  // A way out of every room, its alarms, and an escape window where someone sleeps (one the fixes can
+  // add, at least).
   const home = (d: Design) => {
     const suite = d.proposed.rooms.filter((r) => r.unit === 2);
     const sized = (kind: string, least: number) => suite.some((r) => r.kind === kind && polygonArea(r.polygon) >= least - 0.01);
-    return sized("kitchen", GALLEY_MIN_M2) && sized("bathroom", BATH_MIN_M2) && passes(d, ["rooms", "living-space", ...suite.filter((r) => r.kind === "bedroom").map((r) => `bedroom-size:${r.id}`)]);
+    const beds = suite.filter((r) => r.kind === "bedroom");
+    return sized("kitchen", GALLEY_MIN_M2) && sized("bathroom", BATH_MIN_M2) && passes(d, ["rooms", "living-space", "way-out", "smoke-alarms", ...beds.map((r) => `bedroom-size:${r.id}`), ...beds.map((r) => `escape:${r.id}`)]);
   };
   // When the main room can't hold one on its own (no room for a bathroom, or too little living space), a
   // room through a door from it takes the bathroom, or else the bedroom; the rest of that room joins the
   // suite as it was (a laundry room stays one, now the suite's). Its furnace or water heater gets its
   // service room there, as in the main room.
+  // A room the scan saw as a bathroom (or a bedroom) is tried as that first, as it is.
   const roomier = (meta: Meta, kind: Layout["kind"], alone: Design) => {
     if (home(alone)) return alone;
-    for (const room of neighbours(existing, main)) {
+    const moves = (kind === "studio" ? ["bathroom"] : ["bathroom", "bedroom"]) as ("bathroom" | "bedroom")[];
+    const already = (room: Room, moved: string) => room.kind === moved || new RegExp(`\\b${moved}\\b`, "i").test(room.name);
+    const tries = neighbours(existing, main)
+      .flatMap((room) => moves.map((moved) => ({ room, moved })))
+      .sort((a, b) => Number(already(b.room, b.moved)) - Number(already(a.room, a.moved)));
+    for (const { room, moved } of tries) {
       const there = planOf(existing, room);
-      for (const moved of kind === "studio" ? ["bathroom"] : ["bathroom", "bedroom"]) {
-        const here = suggestLayout(plan, { kind, without: [moved === "bedroom" ? "bedroom" : "bathroom"] });
-        const theirs = suggestLayout(there, { kind: "one_bedroom", without: moved === "bathroom" ? ["bedroom", "kitchen", "living"] : ["bedroom", "bathroom", "kitchen", "living"] });
-        const d = build(meta, here, { room, layout: theirs, rest: moved === "bedroom" ? { kind: "bedroom", name: "Bedroom" } : { kind: room.kind, name: room.name } });
-        if (home(d)) return d;
-      }
+      const as = already(room, moved);
+      const here = suggestLayout(plan, { kind, without: [moved] });
+      const theirs = suggestLayout(there, { kind: "one_bedroom", without: moved === "bathroom" && !as ? ["bedroom", "kitchen", "living"] : ["bedroom", "bathroom", "kitchen", "living"] });
+      const rest = moved === "bedroom" ? { kind: "bedroom" as const, name: as ? room.name : "Bedroom" } : as ? { kind: "bathroom" as const, name: room.name } : { kind: room.kind, name: room.name };
+      const d = build(meta, here, { room, layout: theirs, rest });
+      if (home(d)) return d;
     }
     return alone;
   };
