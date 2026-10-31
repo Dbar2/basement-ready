@@ -1,8 +1,8 @@
 // /dev/ui on a dev server: the Drawing Set UI system (brand/ui.md) drawn with the app's own classes, so a change
 // to a token or a shared rule shows here first. The example basement's real frames and figures fill it.
 import { useEffect, useState } from "react";
-import { FlowFoot, FlowHead } from "../flow/FlowNav";
-import "../flow/flow.css";
+import { Mark } from "../components/Logo";
+import "../guide/guide.css";
 import "../ideas/ideas.css";
 import "../studio/studio.css";
 import "./ui-reference.css";
@@ -93,12 +93,28 @@ export function UiReference() {
   const [toggle, setToggle] = useState<"3d" | "plan">("3d");
   const [chip, setChip] = useState("Light oak");
   return (
-    <div className="flow-page">
-      <FlowHead scanId="sample" step="layouts" remember={false} />
+    <div className="ref-page">
+      {/* The guide's top bar (src/guide/GuideScreen.tsx): the logo home, then the three milestones. */}
+      <header className="gs-top">
+        <a className="gs-home" href="/dev/ui" aria-label="Your basement">
+          <Mark title="Your basement" />
+        </a>
+        <nav aria-label="Milestones">
+          <ol className="gs-milestones">
+            <li data-state="done">Answer</li>
+            <li data-state="now" aria-current="step">
+              Design
+            </li>
+            <li data-state="todo">Build</li>
+          </ol>
+        </nav>
+      </header>
       <main className="ref">
-        <div className="flow-title">
+        <div className="ref-head">
           <h1>Drawing Set</h1>
-          <p className="lede">The UI system in brand/ui.md, drawn with the app's own classes. One clear thing per sheet, one mint button.</p>
+          <p className="lede">
+            The UI system in brand/ui.md, drawn with the app's own classes. One clear thing per screen, one mint button. The guide's screen and every visual and card kind are on <a className="link-quiet" href="/dev/guide">/dev/guide</a>.
+          </p>
         </div>
 
         <section className="ref-sec">
@@ -259,7 +275,6 @@ export function UiReference() {
           </div>
         </section>
       </main>
-      <FlowFoot scanId="sample" step="layouts" next={{ label: "Design it in 3D", onClick: () => {} }} />
     </div>
   );
 }
