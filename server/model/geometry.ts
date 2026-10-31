@@ -148,3 +148,102 @@ export function solidPieces(w: Wall, openings: Opening[], doorsOnly = true): [Pt
   if (L - at > 0.01) out.push([along(w, at), along(w, L)]);
   return out;
 }
+
+// An outline with its sides along the axes, cut into the cells its own corners and the boxes' sides make:
+// which cells are floor. Shared by largestBox and minusBoxes.
+const SNAP_M = 0.02; // edges this close are one edge (a layout's centimetres against an outline's millimetres)
+function cells(poly: Pt[], cutBoxes: Box[] = []) {
+  const B = bounds(poly);
+  // The outline's own coordinates, then each cut's, each kept only where it isn't one already there.
+  const grid = (own: number[], theirs: number[], lo: number, hi: number) => {
+    const out = [...new Set(own.map(r3))].sort((a, b) => a - b);
+    for (const v of theirs.map(r3).sort((a, b) => a - b)) if (v > lo + SNAP_M && v < hi - SNAP_M && out.every((u) => Math.abs(u - v) > SNAP_M)) out.push(v);
+    return out.sort((a, b) => a - b);
+  };
+  const xs = grid(poly.map((p) => p[0]), cutBoxes.flatMap((c) => [c.minX, c.maxX]), B.minX, B.maxX);
+  const zs = grid(poly.map((p) => p[1]), cutBoxes.flatMap((c) => [c.minZ, c.maxZ]), B.minZ, B.maxZ);
+  const snap = (v: number, at: number[]) => at.reduce((best, u) => (Math.abs(u - v) < Math.abs(best - v) ? u : best), v);
+  const cuts = cutBoxes.map((c) => ({ minX: snap(c.minX, xs), maxX: snap(c.maxX, xs), minZ: snap(c.minZ, zs), maxZ: snap(c.maxZ, zs) }));
+  const keep = xs.slice(1).map((x1, i) =>
+    zs.slice(1).map((z1, j) => {
+      const c: Pt = [(xs[i] + x1) / 2, (zs[j] + z1) / 2];
+      return inPolygon(c, poly) && !cuts.some((k) => c[0] > k.minX && c[0] < k.maxX && c[1] > k.minZ && c[1] < k.maxZ);
+    }),
+  );
+  return { xs, zs, keep };
+}
+
+// The biggest box inside an outline whose sides run along the axes: an L-shaped room's main part, where
+// a layout can stand rooms against real walls. A box's own outline gives itself back.
+export function largestBox(poly: Pt[]): Box {
+  if (poly.length === 4) return bounds(poly);
+  const { xs, zs, keep } = cells(poly);
+  let best: Box = bounds(poly), most = -1;
+  for (let i0 = 0; i0 < keep.length; i0++)
+    for (let j0 = 0; j0 < (keep[0]?.length ?? 0); j0++)
+      for (let i1 = i0; i1 < keep.length; i1++)
+        for (let j1 = j0; j1 < keep[0].length; j1++) {
+          let all = true;
+          for (let i = i0; i <= i1 && all; i++) for (let j = j0; j <= j1 && all; j++) all = keep[i][j];
+          if (!all) break;
+          const a = (xs[i1 + 1] - xs[i0]) * (zs[j1 + 1] - zs[j0]);
+          if (a > most) [most, best] = [a, { minX: xs[i0], maxX: xs[i1 + 1], minZ: zs[j0], maxZ: zs[j1 + 1] }];
+        }
+  return best;
+}
+
+// An outline less the boxes cut from it: what's left, traced round the same way as rectPoly. Where the
+// cuts split it, the biggest piece; a box inside it that touches none of its sides leaves it as it was
+// round the outside. Outlines with their sides along the axes only.
+export function minusBoxes(poly: Pt[], cuts: Box[]): Pt[] {
+  const { xs, zs, keep } = cells(poly, cuts);
+  const nx = keep.length, nz = keep[0]?.length ?? 0;
+  // The biggest piece of floor left, cell by cell.
+  const piece = new Set<number>();
+  let most = 0;
+  const seen = new Set<number>();
+  for (let s = 0; s < nx * nz; s++) {
+    if (seen.has(s) || !keep[Math.floor(s / nz)][s % nz]) continue;
+    const got: number[] = [];
+    const todo = [s];
+    seen.add(s);
+    while (todo.length) {
+      const c = todo.pop()!;
+      got.push(c);
+      const i = Math.floor(c / nz), j = c % nz;
+      for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const a = i + di, b = j + dj, n = a * nz + b;
+        if (a >= 0 && a < nx && b >= 0 && b < nz && keep[a][b] && !seen.has(n)) (seen.add(n), todo.push(n));
+      }
+    }
+    const area = got.reduce((t, c) => t + (xs[Math.floor(c / nz) + 1] - xs[Math.floor(c / nz)]) * (zs[(c % nz) + 1] - zs[c % nz]), 0);
+    if (area > most) {
+      most = area;
+      piece.clear();
+      for (const c of got) piece.add(c);
+    }
+  }
+  if (!piece.size) return poly;
+  const inPiece = (i: number, j: number) => i >= 0 && i < nx && j >= 0 && j < nz && piece.has(i * nz + j);
+  // Its edges with floor on their left (the way rectPoly runs), joined end to end.
+  const next = new Map<string, Pt>();
+  const key = (p: Pt) => `${p[0]},${p[1]}`;
+  for (const c of piece) {
+    const i = Math.floor(c / nz), j = c % nz;
+    const [x0, x1, z0, z1] = [xs[i], xs[i + 1], zs[j], zs[j + 1]];
+    if (!inPiece(i, j - 1)) next.set(key([x0, z0]), [x1, z0]);
+    if (!inPiece(i + 1, j)) next.set(key([x1, z0]), [x1, z1]);
+    if (!inPiece(i, j + 1)) next.set(key([x1, z1]), [x0, z1]);
+    if (!inPiece(i - 1, j)) next.set(key([x0, z1]), [x0, z0]);
+  }
+  // The outside loop: from the lowest, leftmost corner.
+  const start = [...next.keys()].map((k) => k.split(",").map(Number) as Pt).sort((a, b) => a[1] - b[1] || a[0] - b[0])[0];
+  const loop: Pt[] = [start];
+  for (let p = next.get(key(start)); p && key(p) !== key(start) && loop.length <= next.size; p = next.get(key(p))) loop.push(p);
+  // Corners only: drop the points along a straight run.
+  const out = loop.filter((p, i) => {
+    const a = loop[(i + loop.length - 1) % loop.length], b = loop[(i + 1) % loop.length];
+    return Math.abs(cross(sub(p, a), sub(b, p))) > 1e-9;
+  });
+  return out.map(roundPt);
+}
