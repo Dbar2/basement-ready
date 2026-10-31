@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { Layout, LayoutZone, Plan } from "../../src/api";
 import { chosenDesign, layoutOf } from "../../server/model/legacy";
+import { furnitureProblems } from "../../server/model/furniture";
 import { seedModel } from "../../server/model/seed";
 import { arrange, clash, doorClear, wayOut, type Rect } from "../../src/three/stagedLayout";
 
@@ -61,12 +62,15 @@ describe("the starting layout's furniture", () => {
     const dining = scanned.find((x) => x.kind === "dining");
     if (chair && dining) expect(clash(chair.rect, dining.rect, 0.5)).toBe(false);
     // As its chosen design: four doors round a narrow living space, and the sofa used to run past the
-    // living space's end into the bedroom door.
+    // living space's end into the bedroom door. The stager furnishes a design only while it has no
+    // furniture of its own (src/studio/DesignScene.tsx); a seeded one has, sofa and bed among it.
     const m = seedModel(sample, {}, "2026-10-30T00:00:00.000Z")!;
-    const shapes = layoutOf(m.existing, chosenDesign(m)!)!;
+    const design = chosenDesign(m)!;
+    const shapes = layoutOf(m.existing, design)!;
     const designed = expectClear(shapes.plan, shapes.layout);
-    expect(designed.some((x) => x.kind === "sofa")).toBe(true);
     expect(designed.some((x) => x.kind === "bed")).toBe(true);
+    expect(design.proposed.furniture.some((f) => f.kind === "sofa")).toBe(true);
+    expect(furnitureProblems(design)).toEqual([]);
   });
 
   it("moves the sofa off a door in the wall behind it", () => {

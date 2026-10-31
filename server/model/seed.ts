@@ -6,14 +6,14 @@
 import type { BasementPlan, Plan as ScanPlan, RoomResult } from "../../src/api";
 import { basementRooms } from "../../src/components/basementPlan";
 import { overheadFinds } from "../clearance";
-import { suggestLayout, type Layout, type LayoutOptions } from "../layout";
+import { BATH_MIN_M2, GALLEY_MIN_M2, suggestLayout, type Layout, type LayoutOptions } from "../layout";
 import type { Plan, Side } from "../plan";
 import { colourFurniture } from "../ideas/deck";
 import { burnsFuel, placeAlarms } from "./alarms";
 import { checkDesign } from "./checks";
 import { applyEdits, nextId } from "./edit";
 import { furnishDesign } from "./furniture";
-import { add, along, bounds, clamp, dist, inPolygon, mul, polygonArea, project, r2, r3, rectPoly, wallLength, wallNormal, type Box } from "./geometry";
+import { add, along, bounds, clamp, dist, inPolygon, largestBox, minusBoxes, mul, polygonArea, project, r2, r3, rectPoly, wallLength, wallNormal, type Box } from "./geometry";
 import type { Design, Edit, Existing, Finishes, Fixture, FixtureKind, Model, Mood, Opening, Pt, Room, RoomKind, Wall } from "./types";
 
 // Anything overhead has its underside well above furniture; below this SAM outlined a shelf
@@ -329,14 +329,31 @@ export function mainRoom(existing: Existing): Room | null {
   return [...(usable.length ? usable : existing.rooms)].sort((a, b) => polygonArea(b.polygon) - polygonArea(a.polygon))[0] ?? null;
 }
 
+// The box a room is laid out in: its main part when it's L-shaped, so every room drawn in it stands
+// against its real walls; grown over a thin strip (under a metre) that runs along most of a side, which is
+// still that wall's floor (and its windows).
+const THIN_M = 1.0;
+export function planBox(poly: Pt[]): Box {
+  const b = { ...largestBox(poly) };
+  const all = bounds(poly);
+  const inside = (pts: Pt[]) => pts.filter((p) => inPolygon(p, poly)).length / pts.length;
+  const along = (n: number, at: (t: number) => Pt) => Array.from({ length: n }, (_, i) => at((i + 0.5) / n));
+  if (b.minZ - all.minZ > 0.01 && b.minZ - all.minZ < THIN_M && inside(along(24, (t) => [b.minX + t * (b.maxX - b.minX), (b.minZ + all.minZ) / 2])) >= 0.7) b.minZ = all.minZ;
+  if (all.maxZ - b.maxZ > 0.01 && all.maxZ - b.maxZ < THIN_M && inside(along(24, (t) => [b.minX + t * (b.maxX - b.minX), (b.maxZ + all.maxZ) / 2])) >= 0.7) b.maxZ = all.maxZ;
+  if (b.minX - all.minX > 0.01 && b.minX - all.minX < THIN_M && inside(along(24, (t) => [(b.minX + all.minX) / 2, b.minZ + t * (b.maxZ - b.minZ)])) >= 0.7) b.minX = all.minX;
+  if (all.maxX - b.maxX > 0.01 && all.maxX - b.maxX < THIN_M && inside(along(24, (t) => [(b.maxX + all.maxX) / 2, b.minZ + t * (b.maxZ - b.minZ)])) >= 0.7) b.maxX = all.maxX;
+  return b;
+}
+
 // The main area as the layout planner reads it (server/layout.ts), in the basement's own frame.
 export function planOf(existing: Existing, room: Room): Plan {
-  const b = bounds(room.polygon);
+  const b = planBox(room.polygon);
   const onSide = (side: Side) => {
     const s = sideWall(b, side);
     return existing.walls.filter((w) => {
       const P = project(s, w.a), Q = project(s, w.b);
-      return Math.abs(P.off) < 0.1 && Math.abs(Q.off) < 0.1;
+      // (A scan's walls stand on their centre lines, half a wall, about 10 cm, out from the room's face.)
+      return Math.abs(P.off) < 0.15 && Math.abs(Q.off) < 0.15;
     });
   };
   const openings: Plan["openings"] = [];
@@ -351,6 +368,17 @@ export function planOf(existing: Existing, room: Room): Plan {
       if (atM < 0 || atM > wallLength(s)) continue;
       openings.push({ kind: o.kind, side, atM: r2(atM), widthM: o.widthM, detectionId: o.id });
     }
+  }
+  // A door in the other arm of an L-shaped room: on the side of the box it's nearest, so the way to it
+  // stays clear.
+  for (const o of existing.openings.filter((x) => x.kind === "door" && !openings.some((y) => y.detectionId === x.id))) {
+    const w = existing.walls.find((x) => x.id === o.wallId);
+    const p = w ? along(w, o.offsetM) : null;
+    if (!p || edgeDist(room.polygon, p) > 0.3) continue;
+    const near = SIDES.map((side) => ({ side, ...project(sideWall(b, side), p) }))
+      .filter((x) => x.t >= 0 && x.t <= wallLength(sideWall(b, x.side)))
+      .sort((x, y) => Math.abs(x.off) - Math.abs(y.off))[0];
+    if (near) openings.push({ kind: "door", side: near.side, atM: r2(near.t), widthM: o.widthM, detectionId: o.id, beyondM: r2(Math.abs(near.off)) });
   }
   const within = (p: Pt) => p[0] >= b.minX - 0.05 && p[0] <= b.maxX + 0.05 && p[1] >= b.minZ - 0.05 && p[1] <= b.maxZ + 0.05;
   const widthM = r2(b.maxX - b.minX), depthM = r2(b.maxZ - b.minZ);
@@ -418,12 +446,18 @@ function stairRoom(st: Box, main: Box, taken: Box[], bottom?: Pt): Box {
 
 type Meta = { id: string; name: string; layout: Design["layout"] };
 
-export function designFromLayout(existing: Existing, main: Room, layout: Layout, meta: Meta, finishes: Finishes, now: string): Design {
-  const mb = bounds(main.polygon);
+// A room next to the main one, through a door, that the suite takes when the main room can't hold a home
+// on its own: its own layout (a service room, and the bathroom it takes), and what the rest of it becomes
+// (the bedroom, or the room it was: a laundry room stays one, now the suite's).
+export type Extra = { room: Room; layout: Layout; rest: { kind: RoomKind; name: string } };
+
+export function designFromLayout(existing: Existing, main: Room, layout: Layout, meta: Meta, finishes: Finishes, now: string, extra?: Extra): Design {
+  // The box the layout was drawn in (planOf): an L-shaped room's main part.
+  const mb = planBox(main.polygon);
   const walls: Wall[] = existing.walls.map((w) => ({ ...w }));
   const openings: Opening[] = existing.openings.map((o) => ({ ...o }));
   const fixtures: Fixture[] = existing.fixtures.map((f) => ({ ...f }));
-  const rooms: Room[] = existing.rooms.filter((r) => r.id !== main.id).map((r) => ({ ...r, unit: r.kind === "stairs" || r.kind === "mechanical" ? ("shared" as const) : (1 as const) }));
+  const rooms: Room[] = existing.rooms.filter((r) => r.id !== main.id && r.id !== extra?.room.id).map((r) => ({ ...r, unit: r.kind === "stairs" || r.kind === "mechanical" ? ("shared" as const) : (1 as const) }));
   const ceilingM = main.ceilingM ?? existing.ceilingM;
   const newWall = (a: Pt, b: Pt, rating: Wall["rating"] = null): Wall => {
     const w: Wall = { id: nextId("new", walls), a: [r3(a[0]), r3(a[1])], b: [r3(b[0]), r3(b[1])], thicknessM: NEW_WALL_M, kind: "new", rating };
@@ -433,65 +467,79 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
   const door = (w: Wall, offsetM: number, rating: Opening["rating"] = null) =>
     openings.push({ id: nextId("door", openings), wallId: w.id, kind: "door", offsetM: r3(offsetM), widthM: Math.min(DOOR_M, wallLength(w) - 0.05), heightM: 2.03, status: "new", swing: "left", rating });
 
-  // The layout's own walls and doors.
-  const layoutWalls = layout.walls.map((w) => newWall([w.x0, w.z0], [w.x1, w.z1]));
-  for (const d of layout.doors) {
-    const w = layoutWalls.find((x) => {
-      const p = project(x, [d.x, d.z]);
-      return Math.abs(p.off) < 0.05 && p.t > 0 && p.t < wallLength(x);
-    });
-    if (w) door(w, project(w, [d.x, d.z]).t);
-  }
-  const centre: Pt = [(mb.minX + mb.maxX) / 2, (mb.minZ + mb.maxZ) / 2];
-  // Rooms a landing or a door can't open into.
-  const closed: Box[] = layout.zones.filter((z) => z.kind !== "stairs" && z.kind !== "living").map((z) => ({ minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 }));
-
-  for (const z of layout.zones) {
-    const kind = ZONE_KIND[z.kind] ?? "other";
-    if (kind === "stairs") {
-      // The stair stays the house's: walled in at 30 minutes, a 20-minute door at its foot into the suite.
-      const run: Box = { minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 };
-      const flight = fixtures.find((f) => f.kind === "stairs" && inBox(f.at, run, 0.05));
-      const r = stairRoom(run, mb, closed, flight?.bottom);
-      rooms.push({ id: nextId("stairs", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "stairs", name: "Stairs to the main floor", unit: "shared", ceilingM });
-      const sides = freeSides(r, mb).map((s) => newWall(s.a, s.b, "30min"));
-      const rc: Pt = [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
-      // The door: off the stair run, opening onto open floor of the suite, nearest the middle of it.
-      const options = sides.flatMap((w) => {
-        const L = wallLength(w);
-        const n = wallNormal(w);
-        const mid = along(w, L / 2);
-        const out = mul(n, Math.sign(n[0] * (mid[0] - rc[0]) + n[1] * (mid[1] - rc[1]) || 1) * 0.4);
-        const found: { w: Wall; t: number; score: number }[] = [];
-        for (let t = DOOR_M / 2 + 0.03; t <= L - DOOR_M / 2 - 0.03 + 1e-9; t += 0.05) {
-          const ends = [along(w, t - DOOR_M / 2), along(w, t), along(w, t + DOOR_M / 2)];
-          if (ends.some((p) => inBox(p, run, 0.02))) continue;
-          const o = add(along(w, t), out);
-          if (!inBox(o, mb, -0.05) || closed.some((b) => inBox(o, b, 0))) continue;
-          found.push({ w, t, score: dist(o, centre) });
-        }
-        return found;
+  // One room's layout: its walls and doors, then its rooms. `box`: the room's own, `ceiling` its height.
+  const lay = (layout: Layout, box: Box, ceiling: number | null) => {
+    const layoutWalls = layout.walls.map((w) => newWall([w.x0, w.z0], [w.x1, w.z1]));
+    for (const d of layout.doors) {
+      const w = layoutWalls.find((x) => {
+        const p = project(x, [d.x, d.z]);
+        return Math.abs(p.off) < 0.05 && p.t > 0 && p.t < wallLength(x);
       });
-      const best = options.sort((a, b) => a.score - b.score)[0];
-      if (best) door(best.w, best.t, "20min");
-      continue;
+      if (w) door(w, project(w, [d.x, d.z]).t);
     }
-    if (kind === "mechanical") {
-      // The furnace room: its own rated walls and a rated door, so a fire there stays there.
-      const r: Box = { minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 };
-      rooms.push({ id: nextId("mechanical", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "mechanical", name: z.name, unit: "shared", ceilingM });
-      // Where it meets the stair room, the stair's wall is its wall too.
-      const sides = freeSides(r, mb).flatMap((s) => uncovered(s.a, s.b, walls).map(([a, b]) => newWall(a, b, "30min")));
-      const w = sides.filter((s) => wallLength(s) >= DOOR_M + 0.1).sort((a, b) => dist(along(a, wallLength(a) / 2), centre) - dist(along(b, wallLength(b) / 2), centre))[0];
-      if (w) door(w, wallLength(w) / 2, "20min");
-      continue;
+    const centre: Pt = [(box.minX + box.maxX) / 2, (box.minZ + box.maxZ) / 2];
+    // Rooms a landing or a door can't open into.
+    const closed: Box[] = layout.zones.filter((z) => z.kind !== "stairs" && z.kind !== "living").map((z) => ({ minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 }));
+
+    for (const z of layout.zones) {
+      const kind = ZONE_KIND[z.kind] ?? "other";
+      if (kind === "stairs") {
+        // The stair stays the house's: walled in at 30 minutes, a 20-minute door at its foot into the suite.
+        const run: Box = { minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 };
+        const flight = fixtures.find((f) => f.kind === "stairs" && inBox(f.at, run, 0.05));
+        const r = stairRoom(run, box, closed, flight?.bottom);
+        rooms.push({ id: nextId("stairs", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "stairs", name: "Stairs to the main floor", unit: "shared", ceilingM: ceiling });
+        const sides = freeSides(r, box).map((s) => newWall(s.a, s.b, "30min"));
+        const rc: Pt = [(r.minX + r.maxX) / 2, (r.minZ + r.maxZ) / 2];
+        // The door: off the stair run, opening onto open floor of the suite, nearest the middle of it.
+        const options = sides.flatMap((w) => {
+          const L = wallLength(w);
+          const n = wallNormal(w);
+          const mid = along(w, L / 2);
+          const out = mul(n, Math.sign(n[0] * (mid[0] - rc[0]) + n[1] * (mid[1] - rc[1]) || 1) * 0.4);
+          const found: { w: Wall; t: number; score: number }[] = [];
+          for (let t = DOOR_M / 2 + 0.03; t <= L - DOOR_M / 2 - 0.03 + 1e-9; t += 0.05) {
+            const ends = [along(w, t - DOOR_M / 2), along(w, t), along(w, t + DOOR_M / 2)];
+            if (ends.some((p) => inBox(p, run, 0.02))) continue;
+            const o = add(along(w, t), out);
+            if (!inBox(o, box, -0.05) || closed.some((b) => inBox(o, b, 0))) continue;
+            found.push({ w, t, score: dist(o, centre) });
+          }
+          return found;
+        });
+        const best = options.sort((a, b) => a.score - b.score)[0];
+        if (best) door(best.w, best.t, "20min");
+        continue;
+      }
+      if (kind === "mechanical") {
+        // The furnace room: its own rated walls and a rated door, so a fire there stays there.
+        const r: Box = { minX: z.x0, maxX: z.x1, minZ: z.z0, maxZ: z.z1 };
+        rooms.push({ id: nextId("mechanical", rooms), polygon: rectPoly(r.minX, r.minZ, r.maxX, r.maxZ), kind: "mechanical", name: z.name, unit: "shared", ceilingM: ceiling });
+        // Where it meets the stair room, the stair's wall is its wall too.
+        const sides = freeSides(r, box).flatMap((s) => uncovered(s.a, s.b, walls).map(([a, b]) => newWall(a, b, "30min")));
+        const w = sides.filter((s) => wallLength(s) >= DOOR_M + 0.1).sort((a, b) => dist(along(a, wallLength(a) / 2), centre) - dist(along(b, wallLength(b) / 2), centre))[0];
+        if (w) door(w, wallLength(w) / 2, "20min");
+        continue;
+      }
+      rooms.push({ id: nextId(kind, rooms), polygon: rectPoly(z.x0, z.z0, z.x1, z.z1), kind, name: z.name, unit: 2, ceilingM: ceiling, ceilingRating: "15min" });
     }
-    rooms.push({ id: nextId(kind, rooms), polygon: rectPoly(z.x0, z.z0, z.x1, z.z1), kind, name: z.name, unit: 2, ceilingM, ceilingRating: "15min" });
+  };
+
+  lay(layout, mb, ceilingM);
+  if (extra) {
+    // The room next door: its layout in its own box, and the rest of it what it becomes, all the suite's.
+    const before = rooms.length;
+    lay(extra.layout, planBox(extra.room.polygon), extra.room.ceilingM ?? ceilingM);
+    const taken = rooms.slice(before).map((r) => bounds(r.polygon));
+    rooms.push({ id: extra.room.id, polygon: minusBoxes(extra.room.polygon, taken), kind: extra.rest.kind, name: extra.rest.name, unit: 2, ceilingM: extra.room.ceilingM ?? ceilingM, ceilingRating: "15min" });
   }
-  // The living space is what's left: where the stair and furnace rooms take the whole of one end of it,
-  // it stops at their walls.
-  const shared = rooms.filter((r) => r.unit === "shared").map((r) => bounds(r.polygon));
-  for (const r of rooms.filter((x) => x.kind === "living")) r.polygon = rectPoly(...trimEnds(bounds(r.polygon), shared));
+  // The living space is the layout's band of the main room less what the other rooms drawn in it take (the
+  // stair and furnace rooms, the kitchen, a bathroom on another wall), and the other arm of an L-shaped
+  // room, so the way to a door there is the suite's floor.
+  const band = layout.zones.find((z) => z.kind === "living");
+  const inMain = rooms.filter((x) => x.kind !== "living" && x.id !== extra?.room.id && (x.unit === 2 || x.unit === "shared")).map((x) => bounds(x.polygon));
+  const offBand = band ? outside(mb, { minX: band.x0, maxX: band.x1, minZ: band.z0, maxZ: band.z1 }) : [];
+  for (const r of rooms.filter((x) => x.kind === "living")) r.polygon = minusBoxes(main.polygon, [...offBand, ...inMain.filter((b) => b.minX < mb.maxX + 0.01 && b.maxX > mb.minX - 0.01 && b.minZ < mb.maxZ + 0.01 && b.maxZ > mb.minZ - 0.01)]);
   // The leftover floor of the area is the suite's hall and open space; the rooms the scan saw elsewhere
   // stay the house's.
   const design: Design = {
@@ -508,17 +556,15 @@ export function designFromLayout(existing: Existing, main: Room, layout: Layout,
   return design;
 }
 
-// A rectangle less any end of it the boxes cover right across: [minX, minZ, maxX, maxZ].
-function trimEnds(r: Box, boxes: Box[]): [number, number, number, number] {
-  const covered = (x: number, z: number) => boxes.some((b) => inBox([x, z], b, 0.01));
-  const across = (n: number, at: (t: number) => Pt) => Array.from({ length: n }, (_, i) => at((i + 0.5) / n)).every((p) => covered(p[0], p[1]));
-  let { minX, maxX, minZ, maxZ } = r;
-  const STEP = 0.05;
-  while (maxX - minX > 1 && across(12, (t) => [minX + STEP / 2, minZ + t * (maxZ - minZ)])) minX += STEP;
-  while (maxX - minX > 1 && across(12, (t) => [maxX - STEP / 2, minZ + t * (maxZ - minZ)])) maxX -= STEP;
-  while (maxZ - minZ > 1 && across(12, (t) => [minX + t * (maxX - minX), minZ + STEP / 2])) minZ += STEP;
-  while (maxZ - minZ > 1 && across(12, (t) => [minX + t * (maxX - minX), maxZ - STEP / 2])) maxZ -= STEP;
-  return [r3(minX), r3(minZ), r3(maxX), r3(maxZ)];
+// A box less another inside it: the strips round it, up to four.
+function outside(b: Box, keep: Box): Box[] {
+  const k = { minX: Math.max(b.minX, keep.minX), maxX: Math.min(b.maxX, keep.maxX), minZ: Math.max(b.minZ, keep.minZ), maxZ: Math.min(b.maxZ, keep.maxZ) };
+  return [
+    { ...b, maxX: k.minX },
+    { ...b, minX: k.maxX },
+    { minX: k.minX, maxX: k.maxX, minZ: b.minZ, maxZ: k.minZ },
+    { minX: k.minX, maxX: k.maxX, minZ: k.maxZ, maxZ: b.maxZ },
+  ].filter((x) => x.maxX - x.minX > 0.02 && x.maxZ - x.minZ > 0.02);
 }
 
 // The parts of a straight wall from a to b that no wall already stands on.
@@ -583,6 +629,18 @@ function twoBedroom(plan: Plan, one: Layout): Layout | null {
 
 const DEFAULT_FINISHES: Finishes = { style: "light", floor: "Light oak laminate", walls: "Warm white" };
 
+// The rooms through a door from the main one that a suite could take in: not the stairs, a furnace room or
+// a closet.
+function neighbours(existing: Existing, main: Room): Room[] {
+  const doors = existing.openings.flatMap((o) => {
+    const w = o.kind === "door" ? existing.walls.find((x) => x.id === o.wallId) : undefined;
+    return w ? [along(w, o.offsetM)] : [];
+  });
+  return existing.rooms.filter(
+    (r) => r.id !== main.id && !["stairs", "mechanical", "closet"].includes(r.kind) && polygonArea(r.polygon) >= 4 && doors.some((p) => edgeDist(main.polygon, p) < 0.4 && edgeDist(r.polygon, p) < 0.4),
+  );
+}
+
 // Every design worth showing for this basement: one bedroom on the window, a studio, the bedroom on
 // another wall, and two bedrooms where they fit. Each is checked and fixed before it's shown.
 // Furnished after the fixes, so nothing stands where a fix moved a wall; each piece takes the colour
@@ -594,13 +652,51 @@ export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finis
   const plan = planOf(existing, main);
   const finishes = { ...DEFAULT_FINISHES, ...(opts.finishes ?? {}) };
   const one = suggestLayout(plan, { kind: "one_bedroom" });
-  const build = (meta: Meta, layout: Layout) => autofix(designFromLayout(existing, main, layout, meta, finishes, now), existing, now);
+  const build = (meta: Meta, layout: Layout, extra?: Extra) => autofix(designFromLayout(existing, main, layout, meta, finishes, now, extra), existing, now);
   const furnish = (d: Design) => {
     const f = furnishDesign(d);
     return opts.colours ? { ...f, proposed: { ...f.proposed, furniture: colourFurniture(f.proposed.furniture, opts.colours) } } : f;
   };
   const passes = (d: Design, ids: string[]) => checkDesign(d, existing).every((c) => !ids.includes(c.id) || c.ok !== false);
-  const kept: Design[] = [build({ id: "one_bedroom", name: "One bedroom", layout: "one_bedroom" }, one), build({ id: "studio", name: "Studio", layout: "studio" }, suggestLayout(plan, { kind: "studio" }))];
+  // A home: a kitchen at least a galley, a three-piece bathroom and somewhere to sleep, each big enough,
+  // and enough living space.
+  // A way out of every room, its alarms, and an escape window where someone sleeps (one the fixes can
+  // add, at least).
+  const home = (d: Design) => {
+    const suite = d.proposed.rooms.filter((r) => r.unit === 2);
+    const sized = (kind: string, least: number) => suite.some((r) => r.kind === kind && polygonArea(r.polygon) >= least - 0.01);
+    const beds = suite.filter((r) => r.kind === "bedroom");
+    return sized("kitchen", GALLEY_MIN_M2) && sized("bathroom", BATH_MIN_M2) && passes(d, ["rooms", "living-space", "way-out", "smoke-alarms", ...beds.map((r) => `bedroom-size:${r.id}`), ...beds.map((r) => `escape:${r.id}`)]);
+  };
+  // When the main room can't hold one on its own (no room for a bathroom, or too little living space), a
+  // room through a door from it takes the bathroom, or else the bedroom; the rest of that room joins the
+  // suite as it was (a laundry room stays one, now the suite's). Its furnace or water heater gets its
+  // service room there, as in the main room.
+  // A room the scan saw as a bathroom (or a bedroom) is tried as that first, as it is.
+  const roomier = (meta: Meta, kind: Layout["kind"], alone: Design) => {
+    if (home(alone)) return alone;
+    const moves = (kind === "studio" ? ["bathroom"] : ["bathroom", "bedroom"]) as ("bathroom" | "bedroom")[];
+    const already = (room: Room, moved: string) => room.kind === moved || new RegExp(`\\b${moved}\\b`, "i").test(room.name);
+    const tries = neighbours(existing, main)
+      .flatMap((room) => moves.map((moved) => ({ room, moved })))
+      .sort((a, b) => Number(already(b.room, b.moved)) - Number(already(a.room, a.moved)));
+    for (const { room, moved } of tries) {
+      const there = planOf(existing, room);
+      const as = already(room, moved);
+      const here = suggestLayout(plan, { kind, without: [moved] });
+      const theirs = suggestLayout(there, { kind: "one_bedroom", without: moved === "bathroom" && !as ? ["bedroom", "kitchen", "living"] : ["bedroom", "bathroom", "kitchen", "living"] });
+      const rest = moved === "bedroom" ? { kind: "bedroom" as const, name: as ? room.name : "Bedroom" } : as ? { kind: "bathroom" as const, name: room.name } : { kind: room.kind, name: room.name };
+      const d = build(meta, here, { room, layout: theirs, rest });
+      if (home(d)) return d;
+    }
+    return alone;
+  };
+  const oneMeta: Meta = { id: "one_bedroom", name: "One bedroom", layout: "one_bedroom" };
+  const studioMeta: Meta = { id: "studio", name: "Studio", layout: "studio" };
+  const kept: Design[] = [roomier(oneMeta, "one_bedroom", build(oneMeta, one)), roomier(studioMeta, "studio", build(studioMeta, suggestLayout(plan, { kind: "studio" })))];
+  // Another idea is worth showing only when it's a home and fails nothing the first one passes.
+  const firstFails = new Set(checkDesign(kept[0], existing).filter((c) => c.ok === false).map((c) => c.id.split(":")[0]));
+  const noWorse = (d: Design) => checkDesign(d, existing).every((c) => c.ok !== false || firstFails.has(c.id.split(":")[0]));
   // The bedroom on another wall: the next window first, then the longest walls. Only one that still
   // fits a bathroom, kitchen and enough living space is worth showing.
   const used = one.window?.side ?? null;
@@ -609,7 +705,7 @@ export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finis
   const sides = [...new Set([...windowSides, ...(["minZ", "maxZ", "minX", "maxX"] as Side[]).sort((a, b) => lengthOf(b) - lengthOf(a))])].filter((s) => s !== used);
   for (const side of sides) {
     const d = build({ id: `bedroom_${side}`, name: "Bedroom on another wall", layout: "one_bedroom" }, suggestLayout(plan, { kind: "one_bedroom", side }));
-    if (passes(d, ["rooms", "living-space", "bedroom-size", "way-out"].concat(d.proposed.rooms.filter((r) => r.kind === "bedroom").map((r) => `bedroom-size:${r.id}`)))) {
+    if (home(d) && noWorse(d)) {
       kept.push(d);
       break;
     }
@@ -618,7 +714,7 @@ export function seedDesigns(existing: Existing, opts: { finishes?: Partial<Finis
   const two = twoBedroom(plan, one);
   if (two) {
     const d = build({ id: "two_bedroom", name: "Two bedrooms", layout: "two_bedroom" }, two);
-    if (passes(d, ["rooms", "living-space", "way-out"])) kept.push(d);
+    if (home(d) && noWorse(d)) kept.push(d);
   }
   const pick = opts.pick;
   const chosen = (pick?.kind === "studio" && kept.find((d) => d.id === "studio")) || (pick?.side && kept.find((d) => d.id === `bedroom_${pick.side}`)) || kept[0];
