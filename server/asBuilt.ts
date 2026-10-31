@@ -11,6 +11,7 @@ import { asBuiltKey, buildAsBuilt, paintJob, type AsBuilt } from "../src/three/A
 import { ModelSchema } from "./model/schema";
 import { seedModel } from "./model/seed";
 import type { Existing, Pt } from "./model/types";
+import { serviceFetch } from "./replay";
 import { keys, storage } from "./storage";
 import { basementFor, loadWorkspace } from "./workspace";
 
@@ -196,7 +197,8 @@ async function paintNow(scanId: string, cur: Current) {
   form.append("job", JSON.stringify(job));
   for (const f of frames) form.append("frames", new Blob([new Uint8Array(f.data)], { type: "image/jpeg" }), f.name);
   depths.forEach((d, i) => form.append("depth", new Blob([new Uint8Array(d.data)], { type: "application/octet-stream" }), `area-${i}.bin`));
-  const res = await fetch(`${URL_}/texture`, { method: "POST", body: form, headers: { Authorization: `Bearer ${TOKEN}` }, signal: AbortSignal.timeout(10 * 60_000) });
+  // Through the record/replay layer (server/replay.ts), like the scan's other 3D calls.
+  const res = await serviceFetch("scan3d", URL_ ?? "", "/texture", { method: "POST", body: form, signal: AbortSignal.timeout(10 * 60_000) }, () => ({ Authorization: `Bearer ${TOKEN}` }));
   if (!res.ok) throw new Error(`texture ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const parts = await res.formData();
   const index = JSON.parse(await (parts.get("index") as File).text());

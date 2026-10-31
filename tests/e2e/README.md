@@ -46,15 +46,15 @@ Saved answers live in two folders:
 - **What a take came out as** (verdict, rooms and sizes, finds, questions, permit sheets and things left, photo and card counts) is the code's, so it's kept per branch: `takes/<id>.json` for main, `takes/<branch>/<id>.json` for a branch. Replay reads its own branch's first, then main's, and must match it.
 - **When the product changes on purpose** (new wording, a new model call, a changed Spark prompt): replay shows named misses or a changed outcome. Record the take again with `E2E_TAKES=…` (only what's new costs anything) and the outcome file is rewritten.
 
-## What's recorded (Oct 30, re-checked against main the same evening)
+## What's recorded (Oct 30, re-recorded on main 1d4d86f that night)
 
 | Take | How it's sent | Where its answers live | Recorded outcome |
 |---|---|---|---|
-| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 1 fix", 3 rooms, 16 cards in the deck, a 15-page set (A2 over two sheets) with 14 things left, 1 photo |
-| `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (too big to commit) | "Looks like yes", 2 rooms (6.2 × 4.17 and 2.93 × 4.17 m; true 6.4 × 4.6 and 4.6 × 3.08), 12 cards, 14 pages with 16 left, 2 photos |
+| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 2 fixes", 3 rooms (Room 1, Rec room, Furnace room), 3 beams and 4 ducts, a 15-page set (A2 over two sheets) with 15 things left, 1 photo |
+| `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (too big to commit) | "Looks like yes", 2 rooms (Rec room 6.2 × 4.17 and Laundry room 2.93 × 4.17 m; true 6.4 × 4.6 and 4.6 × 3.08), no beams, 12 cards, 14 pages with 16 left, 2 photos |
 | Sample basement | The app's own sample (its deck cards are in the repo) | The committed Meta model list and two city forms | — |
 
-Recording cost about $2.49 for both takes on Oct 30, with the 3D on Modal. Two top-ups followed as main changed: $0.73 for the swipe deck and a new Spark read, then $0.86 for the one flow (the rebuilt deck, the layout pictures and the design's pictures). In all, about $4.08, each top-up approved by David. `media/private/replay` holds 149 MB.
+Recording cost about $2.49 for both takes on Oct 30, with the 3D on Modal. Two top-ups followed as main changed: $0.73 for the swipe deck and a new Spark read, then $0.86 for the one flow (the rebuilt deck, the layout pictures and the design's pictures). Late on Oct 30, main gained Muse Wonder's plan check, the floor plan's `/floorplan`, the as-built's painting, new Spark wording, video beams and "metal duct": $0.41, $0.23 and $0.12 re-recorded what changed (Wonder's plan checks, Spark's reads, the "dining table" picture checks; the practice session recorded "metal duct" for $0.25). With $0.41 of outcome re-records earlier that evening, about $5.25 in all, each top-up approved by David. `media/private/replay` holds 178 MB.
 
 ## The journeys
 
@@ -64,7 +64,7 @@ Recording cost about $2.49 for both takes on Oct 30, with the 3D on Modal. Two t
 | `takes.spec.ts` | Each recorded take, from filming to the permit. It goes through the start sheet (address, who) and an upload, or posts the way the iPhone app does with its tracked camera path. Then the wait screen (questions, then swiping the deck: two loved, one passed, both on the board), the flow (plan check, layouts with their pictures, studio, pictures, book), every tab, the permit's readiness count, the timing, and the recorded outcome. Takes replay one at a time. A take that isn't recorded on this machine is skipped, with the reason. |
 | `errors.spec.ts` | A video it can't read. A day's scans used up: it starts its own API with `SCANS_PER_DAY=0` (the other journeys get 1000) and checks the start sheet's message and the server's 503. |
 
-Every journey fails on any console error, any page error, or any replay miss.
+Every journey fails on any console error, any page error, or any replay miss it set off. The API tags each miss with the journey whose request (or queued job) made the call (`x-e2e-test`, server/testTag.ts), so a take's misses never fail the sample beside it; a miss no journey set off fails the run from the report.
 
 ## Recording a take (spends Meta credits; ask David first)
 

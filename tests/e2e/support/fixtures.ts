@@ -17,7 +17,13 @@ export type Journey = {
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 const isLocal = (url: string) => /^(https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\/|data:|blob:|about:)/.test(url);
 
-const missCount = () => (existsSync(files.missLog) ? readFileSync(files.missLog, "utf8").split("\n").filter(Boolean).length : 0);
+// Saved answers that were missing, for one journey: the API tags each with the x-e2e-test header of the
+// request that set it off (server/testTag.ts), so a take's misses don't fail the sample beside it.
+// Misses no journey can be tied to fail the run in the report (support/reporter.ts).
+export const missesFor = (tag: string | null) =>
+  existsSync(files.missLog)
+    ? readFileSync(files.missLog, "utf8").split("\n").filter(Boolean).filter((l) => (JSON.parse(l) as { test?: string | null }).test === tag).length
+    : 0;
 
 export const test = base.extend<{ journey: Journey }>({
   journey: [
@@ -29,7 +35,9 @@ export const test = base.extend<{ journey: Journey }>({
       const allowed: RegExp[] = [/^WebGL: context lost\./];
       const external = new Set<string>();
       const started = Date.now();
-      const misses = missCount();
+      const tag = `${info.testId}-${info.retry}`;
+      await page.context().setExtraHTTPHeaders({ "x-e2e-test": tag });
+      const misses = missesFor(tag);
 
       page.on("console", (m) => {
         if (m.type() === "error") errors.push(`${m.text()}${m.location().url ? ` @ ${m.location().url}` : ""}`);
@@ -67,7 +75,7 @@ export const test = base.extend<{ journey: Journey }>({
       if (external.size) info.annotations.push({ type: "blocked", description: [...external].join(", ") });
       const unexpected = errors.filter((e) => !allowed.some((p) => p.test(e)));
       expect(unexpected, "console errors").toEqual([]);
-      expect(missCount() - misses, `replay misses (see ${relative(process.cwd(), files.missLog)})`).toBe(0);
+      expect(missesFor(tag) - misses, `replay misses (see ${relative(process.cwd(), files.missLog)}, test "${tag}")`).toBe(0);
     },
     { auto: true },
   ],

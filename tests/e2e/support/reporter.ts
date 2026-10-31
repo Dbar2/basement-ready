@@ -31,7 +31,11 @@ function lastRecordedScans() {
 export default class HtmlReport implements Reporter {
   private results: { title: string; project: string; status: string; ms: number; error: string | null; notes: string[] }[] = [];
 
+  // A journey's x-e2e-test tag (support/fixtures.ts) to its name, for the misses table.
+  private tags = new Map<string, string>();
+
   onTestEnd(test: TestCase, result: TestResult) {
+    this.tags.set(`${test.id}-${result.retry}`, `${test.parent.project()?.name ?? ""} · ${test.titlePath().slice(3).join(" › ")}`);
     this.results.push({
       title: test.titlePath().slice(3).join(" › "),
       project: test.parent.project()?.name ?? "",
@@ -42,13 +46,16 @@ export default class HtmlReport implements Reporter {
     });
   }
 
-  onEnd(result: FullResult) {
+  async onEnd(result: FullResult): Promise<{ status: FullResult["status"] } | undefined> {
     mkdirSync(runDir, { recursive: true });
     const steps = lines(files.steps);
     const timing = lines(files.timing);
     const calls = lines(files.replayLog);
     const misses = lines(files.missLog);
     const count = (event: string) => calls.filter((c) => c.event === event).length;
+    // Each journey fails on its own misses (support/fixtures.ts); one no journey set off fails the run.
+    const untagged = misses.filter((m) => !m.test);
+    const journeyOf = (tag: string | null) => (tag ? (this.tags.get(tag) ?? tag) : "none");
 
     const tests = this.results
       .map((r) => {
@@ -90,9 +97,9 @@ export default class HtmlReport implements Reporter {
 
     const costs = timing.filter((t) => t.kind === "cost");
     const costTable = costs.length
-      ? `<h2>What recording cost</h2><table><tr><th>Take</th><th>Frames</th><th>SAM concepts on the video</th><th>SAM picture checks</th><th>Muse images</th><th>Spark reads</th><th>Voice</th><th>3D areas</th><th>Cost</th></tr>${costs
-          .map((c) => `<tr><td>${esc(c.take)}</td><td>${c.frames}</td><td>${c.samVideoConcepts}</td><td>${c.samPictureChecks}</td><td>${c.museImages}</td><td>${c.sparkReads}</td><td>${c.voice}</td><td>${c.areas3d}</td><td><b>$${Number(c.usd).toFixed(2)}</b></td></tr>`)
-          .join("")}</table><p class="note">Only calls that really went out. SAM $0.20 per 1,000 video frames and $0.0025 a picture; Muse Image $0.01 an image; Spark by its token count; about $0.03 an area on Modal; voice not priced.</p>`
+      ? `<h2>What recording cost</h2><table><tr><th>Take</th><th>Frames</th><th>SAM concepts on the video</th><th>SAM picture checks</th><th>Muse images</th><th>Spark reads</th><th>Wonder reads</th><th>Voice</th><th>3D areas</th><th>Cost</th></tr>${costs
+          .map((c) => `<tr><td>${esc(c.take)}</td><td>${c.frames}</td><td>${c.samVideoConcepts}</td><td>${c.samPictureChecks}</td><td>${c.museImages}</td><td>${c.sparkReads}</td><td>${c.wonderReads ?? 0}</td><td>${c.voice}</td><td>${c.areas3d}</td><td><b>$${Number(c.usd).toFixed(2)}</b></td></tr>`)
+          .join("")}</table><p class="note">Only calls that really went out. SAM $0.20 per 1,000 video frames and $0.0025 a picture; Muse Image $0.01 an image; Spark and Wonder by their token counts; about $0.03 an area on Modal; voice not priced.</p>`
       : "";
     const tally = ["passed", "failed", "timedOut", "skipped", "interrupted"]
       .map((st) => [st, this.results.filter((r) => r.status === st).length] as const)
@@ -113,8 +120,8 @@ figcaption{font-size:11px} .note{color:#666;font-size:12px} .miss{color:#a11}
 </style>
 <h1>End-to-end run ${esc(runId)}</h1>
 <p>Mode <b>${esc(mode)}</b> · ${tally} · ${(result.duration / 1000).toFixed(0)} s</p>
-<p>Saved answers: ${count("hit")} replayed exactly, ${count("loose")} pictures answered by a recorded picture of the same kind, ${count("recorded")} recorded from the real services, <span class="${misses.length ? "miss" : ""}">${misses.length} missing</span>.</p>
-${misses.length ? `<h2 class="miss">Missing saved answers</h2><table><tr><th>Service</th><th>Route</th><th>Model</th><th>About</th><th>Key</th></tr>${misses.map((m) => `<tr><td>${esc(m.service)}</td><td>${esc(m.route)}</td><td>${esc(m.model)}</td><td>${esc(m.about)}</td><td>${esc(m.key)}</td></tr>`).join("")}</table>` : ""}
+<p>Saved answers: ${count("hit")} replayed exactly, ${count("loose")} pictures answered by a recorded picture of the same kind, ${count("recorded")} recorded from the real services, <span class="${misses.length ? "miss" : ""}">${misses.length} missing</span>${untagged.length ? `, <span class="miss">${untagged.length} of them from no journey (they fail the run)</span>` : ""}.</p>
+${misses.length ? `<h2 class="miss">Missing saved answers</h2><table><tr><th>Journey</th><th>Service</th><th>Route</th><th>Model</th><th>About</th><th>Key</th></tr>${misses.map((m) => `<tr><td>${esc(journeyOf(m.test))}</td><td>${esc(m.service)}</td><td>${esc(m.route)}</td><td>${esc(m.model)}</td><td>${esc(m.about)}</td><td>${esc(m.key)}</td></tr>`).join("")}</table>` : ""}
 <h2>Timing, upload to answer</h2>
 ${timingTable}
 ${callTable ? `<h2>Calls to the services (time when recorded)</h2><table><tr><th>Call</th><th>Count</th><th>Fastest</th><th>Average</th><th>Slowest</th></tr>${callTable}</table>` : ""}
@@ -124,7 +131,7 @@ ${tests}
 <p class="note">Folder: ${esc(relative(ROOT, runDir))}</p>`;
     writeFileSync(files.report, html);
     if (mode === "record") for (const t of timing.filter((t) => t.kind === "scan")) appendFileSync(RECORDED, JSON.stringify({ ...t, runId }) + "\n");
-    this.passed = result.status === "passed";
+    this.passed = result.status === "passed" && !untagged.length;
     if (this.passed) {
       // The small part, kept: the report and what it links to.
       rmSync(LATEST, { recursive: true, force: true });
@@ -134,6 +141,10 @@ ${tests}
       }
       console.log(`\nE2E report: ${relative(process.cwd(), join(LATEST, "report.html"))} (this run's folder is removed now that it passed)`);
     } else console.log(`\nE2E report: ${relative(process.cwd(), files.report)} (kept with its traces; only the newest ${KEEP_FAILED} failed runs are kept)`);
+    if (untagged.length && result.status === "passed") {
+      console.log(`${untagged.length} saved answers were missing outside any journey: see the report.`);
+      return { status: "failed" };
+    }
   }
 
   // After the servers have stopped: a passing run's folder goes, and failed runs past the newest two.

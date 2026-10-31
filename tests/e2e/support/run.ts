@@ -83,9 +83,20 @@ export function apiEnv(): Record<string, string> {
       REPLAY_LOOSE: process.env.E2E_LOOSE ?? "",
       // The Mac runner by default (free). For Modal, E2E_SCAN3D_URL is its endpoint and the token is the
       // env file's SCAN3D_MODAL_TOKEN, read here only to hand to the test server.
+      // The as-built's painting (POST /texture) goes to Modal's CPU painter, as in production.
       ...(modal
-        ? { SCAN3D_URL: modal, SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? fromEnvFile("SCAN3D_MODAL_TOKEN") ?? "", SCAN3D_PARALLEL: "3" }
-        : { SCAN3D_URL: process.env.E2E_SCAN3D_URL ?? "http://127.0.0.1:8790", SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? "dev", SCAN3D_PARALLEL: process.env.E2E_SCAN3D_PARALLEL ?? "1" }),
+        ? {
+            SCAN3D_URL: modal,
+            SCAN3D_TEXTURE_URL: process.env.E2E_SCAN3D_TEXTURE_URL ?? modal.replace("-scan3d-web.", "-paint-web."),
+            SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? fromEnvFile("SCAN3D_MODAL_TOKEN") ?? "",
+            SCAN3D_PARALLEL: "3",
+          }
+        : {
+            SCAN3D_URL: process.env.E2E_SCAN3D_URL ?? "http://127.0.0.1:8790",
+            SCAN3D_TEXTURE_URL: process.env.E2E_SCAN3D_URL ?? "http://127.0.0.1:8790",
+            SCAN3D_TOKEN: process.env.E2E_SCAN3D_TOKEN ?? "dev",
+            SCAN3D_PARALLEL: process.env.E2E_SCAN3D_PARALLEL ?? "1",
+          }),
     };
   }
   return {
@@ -104,6 +115,7 @@ export function apiEnv(): Record<string, string> {
     SCAN3D_PARALLEL: process.env.E2E_SCAN3D_PARALLEL ?? "3",
     // Never used to reach anything: replay answers before a request is made.
     SCAN3D_URL: "http://scan3d.replay.invalid",
+    SCAN3D_TEXTURE_URL: "http://scan3d.replay.invalid",
     SCAN3D_TOKEN: "replay",
     // Not a key: the app only checks that one is set (server/limits.ts), and replay never sends it. Meta's
     // address below goes nowhere besides.

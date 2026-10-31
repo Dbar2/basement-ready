@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { gunzipSync, gzipSync } from "node:zlib";
+import { testTag } from "./testTag";
 
 // "public": the free public data (city maps, the aerial photo, city forms), only in tests (tests/e2e/support/net-guard.ts).
 export type Service = "meta" | "scan3d" | "public";
@@ -246,7 +247,7 @@ export async function serviceFetch(
   }
   if (mode === "replay") {
     log(process.env.REPLAY_LOG, { event: "miss", key, service, route, model, about });
-    log(process.env.REPLAY_MISS_LOG, { key, service, route, model, about, request: shorten(request) });
+    log(process.env.REPLAY_MISS_LOG, { key, service, route, model, about, test: testTag(), request: shorten(request) });
     console.error(`[replay] MISSING ${what} (key ${key}). Record it with ${ENV[service]}=record.`);
     throw new ReplayMiss(`Replay has no saved answer for ${what} (key ${key})`);
   }

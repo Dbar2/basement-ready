@@ -8,7 +8,7 @@ import { Home } from "./pages/Home";
 import { StyleDeck } from "./pages/StyleDeck";
 import { WaitScreen } from "./pages/WaitScreen";
 import { expectSheets, Workspace } from "./pages/Workspace";
-import type { Page, TestInfo } from "@playwright/test";
+import type { Page, Response, TestInfo } from "@playwright/test";
 import { api, expect, oneAtATime, test, type Journey } from "./support/fixtures";
 import { costOf, realCalls } from "./support/costs";
 import { mode, runDir } from "./support/run";
@@ -116,6 +116,13 @@ for (const take of TAKES) {
       await flow.plan().expectOpen();
     });
     if (r.capture?.photos) await journey.step("one tape number", () => flow.plan().tapeIfAsked("7.3"));
+    // Muse Wonder's check of the plan lands after the answer (server/watchScan.ts), and the plan screen
+    // waits a minute for its questions. Read them, as a homeowner would, before saying yes: then the
+    // check is always made (and recorded), and what it adds to the permit list is always there.
+    if (r.watch)
+      await journey.step("the plan check's questions", () =>
+        expect.poll(async () => (await api(page, `/api/scans/${scanId}`)).result?.planCheck !== undefined, { timeout: mode === "record" ? 5 * 60_000 : 2 * 60_000, intervals: [2_000] }).toBe(true),
+      );
     await journey.step("plan confirmed", () => flow.plan().confirm());
     const layouts = flow.layouts();
     await journey.step("layouts, with the decision", async () => {
@@ -159,11 +166,26 @@ for (const take of TAKES) {
     const deckNow = await api(page, `/api/scans/${scanId}/cards`);
 
     // ---- Permit: the owner once, the readiness count, then the review copy, opened ----
+    // Saving the owner's details ticks "Owner details": the count is read from the first status the page
+    // is sent with it ticked, once the heading shows it (WebKit can draw the old count for a moment).
+    let sent: number | null = null;
+    const onStatus = (res: Response) => {
+      if (!new URL(res.url()).pathname.endsWith("/permit/status") || !res.ok()) return;
+      void res.json().then(
+        (s: { left: number; items: { id: string; done: boolean }[] }) => {
+          if (s.items.find((i) => i.id === "owner")?.done !== false) sent = s.left;
+        },
+        () => {},
+      );
+    };
+    page.on("response", onStatus);
     await journey.step("permit, owner asked once", async () => {
       await ws.open("Permit");
       await ws.fillProfileIfAsked();
       await ws.permit().expectOpen();
     });
+    await expect.poll(async () => sent !== null && (await ws.permit().left()) === sent, { timeout: 15_000 }).toBe(true);
+    page.off("response", onStatus);
     const left = await ws.permit().left();
     const pdf = (await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-${take.id}-permit.pdf`))))!;
     expectSheets(pdf);
