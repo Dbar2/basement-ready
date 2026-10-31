@@ -81,7 +81,7 @@ struct StartView: View {
               Button("How to film") { IntroFlow.shared.openGuide() }
                 .buttonStyle(TextLink())
                 .accessibilityHint("Four short tips before you start")
-              if let last, last.resultURL != nil {
+              if let last, last.homeURL != nil {
                 Button("Your last scan") { onOpenLast(last) }
                   .buttonStyle(TextLink())
                   .accessibilityHint("Opens the answer for the last basement you sent")
