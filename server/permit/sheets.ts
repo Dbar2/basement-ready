@@ -15,9 +15,11 @@ import { bounds, type Box, centroid, dir, drawnHeightM, escapeHeightNeededMm, es
 // What a window's tag says about escape: only a size that meets the rule is called an escape window.
 const escapeLabel = (w: PermitWindow) => (!w.escape ? "" : w.meets ? " ESCAPE WINDOW" : w.meets === null ? " WINDOW: ESCAPE SIZE TO BE TAPED" : " WINDOW: TOO SMALL TO ESCAPE");
 import { citeText, notesFor } from "./notes";
+import { faceHeightM, STOREY_M, TOP_CEILING_M, upo } from "./spatial";
 import { area, both, DETAIL_SCALES, dimText, FAINT, fitScale, frame, ftIn, INK, largestFit, mmBoth, MUTED, OWNER_EXEMPTION, PAPER, PLAN_SCALES, type Project, ptPerMetre, Sheet, sizeText, SITE_SCALES, SMALL_SCALES, TABLOID, TONE, TONE2, TONE3, watermark, type Fonts } from "./pdf";
 import type { Geometry } from "./plans";
-import type { Readiness } from "./readiness";
+import { asksWaterMeter, type Readiness } from "./readiness";
+import { packFor } from "../rules";
 
 export type SheetCtx = {
   doc: PDFDocument;
@@ -181,6 +183,29 @@ function keyPlan(s: Sheet, ctx: SheetCtx, b: Area) {
 
 // ---- A1 Site plan ----------------------------------------------------------------------------
 
+// The parking the city's zoning asks for a house with a basement unit, in the rules' own words and with
+// the by-law they come from (data/rules/*.json zoning_parking).
+export function parkingLine(municipality: string): string | null {
+  const rule = packFor(municipality).pack.rules.find((r) => r.id === "zoning_parking");
+  // The by-law's name, without our note on which copy of it was read.
+  const bylaw = rule?.source.title.replace(/\s*\([^()]*\)\s*$/, "");
+  return rule ? `Parking required by zoning (${bylaw}): ${rule.plain} The spaces are shown on the plan of survey.` : null;
+}
+
+// Kitchener: how the two units' water is metered and where the meter is (Building Bulletin BB 2026-04),
+// as the owner chose on the Permit tab. Until they choose, the review copy says to; the submit copy
+// isn't offered until they have (server/permit/readiness.ts).
+export function waterMeterLine(municipality: string, state: StoredState): string | null {
+  if (!asksWaterMeter(municipality)) return null;
+  const w = state.permit?.waterMeter;
+  const head = "Water meter (Kitchener Utilities; City of Kitchener Building Bulletin BB 2026-04): ";
+  const where = w?.where?.trim();
+  if (!w?.option || !where) return `${head}choose one meter for both units, or a meter for each unit in a meter room or an outside compartment, on the Permit tab.`;
+  if (w.option === "single") return `${head}single meter option, one water meter for both units, at ${where}.`;
+  if (w.option === "room") return `${head}multi-meter option, a meter for each unit in an interior meter room at ${where}, entered from outside or a shared area, not through either unit; a key or door code goes to the City.`;
+  return `${head}multi-meter option, a meter for each unit in an exterior recessed compartment at ${where}, to Kitchener Utilities drawing WMSD-302.`;
+}
+
 export function sitePlan(ctx: SheetCtx): Printed {
   const { s, a, page } = newSheet(ctx, "A1", SHEETS[1].title, null);
   const notes: string[] = [];
@@ -196,7 +221,9 @@ export function sitePlan(ctx: SheetCtx): Printed {
     const lines = [
       "The lot lines, the house, the driveway with its parking, the walkway to the unit's entrance and the window wells are shown on the plan of survey submitted with this application, marked up with the unit's entrance.",
       ...listLot(),
-    ];
+      parkingLine(ctx.municipality),
+      waterMeterLine(ctx.municipality, ctx.state),
+    ].filter((t): t is string => Boolean(t));
     let y = a.y + a.h - 40;
     for (const t of lines) y = s.wrap(t, a.x + 20, y, a.w - 40, { size: 11 }) - 8;
     notes.push(...lines);
@@ -255,7 +282,9 @@ export function sitePlan(ctx: SheetCtx): Printed {
     features.length ? `Unit 2's entrance, parking and walkway as traced on the Region of Waterloo's ${AERIAL_YEAR} aerial photo (open data).` : "Unit 2's entrance, parking and walkway: as marked on the plan of survey.",
     ...listLot(),
     "Window wells at escape windows: 550 mm clear in front of the window (A6).",
-  ];
+    parkingLine(ctx.municipality),
+    waterMeterLine(ctx.municipality, ctx.state),
+  ].filter((t): t is string => Boolean(t));
   let ny = a.y + legendH - 12;
   s.line(a.x, a.y + legendH, a.x + a.w, a.y + legendH, { width: 0.5, color: FAINT });
   lines.forEach((t, i) => {
@@ -410,6 +439,23 @@ function planLegend(s: Sheet, ctx: SheetCtx, a: Area, v: View, m: PermitModel) {
   keyNotes.forEach((t, i) => {
     y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size: 6, leading: 7.4 }) - 2;
   });
+  // The examiner's notes for this unit, numbered on the plan as a City examiner would mark them; the full
+  // text and sources are on A7. Set as large as fits above the scale bar.
+  const water = waterMeterLine(ctx.municipality, ctx.state);
+  const plan = [...projectNotes(ctx).flatMap((n) => (n.plan ? [n.plan] : [])), ...(water ? [water] : [])];
+  const floor = a.y + 62;
+  y -= 6;
+  for (const size of [6, 5.6, 5.2, 4.8, 4.4]) {
+    const leading = size * 1.22;
+    const height = 12 + plan.reduce((h, t, i) => h + s.measure(`${i + 1}. ${t}`, LEGEND_W - 8, size, s.fonts.regular, leading) + 1.5, 0);
+    if (y - height < floor && size > 4.4) continue;
+    s.text("NOTES (FULL TEXT AND SOURCES ON A7)", a.x, y - 4, { size: 6.5, font: s.fonts.bold });
+    y -= 12;
+    plan.forEach((t, i) => {
+      y = s.wrap(`${i + 1}. ${t}`, a.x, y, LEGEND_W - 8, { size, leading }) - 1.5;
+    });
+    break;
+  }
   s.scaleBar(a.x, a.y + 18, v.k, v.scale.label);
   if (review(ctx) && m.design.proposed.walls.some((w: PWall) => w.guess)) s.wrap("Dashed outlines: walls the camera didn't see. Check them before you submit.", a.x, a.y + 46, LEGEND_W - 8, { size: 6, color: MUTED });
 }
@@ -722,6 +768,31 @@ export function elevations(ctx: SheetCtx): Printed {
       by -= 8;
       notes.push(...lines);
     }
+    // Spatial separation for this face (unprotected openings, 9.10.15.4): the glazing this work adds or
+    // enlarges, against what the wall's limiting distance and exposing face allow.
+    const added = wins.filter((x) => x.change !== "keep");
+    const upoLines: [string, boolean][] = [["U.P.O. (UNPROTECTED OPENINGS, 9.10.15.4)", true]];
+    if (!added.length) upoLines.push(["No glazing added or enlarged on this face; its windows stay as they are.", false]);
+    else {
+      const lot = added.map((x) => ctx.state.permit?.lotLines?.find((l) => l.id === x.id)?.mm).find((mm) => mm != null) ?? null;
+      const above = Math.max(0.15, top - gradeH);
+      const faceH = faceHeightM(above, ctx.storeys);
+      const proposed = added.reduce((t, x) => t + x.widthM * (x.heightM ?? PROPOSED_ESCAPE.heightM), 0);
+      if (lot == null) upoLines.push(["Limiting distance: enter this wall's distance to the lot line on the Permit tab.", false]);
+      else {
+        const u = upo(L * faceH, lot / 1000, proposed);
+        upoLines.push(
+          [`Limiting distance ${(lot / 1000).toFixed(2)} m`, false],
+          [`Exposing building face ${L.toFixed(2)} x ${faceH.toFixed(2)} m = ${u.faceM2.toFixed(1)} m²`, false],
+          [u.bySquare ? `Permitted ${(lot / 1000).toFixed(2)}² = ${u.permittedM2.toFixed(2)} m² (9.10.15.4.(1); the table gives ${u.percent}%)` : `Permitted ${u.percent}% (Table 9.10.15.4) = ${u.permittedM2.toFixed(2)} m²`, false],
+          [`Proposed ${u.proposedM2.toFixed(2)} m² (${added.map((x) => x.tag).join(", ")})`, false],
+          [u.ok ? "OK" : "MORE THAN PERMITTED: make the opening smaller or protect it", true],
+        );
+      }
+      upoLines.push([`Face: grade to the top storey's ceiling, ${ctx.storeys} storey${ctx.storeys === 1 ? "" : "s"} at ${STOREY_M} m with a ${TOP_CEILING_M} m top ceiling${review(ctx) ? "; check it on site" : ""}.`, false]);
+    }
+    for (const [t, bold] of upoLines) by = s.wrap(t, bx, by, 220, { size: bold ? 6.8 : 6.4, font: bold ? s.fonts.bold : s.fonts.regular }) - 2;
+    notes.push(...upoLines.map(([t]) => t));
   });
   stampScale(s, scale.label);
   return { number: "A5", title: SHEETS[5].title, notes, scale, page };
@@ -792,7 +863,7 @@ export function details(ctx: SheetCtx): Printed {
       `Sill ${Math.round(sill * 1000)} mm above the floor${sill <= 1.0 ? "" : "; a fixed step or built-in below it"} (no Code maximum in a basement, 9.9.10.1.(2); kept at 1.0 m or less where it's new)`,
       "Opens from inside without tools or keys and stays open on its own",
       "Window well 550 mm clear in front; a cover opens from inside without tools",
-      kitchener ? "Built to the City of Kitchener's egress window detail, pp. 23-24 of its second-unit guide" : "To Building Code 9.9.10.1.",
+      kitchener ? "To Building Code 9.9.10.1. and City of Kitchener standard detail 9-17a, Means of Escape Window" : "To Building Code 9.9.10.1.",
     ];
     for (const c of checks) ty = s.wrap(`- ${c}`, a.x + 10, ty, colW - 20, { size: 6.5, leading: 8 }) - 1;
     notes.push(...checks);
@@ -867,10 +938,16 @@ export function details(ctx: SheetCtx): Printed {
 
 // ---- A7 Notes ------------------------------------------------------------------------------------
 
+// The examiner's notes this project needs (server/permit/notes.ts): all of them on A7, the short ones on A2.
+export function projectNotes(ctx: Pick<SheetCtx, "model" | "municipality">) {
+  const m = ctx.model;
+  return notesFor({ fuelBurning: m?.fuelBurning ?? true, stairs: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "stairs") ?? true), escapeNew: Boolean(m?.windows.some((w) => w.change !== "keep")), bathNew: !keptBathroom(m), municipality: ctx.municipality });
+}
+
 export function notesSheet(ctx: SheetCtx): Printed {
   const { s, a, page } = newSheet(ctx, "A7", SHEETS[7].title, null);
   const m = ctx.model;
-  const list = notesFor({ fuelBurning: m?.fuelBurning ?? true, stairs: Boolean(m?.design.proposed.fixtures.some((f) => f.kind === "stairs") ?? true), escapeNew: Boolean(m?.windows.some((w) => w.change !== "keep")), bathNew: !keptBathroom(m) });
+  const list = projectNotes(ctx);
   const colW = (a.w - 40) / 3;
   let col = 0, y = a.y + a.h - 20;
   const printed: string[] = [];
