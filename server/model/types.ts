@@ -16,6 +16,7 @@ export type Wall = {
   kind: "foundation" | "existing" | "new";
   rating: Rating;
   guess?: boolean; // the camera never saw it: its place is a guess until they confirm the plan
+  why?: string; // a new wall's reason, in words they can read ("Closes off the bedroom")
 };
 
 export type Opening = {
@@ -104,6 +105,9 @@ export type Existing = {
   // 3D is drawn at the same scale as the plan.
   scale: { source: "arkit" | "model" | "user_measurement" | "tape"; tapeM?: { wallId: string; lengthM: number }[]; factor?: number };
   confirmedAt: string | null; // when they said yes, this is my basement
+  // Whether it has its own way in (server/model/entrance.ts): from the scan and what they told us, read
+  // fresh from the answer every time (server/model/current.ts).
+  entrance?: { status: "own" | "needed" | "unknown"; why: string };
 };
 
 // One design for the suite. `proposed` is the whole design as built: existing walls it keeps are in it too.
@@ -115,13 +119,15 @@ export type Design = {
   finishes: Finishes;
   chosen: boolean;
   updatedAt: string;
+  why?: string; // one plain sentence on why it's laid out so (server/model/seed.ts whyOf)
 };
 
 // What they swiped: card ids, and the style and finishes those cards point to. `colours`: each piece of
 // furniture's colour, from the style the board loved most for its room (server/ideas/deck.ts).
 export type Mood = { liked: string[]; disliked: string[]; style: string | null; finishes: Partial<Finishes>; colours?: Partial<Record<FurnitureKind, string>> };
 
-export type Model = { version: 1; existing: Existing; designs: Design[]; mood: Mood };
+// `recommended`: the design the guide puts first, and why in one plain line (server/model/seed.ts).
+export type Model = { version: 1; existing: Existing; designs: Design[]; mood: Mood; recommended?: { designId: string; reason: string } };
 
 // A change to a design: what the editor's drags, the one-tap fixes and muse-spark's proposals produce.
 export type Edit =

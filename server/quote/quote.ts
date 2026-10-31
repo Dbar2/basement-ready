@@ -229,7 +229,9 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   const baths = suite.filter((r) => r.kind === "bathroom" && !r.kept);
   for (const r of kept) assumptions.push(`${r.name} is kept as it is: its fixtures, floor and fan aren't priced, only the fire-rated ceiling over it.`);
   const kitchens = suite.filter((r) => r.kind === "kitchen");
-  const laundry = P.rooms.filter((r) => r.kind === "laundry" && r.unit !== 1);
+  // A laundry room the suite takes as it was has its washer box and dryer vent already.
+  const laundry = P.rooms.filter((r) => r.kind === "laundry" && r.unit !== 1 && !r.kept);
+  const keptLaundry = P.rooms.some((r) => r.kind === "laundry" && r.unit !== 1 && r.kept);
   const inSuite = (p: Pt) => suite.some((r) => nearRoom(p, r));
 
   // Walls: what's new, what's kept, what the suite finishes, and what comes out.
@@ -247,8 +249,12 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   const opens = P.openings.map((o) => ({ o, w: walls.get(o.wallId) ?? null })).filter((x) => x.w);
   const doors = opens.filter((x) => x.o.kind === "door");
   const windows = opens.filter((x) => x.o.kind === "window");
-  const ratedDoors = doors.filter((x) => x.o.rating === "20min");
-  const newDoors = doors.filter((x) => x.o.status === "new" && !x.o.rating);
+  // Stairs open to the suite (in a room kept as it is) get a 20-minute door at their top, in the house.
+  const stairsTop = P.fixtures.filter((f) => f.kind === "stairs" && suite.some((r) => nearRoom(f.at, r, 0)) && !P.rooms.some((r) => r.kind === "stairs" && nearRoom(f.at, r, 0))).length;
+  const ratedDoors = [...doors.filter((x) => x.o.rating === "20min"), ...Array.from({ length: stairsTop }, () => null)];
+  // A new door in an outside wall is the suite's own entrance (server/model/entrance.ts), priced whole.
+  const entrances = doors.filter((x) => x.o.status === "new" && x.w!.kind === "foundation");
+  const newDoors = doors.filter((x) => x.o.status === "new" && !x.o.rating && x.w!.kind !== "foundation");
   const newWindows = windows.filter((x) => x.o.status === "new");
   const holeArea = (xs: typeof opens) => xs.reduce((s, x) => s + x.o.widthM * (x.o.heightM ?? (x.o.kind === "door" ? DOOR_H : 0.6)), 0);
   const holesIn = (ws: Wall[]) => opens.filter((x) => ws.includes(x.w!));
@@ -444,7 +450,7 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
       parts: [part("laundry_box", "Washer outlet box", laundry.length, 0, 1), part("pex_12", "1/2\" PEX", 6 * laundry.length, 0.1, 30.48), part("abs_1_5", "1-1/2\" ABS pipe", 3 * laundry.length, 0.1, 3.66)],
       labour: { rate: "lab_plumber", qty: 4 * laundry.length },
     });
-  } else assumptions.push("No laundry room in this design: the examiner asks for laundry for both units, so add one or say where it's shared.");
+  } else if (!keptLaundry) assumptions.push("No laundry room in this design: the examiner asks for laundry for both units, so add one or say where it's shared.");
 
   // ---- Heating, fans and vents ----
   add({
@@ -505,6 +511,17 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
     parts: [part("door_fire_20min", "20-minute rated door", ratedDoors.length, 0, 1), part("door_closer", "Spring (self-closing) hinges", 3 * ratedDoors.length, 0, 1), part("lever_passage", "Passage levers", ratedDoors.length, 0, 1)],
     labour: { rate: "lab_door", qty: ratedDoors.length },
   });
+  for (const x of entrances) {
+    add({
+      id: `entrance_${x.o.id}`,
+      trade: "doors_windows",
+      item: "A separate entrance: cut the foundation, a walk-up stairwell and an outside door",
+      qty: 1,
+      unit: "entrance",
+      basis: `The basement home's own way in (Ontario Building Code, Division B, Table 11.5.1.1.-C, C139): a ${Math.round(x.o.widthM * 1000)} mm door at the side or back, a lintel, steps up to grade with a drain and a guard. Installed price for a separate side entry (Toronto figure).`,
+      labour: { rate: "pack_entrance", qty: 1 },
+    });
+  }
   for (const x of newWindows) {
     add({
       id: `egress_${x.o.id}`,
@@ -637,8 +654,8 @@ export function quote(model: Model, design: Design, opts: QuoteOptions = {}): Qu
   designer.diy = { low: 0, high: designer.high };
   lines.push(designer);
   add({ id: "pro_hvac", trade: "pros", item: "HVAC heat-loss calculation and design (BCIN)", qty: 1, unit: "job", basis: "Sizes the heating and ventilation for the second unit (CSA F280).", labour: { rate: "hvac_design", qty: 1 }, pro: true });
-  if (newWindows.length || beamMoved)
-    add({ id: "pro_engineer", trade: "pros", item: "Structural engineer's letter and lintel detail", qty: 1, unit: "job", basis: newWindows.length ? "A new opening in the foundation wall needs a lintel the engineer designs." : "A beam or post moves.", labour: { rate: "engineer_egress", qty: 1 }, pro: true });
+  if (newWindows.length || entrances.length || beamMoved)
+    add({ id: "pro_engineer", trade: "pros", item: "Structural engineer's letter and lintel detail", qty: 1, unit: "job", basis: newWindows.length || entrances.length ? "A new opening in the foundation wall needs a lintel the engineer designs." : "A beam or post moves.", labour: { rate: "engineer_egress", qty: 1 }, pro: true });
 
   // Building it yourself, the escape window still needs a concrete cutter (the installed price has one).
   const cut = rate("concrete_cutting");
