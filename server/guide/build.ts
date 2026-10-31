@@ -12,7 +12,9 @@ import { eq } from "drizzle-orm";
 import type { CardRef, Choice, StepId, VisualRef } from "../../src/guide/types";
 import { savedAnswers } from "../answers";
 import { db, schema } from "../db";
-import type { MoneyQuestion, Program } from "../eligibility";
+import { evaluateMoney, type MoneyAnswers, type MoneyQuestion, type Program } from "../eligibility";
+import type { Property } from "../property";
+import { packFor, type Household } from "../rules";
 import { permitStatus } from "../permit/package";
 import type { ReadyItem } from "../permit/readiness";
 import { pricedForBasement, pricedSample } from "../priced";
@@ -28,6 +30,8 @@ export type BuildItem = {
   choices?: Choice[];
   visual: VisualRef;
   done: boolean;
+  // About how long it takes them, for the guide's "about N minutes" (permit items only).
+  minutes?: number;
 };
 export type BuildList = {
   items: BuildItem[]; // in the order the guide asks, done ones included; always ends with "done"
@@ -42,12 +46,18 @@ export type BuildInput = {
   // What the permit routes draw from, when it isn't `result`: a real scan's stored result
   // (server/workspaceRoutes.ts reads it unpriced), so the readiness and the drawings' fingerprint match.
   permitResult?: any;
+  // With the answers, the money is worked out here from them (server/eligibility.ts), as the answer
+  // does; without, it's read from the priced result.
+  household?: Household;
+  answers?: Record<string, unknown>;
+  property?: Property | null;
   municipality: string;
   state: StoredState;
   profile: Profile | null;
 };
 
 const PERMIT: VisualRef = { kind: "permit" };
+const MINUTES: Record<string, number> = { design: 3, tape: 5, window: 3, owner: 2, upstairs: 1, lot: 3, water: 2, designer: 10, review: 5 };
 const MONEY: VisualRef = { kind: "money" };
 const BUILDERS: VisualRef = { kind: "builders" };
 const LATER: Choice = { label: "Later", action: { type: "go", to: "home" } };
@@ -195,23 +205,22 @@ export function buildList(input: BuildInput): BuildList {
     });
   }
 
-  // Before they've given anything, whichever permit item comes up first says what the set is and how
-  // much is left. Once they've started, each item just asks.
-  const opener = items.find((i) => i.section === "permit" && !i.done);
-  if (opener && !items.some((i) => i.section === "permit" && i.done)) {
-    const left = st.readiness.left;
-    opener.message = `I've drawn and filled your permit set. ${left === 1 ? "One thing is" : `${left} things are`} left before you can hand it in. ${opener.message}`;
-    opener.choices = [{ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } }, ...(opener.choices ?? [])];
-  }
-
   // The money: one item per question that still decides a program, then applying for what fits
   // before any work starts. Whichever comes first says how much they may be eligible for.
-  const money = input.result?.money ?? { total: 0, ifYes: 0 };
-  const grants = (input.result?.grants ?? []) as Program[];
+  const worked = input.answers
+    ? evaluateMoney(packFor(input.municipality).pack, {
+        household: input.household ?? input.result?.household ?? "unsure",
+        answers: input.answers as MoneyAnswers,
+        property: input.property ?? input.result?.property ?? null,
+        costHigh: input.result?.cost?.high ?? null,
+      })
+    : null;
+  const money = worked ? { total: worked.total, ifYes: worked.ifYes } : (input.result?.money ?? { total: 0, ifYes: 0 });
+  const grants = (worked?.programs ?? input.result?.grants ?? []) as Program[];
   const cash = grants.filter((g) => g.qualify === "yes" && g.value === "cash" && (g.amountCAD ?? 0) > 0);
   const lead = money.total > 0 ? `You may be eligible for up to ${dollars(money.total)}${cash.length ? ` (${listOf(cash.map((g) => g.shortName))})` : ""}.` : "";
   const moneyItems: BuildItem[] = [];
-  const questions = ((input.result?.moneyQuestions ?? []) as MoneyQuestion[]).filter((q) => q.id !== "household");
+  const questions = ((worked?.questions ?? input.result?.moneyQuestions ?? []) as MoneyQuestion[]).filter((q) => q.id !== "household");
   for (const q of questions) {
     moneyItems.push({
       step: `build.money:${q.id}`,
@@ -285,6 +294,9 @@ export function buildList(input: BuildInput): BuildList {
     visual: PERMIT,
     done: false,
   });
+
+  // Rough minutes for each permit item, for the guide's "about N minutes" before it starts.
+  for (const i of items) if (i.section === "permit") i.minutes = i.step === "build.submit" ? 2 : MINUTES[i.step.split(":")[1]] ?? 2;
 
   return {
     items,
