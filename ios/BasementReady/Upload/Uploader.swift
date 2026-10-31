@@ -16,6 +16,16 @@ struct ScanCreated: Codable, Equatable, Sendable {
   var guideURL: URL? { server?.appending(path: "scans/\(id)/guide") }
   var guideAPI: URL? { server?.appending(path: "api/scans/\(id)/guide") }
 
+  // Scans are private (server/privacy.ts): the owner's claim, as src/api.ts authHeaders() sends it,
+  // encodeURIComponent(JSON.stringify([{ basementId, claimToken }])).
+  var claimsHeader: String {
+    let json = (try? JSONSerialization.data(withJSONObject: [["basementId": basementId, "claimToken": claimToken]], options: [.sortedKeys]))
+      .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+    // encodeURIComponent leaves letters, digits and - _ . ! ~ * ' ( ) as they are.
+    let unreserved = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.!~*'()")
+    return json.addingPercentEncoding(withAllowedCharacters: unreserved) ?? json
+  }
+
   // The last take this phone sent, so the start screen can open its answer again.
   static let lastKey = "lastScan"
   static var last: ScanCreated? {
