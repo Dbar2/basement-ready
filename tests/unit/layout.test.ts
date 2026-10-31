@@ -136,6 +136,45 @@ describe("the bathroom goes where the plumbing comes up", () => {
 
   it("a water heater alone gets the mechanical corner", () => {
     const l = suggestLayout(plan({ fixtures: [{ kind: "water_heater", x: -3.5, z: -2.5, detectionId: "h1" }] }));
-    expect(l.zones.find((z) => z.kind === "mechanical")?.name).toBe("Water heater");
+    expect(l.zones.find((z) => z.kind === "mechanical")?.name).toBe("Water heater room");
+  });
+
+  it("the furnace and water heater share one service room: back to their wall, room in front, the corner taken in", () => {
+    // Found where the camera saw their faces: a furnace 1.2 m off the west wall, a water heater against it.
+    const l = suggestLayout(plan({ fixtures: [{ kind: "furnace", x: -2.8, z: -0.7, detectionId: "f1" }, { kind: "water_heater", x: -3.5, z: 1.2, detectionId: "h1" }] }));
+    const room = l.zones.find((z) => z.kind === "mechanical")!;
+    expect(room.name).toBe("Furnace room");
+    expect(room.x0).toBe(-4); // back to the west wall
+    expect(room.x1).toBeCloseTo(-2.2, 2); // 0.6 m in front of the furnace's face
+    expect(room.z0).toBeCloseTo(-1.15, 2); // past the furnace's side
+    expect(room.z1).toBe(3); // the 1.35 m left past the water heater is too narrow to use: it's in the room
+    // Nothing else stands in it.
+    for (const z of l.zones.filter((x) => x.kind !== "mechanical" && x.kind !== "living")) expect(z.x0 >= room.x1 - 0.05 || z.x1 <= room.x0 + 0.05 || z.z0 >= room.z1 - 0.05 || z.z1 <= room.z0 + 0.05).toBe(true);
+  });
+
+  it("a service room meets the stairs when the gap between them is too narrow to walk", () => {
+    const l = suggestLayout(plan({ stairs: [{ x0: -3, z0: -3, x1: -0.5, z1: -2.1, detectionId: "s1", bottom: [-0.5, -2.55] }], fixtures: [{ kind: "furnace", x: -2.9, z: -0.9, detectionId: "f1" }] }));
+    expect(l.zones.find((z) => z.kind === "mechanical")!.z0).toBe(-2.1);
+  });
+
+  it("keeps the landing at the foot of the stairs clear: the kitchen moves off it", () => {
+    const stairs = [{ x0: -3, z0: -3, x1: -0.5, z1: -2.1, detectionId: "s1", bottom: [-0.5, -2.55] as [number, number] }];
+    const l = suggestLayout(plan({ stairs }));
+    const kitchen = l.zones.find((z) => z.kind === "kitchen")!;
+    expect(kitchen.x0).toBeGreaterThanOrEqual(0.5 - 0.05); // past the 1 m landing at x -0.5..0.5
+    // Without a known foot, nothing is held for a landing.
+    const plain = suggestLayout(plan({ stairs: [{ ...stairs[0], bottom: undefined }] }));
+    expect(plain.zones.find((z) => z.kind === "kitchen")!.x0).toBeLessThan(0.45);
+  });
+
+  it("slides the bedroom along its window wall to make room for a bathroom", () => {
+    // A service room where the bathroom would go beside a bedroom centred on the window.
+    const l = suggestLayout(plan({ openings: [{ kind: "window", side: "maxZ", atM: 5.5, widthM: 0.8, detectionId: "w1" }], fixtures: [{ kind: "furnace", x: -2.6, z: 1.6, detectionId: "f1" }] }), { kind: "one_bedroom" });
+    const bed = l.zones.find((z) => z.kind === "bedroom")!;
+    expect(bed.x0).toBeGreaterThan(-0.1 + 0.05); // moved off the window's middle (centred, it'd start at -0.1)
+    expect(l.zones.some((z) => z.kind === "bathroom")).toBe(true);
+    expect(bed.x0).toBeLessThanOrEqual(1.5 - 0.3 + 0.01); // still takes in the window, at x 1.5
+    expect(bed.x1).toBeGreaterThanOrEqual(1.5 + 0.3 - 0.01);
+    expect(l.checks.find((c) => /room for a bathroom/.test(c.label))).toBeUndefined();
   });
 });
