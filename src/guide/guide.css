@@ -39,7 +39,7 @@
 .gs-msg-body { display: grid; gap: 8px; min-width: 0; }
 .gs-msg-body > p { margin: 0; font-size: 16px; line-height: 1.45; text-wrap: pretty; }
 .gs-why { font-size: var(--text-small) !important; color: var(--color-ink-muted); }
-.gs-why::before { content: "Why I'm asking: "; font-weight: 700; color: var(--color-ink); }
+.gs-why b { font-weight: 700; color: var(--color-ink); }
 .gs-choices { display: flex; flex-wrap: wrap; gap: 6px; }
 .gs-choice { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border: var(--line-ink); border-radius: var(--radius-2); background: transparent; color: var(--color-ink); font-weight: 600; font-size: 15px; }
 .gs-choice:hover:not(:disabled) { background: var(--color-card); }
