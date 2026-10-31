@@ -100,7 +100,7 @@ It's signed with the free development certificate, so it runs on your own regist
 The gear on the start screen picks the server:
 
 - **Mac (dev):** `https://<this Mac's Wi-Fi address>:5173`, written into Debug builds when they're built. Run `pnpm dev:phone` on the Mac, with the phone on the same Wi-Fi. Debug builds accept that server's self-signed certificate, for that address only.
-- **Live site:** `https://basementready.com`.
+- **Live site:** `https://www.basementready.com`.
 - **Another address:** type it in.
 
 ## Needs a real iPhone

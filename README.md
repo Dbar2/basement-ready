@@ -4,7 +4,7 @@ Film your basement on your phone and find out whether it can legally become a se
 
 **Built this week.** Everything in this repo was built during the Meta hackathon. The first commit is Oct 28, 2026, and nothing in it existed before the event.
 
-- Live: https://basementready.com
+- Live: https://www.basementready.com
 - "See an example" on the home page runs a recorded scan from start to finish, with no account and no keys.
 
 ## Run it
