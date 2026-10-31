@@ -254,6 +254,17 @@ describe("one design on every sheet", () => {
 });
 
 describe("one room, one area", () => {
+  it("takes only what a furnace room really covers, not its box, when it's L-shaped", () => {
+    // A 6 x 4 m living room, and an L-shaped furnace room beside it whose arm reaches 1 x 1 m into the
+    // living room's corner. Its box (x 5-8, z 0-6) would take 1 x 4 m.
+    const living = { kind: "living" as const, polygon: [[0, 0], [6, 0], [6, 4], [0, 4]] as [number, number][] };
+    const furnace = { kind: "mechanical" as const, polygon: [[5, 3], [6, 3], [6, 0], [8, 0], [8, 6], [5, 6]] as [number, number][] };
+    expect(floorArea(living, [living, furnace])).toBeCloseTo(24 - 1, 1);
+    // Two boxes: exactly their overlap.
+    const stairs = { kind: "stairs" as const, polygon: [[5, 0], [6, 0], [6, 2.5], [5, 2.5]] as [number, number][] };
+    expect(floorArea(living, [living, stairs])).toBeCloseTo(24 - 2.5, 6);
+  });
+
   it("is the living room's own floor on the drawings, the book, the answer and the studio", async () => {
     const model = currentModel(sample, {}, "sample")!.model;
     const design = chosenDesign(model)!;
