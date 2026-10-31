@@ -43,6 +43,7 @@ export type Room = {
   unit: 1 | 2 | "shared";
   ceilingM?: number | null;
   ceilingRating?: Rating; // the floor above, as a fire separation: 15 minutes over the suite
+  kept?: boolean; // finished as the scan found it (a bathroom already there): kept, not built new
 };
 
 export type FixtureKind = "furnace" | "water_heater" | "panel" | "plumbing" | "beam" | "duct" | "bulkhead" | "post" | "stairs";
