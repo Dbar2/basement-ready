@@ -118,12 +118,10 @@ describe("the example, fully scripted", () => {
     expect(r.state.sample.look).toBe("none");
     await go("Warm wood");
     await go("Looks good");
-    expect(r.state.step).toBe("build");
-    expect(r.messages.at(-1)!.text).toMatch(/^To build it you need a permit\. \*\*I've drawn and filled your permit set\*\* from the scan\. \w+ things only you can give, about \d+ minutes\. Ready\?$/);
+    expect(r.state.step).toBe("build.permit:tape");
+    expect(r.messages.at(-1)!.text).toMatch(/^I've drawn and filled your permit set\. \d+ things are left before you can hand it in\./);
     await go("What's a permit set?");
     expect(r.messages.at(-1)!.visual).toEqual({ kind: "explain", term: "permit_set" });
-    await go("Start");
-    expect(r.state.step).toBe("build.permit:tape");
 
     // Each card saves the browser's workspace, then tells the guide what it said.
     let profile: Profile | null = null;
@@ -169,7 +167,6 @@ describe("the example, fully scripted", () => {
         "design.plan",
         "design.layouts",
         "design.look",
-        "build",
         "build.permit:tape",
         "build.permit:owner",
         "build.permit:upstairs",
