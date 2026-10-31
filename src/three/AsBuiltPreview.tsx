@@ -6,6 +6,7 @@
 //   view=above                    the overview, ceilings off
 //   layer=plain                   the model unpainted; layer=mesh&mesh=URL the old solid scan instead
 //   atlas=/samples/sample/3d/asbuilt/  the painting from somewhere other than `dir`
+//   labels=1                      the beams, ducts and bulkheads named, as the walk-through does
 // It sets <body data-ready> once the sharpest atlas is on.
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
@@ -15,6 +16,8 @@ import * as THREE from "three";
 import type { Existing } from "../../server/model/types";
 import { AsBuiltScene, asBuiltOf, homeView, type Atlas, type AtlasIndex } from "./AsBuilt";
 import { parseMesh, SolidView, type Solid } from "./RealScan";
+import { TagRoot, TagTracker } from "./Tags";
+import "../styles/global.css"; // the labels' look
 
 const q = new URLSearchParams(location.search);
 const dir = q.get("dir") ?? "/tmp/asbuilt/b1/";
@@ -62,27 +65,31 @@ function Preview() {
   if (!existing) return null;
   const k = existing.scale.factor ?? 1;
   return (
-    <Canvas camera={{ fov: Number(q.get("fov") ?? 70), near: 0.03, far: 100 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
-      <color attach="background" args={["#0F2A1E"]} />
-      {layer === "mesh" && solid ? (
-        <group scale={k}>
-          <SolidView solid={solid} ceilingY={(existing.ceilingM ?? 2.4) / k} overview={view === "above"} floors={[]} />
-        </group>
-      ) : (
-        <AsBuiltScene
-          existing={existing}
-          atlas={atlas}
-          overview={view === "above"}
-          reveal={false}
-          onLoaded={() => {
-            // Ready once no sharper atlas follows for a moment.
-            clearTimeout(readyTimer);
-            readyTimer = setTimeout(() => (document.body.dataset.ready = "1"), 1500);
-          }}
-        />
-      )}
-      <Camera existing={existing} atlas={atlas} />
-    </Canvas>
+    <TagRoot>
+      <Canvas camera={{ fov: Number(q.get("fov") ?? 70), near: 0.03, far: 100 }} gl={{ antialias: true, preserveDrawingBuffer: true }}>
+        <TagTracker />
+        <color attach="background" args={["#0F2A1E"]} />
+        {layer === "mesh" && solid ? (
+          <group scale={k}>
+            <SolidView solid={solid} ceilingY={(existing.ceilingM ?? 2.4) / k} overview={view === "above"} floors={[]} />
+          </group>
+        ) : (
+          <AsBuiltScene
+            existing={existing}
+            atlas={atlas}
+            overview={view === "above"}
+            reveal={false}
+            labels={q.get("labels") === "1"}
+            onLoaded={() => {
+              // Ready once no sharper atlas follows for a moment.
+              clearTimeout(readyTimer);
+              readyTimer = setTimeout(() => (document.body.dataset.ready = "1"), 1500);
+            }}
+          />
+        )}
+        <Camera existing={existing} atlas={atlas} />
+      </Canvas>
+    </TagRoot>
   );
 }
 
