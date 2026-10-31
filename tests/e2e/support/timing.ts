@@ -5,8 +5,9 @@ import type { APIRequestContext } from "@playwright/test";
 export type ScanEvent = { at: number; type: string; text: string; data?: any };
 
 // The whole event log of a finished scan: the events stream replays everything and ends at "done".
-export async function scanEvents(request: APIRequestContext, scanId: string): Promise<ScanEvent[]> {
-  const res = await request.get(`/api/scans/${scanId}/events`, { timeout: 60_000 });
+// `headers`: the page's claims (support/fixtures.ts claimsHeader); a scan is private.
+export async function scanEvents(request: APIRequestContext, scanId: string, headers: Record<string, string> = {}): Promise<ScanEvent[]> {
+  const res = await request.get(`/api/scans/${scanId}/events`, { timeout: 60_000, headers });
   return (await res.text())
     .split("\n")
     .filter((l) => l.startsWith("data:"))

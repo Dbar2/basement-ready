@@ -1,166 +1,41 @@
-// The sample basement, start to finish, through the one flow: the wait screen, the plan check, a layout,
-// the studio, the pictures, the book, then the permit, money and build tabs and the answer. It never
-// calls a model (its pictures are committed), so it runs anywhere for free.
+// The example basement through the guide: the answer, the design and every Build card to the book, then a
+// return visit. Scripted (server/guide/sample.ts): it never calls a model, so it runs anywhere for free.
 import { join } from "node:path";
-import { Flow } from "./pages/Flow";
+import { expectSheets, Guide } from "./pages/Guide";
 import { Home } from "./pages/Home";
-import { StyleDeck } from "./pages/StyleDeck";
-import { WaitScreen } from "./pages/WaitScreen";
-import { expectSheets, Workspace } from "./pages/Workspace";
-import { runDir } from "./support/run";
 import { expect, test } from "./support/fixtures";
-import sample from "../../public/samples/sample/result.json" with { type: "json" };
+import { runDir } from "./support/run";
 
-test("the sample basement: wait screen, plan, layout, studio, pictures, book, permit, money, build", async ({ page, journey }, info) => {
+test("the example through the guide: answer, design, build, the book", async ({ page, journey }, info) => {
+  test.slow(); // every Build card, each saved and answered
   const home = new Home(page);
-  const wait = new WaitScreen(page);
-  const flow = new Flow(page);
-  const ws = new Workspace(page);
-  const deck = new StyleDeck(page);
+  const guide = new Guide(page);
 
   await journey.step("home", () => home.open());
-  await journey.step("sample wait screen", async () => {
-    await home.trySample();
-    await wait.expectOpen();
-    await flow.expectStep(1, "Swipe your style");
-  });
-  const asked = await journey.step("wait screen questions", () => wait.answerAll());
-  expect(asked!.length, "the sample asks at least one question").toBeGreaterThan(0);
-  await journey.step("swipe your style: two loved, one passed", async () => {
-    await deck.expectOpen();
-    await deck.swipeAll(["love", "pass", "love"]);
-  });
-  await journey.step("answer ready", () => wait.waitForAnswer(60_000));
+  await journey.step("try the example", () => home.trySample());
+  await journey.step("the example's guide", () => guide.open("sample"));
+  expect(await guide.milestone()).toBe("Answer");
 
-  // ---- 2. Is this your basement? The measured room, its overall width and depth on the drawing ----
-  await journey.step("is this your basement?", async () => {
-    await wait.checkPlan();
-    await flow.plan().expectOpen();
-    await flow.expectStep(2, "Is this your basement?");
-  });
-  const drawing = (await flow.plan().drawing())!;
-  const box = sample.rooms[0].plan.box;
-  expect(drawing.label).toMatch(/^Your basement's plan, /);
-  expect(drawing.texts).toEqual(expect.arrayContaining([`${(box.maxX - box.minX).toFixed(2)} m`, `${(box.maxZ - box.minZ).toFixed(2)} m`]));
-  await journey.step("plan confirmed", () => flow.plan().confirm());
+  const walked = await guide.walk({ answers: {}, saveAs: (w) => join(runDir, "downloads", `${info.project.name}-sample-${w}.pdf`), step: journey.step, measuringMs: 60_000 });
 
-  // ---- 3. Pick a layout: the decision beside the cards, a picture on each ----
-  const layouts = flow.layouts();
-  await journey.step("layouts", async () => {
-    await layouts.expectOpen();
-    // The answer as the server prices it: the rules' fixes and the picked design's, one count (server/priced.ts).
-    const { result: answer } = await (await page.request.post("/api/recheck", { data: { result: sample, answers: {} } })).json();
-    expect(answer.headline).toMatch(new RegExp(`after ${answer.fixGroups.length} fix(es)?\\.`));
-    await expect(layouts.decision).toContainText(answer.headline);
-  });
-  const captions = (await journey.step("a picture of each layout", () => layouts.pictures()))!;
-  // Each layout drawn in clean 3D in the basement as built, never a render over a photo.
-  expect(captions.every((c) => /in 3D/.test(c)), captions.join(" | ")).toBe(true);
-  const names = (await layouts.names())!;
-  expect(names).toEqual(expect.arrayContaining(["One bedroom", "Studio"]));
-  await journey.step("studio picked", () => layouts.pick("Studio"));
-  // Every screen's total for the picked design, as its raw numbers (data-low/data-high): one quote.
-  const totals: Record<string, string> = {};
-  const total = async (where: string, scope: import("@playwright/test").Locator) => {
-    const el = scope.locator("[data-total]").first();
-    await expect(el).toBeVisible();
-    totals[where] = `${await el.getAttribute("data-low")}–${await el.getAttribute("data-high")}`;
-  };
-  await total("layout card", page.locator(".layout-card[data-chosen]"));
-  // The decision is priced again for the pick: it catches up with the card, or the test fails.
-  await expect(layouts.decision.locator("[data-total]")).toHaveAttribute("data-low", totals["layout card"].split("–")[0], { timeout: 15_000 });
-  await total("the decision beside it", layouts.decision);
-
-  // ---- 4. The studio opens on it, checked and priced ----
-  await journey.step("studio", async () => {
-    await layouts.designIt();
-    await flow.studio().expectOpen();
-    await flow.expectStep(4, "Your design in 3D");
-  });
-  expect(await flow.studio().chosen()).toBe("Studio");
-  await expect(flow.studio().cost).toHaveText(/^\$[\d.]+k–\$[\d.]+k hired out$/);
-  await total("studio", flow.studio().cost);
-
-  // ---- 5. Pictures of it ----
-  await journey.step("pictures", async () => {
-    await flow.studio().toPictures();
-    await flow.pictures().expectOpen();
-  });
-  const labels = (await flow.pictures().labels())!;
-  expect(labels.length).toBeGreaterThan(0);
-  expect(new Set(labels)).toEqual(new Set(["Virtually staged"]));
-
-  // ---- 6. The book, on the design they picked ----
-  await journey.step("book", async () => {
-    await flow.pictures().toBook();
-    await ws.expectOpen();
-    await ws.book().expectOpen();
-  });
-  const facts = (await ws.book().facts())!;
-  const bookPermit = await ws.book().permitLine();
-  await total("book", ws.book().cover);
-  expect(facts["The design"]).toBe("Studio");
-
-  // The book counts what the Permit tab counts.
-  const [ready, checks] = (/^(\d+) of (\d+) checks ready$/.exec(facts.Permit) ?? []).slice(1).map(Number);
-  await journey.step("permit, with the same count as the book", async () => {
-    await ws.open("Permit");
-    await ws.permit().expectOpen();
-    expect(checks - ready).toBe(await ws.permit().left());
-  });
-  await journey.step("permit, owner asked once", async () => {
-    await ws.fillProfileIfAsked();
-    await ws.permit().expectOpen();
-  });
-  // The example is a Waterloo house: Ontario's rules and Waterloo's, never another city's.
-  await journey.step("licensed pros, Waterloo's rules only", async () => {
-    await ws.permit().licensedPro.scrollIntoViewIfNeeded();
-    await expect(ws.permit().licensedPro).toContainText("Waterloo's guides don't say, so ask the City first.");
-    await expect(ws.permit().licensedPro).not.toContainText(/Kitchener|Cambridge/);
-  });
-  const pdf = await journey.step("permit review copy downloaded", () => ws.permit().downloadPackage(join(runDir, "downloads", `${info.project.name}-sample-permit.pdf`)));
-  expectSheets(pdf!);
-  journey.timing({ take: "sample", kind: "permit", pages: pdf!.pageCount, sheets: pdf!.index });
-
-  await journey.step("money", async () => {
-    await ws.open("Money");
-    await ws.money().expectOpen();
-  });
-
-  // One unit area and one fee: Money's permit step, the book's quote and the permit set's cover and fee.
-  const moneyPermit = await ws.money().permitStep();
-  const sqft = /for about ([\d,]+) sq ft/.exec(moneyPermit.note)?.[1];
-  const fee = /\$[\d,]+$/.exec(moneyPermit.meta)?.[0];
-  expect(sqft, moneyPermit.note).toBeTruthy();
-  expect(fee, moneyPermit.meta).toBeTruthy();
-  expect(bookPermit.amount).toBe(fee);
-  expect(bookPermit.basis).toContain(`(${sqft} sq ft)`);
-  const pdfText = pdf!.pages.map((p) => p.text.replace(/\s+/g, " ")).join(" ");
-  expect(pdf!.pages[0].text.replace(/\s+/g, " ")).toContain(`(${sqft} sq ft)`);
-  expect(pdfText).toContain(`About ${fee}.`);
-  expect(pdfText).toContain(`for about ${sqft} sq ft`);
-  await journey.step("build", async () => {
-    await ws.open("Build");
-    await ws.build().expectOpen();
-  });
-  await journey.step("the answer", async () => {
-    await ws.open("The answer");
-    await expect(page.locator("main.workspace")).toHaveAttribute("data-verdict", /^(yes|fix|no)$/);
-    await expect(ws.answer().verdict).toHaveText(/second home/);
-    await expect(ws.answer().scanned).toBeVisible();
-  });
-
-  await total("the answer", page.locator("section.decision"));
-  // The layouts, the studio, the book and the answer show the same total for the same design.
-  expect(Object.keys(totals)).toHaveLength(5);
-  expect(new Set(Object.values(totals)), JSON.stringify(totals)).toEqual(new Set([totals.book]));
+  // The answer, said with its price; a design used; every Build card to the book.
+  expect(walked.answer?.headline, "the answer's headline").toMatch(/second home/);
+  expect(walked.answer?.said, "the answer's price").toMatch(/roughly \$[\d.,]+k?[–-]\$[\d.,]+k?/);
+  expect(walked.design.recommended, "a layout used").toBeTruthy();
+  expect(walked.stopped, "nothing the walk couldn't get past").toBeNull();
+  expect(walked.build).toEqual(expect.arrayContaining(["permit set", "tape", "owner", "review", "book"]));
+  // A Waterloo house: no water-meter question (Kitchener's, Building Bulletin BB 2026-04).
+  expect(walked.build).not.toContain("water");
+  expectSheets(walked.pdfs.review!);
+  if (walked.pdfs.submit) expectSheets(walked.pdfs.submit);
+  expect(walked.pdfs.book?.pageCount, "the book's pages").toBeGreaterThan(3);
+  expect(await guide.milestone()).toBe("Build");
 
   // ---- Coming back lands where they left off ----
-  await journey.step("back on the pictures, then a return visit", async () => {
-    await flow.back.click();
-    await expect(page).toHaveURL(/\/pictures$/);
-    await flow.pictures().expectOpen();
-    await page.goto("/scans/sample");
-    await expect(page).toHaveURL(/\/pictures$/, { timeout: 30_000 });
+  await journey.step("a return visit", async () => {
+    await page.reload();
+    await guide.expectOpen();
+    await expect(guide.live.locator('[data-card="download"]')).toBeVisible();
+    expect(await guide.milestone()).toBe("Build");
   });
 });

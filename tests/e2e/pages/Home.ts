@@ -13,7 +13,8 @@ export class Home {
   // The hero and the closing call to action both offer these: the first is the hero's.
   async trySample() {
     await this.page.getByRole("button", { name: "Try the example" }).first().click();
-    await this.page.waitForURL("**/scans/sample");
+    // The example's home base, or straight on to its guide.
+    await this.page.waitForURL(/\/scans\/sample(\/guide)?(\?.*)?$/);
   }
 
   async startSheet() {
@@ -41,12 +42,13 @@ export class StartSheet {
     await expect(this.dialog.getByRole("button", { name: label })).toHaveAttribute("aria-pressed", "true");
   }
 
-  // Uploads a video file and waits for the wait screen's URL. Returns the new scan's id.
+  // Uploads a video file and waits for the scan's own page. Returns the new scan's id.
   async upload(videoPath: string): Promise<string> {
     const chooser = this.page.waitForEvent("filechooser");
     await this.dialog.getByRole("button", { name: "Upload a video" }).click();
     await (await chooser).setFiles(videoPath);
-    await this.page.waitForURL(/\/scans\/[0-9a-f-]{36}$/, { timeout: 120_000 });
-    return this.page.url().split("/").pop()!;
+    // The scan's home, or straight on to its guide.
+    await this.page.waitForURL(/\/scans\/[0-9a-f-]{36}(\/guide)?(\?.*)?$/, { timeout: 120_000 });
+    return /\/scans\/([0-9a-f-]{36})/.exec(this.page.url())![1];
   }
 }

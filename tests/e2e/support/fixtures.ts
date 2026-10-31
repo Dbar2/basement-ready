@@ -112,11 +112,16 @@ export async function api<T = any>(page: Page, path: string): Promise<T> {
   return res.json();
 }
 
-// The same, for what only the device that scanned may read (the workspace, the model): with the page's
-// claims, as src/api.ts sends them.
-export async function claimedApi<T = any>(page: Page, path: string): Promise<T> {
+// A scan is private (server/privacy.ts): only the device that made it may read it. The page's claims, as
+// src/api.ts sends them.
+export async function claimsHeader(page: Page): Promise<Record<string, string>> {
   const claims = await page.evaluate(() => localStorage.getItem("br-claims"));
-  const res = await page.request.get(path, { timeout: 60_000, headers: claims ? { "x-claims": encodeURIComponent(claims) } : {} });
+  return claims ? { "x-claims": encodeURIComponent(claims) } : {};
+}
+
+// The same, for a scan's own data: with the page's claims.
+export async function claimedApi<T = any>(page: Page, path: string): Promise<T> {
+  const res = await page.request.get(path, { timeout: 60_000, headers: await claimsHeader(page) });
   expect(res.ok(), `${path} → ${res.status()}`).toBeTruthy();
   return res.json();
 }

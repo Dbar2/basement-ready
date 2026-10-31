@@ -3,21 +3,21 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Home } from "./pages/Home";
-import { WaitScreen } from "./pages/WaitScreen";
-import { api, expect, test } from "./support/fixtures";
+import { Guide } from "./pages/Guide";
+import { claimedApi, expect, test } from "./support/fixtures";
 import { API_PORT, apiCommand, apiEnv, runDir } from "./support/run";
 
-test("a video it can't read: the wait screen says so", async ({ page, journey }, info) => {
+test("a video it can't read: the guide says so", async ({ page, journey }, info) => {
   test.slow(); // the job tries twice, 15 s apart, before it gives up
   // Not a video at all: ffmpeg fails before any model is called, so this is free in every mode.
   const broken = join(runDir, "inputs", `${info.project.name}-broken.mp4`);
   mkdirSync(join(runDir, "inputs"), { recursive: true });
   writeFileSync(broken, "this is not a video\n".repeat(64));
-  // The wait screen plays the video it was given; this one can't play, and the server never makes a copy.
+  // The guide plays the video it was given; this one can't play, and the server never makes a copy.
   journey.allowConsole(/Failed to load resource: the server responded with a status of 404|404 \(Not Found\)/);
 
   const home = new Home(page);
-  const wait = new WaitScreen(page);
+  const guide = new Guide(page);
   await journey.step("home", () => home.open());
   const sheet = (await journey.step("start sheet: who", async () => {
     const s = await home.startSheet();
@@ -25,16 +25,16 @@ test("a video it can't read: the wait screen says so", async ({ page, journey },
     return s;
   }))!;
   const scanId = (await journey.step("broken video uploaded", () => sheet.upload(broken)))!;
-  await journey.step("wait screen", () => wait.expectOpen());
   // The test server runs one scan at a time, so this may wait behind a recorded take: the server's word
-  // first, then the screen must say it promptly.
-  await expect.poll(async () => (await api(page, `/api/scans/${scanId}`)).status, { timeout: 5 * 60_000, intervals: [2_000] }).toBe("error");
-  await journey.step("error shown", async () => {
-    const failed = page.getByRole("alert").filter({ has: page.getByRole("heading", { name: "We couldn't finish this scan" }) });
-    await expect(failed).toBeVisible({ timeout: 15_000 });
-    await expect(failed.getByRole("link", { name: "See the example" })).toBeVisible();
+  // first, then the guide must say it promptly.
+  await expect.poll(async () => (await claimedApi(page, `/api/scans/${scanId}`)).status, { timeout: 5 * 60_000, intervals: [2_000] }).toBe("error");
+  expect((await claimedApi(page, `/api/scans/${scanId}`)).error).toMatch(/^We couldn't read this video/);
+  await journey.step("the guide says so", async () => {
+    await guide.open(scanId);
+    await expect(guide.live).toContainText("We couldn't read this video file. Film again, or upload an MP4 or MOV.", { timeout: 30_000 });
+    // Filming again is the way on; a retry can't read a file that isn't a video.
+    await expect(guide.live.getByRole("button", { name: "Try again" })).toHaveCount(0);
   });
-  expect((await api(page, `/api/scans/${scanId}`)).error).toMatch(/^We couldn't read this video/);
 });
 
 // Over the limit, for real: this journey starts its own API (replay mode, its own database) with the day's
