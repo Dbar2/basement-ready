@@ -270,8 +270,8 @@ describe("one room, one area", () => {
     const design = chosenDesign(model)!;
     const living = design.proposed.rooms.find((r) => r.kind === "living")!;
     const own = floorArea(living, design.proposed.rooms);
-    // The layout draws the living room around the stairs; the stairs aren't living floor.
-    expect(polygonArea(living.polygon) - own).toBeGreaterThan(0.5);
+    // The living room is drawn round the stairs and the kitchen now: none of its outline is theirs.
+    expect(polygonArea(living.polygon) - own).toBeLessThan(0.01);
     const text = `${own.toFixed(1)} m²`;
     expect(sheet(await pdfOf(sample), "A2")).toContain(`LIVING AND DINING ${text}`);
     // The answer's plan (its zones) and the book's plan.

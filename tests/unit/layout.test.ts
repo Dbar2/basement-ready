@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { suggestLayout } from "../../server/layout";
+import { GALLEY_MIN_M2, suggestLayout } from "../../server/layout";
 import type { Plan } from "../../server/plan";
 
 const plan = (over: Partial<Plan> = {}): Plan => ({
@@ -55,13 +55,18 @@ describe("suggested layout", () => {
     expect(l.walls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("makes a studio in a small room", () => {
+  it("makes a studio in a small room, its bathroom on another wall when there's no room beside the bed", () => {
     const l = suggestLayout(plan({ box: { minX: -2.5, maxX: 2.5, minZ: -2.5, maxZ: 2.5 }, widthM: 5, depthM: 5, areaM2: 25, openings: [] }));
     expect(l.kind).toBe("studio");
     expect(l.checks.find((c) => c.label.startsWith("The bedroom has"))!.ok).toBe(false);
-    // Too narrow for a bathroom beside the bed: said plainly, not hidden.
-    expect(l.zones.some((z) => z.kind === "bathroom")).toBe(false);
-    expect(l.checks.find((c) => c.label.includes("bathroom"))!.ok).toBe(false);
+    const bath = l.zones.find((z) => z.kind === "bathroom")!;
+    expect(bath.areaM2).toBeGreaterThanOrEqual(3.5);
+    expect(bath.areaM2).toBeLessThanOrEqual(5);
+    expect(l.checks.some((c) => c.label === "There's room for a bathroom")).toBe(false);
+    // And a galley kitchen: a counter run and the aisle to work in, clear of the bathroom and the bed.
+    const kitchen = l.zones.find((z) => z.kind === "kitchen")!;
+    expect(kitchen.areaM2).toBeGreaterThanOrEqual(GALLEY_MIN_M2);
+    for (const z of l.zones.filter((x) => x.kind === "bathroom" || x.kind === "bedroom")) expect(z.x0 < kitchen.x1 - 0.05 && z.x1 > kitchen.x0 + 0.05 && z.z0 < kitchen.z1 - 0.05 && z.z1 > kitchen.z0 + 0.05, z.name).toBe(false);
   });
 
   it("keeps the stairs and furnace as they are", () => {
