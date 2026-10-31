@@ -205,8 +205,17 @@ export function buildList(input: BuildInput): BuildList {
     });
   }
 
+  // Before they've given anything, whichever permit item comes up first says what the set is and how
+  // much is left (the script has no build intro of its own). Once they've started, each item just asks.
+  const opener = items.find((i) => i.section === "permit" && !i.done);
+  if (opener && !items.some((i) => i.section === "permit" && i.done)) {
+    const left = st.readiness.left;
+    opener.message = `I've drawn and filled your permit set. ${left === 1 ? "One thing is" : `${left} things are`} left before you can hand it in. ${opener.message}`;
+    opener.choices = [{ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } }, ...(opener.choices ?? [])];
+  }
+
   // The money: one item per question that still decides a program, then applying for what fits
-  // before any work starts. Whichever comes first says how much they may be eligible for.
+  // before any work starts. Whichever comes first says how much they may get.
   const worked = input.answers
     ? evaluateMoney(packFor(input.municipality).pack, {
         household: input.household ?? input.result?.household ?? "unsure",
@@ -218,7 +227,7 @@ export function buildList(input: BuildInput): BuildList {
   const money = worked ? { total: worked.total, ifYes: worked.ifYes } : (input.result?.money ?? { total: 0, ifYes: 0 });
   const grants = (worked?.programs ?? input.result?.grants ?? []) as Program[];
   const cash = grants.filter((g) => g.qualify === "yes" && g.value === "cash" && (g.amountCAD ?? 0) > 0);
-  const lead = money.total > 0 ? `You may be eligible for up to ${dollars(money.total)}${cash.length ? ` (${listOf(cash.map((g) => g.shortName))})` : ""}.` : "";
+  const lead = money.total > 0 ? `You may get up to ${dollars(money.total)}${cash.length ? ` (${listOf(cash.map((g) => g.shortName))})` : ""}.` : "";
   const moneyItems: BuildItem[] = [];
   const questions = ((worked?.questions ?? input.result?.moneyQuestions ?? []) as MoneyQuestion[]).filter((q) => q.id !== "household");
   for (const q of questions) {
