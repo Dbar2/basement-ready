@@ -25,17 +25,24 @@
 .bv-checks li { display: grid; grid-template-columns: 16px minmax(0, 1fr); gap: 8px; align-items: center; color: var(--color-ink); }
 .bv-checks li:not([data-done]) { color: var(--color-ink); font-weight: 600; }
 .bv-checks li[data-done] { color: var(--color-ink-muted); }
+.bv-checks li[data-extra] { display: none; }
+.bv-checks li.bv-more { display: block; padding-left: 24px; font-size: 13px; color: var(--color-ink-muted); }
+.bv-note { justify-self: center; }
 .bv-box { width: 14px; height: 14px; border: 1px solid var(--color-ink); display: grid; place-items: center; font-size: 11px; line-height: 1; }
-.bv-checks li[data-done] .bv-box { background: var(--color-ink); color: var(--color-card); transition: background var(--dur-2) var(--ease-out); }
+.bv-checks li[data-done] .bv-checks li[data-extra] { display: none; }
+.bv-checks li.bv-more { display: block; padding-left: 24px; font-size: 13px; color: var(--color-ink-muted); }
+.bv-note { justify-self: center; }
+.bv-box { background: var(--color-ink); color: var(--color-card); transition: background var(--dur-2) var(--ease-out); }
 
 /* The money. */
-.bv-money { display: grid; gap: 14px; max-width: 640px; width: 100%; margin: 0 auto; }
+.bv-money { display: grid; gap: 10px; max-width: 640px; width: 100%; margin: 0 auto; }
 .bv-money-head { display: grid; gap: 4px; }
 .bv-programs { list-style: none; margin: 0; padding: 0; border-top: var(--line-ink); }
-.bv-programs li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; padding: 7px 0; border-bottom: var(--line); font-size: 14px; }
+.bv-programs li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 12px; padding: 5px 0; border-bottom: var(--line); font-size: 14px; }
 .bv-program-name { font-weight: 700; }
 .bv-programs .mono { font-size: var(--text-figure); text-align: right; }
-.bv-program-state { grid-column: 1 / -1; font-size: 13px; color: var(--color-ink-muted); }
+.bv-program-state { grid-column: 1 / -1; font-size: 12px; color: var(--color-ink-muted); }
+@media (min-width: 1000px) { .bv-money { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); align-items: start; gap: 32px; } .bv-programs li { padding: 8px 0; } }
 .bv-programs li[data-qualify="ask"] .bv-program-state { color: var(--color-fix); font-weight: 600; }
 
 /* Who builds it: from the drawings to move-in. */
@@ -49,6 +56,8 @@
 
 @media (min-width: 1000px) {
   .bv-checks { font-size: 15px; gap: 4px; }
+  .bv-checks li[data-extra] { display: grid; }
+  .bv-checks li.bv-more { display: none; }
   .bv-path { grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); max-width: 900px; }
   .bv-path li { grid-template-columns: none; grid-template-rows: auto auto auto; align-content: start; gap: 4px; padding: 14px 12px 14px 0; border-bottom: 0; border-top: var(--line-ink); }
   .bv-path li::after { content: "→"; position: absolute; right: 2px; top: 12px; color: var(--color-ink-muted); }
@@ -56,5 +65,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bv-bar > span, .bv-checks li[data-done] .bv-box { transition: none; }
+  .bv-bar > span, .bv-checks li[data-done] .bv-checks li[data-extra] { display: none; }
+.bv-checks li.bv-more { display: block; padding-left: 24px; font-size: 13px; color: var(--color-ink-muted); }
+.bv-note { justify-self: center; }
+.bv-box { transition: none; }
 }
