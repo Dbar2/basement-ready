@@ -15,6 +15,12 @@ export function DownloadCard(props: CardProps) {
   return <BookCard {...props} />;
 }
 
+// "2026-10-31" as "Oct 31", read as a local day (a bare date would otherwise be read as UTC midnight).
+function dayOf(iso: string) {
+  const [y, m, d] = iso.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+}
+
 // A download's button: busy while the server draws it, an error if it can't.
 function useRun() {
   const [busy, setBusy] = useState<string | null>(null);
@@ -102,10 +108,10 @@ function SubmitCard({ scanId, card, act }: CardProps) {
     );
   return (
     <CardFrame card={card} label="Hand it in">
-      <button type="button" className="btn btn-primary gc-primary" disabled={busy !== null} onClick={() => run("submit", () => downloadPermit(scanId, "submit"))}>
-        {busy === "submit" ? "Making the submit copy…" : "Download the submit copy"}
+      {/* Mint while it's the way on; ink once handed in, when the guide's next button is the one. */}
+      <button type="button" className={handedIn ? "gc-save" : "btn btn-primary gc-primary"} disabled={busy !== null} onClick={() => run("submit", () => downloadPermit(scanId, "submit"))}>
+        {busy === "submit" ? "Making the submit copy…" : "Download the submit copy "}
         <span className="arrow" aria-hidden>
-          {" "}
           ↓
         </span>
       </button>
@@ -116,14 +122,17 @@ function SubmitCard({ scanId, card, act }: CardProps) {
             Open the {permit.portal.label} <span aria-hidden>→</span>
           </a>
           {permit.upload.length > 0 && (
-            <ul className="gc-list gc-upload" aria-label="What to upload, and where it is">
-              {permit.upload.map((u) => (
-                <li key={u.what}>
-                  <span className="gc-list-name">{u.what}</span>
-                  <span className="field-help">{u.where}</span>
-                </li>
-              ))}
-            </ul>
+            <details className="gc-more">
+              <summary>What to upload, and where it is in your set</summary>
+              <ul className="gc-list gc-upload">
+                {permit.upload.map((u) => (
+                  <li key={u.what}>
+                    <span className="gc-list-name">{u.what}</span>
+                    <span className="field-help">{u.where}</span>
+                  </li>
+                ))}
+              </ul>
+            </details>
           )}
         </>
       )}
@@ -139,7 +148,7 @@ function SubmitCard({ scanId, card, act }: CardProps) {
       )}
       <Problem text={error} />
       {handedIn ? (
-        <Saved>Handed in {new Date(handedIn).toLocaleDateString("en-CA", { month: "short", day: "numeric" })}</Saved>
+        <Saved>{example ? "Done" : `Handed in ${dayOf(handedIn)}`}</Saved>
       ) : (
         <button
           type="button"
@@ -147,7 +156,8 @@ function SubmitCard({ scanId, card, act }: CardProps) {
           disabled={busy !== null}
           onClick={() =>
             run("in", async () => {
-              await savePermit(scanId, { submittedAt: new Date().toISOString().slice(0, 10) });
+              // Today here, not in UTC: a hand-in at 9 PM in Waterloo is still today.
+              await savePermit(scanId, { submittedAt: new Date().toLocaleDateString("en-CA") });
               act({ type: "permitItem", itemId: "submit", value: { said: example ? "Done with the example's permit set" : "I've handed it in" } });
             })
           }

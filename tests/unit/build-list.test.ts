@@ -36,10 +36,11 @@ describe("the Build milestone's list", () => {
   it("starts at the tape, says what the set is and how much is left, and ends at the book", () => {
     const l = sampleBuildList({ profile: null, state: {} });
     expect(l.next.step).toBe("build.permit:tape");
-    expect(l.next.message).toMatch(/^I've drawn and filled your permit set from the scan\. \d+ things are left before you can hand it in\./);
+    expect(l.next.message).toMatch(/^I've drawn and filled your permit set\. \d+ things are left before you can hand it in\./);
     expect(l.next.choices?.[0]).toEqual({ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } });
     expect(l.next.card).toEqual({ kind: "tape", id: "tape" });
     expect(l.next.why).toBeTruthy();
+    expect(l.items.at(-1)!.why).toBe("");
     expect(steps(l)).toEqual(["build.permit:tape", expect.stringMatching(/^build\.permit:window:/), "build.permit:owner", "build.permit:upstairs", "build.permit:review", "build.money:apply", "build.builders", "build.submit", "done"]);
     expect(l.permit).toMatchObject({ ready: 0, canSubmit: false, city: "Waterloo", authority: "City of Waterloo" });
     expect(l.permit.total).toBeGreaterThan(5);
@@ -55,8 +56,9 @@ describe("the Build milestone's list", () => {
 
     state = taped(state);
     expect(next().step).toBe("build.permit:owner");
-    // Only the first open permit item carries the opening line.
-    expect(next().message).toMatch(/^I've drawn and filled your permit set/);
+    // The opening line is said once, before anything is given.
+    expect(next().message).not.toMatch(/drawn and filled/);
+    expect(next().choices?.some((c) => c.label === "What's a permit set?")).toBe(false);
 
     profile = OWNER;
     expect(next().step).toBe("build.permit:upstairs");
@@ -120,7 +122,8 @@ describe("the Build milestone's list", () => {
     const l = sampleBuildList({ profile: null, state: taped({}) });
     for (const i of l.items) {
       expect(`${i.message} ${i.why}`).not.toMatch(/qualif|approved/i);
-      expect(i.why.length).toBeGreaterThan(10);
+      // Every question says why; the last step asks nothing.
+      if (i.step !== "done") expect(i.why.length).toBeGreaterThan(10);
     }
   });
 });

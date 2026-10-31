@@ -8,21 +8,22 @@
 .gc-loading { margin: 0; font-size: var(--text-small); color: var(--color-ink-muted); }
 .gc-form { display: grid; gap: 10px; }
 .gc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.gc-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 10px; }
+.gc-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px 10px; }
 .gc-wide { grid-column: 1 / -1; }
 .gc-field { display: grid; gap: 4px; min-width: 0; }
 .gc-field > span:first-child { font-size: 13px; font-weight: 600; }
-.gc-field .input, .gc-mm .input, .gc-quote .input { min-height: 44px; padding: 8px 10px; }
+.gc-field .input, .gc-quote .input { min-height: 44px; padding: 8px 10px; }
 .gc-short { max-width: 200px; }
+.gc .field-help { font-size: 12px; line-height: 1.35; }
 .gc-add { justify-self: start; font-size: var(--text-small); }
 
-/* Numbers in millimetres. */
-.gc-mm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-.gc-mm { display: grid; gap: 4px; align-content: start; }
-.gc-mm-label { font-size: 13px; font-weight: 600; }
-.gc-mm-input { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 6px; }
-.gc-mm-input .input { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
-.gc-mm-input .mono { font-size: var(--text-figure); color: var(--color-ink-muted); }
+/* Numbers in millimetres: one line each. */
+.gc-mm-rows { display: grid; gap: 6px; }
+.gc-mm { display: grid; grid-template-columns: minmax(0, 1fr) 112px auto; align-items: center; gap: 8px; }
+.gc-mm-label { font-size: 14px; font-weight: 600; line-height: 1.25; }
+.gc-mm .input { min-height: 44px; padding: 6px 10px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.gc-mm .input::placeholder { color: var(--color-ink-muted); opacity: 0.7; }
+.gc-mm .mono { font-size: var(--text-figure); color: var(--color-ink-muted); }
 
 /* Buttons: ink fill, the card's own colour on it. */
 .gc-save { justify-self: start; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--color-ink); border-radius: var(--radius-2); background: var(--color-ink); color: var(--color-card); font: 700 15px var(--font-body); cursor: pointer; }
@@ -30,6 +31,7 @@
 .gc-save:disabled { opacity: 0.45; cursor: default; }
 .gc-primary { justify-self: start; min-height: 48px; }
 .gc .chip { min-height: 40px; text-decoration: none; }
+.gc > .link-quiet, .gc-form > .link-quiet { justify-self: start; text-align: left; }
 
 /* Saved: one line, with "Change". */
 .gc-saved { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
@@ -43,7 +45,7 @@
 .gc-list-name { font-weight: 700; }
 .gc-list-name .mono, .gc-list > li > .mono { font-size: var(--text-figure); font-weight: 400; color: var(--color-ink-muted); }
 .gc-apps > li[data-answered] { opacity: 0.8; }
-.gc-sheets { display: grid; gap: 2px; }
+.gc-sheets { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 2px 12px; }
 .gc-sheets .link-quiet { font-size: var(--text-small); font-weight: 500; text-align: left; }
 .gc-sheets .mono { font-size: var(--text-figure); margin-right: 6px; }
 .gc-links { display: grid; gap: 4px; font-size: var(--text-small); }

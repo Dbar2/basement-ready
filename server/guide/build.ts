@@ -16,14 +16,14 @@ import type { MoneyQuestion, Program } from "../eligibility";
 import { permitStatus } from "../permit/package";
 import type { ReadyItem } from "../permit/readiness";
 import { pricedForBasement, pricedSample } from "../priced";
-import { loadWorkspace, type Profile, type StoredState } from "../workspace";
+import { loadWorkspace, ProfileSchema, StateSchema, type Profile, type StoredState } from "../workspace";
 
 export type BuildSection = "permit" | "money" | "builders" | "done";
 export type BuildItem = {
   step: StepId; // "build.permit:<id>", "build.submit", "build.money:<question>", "build.builders", "done"
   section: BuildSection;
   message: string;
-  why: string;
+  why: string; // "" on the last step, where nothing is asked
   card?: CardRef;
   choices?: Choice[];
   visual: VisualRef;
@@ -85,7 +85,7 @@ export function buildList(input: BuildInput): BuildList {
       step: "build.permit:tape",
       section: "permit",
       message: `Grab a tape measure: ${listOf(what)}.`,
-      why: "The video's sizes are close; the City's drawings need measured ones, and every size on them comes from these.",
+      why: "The City's drawings need measured sizes, and every size on them comes from these.",
       card: { kind: "tape", id: "tape" },
       choices: [LATER],
       visual: PERMIT,
@@ -192,11 +192,12 @@ export function buildList(input: BuildInput): BuildList {
     });
   }
 
-  // Whichever permit item comes up first says what the set is and how much is left.
+  // Before they've given anything, whichever permit item comes up first says what the set is and how
+  // much is left. Once they've started, each item just asks.
   const opener = items.find((i) => i.section === "permit" && !i.done);
-  if (opener) {
+  if (opener && !items.some((i) => i.section === "permit" && i.done)) {
     const left = st.readiness.left;
-    opener.message = `I've drawn and filled your permit set from the scan. ${left === 1 ? "One thing is" : `${left} things are`} left before you can hand it in. ${opener.message}`;
+    opener.message = `I've drawn and filled your permit set. ${left === 1 ? "One thing is" : `${left} things are`} left before you can hand it in. ${opener.message}`;
     opener.choices = [{ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } }, ...(opener.choices ?? [])];
   }
 
@@ -247,7 +248,7 @@ export function buildList(input: BuildInput): BuildList {
     step: "build.builders",
     section: "builders",
     // With nothing to answer or apply for, the money is said here, on the way past.
-    message: `${!firstMoney && lead ? `${lead} ` : ""}Who builds it? Hire a contractor to run it, run it yourself with licensed trades for some of it, or do it all yourself.`,
+    message: `${!moneyItems.length && lead ? `${lead} ` : ""}Who builds it? Hire a contractor to run it, run it yourself with licensed trades for some of it, or do it all yourself.`,
     why: "It changes the cost, who pulls which permit, and who you call. I'll line up the public registries and write the quote requests.",
     card: { kind: "buildPath", id: "path" },
     choices: [LATER],
@@ -272,8 +273,9 @@ export function buildList(input: BuildInput): BuildList {
   items.push({
     step: "done",
     section: "done",
-    message: "That's everything I need from you. Your book has the answer, your design, the permit set and the money in one PDF.",
-    why: "Share it with a designer or a contractor so they can quote without a first visit.",
+    message: "That's everything I need from you. Your book has the answer, your design, the permit set and the money in one PDF, to share with a designer or a contractor so they can quote without a first visit.",
+    // Nothing is asked here, so there's no "why".
+    why: "",
     card: { kind: "download", id: "book" },
     choices: [{ label: "Back to your basement", action: { type: "go", to: "home" }, primary: true }],
     visual: PERMIT,
@@ -306,8 +308,13 @@ export async function buildListFor(scanId: string): Promise<BuildList | null> {
   return buildList({ result: priced, municipality: basement.municipality, state: ws.state, profile: ws.profile });
 }
 
-// The example's list, from the workspace and money answers its browser keeps.
-export function sampleBuildList(ws: { profile: Profile | null; state: StoredState }, answers: Record<string, unknown> = {}): BuildList {
-  const result = pricedSample(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), ws.state, answers as never);
-  return buildList({ result, municipality: "waterloo-on", state: ws.state, profile: ws.profile });
+// The example's list, from the workspace and money answers its browser keeps. Checked the way the
+// example's permit routes check it (server/workspaceRoutes.ts sampleBody): the drawings' fingerprint
+// follows the checked shape, so a sheet looked over there counts here too.
+export function sampleBuildList(ws: { profile: unknown; state: unknown }, answers: Record<string, unknown> = {}): BuildList {
+  const p = ProfileSchema.safeParse(ws.profile);
+  const s = StateSchema.safeParse(ws.state ?? {});
+  const state: StoredState = s.success ? s.data : {};
+  const result = pricedSample(JSON.parse(readFileSync("public/samples/sample/result.json", "utf8")), state, answers as never);
+  return buildList({ result, municipality: "waterloo-on", state, profile: p.success ? p.data : null });
 }
