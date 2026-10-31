@@ -18,7 +18,7 @@ vi.mock("../../server/scan3d", async (orig) => ({
 }));
 vi.mock("../../server/limits", () => ({ overSpend: vi.fn(async () => false) }));
 
-const { readBasementPlan, toEdits, inside, applyWatch } = await import("../../server/floorplan");
+const { readBasementPlan, measureBasementPlan, measuredPlan, reviewBasementPlan, toEdits, inside, applyWatch } = await import("../../server/floorplan");
 const { runFloorPlan } = await import("../../server/scan3d");
 
 // The main room 6 × 4 m, a 1.2 × 2.4 m low room beside it behind a 12 cm partition with a door, a stair
@@ -127,7 +127,7 @@ describe("Spark's corrections, checked by the points", () => {
     });
     const b = { scans: [], tracked: { cameras: [[0, 1.4, 0]], plan: {} } } as unknown as BasementScan;
     const logs: string[] = [];
-    const out = (await readBasementPlan("/nowhere", b, [], { ask, log: async (t) => void logs.push(t) }))!;
+    const out = (await readBasementPlan("/nowhere", b, [], { ask, rounds: 2, log: async (t) => void logs.push(t) }))!;
     expect(ask).toHaveBeenCalledTimes(2);
     expect(asked).toEqual([2, 1]); // the second look sees the merged plan
     expect(out.rooms).toHaveLength(1);
@@ -135,6 +135,24 @@ describe("Spark's corrections, checked by the points", () => {
     expect(out.walls.find((w) => w.id === "w4")!.guess).toBe(true);
     expect(out.review).toMatchObject({ rounds: 2, note: "The low room looks open to the main room." });
     expect(logs).toContain("Kept 1 of 2 corrections the 3D agreed with");
+  });
+
+  it("looks once by default, and gives up on Spark after the cap with the plan as measured", async () => {
+    plans.push(plan());
+    const b = { scans: [], tracked: { cameras: [[0, 1.4, 0]], plan: {} } } as unknown as BasementScan;
+    const read = (await measureBasementPlan("/nowhere", b, []))!;
+    // A Spark that never answers: the review ends when its signal does.
+    const stuck = vi.fn((_p: BasementPlan, _r: unknown, _s: string, _w: unknown, signal?: AbortSignal) => new Promise<never>((_, reject) => signal!.addEventListener("abort", () => reject(signal!.reason))));
+    const t0 = Date.now();
+    expect(await reviewBasementPlan(read, b, { ask: stuck as never, timeoutMs: 50 })).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(2000);
+    expect(stuck).toHaveBeenCalledTimes(1);
+    // Nothing to change: no new plan to write over the measured one.
+    const quiet = vi.fn(async () => ({ corrections: [], unsure: [], note: "" }));
+    expect(await reviewBasementPlan(read, b, { ask: quiet })).toBeNull();
+    expect(quiet).toHaveBeenCalledTimes(1);
+    // The measured plan goes out as read, with no review on it.
+    expect(measuredPlan(read, b).review).toBeNull();
   });
 
   it("reads without Spark when asked not to review", async () => {
@@ -174,6 +192,18 @@ describe("the whole-take watch on the plan", () => {
     expect(p.rooms[0].name).toBe("the gym");
     expect(p.rooms[1]).toMatchObject({ name: "Closet", kind: "closet" });
     expect(missing.map((r) => r.name)).toEqual(["Furnace room"]);
+  });
+
+  it("types a room the watch named for what it is, with no wait for Spark", () => {
+    const p = looked();
+    Object.assign(p.rooms[0], { kind: "other" });
+    applyWatch(p, { ...watch, rooms: [{ ...watch.rooms[0], name: "Laundry room", spokenName: undefined }] }, cams, frames);
+    expect(p.rooms[0]).toMatchObject({ name: "Laundry room", kind: "laundry" });
+    // A name that says nothing about the room leaves its kind alone.
+    const q = looked();
+    Object.assign(q.rooms[0], { kind: "other" });
+    applyWatch(q, { ...watch, rooms: [{ ...watch.rooms[0], name: "Bedroom", spokenName: undefined }] }, cams, frames);
+    expect(q.rooms[0].kind).toBe("other");
   });
 
   it("tells the planner to look for a room nobody went into, and says which it couldn't place", async () => {
@@ -216,5 +246,33 @@ describe("one floor for every area", () => {
     const out = mergeMesh([{ mesh: buf, placement: { turn: 0, x: 0, z: 0, y: -0.04 }, rect }], [rect]);
     const pos = new Int16Array(out.buffer.slice(out.byteOffset + 24, out.byteOffset + 42));
     expect([pos[1], pos[4], pos[7]]).toEqual([-40, -40, -40]);
+  });
+});
+
+describe("an app take's sizes on the wait screen", () => {
+  const rough = { ceilingHeightM: 2.19, widthM: 2.4, depthM: 1.4, scaleSource: "arkit", confidence: "high", expectedErrorPct: 5, pass: null, trusted: false, warnings: [], clearances: [] } as const;
+  const area = (index: number, name: string) => ({ index, name, startS: 0, endS: 10, has3d: true, plan: null, measurements: { ...rough }, placement: null });
+
+  it("are the plan's rooms, by the watch's names, not each stretch of the walk", async () => {
+    const { sizeLines } = await import("../../server/pipeline");
+    const p = plan();
+    p.rooms[0].name = "Bedroom";
+    p.rooms[1].name = "Laundry room";
+    const lines = sizeLines(p, [area(0, "Bedroom"), area(1, "Room 2")]).map((l) => l.text);
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toMatch(/^Bedroom: ceiling 2\.\d\d m · [\d.]+ m², 6\.0 × 4\.0 m/);
+    // The first stretch of the walk alone (2.4 × 1.4 m) isn't a room.
+    expect(lines.join(" ")).not.toContain("2.4 × 1.4");
+  });
+
+  it("say a tape fixes a rough size: re-filming slowly doesn't, with the phone's own tracking", async () => {
+    const { caveatFor, sizeLines } = await import("../../server/pipeline");
+    expect(caveatFor({ ...rough })).toBe(" (rough: a tape measurement fixes it)");
+    expect(caveatFor({ ...rough, scaleSource: "model" })).toBe(" (rough: re-film slowly for exact sizes)");
+    expect(caveatFor({ ...rough, scaleSource: "model" }, true)).toBe(" (rough: a tape measurement fixes it)");
+    expect(caveatFor({ ...rough, trusted: true })).toBe("");
+    expect(sizeLines(plan(), [area(0, "Bedroom")]).every((l) => l.text.endsWith("(rough: a tape measurement fixes it)"))).toBe(true);
+    // Without a plan, each area's own line, as before.
+    expect(sizeLines(null, [area(0, "Bedroom")])[0].text).toBe("Measured ceiling 2.19 m · 2.4 × 1.4 m (rough: a tape measurement fixes it)");
   });
 });
