@@ -127,3 +127,67 @@ describe("the Build milestone's list", () => {
     }
   });
 });
+
+// A real scan: the example's answer stored as a scan, its workspace saved the way the cards save it
+// (PUT /api/scans/:id/workspace: cleanPatch, then saveWorkspace), and its permit status read the way
+// GET /permit/status reads it (the stored result).
+describe("a real scan's list, from the database", () => {
+  it("gets from the answer to the submit copy, and the submit copy builds", async () => {
+    const { db, migrateDb, schema } = await import("../../server/db");
+    const { buildListFor } = await import("../../server/guide/build");
+    const { cleanPatch, loadWorkspace, saveWorkspace } = await import("../../server/workspace");
+    const { buildPermitPackage } = await import("../../server/permit/package");
+    await migrateDb();
+    const result = JSON.parse(readFileSync("public/samples/sample/result.json", "utf8"));
+    const [b] = await db.insert(schema.basements).values({ claimToken: "claim-token-build-f", household: "relative", municipality: "waterloo-on" }).returning();
+    const [s] = await db.insert(schema.scans).values({ basementId: b.id, status: "done", result }).returning();
+    const put = async (body: unknown) => {
+      const patch = cleanPatch(body);
+      if ("error" in patch) throw new Error(patch.error);
+      const now = await loadWorkspace(b.id);
+      await saveWorkspace(b.id, { ...patch, state: patch.state ? { ...now.state, ...patch.state } : undefined });
+    };
+    const status = async () => {
+      const w = await loadWorkspace(b.id);
+      return permitStatus({ result, municipality: "waterloo-on", state: w.state, profile: w.profile });
+    };
+
+    expect((await buildListFor(s.id))!.next.step).toBe("build.permit:tape");
+    await put({ state: taped({}) });
+    await put({ profile: OWNER });
+    const w = await loadWorkspace(b.id);
+    await put({ state: { permit: { ...w.state.permit, upstairs: { bedrooms: [], none: true } } } });
+    expect((await buildListFor(s.id))!.next.step).toBe("build.permit:review");
+    // "Every sheet matches my basement", with the key the status route gives the card.
+    const st = await status();
+    const w2 = await loadWorkspace(b.id);
+    await put({ state: { permit: { ...w2.state.permit, reviewed: st.sheets.map((x) => ({ sheet: x.number, key: st.reviewKey })) } } });
+
+    let list = (await buildListFor(s.id))!;
+    expect(list.permit.canSubmit).toBe(true);
+    // The money questions: each answered with its first choice, through the answers code the guide's
+    // { type: "answer" } goes through. Then the applications and who builds it, as their cards save them.
+    const { saveAnswer, savedAnswers } = await import("../../server/answers");
+    const { pricedForBasement } = await import("../../server/priced");
+    for (let guard = 0; guard < 12 && list.next.step !== "build.submit"; guard++) {
+      const item = list.next;
+      if (item.step === "build.money:apply") {
+        // "Not for me" on each program that applies before work, as the apply card saves it.
+        const priced = (await pricedForBasement(s.id, b.id, { ...result, household: "relative" }, await savedAnswers(b.id))) as { grants: { id: string; qualify: string; apply: { when: string } | null }[] };
+        const first = priced.grants.filter((g) => g.qualify === "yes" && g.apply && (g.apply.when === "before_work" || g.apply.when === "at_permit"));
+        await put({ state: { apply: Object.fromEntries(first.map((g) => [g.id, { sentAt: null }])) } });
+      } else if (item.step.startsWith("build.money:")) {
+        const choice = item.choices![0].action as { questionId: string; value: unknown };
+        await saveAnswer(b.id, choice.questionId, choice.value as never);
+      } else if (item.step === "build.builders") await put({ state: { build: { path: "diy" } } });
+      else throw new Error(`Stuck at ${item.step}`);
+      list = (await buildListFor(s.id))!;
+    }
+    expect(list.next.step).toBe("build.submit");
+    expect(list.next.card).toEqual({ kind: "download", id: "submit" });
+
+    const final = await loadWorkspace(b.id);
+    const out = await buildPermitPackage({ result, municipality: "waterloo-on", address: "1 Example St", profile: final.profile, state: final.state, site: null, aerialJpeg: null, favourites: [], copy: "submit" });
+    expect(out.bytes.byteLength).toBeGreaterThan(10_000);
+  });
+});
