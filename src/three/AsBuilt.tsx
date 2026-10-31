@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import type { Design, Existing, Pt } from "../../server/model/types";
 import { buildAsBuilt, pointAt, type AsBuilt, type Block, type Surface } from "./AsBuiltModel";
+import { Tag } from "./Tags";
 
 // services/scan3d/scan3d/texture.py `paint`: where each surface sits in the atlas.
 export type AtlasEntry = { key: string; rect: [number, number, number, number]; coverage: number; frames?: number[]; shiftM?: number };
@@ -201,6 +202,7 @@ export function AsBuiltScene({
   overview = false,
   reveal = true,
   lights = true,
+  labels = false,
   onLoaded,
 }: {
   existing: Existing;
@@ -210,6 +212,7 @@ export function AsBuiltScene({
   overview?: boolean;
   reveal?: boolean;
   lights?: boolean;
+  labels?: boolean; // name the beams, ducts and bulkheads and the headroom under each (inside a <TagRoot>)
   onLoaded?: (size: number) => void; // each time a sharper atlas is on
 }) {
   // Rebuilt only when the design changes the house itself (a wall gone, an opening cut, or its new
@@ -270,6 +273,16 @@ export function AsBuiltScene({
         <mesh geometry={geo.plainCeilings} material={mats.plain} frustumCulled={false} />
         <mesh geometry={geo.well} material={mats.blocks} frustumCulled={false} />
       </group>
+      {labels &&
+        model.blocks
+          .filter((b) => b.label)
+          .map((b) => (
+            <Tag key={b.id} position={[b.center[0], b.center[1] - b.size[1] / 2 - 0.08, b.center[2]]} priority={1}>
+              <span className="viewer-tag" data-kind="mechanical">
+                <i /> {b.label}
+              </span>
+            </Tag>
+          ))}
     </>
   );
 }
