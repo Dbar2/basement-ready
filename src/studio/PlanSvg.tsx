@@ -249,7 +249,9 @@ export function PlanSvg(props: {
       const short = `${FIXTURE_NAME[f.kind].toUpperCase()}${f.heightM != null ? ` · ${fmtLength(f.heightM, units)} CLEAR` : ""}`;
       const along = w >= h ? [0, -0.3, 0.3, -0.15, 0.15].map((t): [number, number] => [cx + t * w, cy + 5 * q]) : [0, -0.3, 0.3].map((t): [number, number] => [cx, cy + 5 * q + t * h]);
       const beside = w >= h ? [[cx, cy - h / 2 - 8 * q], [cx, cy + h / 2 + 20 * q], [cx - 0.3 * w, cy - h / 2 - 8 * q], [cx + 0.3 * w, cy + h / 2 + 20 * q]] : [[cx + w / 2 + 70 * q, cy + 5 * q], [cx - w / 2 - 70 * q, cy + 5 * q]];
-      return { id: f.id, text: short + (f.guess ? " · DRAG TO PLACE" : ""), short, size: T.tag, spots: [...along, ...(beside as [number, number][])] };
+      // In a pane, inside the walls: the long label gives way to the short one before it runs over a wall.
+      const walls = u ? { x0: X(all.minX) + 2 * u, y0: Z(all.minZ) + 2 * u, x1: X(all.maxX) - 2 * u, y1: Z(all.maxZ) - 2 * u } : undefined;
+      return { id: f.id, text: short + (f.guess ? " · DRAG TO PLACE" : ""), short, size: T.tag, spots: [...along, ...(beside as [number, number][])], within: walls };
     }
     if (f.kind === "stairs") return { id: f.id, text: "STAIRS", size: T.tag, spots: [[cx, cy + 5 * q], [cx, cy - h / 2 - 8 * q], [cx, cy + h / 2 + 20 * q]] };
     const box = Math.max(22 * q, Math.max(w, h));

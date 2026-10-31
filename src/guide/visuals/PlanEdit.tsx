@@ -20,13 +20,15 @@ import { along, bounds, centroid, inPolygon, polygonArea, wallLength } from "../
 import type { Edit, Existing, Fixture, Model, Pt, Room, RoomKind, Wall } from "../../../server/model/types";
 import { designsFor, loadModel, saveModel } from "../../studio/api";
 import { useHistory } from "../../studio/history";
-import { placeCallout } from "../../studio/labels";
+import { placeCalloutAlong } from "../../studio/labels";
 import { LengthInput } from "../../studio/LengthInput";
 import { FIXTURE_NAME, frameOf, planScale, PlanSvg, type Fit, type Picked } from "../../studio/PlanSvg";
+import type { VisualProps } from "../mount";
+import type { GuideAction } from "../types";
 import "./plan-edit.css";
 
-// The guide's actions this editor carries out (src/guide/types.ts, GuideAction).
-export type PlanAction = { type: "setWall"; wallId: string; lengthM: number } | { type: "confirmPlan" };
+// The guide's actions this editor carries out.
+export type PlanAction = Extract<GuideAction, { type: "setWall" | "confirmPlan" }>;
 
 const ROOM_KINDS: { kind: RoomKind; label: string }[] = [
   { kind: "bedroom", label: "Bedroom" },
@@ -93,7 +95,8 @@ async function confirmed(model: Model): Promise<Model> {
 
 // ---- the pane ----
 
-export function PlanEdit({ scanId }: { scanId: string }) {
+// Mounted as the guide's "planEdit" visual (src/guide/mount.tsx); the old /plan page passes the scan alone.
+export function PlanEdit({ scanId }: Pick<VisualProps<"planEdit">, "scanId">) {
   const [model, setModel] = useState<Model | null>(null);
   const [photos, setPhotos] = useState(false);
   const [check, setCheck] = useState<ScanResult["planCheck"]>(null);
@@ -276,11 +279,23 @@ function Editor({ scanId, model, photos, check }: { scanId: string; model: Model
     const b = bounds(r.polygon);
     return [Math.min(b.maxX - 0.3, roomAt(r)[0] + 0.9), Math.max(b.minZ + 0.3, roomAt(r)[1] - 0.5)];
   };
-  const anchor = (f: Focus): Pt | null => {
+  // Where the callout's leader may point: the middle, else a quarter from either end of a wall or a duct.
+  const thirds = (a: Pt, b: Pt): Pt[] => [0.5, 0.25, 0.75].map((t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+  const anchors = (f: Focus): Pt[] => {
     if (f.kind === "wall") {
       const w = e.walls.find((x) => x.id === f.id);
-      return w ? [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2] : null;
+      return w ? thirds(w.a, w.b) : [];
     }
+    if (f.kind === "fixture") {
+      const x = e.fixtures.find((y) => y.id === f.id);
+      if (!x) return [];
+      const [sx, sz] = x.sizeM ?? [0.4, 0.4];
+      return sx >= sz ? thirds([x.at[0] - sx / 2, x.at[1]], [x.at[0] + sx / 2, x.at[1]]) : thirds([x.at[0], x.at[1] - sz / 2], [x.at[0], x.at[1] + sz / 2]);
+    }
+    const p = anchor(f);
+    return p ? [p] : [];
+  };
+  const anchor = (f: Focus): Pt | null => {
     if (f.kind === "room") {
       const r = e.rooms.find((x) => x.id === f.id);
       return r ? roomAt(r) : null;
@@ -290,13 +305,12 @@ function Editor({ scanId, model, photos, check }: { scanId: string; model: Model
       const w = o && e.walls.find((x) => x.id === o.wallId);
       return o && w ? along(w, o.offsetM) : null;
     }
-    if (f.kind === "fixture") return e.fixtures.find((x) => x.id === f.id)?.at ?? null;
     const q = "i" in f ? check?.questions[f.i] : null;
     return q ? pinAt(q) : null;
   };
 
   const areaText = `${rough ? "About " : ""}${fmtArea(area, units)}`;
-  const at = shown && size ? anchor(shown) : null;
+  const at = shown && size ? anchors(shown).map(px) : [];
 
   return (
     <div className="plan-edit" ref={pane} onKeyDown={keys}>
@@ -382,8 +396,8 @@ function Editor({ scanId, model, photos, check }: { scanId: string; model: Model
         ) : null}
       </p>
 
-      {shown && at && size && (
-        <CalloutFrame key={`${shown.kind}:${"id" in shown ? shown.id : shown.i}`} at={px(at)} pane={size} enter={enter} onClose={() => close()} className={tapeAsk ? "tape-ask" : undefined} title={title(shown)}>
+      {shown && at.length > 0 && size && (
+        <CalloutFrame key={`${shown.kind}:${"id" in shown ? shown.id : shown.i}`} at={at} pane={size} enter={enter} onClose={() => close()} className={tapeAsk ? "tape-ask" : undefined} title={title(shown)}>
           {body(shown)}
         </CalloutFrame>
       )}
@@ -417,21 +431,12 @@ function Editor({ scanId, model, photos, check }: { scanId: string; model: Model
       if (!o) return null;
       return (
         <>
-          <p>
-            {o.guess ? "About " : ""}
-            <span className="mono">{fmtLength(o.widthM, units)}</span> wide
-            {o.heightM ? (
-              <>
-                , <span className="mono">{fmtLength(o.heightM, units)}</span> tall
-              </>
-            ) : null}
-            . {o.guess && o.kind === "window" ? "Seen on the video, but not where it is: drag it to its place." : "Drag its knob along the wall."}
-          </p>
-          <LengthInput compact="label" label="Its width by tape" units={units} onSubmit={(m) => edit({ op: "set_opening", openingId: o.id, widthM: m })} cta="Set the width" />
-          {o.kind === "window" && <LengthInput compact="label" label="Its height by tape" units={units} onSubmit={(m) => edit({ op: "set_opening", openingId: o.id, heightM: m })} cta="Set the height" />}
+          {o.guess && <p>{o.kind === "window" ? "Seen on the video, not where it is: drag its knob into place." : "Its width is a guess: a tape number fixes it."}</p>}
+          <LengthInput compact="label" label="Its width by tape" placeholder={fmtLength(o.widthM, units)} units={units} onSubmit={(m) => edit({ op: "set_opening", openingId: o.id, widthM: m })} cta="Set the width" />
+          {o.kind === "window" && <LengthInput compact="label" label="Its height by tape" placeholder={o.heightM ? fmtLength(o.heightM, units) : units === "m" ? "0.60 m" : `2' 0"`} units={units} onSubmit={(m) => edit({ op: "set_opening", openingId: o.id, heightM: m })} cta="Set the height" />}
           <div className="plan-callout-links">
             <button className="link-quiet link-stop" onClick={() => (edit({ op: "remove_opening", openingId: o.id }), setFocus(null))}>
-              It isn't there
+              Not there
             </button>
           </div>
         </>
@@ -553,15 +558,7 @@ function FixtureBody({ f, e, units, edit, clear }: { f: Fixture; e: Existing; un
   const overhead = f.kind === "beam" || f.kind === "duct" || f.kind === "bulkhead";
   return (
     <>
-      <p>
-        {f.guess ? "We saw it on video but not exactly where it runs: drag it into place." : "Drag it if it's not quite there."}
-        {f.heightM != null && (
-          <>
-            {" "}
-            <span className="mono">{fmtLength(f.heightM, units)}</span> from the floor to its underside.
-          </>
-        )}
-      </p>
+      {f.guess && <p>Seen on the video, not where it runs: drag it into place.</p>}
       {overhead && (
         <>
           <div className="plan-callout-kinds" role="radiogroup" aria-label="What it is">
@@ -571,17 +568,17 @@ function FixtureBody({ f, e, units, edit, clear }: { f: Fixture; e: Existing; un
               </button>
             ))}
           </div>
-          <LengthInput compact="label" label="Floor to its underside, by tape" units={units} onSubmit={(m) => edit({ op: "set_fixture", fixtureId: f.id, heightM: m })} cta="Set it" />
+          <LengthInput compact="label" label="Floor to its underside, by tape" placeholder={fmtLength(f.heightM ?? 1.95, units)} units={units} onSubmit={(m) => edit({ op: "set_fixture", fixtureId: f.id, heightM: m })} cta="Set it" />
         </>
       )}
       <div className="plan-callout-links">
         {overhead && (
           <button className="link-quiet" onClick={() => edit(turnAcross(e, f))}>
-            It runs the other way
+            Runs the other way
           </button>
         )}
         <button className="link-quiet link-stop" onClick={() => (edit({ op: "remove_fixture", fixtureId: f.id }), clear())}>
-          That's not there
+          Not there
         </button>
       </div>
     </>
@@ -589,7 +586,7 @@ function FixtureBody({ f, e, units, edit, clear }: { f: Fixture; e: Existing; un
 }
 
 // The callout on its leader, beside the point it's about and inside the pane.
-function CalloutFrame({ at, pane, title, enter, onClose, className, children }: { at: [number, number]; pane: { w: number; h: number }; title: string; enter: boolean; onClose: () => void; className?: string; children: ReactNode }) {
+function CalloutFrame({ at, pane, title, enter, onClose, className, children }: { at: [number, number][]; pane: { w: number; h: number }; title: string; enter: boolean; onClose: () => void; className?: string; children: ReactNode }) {
   const box = useRef<HTMLDivElement>(null);
   const [h, setH] = useState(132);
   const w = Math.min(232, pane.w - 16);
@@ -599,12 +596,12 @@ function CalloutFrame({ at, pane, title, enter, onClose, className, children }: 
   useEffect(() => {
     if (enter) box.current?.querySelector<HTMLElement>("input, button:not(.plan-callout-x)")?.focus();
   }, [enter]);
-  const c = placeCallout(at, { w, h }, { w: pane.w, h: pane.h, top: EDGE.top, bottom: 8 });
+  const c = placeCalloutAlong(at, { w, h }, { w: pane.w, h: pane.h, top: EDGE.top, bottom: 8 });
   return (
     <>
       <svg className="plan-leader" width={pane.w} height={pane.h} aria-hidden="true">
         <polyline points={c.leader.map((p) => p.join(",")).join(" ")} />
-        <circle cx={at[0]} cy={at[1]} r={3} />
+        <circle cx={c.at[0]} cy={c.at[1]} r={3} />
       </svg>
       <div ref={box} className={`plan-callout${className ? ` ${className}` : ""}`} role="dialog" aria-label={title} style={{ left: c.x, top: c.y, width: w }}>
         <div className="plan-callout-head">
