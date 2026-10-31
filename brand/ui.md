@@ -58,7 +58,7 @@ Hanken Grotesk for words, Geist Mono for figures.
 
 - The one screen after the upload (`src/guide/GuideScreen.tsx`). On a phone: the top bar, the visual pane (about 40% of the height), the thread, the ask bar, all inside the screen's height; only the thread scrolls. On a computer (from 1000 px): the basement on the left, the thread and the ask bar in a 440 px column on the right.
 - **The visual pane** always shows the basement: the video while it measures, the plan with the fix marked, a drawing that explains a term, the plan to edit, the 3D, before and after. It is never empty: while the next one loads, the last one stays, with a progress line.
-- **The guide's messages:** the mark, then 16 px text, three short sentences at most, then "Why I'm asking:" in small text. Only the newest message has choices: hairline buttons, and one mint button for the way on, with `→`.
+- **The guide's messages:** the mark, then 16 px text, three short sentences at most, then the why in small text: "Why I'm asking:" under a question, "Why it matters:" under anything else. Only the newest message has choices: hairline buttons, and one mint button for the way on, with `→`.
 - **Their messages:** ink blocks on the right, in card-coloured text.
 - **Cards** under a message, for what buttons can't carry (a tape number, a window's size, the owner): a hairline frame, 6 px corners.
 - **The ask bar:** "Ask anything about your basement" and a hairline Send button; voice where the browser has it.
