@@ -13,7 +13,7 @@ import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm, permitRows, summarySheet, t
 import { suiteAreaM2 } from "../model/suite";
 import { permitModel, type PermitModel, unitRooms } from "./model";
 import { embedFonts, type Fonts, INK, LETTER, MUTED, newDoc, type Project, Sheet, type Signer } from "./pdf";
-import { fingerprint, readiness, type Readiness } from "./readiness";
+import { asksWaterMeter, fingerprint, readiness, type Readiness } from "./readiness";
 import { basementPlan, ceilingPlan, coverSheet, details, elevations, finishSheets, mainFloor, notesSheet, type Printed, scopeOfWork, type SheetCtx, SHEETS, sitePlan } from "./sheets";
 
 // Today in Ontario, as the forms want it: YYYY-MM-DD.
@@ -75,6 +75,7 @@ export function permitStatus(input: Pick<PackageInput, "result" | "municipality"
     profile,
     upstairs: state.permit?.upstairs ?? null,
     lotLines: state.permit?.lotLines ?? [],
+    waterMeter: asksWaterMeter(input.municipality) ? (state.permit?.waterMeter ?? {}) : null,
     sheets: SHEETS,
     reviewed: state.permit?.reviewed ?? [],
     reviewKey,

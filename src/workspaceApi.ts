@@ -56,9 +56,10 @@ export type PermitInputs = {
   upstairs?: { bedrooms: { floor: number; at: [number, number] }[]; none?: boolean | null };
   reviewed?: { sheet: string; key: string }[];
   designer?: { name?: string | null; bcin?: string | null; firm?: string | null; firmBcin?: string | null; email?: string | null; phone?: string | null };
+  waterMeter?: { option?: "single" | "room" | "compartment" | null; where?: string | null };
 };
 
-export type ReadyItem = { id: string; group: "tape" | "windows" | "owner" | "upstairs" | "lot" | "designer" | "review"; label: string; detail: string; done: boolean };
+export type ReadyItem = { id: string; group: "tape" | "windows" | "owner" | "upstairs" | "lot" | "water" | "designer" | "review"; label: string; detail: string; done: boolean };
 export type PermitWindow = { id: string; tag: string; room: string; widthM: number; heightM: number | null; sillM: number | null; change: "keep" | "enlarge" | "new"; escape: boolean; taped: boolean; was: { widthM: number; heightM: number | null } | null };
 // Where the permit set stands (server/workspaceRoutes.ts permitPayload).
 export type PermitStatus = {
