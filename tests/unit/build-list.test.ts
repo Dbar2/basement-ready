@@ -111,7 +111,7 @@ describe("the Build milestone's list", () => {
       { type: "answer", questionId: "lives_there", value: false },
       { type: "answer", questionId: "lives_there", value: "unsure" },
     ]);
-    expect(item.why).toBe("As your main home. It decides Region of Waterloo forgivable loan.");
+    expect(item.why).toBe("as your main home. It decides Region of Waterloo forgivable loan.");
     // The first money item says the total.
     expect(item.message).toMatch(/^You may get up to \$7,000/);
     const unsure = buildList({ result: { ...result, moneyQuestions: [{ ...question, answer: "unsure" }] }, municipality: "waterloo-on", state: {}, profile: null });
@@ -122,6 +122,8 @@ describe("the Build milestone's list", () => {
     const l = sampleBuildList({ profile: null, state: taped({}) });
     for (const i of l.items) {
       expect(`${i.message} ${i.why}`).not.toMatch(/qualif|approved|eligible/i);
+      // A why follows the screen's "Why it matters:", so it starts in lower case unless it starts with a name.
+      expect(i.why).not.toMatch(/^(The|A|An|Each|You|Most|It) /);
       // Every question says why; the submit copy and the last step ask nothing.
       if (i.step !== "done" && i.step !== "build.submit") expect(i.why.length).toBeGreaterThan(10);
     }
