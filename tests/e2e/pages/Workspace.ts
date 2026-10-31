@@ -129,6 +129,11 @@ export class PermitTab {
   }
 
   // How many things are left before the clean submit copy: 0 when it's ready.
+  // "What needs a licensed pro": the work only a licensed pro may do, as the house's city has it.
+  get licensedPro() {
+    return this.page.locator("section", { has: this.page.getByRole("heading", { level: 2, name: "What needs a licensed pro" }) });
+  }
+
   async left(): Promise<number> {
     await expect(this.heading).not.toHaveText("Your permit set", { timeout: 30_000 });
     const text = (await this.heading.textContent()) ?? "";

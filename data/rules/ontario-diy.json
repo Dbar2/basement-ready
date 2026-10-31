@@ -369,7 +369,12 @@
         "retrieved": "2026-10-29"
       },
       "verified": true,
-      "notes": "Waterloo's 2025 ARU guide says an architect, engineer or BCIN designer; its web page and the code allow the owner."
+      "cities": {
+        "waterloo-on": {
+          "detail": "",
+          "notes": "Waterloo's 2025 ARU guide says an architect, engineer or BCIN designer; its web page and the code allow the owner."
+        }
+      }
     },
     {
       "id": "building",
@@ -408,17 +413,34 @@
       "id": "plumbing",
       "title": "Plumbing",
       "owner": "ask",
-      "detail": "Plumbing is a compulsory trade in Ontario and no homeowner exemption is written in the regulation. Kitchener lets an owner who lives at the house do the suite's plumbing; Waterloo and Cambridge don't say. Ask your City before you plumb it yourself, and hire a licensed plumber otherwise.",
+      "detail": "Plumbing is a compulsory trade in Ontario and no homeowner exemption is written in the regulation. Ask your City before you plumb it yourself, and hire a licensed plumber otherwise.",
       "permit": "Inspected under the building permit",
       "registry": null,
       "source": {
-        "title": "Building Opportunities in the Skilled Trades Act, 2021, s. 6; O. Reg. 877/21; Kitchener inspection guide p. 28",
+        "title": "Building Opportunities in the Skilled Trades Act, 2021, s. 6; O. Reg. 877/21",
         "url": "https://www.ontario.ca/page/compulsory-trades-and-enforcement",
         "section": "'All exemptions are prescribed in the General Regulation (O. Reg. 877/21)'",
         "retrieved": "2026-10-29"
       },
       "verified": false,
-      "notes": "No provincial homeowner exemption found; Kitchener's guide allows a resident owner. A provincial enforcement blitz on electrical and plumbing work runs 2026-10-01 to 2027-01-31."
+      "notes": "No provincial homeowner exemption found. A provincial enforcement blitz on electrical and plumbing work runs 2026-10-01 to 2027-01-31.",
+      "cities": {
+        "kitchener-on": {
+          "detail": "Kitchener lets an owner who lives at the house do the suite's plumbing.",
+          "source": {
+            "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+            "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+            "section": "p. 28",
+            "retrieved": "2026-10-29"
+          }
+        },
+        "waterloo-on": {
+          "detail": "Waterloo's guides don't say."
+        },
+        "cambridge-on": {
+          "detail": "Cambridge's guides don't say."
+        }
+      }
     },
     {
       "id": "gas",
@@ -452,22 +474,52 @@
         "retrieved": "2026-10-29"
       },
       "verified": true,
-      "notes": "Kitchener sets the foundation cut at 3'-11\" before an engineer may be needed (inspection guide p. 18)."
+      "cities": {
+        "kitchener-on": {
+          "detail": "Kitchener sets the foundation cut at 3'-11\" before an engineer may be needed.",
+          "source": {
+            "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+            "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+            "section": "p. 18",
+            "retrieved": "2026-10-29"
+          }
+        }
+      }
     },
     {
       "id": "hvac",
       "title": "Heating",
       "owner": "no",
-      "detail": "A furnace or water heater that burns gas is installed by a TSSA-registered contractor. A separate heating system for the unit is sized by a heat-loss calculation (CSA F280); Kitchener wants a BCIN HVAC designer's Schedule 1 for it.",
+      "detail": "A furnace or water heater that burns gas is installed by a TSSA-registered contractor. A separate heating system for the unit is sized by a heat-loss calculation (CSA F280).",
       "permit": "HVAC permit where the City has one",
       "registry": null,
       "source": {
-        "title": "2024 Building Code Compendium, Division B Part 9; Kitchener duplex guide",
+        "title": "2024 Building Code Compendium, Division B Part 9",
         "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
-        "section": "9.33.5.1.(1), 9.33.4.1.(1); Kitchener process guide p. 1",
+        "section": "9.33.5.1.(1), 9.33.4.1.(1)",
         "retrieved": "2026-10-29"
       },
-      "verified": true
+      "verified": true,
+      "cities": {
+        "kitchener-on": {
+          "detail": "Kitchener wants a BCIN HVAC designer's Schedule 1 for it.",
+          "source": {
+            "title": "Duplex building process guide (City of Kitchener)",
+            "url": "https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf",
+            "section": "p. 1, item 4",
+            "retrieved": "2026-10-29"
+          }
+        },
+        "cambridge-on": {
+          "detail": "Cambridge lists heat loss/gain calculations among the documents to upload.",
+          "source": {
+            "title": "Building Permits (City of Cambridge)",
+            "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/",
+            "section": "Drawings; How to apply",
+            "retrieved": "2026-10-28"
+          }
+        }
+      }
     }
   ],
   "needsPro": [
@@ -476,56 +528,98 @@
       "title": "A new or wider foundation window",
       "who": "Professional engineer (opening and lintel); a concrete cutter",
       "when": "egress_cut",
-      "detail": "The code treats the wall under a foundation opening wider than 1.2 m as unsupported, and going past its tables means engineering. Kitchener puts the line at a 3'-11\" cut. An egress window big enough for 0.35 m² usually needs a wider cut: attach the engineer's drawing or letter.",
+      "detail": "The code treats the wall under a foundation opening wider than 1.2 m as unsupported, and going past its tables means engineering. An egress window big enough for 0.35 m² usually needs a wider cut: attach the engineer's drawing or letter.",
       "registry": null,
       "source": {
-        "title": "2024 Building Code Compendium, Division B Part 9; Kitchener inspection guide p. 18",
+        "title": "2024 Building Code Compendium, Division B Part 9",
         "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
         "section": "9.15.4.3.(3), 9.4.1.1.(1)",
         "retrieved": "2026-10-29"
       },
-      "verified": true
+      "verified": true,
+      "cities": {
+        "kitchener-on": {
+          "detail": "Kitchener puts the line at a 3'-11\" cut.",
+          "source": {
+            "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+            "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+            "section": "p. 18",
+            "retrieved": "2026-10-29"
+          }
+        }
+      }
     },
     {
       "id": "beams",
       "title": "Moving or adding beams, posts or load-bearing walls",
       "who": "Professional engineer, or engineered software for LVL beams",
       "when": "beam_change",
-      "detail": "Cities need a permit and drawings showing new beam sizes, supports and spans; LVL beams need software or an engineer's design.",
+      "detail": "New or moved beams, posts and load-bearing walls are structural work: the permit drawings show the new beam sizes, supports and spans, from the code's tables or an engineer's design.",
       "registry": null,
       "source": {
-        "title": "Residential building permits (City of Kitchener); Project Information: Residential",
-        "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
-        "section": "'Removing a load-bearing wall'",
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.4.1.1.(1)",
         "retrieved": "2026-10-29"
       },
-      "verified": true
+      "verified": true,
+      "cities": {
+        "kitchener-on": {
+          "detail": "Kitchener lists removing a load-bearing wall among the work that needs a permit; LVL beams need the maker's software or an engineer's design.",
+          "source": {
+            "title": "Residential building permits (City of Kitchener); Project Information: Residential",
+            "url": "https://www.kitchener.ca/building-and-renovating/residential-building-permits/",
+            "section": "'Removing a load-bearing wall'",
+            "retrieved": "2026-10-29"
+          }
+        }
+      }
     },
     {
       "id": "separate_heating",
       "title": "Separate heating for the unit",
       "who": "BCIN HVAC designer (heat loss); TSSA-registered contractor for gas equipment",
       "when": "separate_heating",
-      "detail": "Heating is sized from a CSA F280 heat-loss calculation. Kitchener asks for a BCIN HVAC designer's Schedule 1 with the calculations; Cambridge lists heat loss/gain calculations among its usual documents.",
+      "detail": "Heating is sized from a CSA F280 heat-loss calculation.",
       "registry": {
         "label": "QuARTS registry (HVAC - House)",
         "url": "https://www.search.quarts.mah.gov.on.ca/en"
       },
       "source": {
-        "title": "2024 Building Code Compendium 9.33.5.1.; Kitchener process guide p. 1",
-        "url": "https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf",
-        "section": "p. 1, item 4",
+        "title": "2024 Building Code Compendium, Division B Part 9",
+        "url": "https://www.ontario.ca/document/2024-building-code-compendium/part-9-housing-and-small-buildings",
+        "section": "9.33.5.1.",
         "retrieved": "2026-10-29"
       },
       "verified": true,
-      "notes": "Kitchener's requirement sits uneasily with the owner design exemption in Div. C 3.2.5.1.(3)(b); ask whether your own F280 calculation is accepted."
+      "cities": {
+        "kitchener-on": {
+          "detail": "Kitchener asks for a BCIN HVAC designer's Schedule 1 with the calculations.",
+          "source": {
+            "title": "Duplex building process guide (City of Kitchener)",
+            "url": "https://www.kitchener.ca/media/jt2cssy4/dsd_build_process_guide_duplex.pdf",
+            "section": "p. 1, item 4",
+            "retrieved": "2026-10-29"
+          },
+          "notes": "Kitchener's requirement sits uneasily with the owner design exemption in Div. C 3.2.5.1.(3)(b); ask whether your own F280 calculation is accepted."
+        },
+        "cambridge-on": {
+          "detail": "Cambridge lists heat loss/gain calculations among the documents to upload.",
+          "source": {
+            "title": "Building Permits (City of Cambridge)",
+            "url": "https://www.cambridge.ca/business-building-development/building-planning/building-permits/",
+            "section": "Drawings; How to apply",
+            "retrieved": "2026-10-28"
+          }
+        }
+      }
     },
     {
       "id": "gas",
       "title": "Any gas line or appliance",
       "who": "TSSA-registered contractor with a certified gas technician",
       "when": "gas_work",
-      "detail": "Moving the furnace, adding a gas range or a second meter: only a certificate holder may do it. In Kitchener a second meter needs a TSSA technician's tag on each gas line.",
+      "detail": "Moving the furnace, adding a gas range or a second meter: only a certificate holder may do it.",
       "registry": {
         "label": "TSSA registered contractors",
         "url": "https://www.tssa.org/fuels-contractor"
@@ -536,14 +630,19 @@
         "section": "s. 6(1), 21(1)",
         "retrieved": "2026-10-29"
       },
-      "verified": true
+      "verified": true,
+      "cities": {
+        "kitchener-on": {
+          "detail": "In Kitchener a second meter needs a TSSA technician's tag on each gas line."
+        }
+      }
     },
     {
       "id": "plumbing",
       "title": "Plumbing, unless your City says you may",
       "who": "Licensed plumber",
       "when": "always",
-      "detail": "Plumbing is a compulsory trade and the regulation lists no homeowner exemption. Kitchener lets an owner who lives at the house do it; ask Waterloo or Cambridge first.",
+      "detail": "Plumbing is a compulsory trade and the regulation lists no homeowner exemption: hire a licensed plumber unless your City says you may do it yourself.",
       "registry": null,
       "source": {
         "title": "Compulsory trades and enforcement (Government of Ontario)",
@@ -551,7 +650,24 @@
         "section": null,
         "retrieved": "2026-10-29"
       },
-      "verified": false
+      "verified": false,
+      "cities": {
+        "kitchener-on": {
+          "detail": "Kitchener lets an owner who lives at the house do it.",
+          "source": {
+            "title": "Adding a Second Unit in an Existing House: Guide to Successful Inspections (City of Kitchener, June 2025)",
+            "url": "https://www.kitchener.ca/media/mjlpg14o/dsd_build_duplex_guide.pdf",
+            "section": "p. 28",
+            "retrieved": "2026-10-29"
+          }
+        },
+        "waterloo-on": {
+          "detail": "Waterloo's guides don't say, so ask the City first."
+        },
+        "cambridge-on": {
+          "detail": "Cambridge's guides don't say, so ask the City first."
+        }
+      }
     }
   ]
 }
