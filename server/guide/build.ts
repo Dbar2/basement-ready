@@ -23,7 +23,7 @@ export type BuildItem = {
   step: StepId; // "build.permit:<id>", "build.submit", "build.money:<question>", "build.builders", "done"
   section: BuildSection;
   message: string;
-  why: string; // "" on the last step, where nothing is asked
+  why: string; // "" where nothing is asked: the submit copy and the last step
   card?: CardRef;
   choices?: Choice[];
   visual: VisualRef;
@@ -265,9 +265,10 @@ export function buildList(input: BuildInput): BuildList {
     step: "build.submit",
     section: "permit",
     message: canSubmit
-      ? `Everything's ready. Download the submit copy and hand it in ${portal ? `on the ${portal.label}` : `to the ${st.place.authority}`}.`
+      ? `Everything's ready. Download the submit copy, with no draft marks and every form filled, and hand it in ${portal ? `on the ${portal.label}` : `to the ${st.place.authority}`}.`
       : `The submit copy unlocks when nothing is left: ${st.readiness.left} to go.`,
-    why: "The submit copy has no draft marks and every form filled. It's the one the City reviews.",
+    // Nothing is asked here either.
+    why: "",
     card: canSubmit ? { kind: "download", id: "submit" } : undefined,
     visual: PERMIT,
     done: Boolean(input.state.permit?.submittedAt),

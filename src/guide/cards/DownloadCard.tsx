@@ -115,7 +115,7 @@ function SubmitCard({ scanId, card, act }: CardProps) {
           ↓
         </span>
       </button>
-      <p className="field-help">Sign the statement box on each sheet{ownerSigns ? " (you're the designer)" : ""}, then upload it.</p>
+      <p className="field-help">Sign each sheet's statement box{ownerSigns ? " as the designer" : ""}, then upload it.</p>
       {permit && (
         <>
           <a className="link-quiet" href={permit.portal.url} target="_blank" rel="noreferrer">
