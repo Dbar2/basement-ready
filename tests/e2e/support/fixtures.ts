@@ -111,3 +111,12 @@ export async function api<T = any>(page: Page, path: string): Promise<T> {
   expect(res.ok(), `${path} → ${res.status()}`).toBeTruthy();
   return res.json();
 }
+
+// The same, for what only the device that scanned may read (the workspace, the model): with the page's
+// claims, as src/api.ts sends them.
+export async function claimedApi<T = any>(page: Page, path: string): Promise<T> {
+  const claims = await page.evaluate(() => localStorage.getItem("br-claims"));
+  const res = await page.request.get(path, { timeout: 60_000, headers: claims ? { "x-claims": encodeURIComponent(claims) } : {} });
+  expect(res.ok(), `${path} → ${res.status()}`).toBeTruthy();
+  return res.json();
+}
