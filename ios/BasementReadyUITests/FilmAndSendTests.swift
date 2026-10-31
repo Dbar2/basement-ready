@@ -64,6 +64,10 @@ final class FilmAndSendTests: XCTestCase {
     app.buttons["result.logo"].tap()
     XCTAssertTrue(web.waitForExistence(timeout: 10))
     XCTAssertTrue(app.buttons["New scan"].exists, "still on the result screen, not sent out of the app")
+
+    // basementready://new (the web's in-app "New scan" link) goes back to the start screen.
+    XCUIDevice.shared.system.open(URL(string: "basementready://new")!)
+    XCTAssertTrue(app.buttons["Start filming"].waitForExistence(timeout: 15), "a new scan starts from the start screen")
   }
 
   private func attach(_ app: XCUIApplication, _ name: String) {
