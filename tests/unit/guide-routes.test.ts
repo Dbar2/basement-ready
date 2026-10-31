@@ -82,6 +82,7 @@ describe("a real scan's guide", () => {
     expect((await savedAnswers(basementId)).look).toBe("warm");
     expect((await loadWorkspace(basementId)).state.ideas?.finish).toBe("warm");
 
+    expect((await post({ type: "go", to: "build" })).state.step).toBe("build");
     const build = await post({ type: "go", to: "build" });
     expect(build.state.step).toBe("build.permit:tape");
     expect(build.messages.at(-1)!.card).toEqual({ kind: "tape", id: "tape" });
