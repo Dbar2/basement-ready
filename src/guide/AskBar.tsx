@@ -1,5 +1,5 @@
 // "Ask anything about your basement": typed, or said aloud where the browser can listen (Web Speech).
-// What they say is put in the box to check, then sent.
+// What they say lands in the box to check, then they send it.
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 type Recognition = {
@@ -13,11 +13,11 @@ type Recognition = {
   stop: () => void;
 };
 
-const Speech = (): (new () => Recognition) | null => {
+function Speech(): (new () => Recognition) | null {
   if (typeof window === "undefined") return null;
   const w = window as unknown as { SpeechRecognition?: new () => Recognition; webkitSpeechRecognition?: new () => Recognition };
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
-};
+}
 
 export function AskBar({ onAsk, busy, placeholder = "Ask anything about your basement" }: { onAsk: (text: string) => void; busy: boolean; placeholder?: string }) {
   const [text, setText] = useState("");
@@ -27,7 +27,7 @@ export function AskBar({ onAsk, busy, placeholder = "Ask anything about your bas
 
   useEffect(() => () => rec.current?.stop(), []);
 
-  const submit = (e: FormEvent) => {
+  const send = (e: FormEvent) => {
     e.preventDefault();
     const t = text.trim();
     if (!t || busy) return;
@@ -55,13 +55,13 @@ export function AskBar({ onAsk, busy, placeholder = "Ask anything about your bas
   };
 
   return (
-    <form className="guide-ask" onSubmit={submit}>
-      <label className="sr-only" htmlFor="guide-ask-input">
-        Ask the guide
+    <form className="gs-ask" data-voice={canListen || undefined} onSubmit={send}>
+      <label className="visually-hidden" htmlFor="guide-ask-input">
+        Ask anything about your basement
       </label>
       <input
         id="guide-ask-input"
-        type="text"
+        className="input"
         value={text}
         maxLength={500}
         autoComplete="off"
@@ -70,17 +70,15 @@ export function AskBar({ onAsk, busy, placeholder = "Ask anything about your bas
         onChange={(e) => setText(e.target.value)}
       />
       {canListen && (
-        <button type="button" className="guide-mic" aria-pressed={listening} aria-label={listening ? "Stop listening" : "Say it"} onClick={listen}>
+        <button type="button" className="gs-mic" aria-pressed={listening} aria-label={listening ? "Stop listening" : "Say it"} onClick={listen}>
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
             <rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" strokeWidth="1.8" />
             <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
           </svg>
         </button>
       )}
-      <button type="submit" className="guide-send" disabled={busy || !text.trim()} aria-label="Send">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-          <path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+      <button type="submit" className="gs-send" disabled={busy || !text.trim()}>
+        Send
       </button>
     </form>
   );

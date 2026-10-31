@@ -1,0 +1,17 @@
+/* /dev/guide (src/dev/GuideReference.tsx): the guide at phone and computer sizes, side by side. */
+.gref { padding: 28px var(--gutter) 64px; display: grid; gap: 24px; }
+.gref-head { display: grid; gap: 10px; }
+.gref-head h1 { font-size: var(--text-display); }
+.gref-head p { margin: 0; }
+.gref-frames { display: grid; grid-template-columns: 390px minmax(0, 1fr); gap: 32px; align-items: start; }
+.gref-frames figure { margin: 0; display: grid; gap: 8px; min-width: 0; }
+.gref-frames figcaption { font-size: var(--text-small); color: var(--color-ink-muted); }
+/* The guide fills its frame instead of the window. */
+.gref-phone .gs, .gref-desk .gs { height: 100%; border: var(--line-ink); border-radius: var(--radius-2); }
+.gref-phone { height: 780px; grid-template-rows: minmax(0, 1fr) auto; }
+.gref-phone .gs { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(180px, 40%) minmax(0, 1fr) auto; grid-template-areas: "top" "visual" "thread" "ask"; }
+.gref-phone .gs-visual { border-right: 0; border-bottom: var(--line-ink); }
+.gref-desk { height: 720px; grid-template-rows: minmax(0, 1fr) auto; }
+.gref-desk .gs { grid-template-columns: minmax(0, 1fr) 440px; grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "top top" "visual thread" "visual ask"; }
+.gref-desk .gs-visual { border-bottom: 0; border-right: var(--line-ink); }
+@media (max-width: 1100px) { .gref-frames { grid-template-columns: minmax(0, 1fr); } .gref-phone { max-width: 390px; } }

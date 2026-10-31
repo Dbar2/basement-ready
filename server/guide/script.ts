@@ -152,7 +152,7 @@ function answerSaid(r: ResultLike): Said {
   const choices: Choice[] = [
     ...(entry ? [{ label: `What's ${article(entry.name)}?`, action: { type: "explain", term: entry.term } as GuideAction }] : []),
     { label: "Why that cost?", action: { type: "ask", text: "Why that cost?" } },
-    { label: r.verdict === "no" ? "Show me the plan anyway →" : "Show me what it could be →", action: { type: "go", to: "design" }, primary: true },
+    { label: r.verdict === "no" ? "Show me the plan anyway" : "Show me what it could be", action: { type: "go", to: "design" }, primary: true },
   ];
   return { text: parts.join(" "), choices, visual: { kind: "plan", ...(fixes[0] ? { mark: fixes[0].category } : {}) } };
 }
@@ -171,7 +171,7 @@ function planSaid(model: NonNullable<Ctx["model"]>): Said {
     why: "every room and price is drawn on this plan.",
     choices: [
       { label: "A wall is off", action: { type: "ask", text: "A wall is off" } },
-      { label: "Looks right →", action: { type: "confirmPlan" }, primary: true },
+      { label: "Looks right", action: { type: "confirmPlan" }, primary: true },
     ],
     visual: { kind: "planEdit" },
   };
@@ -195,7 +195,7 @@ function kept(model: NonNullable<Ctx["model"]>) {
 function layoutsSaid(ctx: Ctx): Said {
   const model = ctx.model!;
   const rec = recommendedOf(model);
-  if (!rec) return { text: "I couldn't draw a layout on this plan.", choices: [{ label: "Go on to building →", action: { type: "go", to: "build" }, primary: true }], visual: { kind: "plan" } };
+  if (!rec) return { text: "I couldn't draw a layout on this plan.", choices: [{ label: "Go on to building", action: { type: "go", to: "build" }, primary: true }], visual: { kind: "plan" } };
   const n = model.designs.length;
   const forWhom = ctx.household === "relative" ? "For family, " : ctx.household === "renter" ? "For a rental, " : "";
   const reason = rec.reason ? `: ${low1(rec.reason.replace(/\.$/, ""))}` : "";
@@ -211,7 +211,7 @@ function layoutsSaid(ctx: Ctx): Said {
     choices: [
       ...(bedroom ? [{ label: "Bigger bedroom", action: { type: "describe", text: "Make the bedroom bigger" } as GuideAction }] : []),
       ...others.slice(0, 2).map((d) => ({ label: `Show ${d.name}`, action: { type: "ask", text: `Show ${d.name}` } as GuideAction })),
-      { label: `Use ${rec.design.name} →`, action: { type: "chooseDesign", designId: rec.design.id }, primary: true },
+      { label: `Use ${rec.design.name}`, action: { type: "chooseDesign", designId: rec.design.id }, primary: true },
     ],
     visual: { kind: "layouts", designId: rec.design.id },
   };
@@ -242,7 +242,7 @@ function lookSaid(ctx: Ctx): Said {
     text: `Here's your basement as you filmed it, and with ${design?.name ?? "your design"} in ${LOOK_NAMES[ctx.look]}. **Drag to compare.** Pick another look, or tell me what you'd like.`,
     choices: [
       { label: "None of these", action: { type: "setLook", look: "none" } },
-      { label: "Looks good →", action: { type: "go", to: "build" }, primary: true },
+      { label: "Looks good", action: { type: "go", to: "build" }, primary: true },
     ],
     visual: { kind: "beforeAfter", designId, look: ctx.look },
   };
@@ -259,7 +259,7 @@ function buildSaid(ctx: Ctx, t: Pick<Thread, "passed">): Said {
     choices: [
       { label: "What's a permit set?", action: { type: "explain", term: "permit_set" } },
       { label: "Later", action: { type: "go", to: "home" } },
-      { label: n ? "Start →" : "See it →", action: { type: "go", to: "build" }, primary: true },
+      { label: n ? "Start" : "See it", action: { type: "go", to: "build" }, primary: true },
     ],
     visual: { kind: "permit" },
   };
@@ -355,7 +355,7 @@ function passing(t: Thread, action: GuideAction, ctx: Ctx): string[] {
       return ctx.build.filter((b) => b.id === action.itemId).map((b) => b.step);
     case "go": {
       if (action.to === "home") return [];
-      // Inside the milestone already: past its opening step ("Start →" on the build intro).
+      // Inside the milestone already: past its opening step ("Start" on the build intro).
       if (milestoneOf(at) === action.to) return at === "build" || at === "answer" ? [at] : [];
       const order: Milestone[] = ["answer", "design", "build"];
       const before = order.slice(0, order.indexOf(action.to));
@@ -385,7 +385,9 @@ export function act(t: Thread, action: GuideAction, ctx: Ctx, reply?: Reply): { 
     if (QUESTION.test(step)) {
       // A question's still open: answer the aside, then ask it again.
       out.push(message(t, out, { from: "guide", at: ctx.now, ...replySaid(aside) }));
-      out.push(message(t, out, { from: "guide", at: ctx.now, ...current, text: `Back to my question: ${current.text.slice(current.text.indexOf("**"))}` }));
+      // Without a visual of its own, so the aside's drawing stays in the pane.
+      const { visual: _visual, ...again } = current;
+      out.push(message(t, out, { from: "guide", at: ctx.now, ...again, text: `Back to my question: ${current.text.slice(current.text.indexOf("**"))}` }));
     } else {
       // Otherwise the way on stays one tap away, under the reply.
       const on = current.choices?.find((c) => c.primary);

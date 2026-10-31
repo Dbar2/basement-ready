@@ -42,7 +42,7 @@ export function scripted(text: string, ctx: Ctx, pack: Pack | null): Reply | nul
     const back = rec && rec.design.id !== design.id ? [{ label: `Show ${rec.design.name}`, action: { type: "ask", text: `Show ${rec.design.name}` } as GuideAction }] : [];
     return {
       text: `Here's ${design.name}${why ? `: ${why.charAt(0).toLowerCase()}${why.slice(1).replace(/\.$/, "")}` : ""}.`,
-      choices: [...back, { label: `Use ${design.name} →`, action: { type: "chooseDesign", designId: design.id }, primary: true }],
+      choices: [...back, { label: `Use ${design.name}`, action: { type: "chooseDesign", designId: design.id }, primary: true }],
       visual: { kind: "layouts", designId: design.id },
     };
   }
@@ -181,7 +181,7 @@ export function suggestion(raw: unknown, ctx: Ctx): Choice | null {
     }
     case "chooseDesign": {
       const d = model?.designs.find((x) => x.id === a.designId);
-      return d ? { label: `Use ${d.name} →`, action: { type: "chooseDesign", designId: d.id }, primary: true } : null;
+      return d ? { label: `Use ${d.name}`, action: { type: "chooseDesign", designId: d.id }, primary: true } : null;
     }
     case "setLook":
       return LOOK_KEYS.includes(a.look as never) ? { label: LOOK_NAMES[a.look as keyof typeof LOOK_NAMES], action: { type: "setLook", look: a.look as never }, primary: true } : null;

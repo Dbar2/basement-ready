@@ -20,7 +20,7 @@ export function placeAlarms(design: Pick<Design, "layout" | "proposed">, fuelBur
   const { rooms, openings, walls } = design.proposed;
   const suite = rooms.filter((r) => r.unit === 2);
   const beds = suite.filter((r) => r.kind === "bedroom");
-  const living = [...suite.filter((r) => r.kind === "living")].sort((a, b) => area(b) - area(a))[0] ?? null;
+  const main = [...suite.filter((r) => r.kind === "living")].sort((a, b) => area(b) - area(a))[0] ?? null;
   const studio = design.layout === "studio";
   const doors = openings.flatMap((o) => {
     const w = o.kind === "door" ? walls.find((x) => x.id === o.wallId) : null;
@@ -30,11 +30,14 @@ export function placeAlarms(design: Pick<Design, "layout" | "proposed">, fuelBur
   for (const bed of beds) {
     const c = spot(bed);
     out.push({ kind: studio && fuelBurning ? "combo" : "smoke", at: c, why: studio ? "In the sleeping area" : "In each bedroom" });
-    if (studio || !living) continue;
+    if (studio || !main) continue;
     // Outside the bedroom door, in the living space: between the bedroom and the rest of the suite. Its
-    // door is the one into the living space (not a furnace room's beside it).
-    const intoLiving = doors.filter((d) => edges(living.polygon).some(([a, b]) => distToSegment(d, a, b) < 0.4));
+    // door is the one into a living space (not a furnace room's beside it), and that living space is where
+    // the alarm goes (a suite can have more than one).
+    const livings = suite.filter((r) => r.kind === "living");
+    const intoLiving = doors.filter((d) => livings.some((l) => edges(l.polygon).some(([a, b]) => distToSegment(d, a, b) < 0.4)));
     const door = [...(intoLiving.length ? intoLiving : doors)].sort((p, q) => dist(p, c) - dist(q, c))[0];
+    const living = (door && livings.find((l) => edges(l.polygon).some(([a, b]) => distToSegment(door, a, b) < 0.4))) || main;
     const lc = spot(living);
     const at = door ?? lc;
     const lb = bounds(living.polygon);
@@ -50,7 +53,7 @@ export function placeAlarms(design: Pick<Design, "layout" | "proposed">, fuelBur
     }
     out.push({ kind: fuelBurning ? "combo" : "smoke", at: inLiving, why: fuelBurning ? "Outside the bedroom: smoke, and CO next to where people sleep" : "Between the bedroom and the rest of the suite" });
   }
-  if (!beds.length && living) out.push({ kind: fuelBurning ? "combo" : "smoke", at: spot(living), why: "One per storey of the suite" });
+  if (!beds.length && main) out.push({ kind: fuelBurning ? "combo" : "smoke", at: spot(main), why: "One per storey of the suite" });
   // A service room with a fuel-burning furnace gets its own CO alarm, and a bedroom that shares a
   // wall with it gets CO inside the bedroom too.
   const mech = rooms.find((r) => r.kind === "mechanical");

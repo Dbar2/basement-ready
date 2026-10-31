@@ -1,11 +1,10 @@
-// The guide's two calls (server/guide/routes.ts): the thread as it stands, and an action on it. A real
-// scan's thread is kept on its workspace; the example's lives in this browser and goes with each action.
+// The guide's thread from the server (GET/POST /api/scans/:id/guide, server/guide/routes.ts): the thread
+// as it stands, and an action on it. A real scan's thread is kept on its workspace; the example's lives in
+// this browser and goes with each action.
 import { authHeaders } from "../api";
 import type { GuideAction, GuideMessage, GuideState } from "./types";
 
 const SAMPLE_KEY = "br-guide-sample";
-
-export type Sent = { messages: GuideMessage[]; state: GuideState };
 
 function readSample(): GuideState | null {
   try {
@@ -38,26 +37,28 @@ async function errorOf(res: Response, fallback: string) {
   return new Error(body.error ?? fallback);
 }
 
-export async function loadGuide(scanId: string): Promise<GuideState> {
-  if (scanId === "sample") {
+// `fresh`: ask the server even for the example (it starts over).
+export async function getGuide(scanId: string, fresh = false): Promise<GuideState> {
+  if (scanId === "sample" && !fresh) {
     const kept = readSample();
     if (kept) return kept;
   }
   const res = await fetch(`/api/scans/${scanId}/guide`, { headers: await authHeaders() });
-  if (!res.ok) throw await errorOf(res, "We couldn't open your guide. Try again.");
+  if (!res.ok) throw await errorOf(res, "Your guide didn't load. Refresh to try again.");
   const state = (await res.json()) as GuideState;
   if (scanId === "sample") keepSample(state);
   return state;
 }
 
-export async function sendGuide(scanId: string, action: GuideAction, state: GuideState): Promise<Sent> {
+// The example sends its thread along, since the server keeps nothing for it.
+export async function postGuide(scanId: string, action: GuideAction, state?: GuideState | null): Promise<{ messages: GuideMessage[]; state: GuideState }> {
   const res = await fetch(`/api/scans/${scanId}/guide`, {
     method: "POST",
     headers: await authHeaders(true),
-    body: JSON.stringify(scanId === "sample" ? { action, state } : { action }),
+    body: JSON.stringify(scanId === "sample" ? { action, state: state ?? readSample() } : { action }),
   });
   if (!res.ok) throw await errorOf(res, "That didn't go through. Try again.");
-  const sent = (await res.json()) as Sent;
+  const sent = (await res.json()) as { messages: GuideMessage[]; state: GuideState };
   if (scanId === "sample") keepSample(sent.state);
   return sent;
 }
