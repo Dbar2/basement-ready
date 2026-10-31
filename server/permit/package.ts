@@ -12,7 +12,7 @@ import { designerNeed, type DesignerNeed, quartsFilters } from "./designer";
 import { FIELD_MAPS, fetchOfficialPdf, fillAcroForm, permitRows, summarySheet, type FormValues } from "./forms";
 import { suiteAreaM2 } from "../model/suite";
 import { permitModel, type PermitModel, unitRooms } from "./model";
-import { embedFonts, INK, LETTER, MUTED, newDoc, type Project, Sheet, type Signer } from "./pdf";
+import { embedFonts, type Fonts, INK, LETTER, MUTED, newDoc, type Project, Sheet, type Signer } from "./pdf";
 import { fingerprint, readiness, type Readiness } from "./readiness";
 import { basementPlan, ceilingPlan, coverSheet, details, elevations, finishSheets, mainFloor, notesSheet, type Printed, scopeOfWork, type SheetCtx, SHEETS, sitePlan } from "./sheets";
 
@@ -259,8 +259,9 @@ async function submitPage(doc: PDFDocument, input: PackageInput, permit: ReturnT
   s.wrap(`Source: ${permit.inspectionsSource.title}, ${permit.inspectionsSource.url}`, 48, Math.max(60, y - 8), s.width - 96, { size: 7.5, color: MUTED });
 }
 
-export async function lookPage(doc: PDFDocument, favourites: PackageInput["favourites"], state: StoredState) {
-  const fonts = await embedFonts(doc);
+// `fonts`: the book passes its own brand fonts; the permit package uses the standard ones.
+export async function lookPage(doc: PDFDocument, favourites: PackageInput["favourites"], state: StoredState, fonts?: Fonts) {
+  fonts ??= await embedFonts(doc);
   const s = new Sheet(doc.addPage(LETTER), fonts);
   s.rect(0, 0, s.width, s.height, { fill: rgb(1, 1, 1), stroke: false });
   let y = s.height - 54;
