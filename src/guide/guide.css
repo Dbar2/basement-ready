@@ -38,6 +38,8 @@
 .gs-msg-mark svg { width: 18px; height: auto; display: block; margin-top: 3px; color: var(--color-ink); }
 .gs-msg-body { display: grid; gap: 8px; min-width: 0; }
 .gs-msg-body > p { margin: 0; font-size: 16px; line-height: 1.45; text-wrap: pretty; }
+.gs-msg-body > p strong { font-weight: 700; }
+.gs-msg-body > p a { color: var(--color-ink); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--color-ink); }
 .gs-why { font-size: var(--text-small) !important; color: var(--color-ink-muted); }
 .gs-why b { font-weight: 700; color: var(--color-ink); }
 .gs-choices { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -55,6 +57,10 @@
 .gs-ask .input { min-height: 44px; }
 .gs-send { min-height: 44px; padding: 0 16px; border: var(--line-ink); border-radius: var(--radius-2); background: transparent; color: var(--color-ink); font-weight: 700; }
 .gs-send:disabled { opacity: 0.4; cursor: default; }
+/* Voice, where the browser can listen: a hairline square between the box and Send, ink while listening. */
+.gs-ask[data-voice] { grid-template-columns: minmax(0, 1fr) auto auto; }
+.gs-mic { display: inline-grid; place-items: center; width: 44px; min-height: 44px; padding: 0; border: var(--line-ink); border-radius: var(--radius-2); background: transparent; color: var(--color-ink); }
+.gs-mic[aria-pressed="true"] { background: var(--color-ink); color: var(--color-card); }
 
 /* Stubs for kinds a track hasn't delivered (src/guide/stubs.tsx). */
 .gs-stub { display: grid; place-content: center; justify-items: center; gap: 6px; padding: 16px; text-align: center; color: var(--color-ink-muted); }
