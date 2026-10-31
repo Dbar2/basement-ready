@@ -46,10 +46,11 @@ export function Problem({ text }: { text: string | null }) {
   ) : null;
 }
 
-export type MmField = { key: string; label: string; value: number | null | undefined; help?: string; hint?: string };
+export type MmField = { key: string; label: string; value: number | null | undefined; placeholder?: string };
 
-// Numbers in millimetres, typed together and saved together. A field's hint is what the video says.
-export function MmForm({ fields, submit, onSave }: { fields: MmField[]; submit?: string; onSave: (v: Record<string, number | null>) => Promise<void> }) {
+// Numbers in millimetres, one line each (what, the box, mm), typed together and saved together. The
+// placeholder is what the video says; `note` is one line of how to measure, under them all.
+export function MmForm({ fields, note, submit, onSave }: { fields: MmField[]; note?: string; submit?: string; onSave: (v: Record<string, number | null>) => Promise<void> }) {
   const [draft, setDraft] = useState<Record<string, string>>(() => Object.fromEntries(fields.map((f) => [f.key, mmText(f.value)])));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,20 +65,18 @@ export function MmForm({ fields, submit, onSave }: { fields: MmField[]; submit?:
   };
   return (
     <form className="gc-form" onSubmit={send}>
-      <div className="gc-mm-grid">
+      <div className="gc-mm-rows">
         {fields.map((f) => (
           <label key={f.key} className="gc-mm">
             <span className="gc-mm-label">{f.label}</span>
-            <span className="gc-mm-input">
-              <input className="input" inputMode="numeric" autoComplete="off" value={draft[f.key] ?? ""} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.replace(/[^0-9]/g, "") })} />
-              <span className="mono" aria-hidden>
-                mm
-              </span>
+            <input className="input" inputMode="numeric" autoComplete="off" placeholder={f.placeholder} value={draft[f.key] ?? ""} onChange={(e) => setDraft({ ...draft, [f.key]: e.target.value.replace(/[^0-9]/g, "") })} />
+            <span className="mono" aria-hidden>
+              mm
             </span>
-            {(f.hint || f.help) && <span className="field-help">{[f.hint, f.help].filter(Boolean).join(" ")}</span>}
           </label>
         ))}
       </div>
+      {note && <p className="field-help">{note}</p>}
       <Problem text={error} />
       <SaveButton busy={busy} disabled={!ready}>
         {submit ?? "Save"}
