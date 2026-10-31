@@ -84,6 +84,8 @@ const devRoutes = import.meta.env.DEV
       createRoute({ getParentRoute: () => rootRoute, path: "/dev/ui", component: lazyRouteComponent(() => import("./dev/UiReference"), "UiReference") }),
       // Every visual and card kind of the guide, mounted as the guide mounts them (src/dev/GuideReference.tsx).
       createRoute({ getParentRoute: () => rootRoute, path: "/dev/guide", component: lazyRouteComponent(() => import("./dev/GuideReference"), "GuideReference") }),
+      // One frame of it: the guide full page on the sample thread, so each size is a real viewport.
+      createRoute({ getParentRoute: () => rootRoute, path: "/dev/guide/frame", component: lazyRouteComponent(() => import("./dev/GuideReference"), "GuideFrame") }),
     ]
   : [];
 
