@@ -130,7 +130,7 @@ export function basementGeometry(result: any, state: StoredState | null | undefi
     rooms.some((r) => r.plan.fixtures.some((f) => f.kind === "furnace" || f.kind === "water_heater")) ||
     (result?.detections ?? []).some((d: { kind: string; label?: string }) => d.kind === "mechanical" && /furnace|water heater/i.test(d.label ?? ""));
   const win = layout?.window ?? null;
-  const bedOk = layout?.checks.find((c) => /escape window/i.test(c.label))?.ok ?? null;
+  const bedOk = layout?.window?.inBedroom ?? layout?.checks.find((c) => /escape window/i.test(c.label))?.ok ?? null;
   let egress: Geometry["egress"] = null;
   const bed = layout?.zones.find((z) => z.kind === "bedroom") ?? null;
   if (win && bedOk) egress = { side: win.side, atM: win.atM, widthM: win.widthM, existing: true, ok: win.widthM >= 0.38 ? null : false };

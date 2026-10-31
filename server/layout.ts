@@ -3,6 +3,7 @@
 // window, rooms meet minimum sizes, the stairs and furnace stay clear, and the bathroom goes where the
 // plumbing already comes up through the floor. A designer refines it; this is so a homeowner can see
 // their basement as a home.
+import { LIMITS } from "./model/checks";
 import type { Plan, Side } from "./plan";
 import { nearestSide } from "./side";
 
@@ -17,7 +18,9 @@ export type Layout = {
   zones: Zone[];
   walls: Wall[]; // new partition walls
   doors: Door[]; // doors in the new walls
-  window: { side: Side; atM: number; widthM: number } | null; // the bedroom's escape window
+  // The biggest window, the bedroom's escape window if it meets the rule. inBedroom: the bedroom takes it
+  // in (answers saved before Oct 30 lack it: their escape check's tick said so).
+  window: { side: Side; atM: number; widthM: number; inBedroom?: boolean } | null;
   checks: { label: string; ok: boolean | null; detail: string }[];
 };
 
@@ -124,6 +127,36 @@ export function serviceRoom(plan: Plan): { name: string; rect: Rect } | null {
 
 // Options for exploring ideas: force a studio or a one-bedroom, or put the bedroom on another wall.
 export type LayoutOptions = { kind?: Layout["kind"] | null; side?: Side | null };
+
+// The scan has the window's width, not its height: it meets the rule only once a tape shows it does,
+// and it can't when it's narrower than 38 cm. Never a tick for a size nobody has.
+function escapeCheck(win: { widthM: number } | null, inBedroom: boolean): Layout["checks"][number] {
+  const cm = win ? Math.round(win.widthM * 100) : 0;
+  const narrow = Boolean(win && win.widthM < LIMITS.egressSideM);
+  const tall = win ? Math.ceil(Math.max(LIMITS.egressSideM, LIMITS.egressM2 / win.widthM) * 100) : 0;
+  return {
+    label: "The bedroom has an escape window",
+    ok: inBedroom && win ? (narrow ? false : null) : false,
+    detail:
+      inBedroom && win
+        ? narrow
+          ? `The bedroom's window is ${cm} cm wide, under the 38 cm an escape window needs: it needs a bigger one.`
+          : `The bedroom sits on the wall with your biggest window, ${cm} cm wide. To be an escape window it has to open at least ${tall} cm tall (0.35 m², no side under 38 cm): measure it.`
+        : win
+          ? "The stairs are in the way of the window wall: the bedroom needs a new escape window where it is."
+          : "No window was seen in this room: the bedroom needs a new escape window (in your fixes).",
+  };
+}
+
+// An answer saved before Oct 30 ticked the escape window for the bedroom sitting on the biggest
+// window's wall. Read back, its check says what the scan knows: the width, and the height to tape.
+export function rejudgeEscape<L extends Pick<Layout, "window" | "checks">>(layout: L): L {
+  const i = layout.checks.findIndex((c) => /escape window/i.test(c.label));
+  if (i < 0 || !layout.window) return layout;
+  const inBedroom = layout.window.inBedroom ?? layout.checks[i].ok === true;
+  const checks = layout.checks.map((c, j) => (j === i ? escapeCheck(layout.window, inBedroom) : c));
+  return { ...layout, window: { ...layout.window, inBedroom }, checks };
+}
 
 export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   const { box } = plan;
@@ -310,15 +343,7 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
   zone("living", studio ? "Living and kitchen" : "Living and dining", living);
 
   const bed = zones.find((z) => z.kind === "bedroom")!;
-  checks.push({
-    label: "The bedroom has an escape window",
-    ok: windowInBedroom,
-    detail: windowInBedroom
-      ? "The bedroom sits on the wall with your biggest window. Its opening still needs to be at least 0.35 m², no side under 38 cm."
-      : win
-        ? "The stairs are in the way of the window wall: the bedroom needs a new escape window where it is."
-        : "No window was seen in this room: the bedroom needs a new escape window (in your fixes).",
-  });
+  checks.push(escapeCheck(win, windowInBedroom));
   checks.push({
     label: `Bedroom is at least ${BEDROOM_MIN_M2} m²`,
     ok: bed.areaM2 >= BEDROOM_MIN_M2,
@@ -354,5 +379,5 @@ export function suggestLayout(plan: Plan, opts: LayoutOptions = {}): Layout {
     detail: plan.trusted ? "The scan passed its checks." : "The scan's sizes are rough; your designer confirms them.",
   });
 
-  return { version: 1, kind: studio ? "studio" : "one_bedroom", zones, walls, doors, window: win ? { side: win.side, atM: win.atM, widthM: win.widthM } : null, checks };
+  return { version: 1, kind: studio ? "studio" : "one_bedroom", zones, walls, doors, window: win ? { side: win.side, atM: win.atM, widthM: win.widthM, inBedroom: windowInBedroom } : null, checks };
 }

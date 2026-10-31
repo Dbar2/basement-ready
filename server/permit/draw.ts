@@ -259,23 +259,40 @@ export function drawRoomFixtures(s: Sheet, v: View, m: PermitModel) {
 }
 
 // Room names, areas, sizes and ceiling heights.
-export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean }) {
+// On a plan cut into sheets (`tile`, this sheet's part of `tiles`, which together cover `whole`), a room
+// is named in the middle of its part on the sheet that holds most of it, and on any other that shows at
+// least 40% of it, so no name runs off a match line. One mostly outside the plan (a unit 1 room beside
+// the work) isn't named on the sliver of it that shows.
+const overlapOf = (a: Box, t: Box): Box => ({ minX: Math.max(a.minX, t.minX), maxX: Math.min(a.maxX, t.maxX), minZ: Math.max(a.minZ, t.minZ), maxZ: Math.min(a.maxZ, t.maxZ) });
+const boxArea = (b: Box) => Math.max(0, b.maxX - b.minX) * Math.max(0, b.maxZ - b.minZ);
+
+export function drawRoomLabels(s: Sheet, v: View, m: PermitModel, o: { ceiling: boolean; unitTag: boolean; tile?: Box; tiles?: Box[]; whole?: Box }) {
   const rooms = m.design.proposed.rooms;
   for (const r of rooms) {
     if (r.kind === "stairs") continue;
-    const b = bounds(r.polygon);
+    const full = bounds(r.polygon);
+    const t = o.tile;
+    const cut = Boolean(t && (full.minX < t.minX - 0.01 || full.maxX > t.maxX + 0.01 || full.minZ < t.minZ - 0.01 || full.maxZ > t.maxZ + 0.01));
+    const b = cut && t ? overlapOf(full, t) : full;
+    if (t && o.tiles?.length) {
+      const share = (x: Box) => boxArea(overlapOf(full, x)) / Math.max(1e-9, boxArea(full));
+      if (o.whole && share(o.whole) < 0.5) continue;
+      const best = o.tiles.reduce((bi, x, i) => (share(x) > share(o.tiles![bi]) + 1e-6 ? i : bi), 0);
+      if (o.tiles[best] !== t && share(t) < 0.4) continue;
+    }
+    if (b.maxX - b.minX < 0.3 || b.maxZ - b.minZ < 0.3) continue;
     // A kitchen that's only a counter along the wall: its fixtures say what it is.
-    if (r.kind === "kitchen" && Math.min(b.maxX - b.minX, b.maxZ - b.minZ) < 1.2) continue;
+    if (r.kind === "kitchen" && Math.min(full.maxX - full.minX, full.maxZ - full.minZ) < 1.2) continue;
     // Leave a stair or furnace room drawn inside this one out of where the label goes.
     const inner = rooms.filter((x) => x !== r && (x.kind === "stairs" || x.kind === "mechanical")).map((x) => bounds(x.polygon));
-    let c = centroid(r.polygon);
+    let c: Pt = cut ? [(b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2] : centroid(r.polygon);
     for (const ib of inner) if (c[0] > ib.minX - 0.4 && c[0] < ib.maxX + 0.4 && c[1] > ib.minZ - 0.4 && c[1] < ib.maxZ + 0.4) c = [c[0], ib.maxZ + 0.9 < b.maxZ ? ib.maxZ + 0.9 : ib.minZ - 0.9];
     const [cx, cy] = v.P(c);
     const wide = (b.maxX - b.minX) * v.k;
     const name = (r.unit === 2 ? r.name : `${r.name}${r.unit === 1 ? " (unit 1)" : r.unit === "shared" && r.kind !== "mechanical" ? " (shared)" : ""}`).toUpperCase();
     const lines: [string, number, boolean][] = [[name, 7, true]];
     lines.push([area(roomArea(r, rooms)), 5.8, false]);
-    if (r.unit === 2) lines.push([`${ftIn(b.maxX - b.minX)} x ${ftIn(b.maxZ - b.minZ)}`, 5.5, false]);
+    if (r.unit === 2) lines.push([`${ftIn(full.maxX - full.minX)} x ${ftIn(full.maxZ - full.minZ)}`, 5.5, false]);
     const clg = r.ceilingM ?? m.ceilingM;
     if (o.ceiling && clg) lines.push([`CLG ${ftIn(clg)} (${Math.round(clg * 1000)})`, 5.5, false]);
     const tall = (b.maxZ - b.minZ) * v.k;
@@ -415,12 +432,22 @@ export function drawChains(s: Sheet, v: View, m: PermitModel, clipBox?: Box) {
     const side = n[0] * e.out[0] + n[1] * e.out[1] > 0 ? 1 : -1;
     const off1 = face + 0.18 + 14 / v.k, off2 = off1 + 16 / v.k;
     const w0 = { ...edge, id: "edge", thicknessM: face, kind: "existing", rating: null } as PWall;
-    for (let i = 0; i + 1 < sorted.length; i++) chainSeg(s, v, w0, sorted[i], sorted[i + 1], n, side * off1, i, face);
-    if (sorted.length > 2) chainSeg(s, v, w0, 0, L, n, side * off2, 0, face);
+    // On a plan cut into sheets, only what's on this sheet: a dimension that crosses the match line
+    // stops there and says so, and the overall goes on the sheet that shows the whole edge. A line the
+    // sheet's edge cut short would read shorter than its label at the sheet's scale.
+    const horizontal = Math.abs(e.b[1] - e.a[1]) < 1e-6;
+    const lo = clipBox ? Math.max(0, horizontal ? clipBox.minX - e.a[0] : clipBox.minZ - e.a[1]) : 0;
+    const hi = clipBox ? Math.min(L, horizontal ? clipBox.maxX - e.a[0] : clipBox.maxZ - e.a[1]) : L;
+    for (let i = 0; i + 1 < sorted.length; i++) {
+      const t0 = Math.max(sorted[i], lo), t1 = Math.min(sorted[i + 1], hi);
+      if (t1 - t0 < 0.05) continue;
+      chainSeg(s, v, w0, t0, t1, n, side * off1, i, face, t0 > sorted[i] || t1 < sorted[i + 1] ? "TO MATCH LINE" : undefined);
+    }
+    if (sorted.length > 2 && lo <= 0.001 && hi >= L - 0.001) chainSeg(s, v, w0, 0, L, n, side * off2, 0, face);
   }
 }
 
-function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, off: number, i: number, face: number) {
+function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, off: number, i: number, face: number, note?: string) {
   const a = add(at(w, t0), n, off), b = add(at(w, t1), n, off);
   const [ax, ay] = v.P(a), [bx, by] = v.P(b);
   s.line(ax, ay, bx, by, { width: 0.45, color: MUTED });
@@ -431,7 +458,7 @@ function chainSeg(s: Sheet, v: View, w: PWall, t0: number, t1: number, n: Pt, of
     s.line(px - 3, py - 3, px + 3, py + 3, { width: 0.8 });
   }
   const len = t1 - t0;
-  const label = dimText(len);
+  const label = note ? `${dimText(len)} ${note}` : dimText(len);
   const span = Math.hypot(bx - ax, by - ay);
   const ang = (Math.atan2(by - ay, bx - ax) * 180) / Math.PI;
   const up = ang > 90 || ang < -90 ? ang + 180 : ang;
