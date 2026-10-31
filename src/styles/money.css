@@ -21,7 +21,7 @@
   width: fit-content;
   text-decoration: underline;
   text-underline-offset: 4px;
-  text-decoration-color: var(--color-mint-line);
+  text-decoration-color: var(--color-ink);
 }
 .program-terms ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 4px; max-width: 64ch; }
 .program-source { font-size: 14px; color: var(--color-accent-text); }
@@ -63,7 +63,7 @@
   border: var(--line-ink);
   overflow-wrap: anywhere;
 }
-.task-links a::after { content: " ↗"; color: var(--color-mint-line); }
+.task-links a::after { content: " ↗"; color: var(--color-ink-muted); }
 .task-links a:hover { background: var(--color-card); }
 
 /* ---------- Get it done ---------- */

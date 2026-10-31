@@ -23,9 +23,10 @@ import "../styles/journey.css";
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 
 export type Tab = "book" | "decision" | "permit" | "money" | "build";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "book", label: "Your book" },
-  { id: "decision", label: "The answer" },
+// `pre` drops on a phone so all five tabs fit one row ("Book", "Answer"…); the full name stays the tab's name.
+const TABS: { id: Tab; label: string; pre?: string }[] = [
+  { id: "book", label: "Your book", pre: "Your" },
+  { id: "decision", label: "The answer", pre: "The" },
   { id: "permit", label: "Permit" },
   { id: "money", label: "Money" },
   { id: "build", label: "Build" },
@@ -226,8 +227,15 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
         </div>
         <nav className="ws-tabs" role="tablist" aria-label="Workspace">
           {TABS.filter((t) => !readOnly || t.id !== "book").map((t) => (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => go(t.id)}>
-              {t.label}
+            <button key={t.id} role="tab" aria-selected={tab === t.id} aria-label={t.label} onClick={() => go(t.id)}>
+              {t.pre ? (
+                <>
+                  <span className="ws-tab-pre">{t.pre} </span>
+                  <span className="ws-tab-word">{t.label.slice(t.pre.length + 1)}</span>
+                </>
+              ) : (
+                t.label
+              )}
             </button>
           ))}
         </nav>

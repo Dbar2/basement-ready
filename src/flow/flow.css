@@ -18,7 +18,7 @@
 .flow-foot > :first-child { justify-self: start; }
 .flow-foot-right { display: flex; align-items: center; justify-content: flex-end; gap: 16px; min-width: 0; grid-column: 3; }
 .flow-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 4px; color: var(--color-ink); font-size: 15px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-.flow-back:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-mint-line); }
+.flow-back:hover { text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-ink); }
 .flow-foot .btn:disabled { opacity: 0.45; cursor: default; }
 /* The title block: which sheet this is, like the corner of a drawing. Desktop only. */
 .title-block { grid-column: 2; display: grid; grid-template-columns: auto auto; align-items: stretch; border: var(--line-ink); border-radius: 2px; font-family: var(--font-mono); font-size: var(--text-tiny); line-height: 1.35; color: var(--color-ink); }

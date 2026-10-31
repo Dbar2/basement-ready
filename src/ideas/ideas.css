@@ -66,7 +66,7 @@
 .deck-btn:disabled { opacity: 0.4; cursor: default; }
 /* Loving is the strong choice, in ink; mint stays for the step's way forward. */
 .deck-love { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-card); }
-.deck-undo { background: none; border: 0; padding: 12px 8px; color: var(--color-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-mint-line); }
+.deck-undo { background: none; border: 0; padding: 12px 8px; color: var(--color-ink); font-weight: 600; text-decoration: underline; text-underline-offset: 4px; text-decoration-color: var(--color-ink); }
 .deck-undo:disabled { opacity: 0.35; text-decoration: none; cursor: default; }
 .deck-count { margin: 0; text-align: center; color: var(--color-ink-muted); font-size: var(--text-small); }
 
