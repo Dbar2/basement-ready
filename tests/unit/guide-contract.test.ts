@@ -10,7 +10,7 @@ const app = new Hono();
 mountGuide(app);
 
 describe("the guide's contract", () => {
-  it("gives the example's thread, at its answer, with a visual in the pane", async () => {
+  it("gives the example's thread, on its first question, with a visual in the pane", async () => {
     const res = await app.request("/api/scans/sample/guide");
     expect(res.status).toBe(200);
     const s: GuideState = await res.json();
@@ -18,7 +18,8 @@ describe("the guide's contract", () => {
     expect(VISUAL_KINDS).toContain(s.visual.kind);
     const last = s.messages.at(-1)!;
     expect(last.from).toBe("guide");
-    expect(last.choices?.filter((c) => c.primary)).toHaveLength(1);
+    // A question's answers are equals; a step with a way on has exactly one mint button.
+    expect(last.choices?.filter((c) => c.primary).length ?? 0).toBeLessThanOrEqual(1);
     for (const m of s.messages) if (m.visual) expect(VISUAL_KINDS).toContain(m.visual.kind);
   });
 
