@@ -1,6 +1,7 @@
 // The guide's routes (mounted from server/index.ts):
 //   GET  /api/scans/:id/guide            the thread as it stands, moved on if the scan has (the wait polls it)
 //   POST /api/scans/:id/guide {action}   their tap or their words; returns the new messages and the thread
+//   POST /api/scans/:id/guide/voice      a recorded question (audio body) → {text} for the ask box
 // Each action goes through the existing code first: answers through the answers route, plan edits
 // through server/model/edit.ts, described changes through server/model/describe.ts, the model saved on
 // the workspace. Then the script (server/guide/script.ts) says what's next. The thread is kept on the
@@ -8,6 +9,7 @@
 // the browser, which sends it back with each action; it never calls a model.
 import { eq } from "drizzle-orm";
 import type { Context, Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { db, schema } from "../db";
 import { LOOK_ID, LOOK_VALUES, waitQuestions } from "../eligibility";
 import { clientIp, metaKey, overSpend } from "../limits";
@@ -28,6 +30,8 @@ import { answer, askSpark, SAMPLE_LINE } from "./ask";
 import { entryFor, sourcesFor } from "./glossary";
 import { cleanSample, SAMPLE_DESCRIBE, SAMPLE_WALL, sampleAct, sampleCtx, samplePack, sampleStart } from "./sample";
 import { buildListFor } from "./build";
+import { heard, VOICE_MAX_BYTES } from "./voice";
+import { NOT_FOUND } from "../privacy";
 import { act, chosenOf, explainReply, start, sync, type Ctx, type Reply, type Thread } from "./script";
 import type { GuideAction, LookKey } from "../../src/guide/types";
 
@@ -242,7 +246,7 @@ async function apply(app: Hono, c: Context, a: Access, action: GuideAction, befo
 
 // Why Spark can't be asked right now, or null.
 async function sparkBusy(c: Context): Promise<Applied["error"] | null> {
-  if (!metaKey()) return { text: "Typed questions need the AI key on this server.", status: 503 };
+  if (!metaKey()) return { text: "That needs the AI key on this server. The buttons still work.", status: 503 };
   if (await overSpend()) return { text: "That's all the questions I can answer today. They come back at midnight, Eastern time.", status: 429 };
   if (!allowAsk(clientIp(c))) return { text: "That's a lot of questions for one hour. Try again later.", status: 429 };
   return null;
@@ -282,6 +286,29 @@ export function mountGuide(app: Hono, currentUser: (c: Context) => Promise<strin
     const { thread, messages } = was ? sync(was, ctx) : { thread: start(ctx), messages: [] };
     if (!was || messages.length) await saveWorkspace(a.basement.id, { state: { guide: thread } as Partial<GuideStored> });
     return c.json(thread, 200, NO_STORE);
+  });
+
+  // Their question said aloud (server/guide/voice.ts): the words for the ask box, or why not. The owner's
+  // only (the scan gate answers anyone else the same 404, and so does this), and paid for like a typed
+  // question. The example never spends, so it doesn't listen.
+  const tooBig = { error: "That's longer than I can listen to. Keep it under 30 seconds." };
+  // The size is checked as the body streams in, so a clip with no length given stops at the cap too.
+  const voiceLimit = bodyLimit({ maxSize: VOICE_MAX_BYTES, onError: (c) => c.json(tooBig, 413) });
+  app.post("/api/scans/:id/guide/voice", voiceLimit, async (c) => {
+    if (c.req.param("id") === "sample") return c.json({ error: "The example doesn't listen. Type your question instead." }, 404);
+    const a = await ownerOf(c, currentUser);
+    if (!a?.allowed) return c.json({ error: NOT_FOUND }, 404);
+    const clip = new Uint8Array(await c.req.arrayBuffer());
+    if (!clip.byteLength) return c.json({ error: "No sound came through. Try again, or type it." }, 400);
+    const busy = await sparkBusy(c);
+    if (busy) return c.json({ error: busy.text }, busy.status);
+    try {
+      const text = await heard(clip);
+      return text ? c.json({ text }, 200, NO_STORE) : c.json({ error: "I didn't catch any words. Try again, or type it." }, 422);
+    } catch (err) {
+      console.error(`[guide] voice failed: ${err instanceof Error ? err.message : err}`);
+      return c.json({ error: "I couldn't hear that. Try again, or type it." }, 502);
+    }
   });
 
   app.post("/api/scans/:id/guide", async (c) => {
