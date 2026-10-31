@@ -1,6 +1,6 @@
 /* The Build milestone's cards (src/guide/cards), inside the thread's card frame (.gs-card in guide.css).
-   Drawing Set (brand/ui.md): hairlines, no shadows, ink for every button here; the one mint button is
-   the guide's way on, or "Download the submit copy" on the step where it is the way on. */
+   Drawing Set (brand/ui.md): hairlines, no shadows; the card's way on is the one mint button, the rest
+   are hairline ghosts or underlined links. */
 
 .gc { gap: 10px; font-size: 15px; }
 .gc p { margin: 0; }
@@ -25,11 +25,9 @@
 .gc-mm .input::placeholder { color: var(--color-ink-muted); opacity: 0.7; }
 .gc-mm .mono { font-size: var(--text-figure); color: var(--color-ink-muted); }
 
-/* Buttons: ink fill, the card's own colour on it. */
-.gc-save { justify-self: start; display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border: 1px solid var(--color-ink); border-radius: var(--radius-2); background: var(--color-ink); color: var(--color-card); font: 700 15px var(--font-body); cursor: pointer; }
-.gc-save:hover:not(:disabled) { background: var(--color-ink-muted); border-color: var(--color-ink-muted); }
-.gc-save:disabled { opacity: 0.45; cursor: default; }
-.gc-primary { justify-self: start; min-height: 48px; }
+/* Buttons: the system's own. The card's way on is the mint primary (one per screen: the older cards
+   have folded to their saved line); everything else is a hairline ghost. Sized for a card. */
+.gc-btn { justify-self: start; min-height: 44px; padding: 0 16px; font-size: 15px; }
 .gc .chip { min-height: 40px; text-decoration: none; }
 .gc > .link-quiet, .gc-form > .link-quiet { justify-self: start; text-align: left; }
 
