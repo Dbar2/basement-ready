@@ -115,9 +115,10 @@ final class CapturePipelineTests: XCTestCase {
     }
     print("BRPERF memory every 10 s of take: " + mb.map { String(format: "%.0f", $0) }.joined(separator: " ") + " MB")
     // A leak grows sample after sample. A busy Mac's software encoder can hold a batch of frames for a
-    // while (a step of 15–30 MB here), which isn't growth; a frame leaked each time would be gigabytes.
+    // while (steps of 15–45 MB here), which isn't growth; holding the frames themselves would add
+    // about 140 MB every 10 s.
     let median = { (xs: ArraySlice<Double>) in xs.sorted()[xs.count / 2] }
-    XCTAssertLessThan(median(mb[5...7]) - median(mb[2...4]), 40, "no steady growth over the take")
+    XCTAssertLessThan(median(mb[5...7]) - median(mb[2...4]), 100, "no steady growth over the take")
     pipeline.cancel()
   }
 }
