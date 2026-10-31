@@ -118,11 +118,14 @@ export function reachable(design: Design, existing: Existing, radius: number, do
   for (let k = 0; k < nz; k++)
     for (let i = 0; i < nx; i++) {
       const p = pt(i, k);
-      if (!floor.some((poly) => inPolygon(p, poly))) continue;
-      const inDoor = doorsOpen && doors.some(({ o, w }) => {
-        const { t, off } = project(w, p);
-        return Math.abs(t - o.offsetM) <= o.widthM / 2 && Math.abs(off) < 0.35;
-      });
+      const inDoorway = (reach: number) =>
+        doors.some(({ o, w }) => {
+          const { t, off } = project(w, p);
+          return Math.abs(t - o.offsetM) <= o.widthM / 2 && Math.abs(off) < reach;
+        });
+      // A doorway is floor too: it crosses the wall between two rooms' outlines.
+      if (!floor.some((poly) => inPolygon(p, poly)) && !inDoorway(0.15)) continue;
+      const inDoor = doorsOpen && inDoorway(0.35);
       if (inDoor || pieces.every(([a, b]) => distToSegment(p, a, b) >= radius)) free[k * nx + i] = 1;
     }
   // Ways out: the stairs, and a door in a foundation wall (to the outside).

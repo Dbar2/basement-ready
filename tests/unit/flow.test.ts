@@ -110,6 +110,17 @@ describe("the example's committed pictures", () => {
     expect(shuffled.map(designHash)).toEqual(model.designs.map(designHash));
   });
 
+  // A picture is taken from where the video was filmed, never from inside a piece of furniture
+  // (server/views/angles.ts): every design has to leave at least one of those spots clear to show it from.
+  it("leaves every design an angle to picture it from, in each of the studio's finishes", async () => {
+    const model = await served();
+    for (const d of model.designs)
+      for (const style of ["light", "warm", "deep"]) {
+        const design = d.finishes.style === style ? d : applyEdit(d, { op: "set_finishes", finishes: { style } });
+        expect((await designAngles("sample", 5, design.proposed.furniture, newWallSegs(design))).length, `${d.id} ${style}`).toBeGreaterThan(0);
+      }
+  });
+
   // The pictures step and the layout cards ask for a design's pictures by its hash; a design without
   // committed ones falls back to the 3D render (and the example never makes new ones), so this fails as
   // soon as the example's designs change without its pictures being made again (scripts in the
