@@ -56,9 +56,10 @@ export type PermitInputs = {
   upstairs?: { bedrooms: { floor: number; at: [number, number] }[]; none?: boolean | null };
   reviewed?: { sheet: string; key: string }[];
   designer?: { name?: string | null; bcin?: string | null; firm?: string | null; firmBcin?: string | null; email?: string | null; phone?: string | null };
+  waterMeter?: { option?: "single" | "room" | "compartment" | null; where?: string | null };
 };
 
-export type ReadyItem = { id: string; group: "tape" | "windows" | "owner" | "upstairs" | "lot" | "designer" | "review"; label: string; detail: string; done: boolean };
+export type ReadyItem = { id: string; group: "tape" | "windows" | "owner" | "upstairs" | "lot" | "water" | "designer" | "review"; label: string; detail: string; done: boolean };
 export type PermitWindow = { id: string; tag: string; room: string; widthM: number; heightM: number | null; sillM: number | null; change: "keep" | "enlarge" | "new"; escape: boolean; taped: boolean; was: { widthM: number; heightM: number | null } | null };
 // Where the permit set stands (server/workspaceRoutes.ts permitPayload).
 export type PermitStatus = {
@@ -120,7 +121,8 @@ export type Line = {
   only?: string | null;
 };
 export type Cost = { id: string; item: string; lowCAD: number; highCAD: number; source: { title: string; url: string; checked: string } | null; estimate: boolean; only?: string | null };
-export type Trade = { id: string; title: string; owner: "yes" | "with_permit" | "ask" | "no"; detail: string; permit: string | null; registry?: { label: string; url: string } | null; source: Cite; verified: boolean; notes?: string };
+// citySource: the page behind the house's own city's addition to the Ontario wording (server/permit/data.ts forCity).
+export type Trade = { id: string; title: string; owner: "yes" | "with_permit" | "ask" | "no"; detail: string; permit: string | null; registry?: { label: string; url: string } | null; source: Cite; citySource: Cite | null; verified: boolean; notes?: string };
 export type CityForm = { id: string; title: string; url: string | null; fill: "acroform" | "summary"; who: string; when: string; required: string; source: Cite; verified: boolean; notes?: string };
 export type CityPermit = {
   signer: "owner" | "brief";
@@ -137,7 +139,7 @@ export type CityPermit = {
   inspections: { id: string; title: string; when: string; who: string }[];
   inspectionsSource: Cite;
 };
-export type ProItem = { id: string; title: string; who: string; when: string; detail: string; registry?: { label: string; url: string } | null; source: Cite; verified: boolean; notes?: string; live: boolean };
+export type ProItem = { id: string; title: string; who: string; when: string; detail: string; registry?: { label: string; url: string } | null; source: Cite; citySource: Cite | null; verified: boolean; notes?: string; live: boolean };
 
 export type DiyPlan = {
   city: string;
@@ -150,7 +152,7 @@ export type DiyPlan = {
   takeoff: { lines: Line[]; assumptions: string[]; materialsCAD: number; hstCAD: number; missing: string[]; wallHeightM: number; checked: string };
   permits: Cost[];
   hires: Cost[];
-  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null };
+  totals: { diyLow: number; diyHigh: number; hiredLow: number | null; hiredHigh: number | null; fromQuote: boolean };
   steps: { n: number; title: string; who: string; detail: string; inspection: string | null }[];
 };
 

@@ -19,6 +19,8 @@ from . import MODEL_ID, MODEL_REVISION, ScanError
 from .planapi import respond
 from .mesh import MAX_FACES
 from .pipeline import Scanner
+from .texture import decode as decode_image
+from .texture import paint
 
 MAX_FRAMES_IN = 900  # 3 minutes at 5 fps, the cap in server/pipeline.ts
 MAX_FRAME_BYTES = 10 * 1024 * 1024
@@ -75,7 +77,7 @@ def _cameras(raw, n: int):
     return out
 
 
-def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: int = 64) -> FastAPI:
+def create_app(get_scanner: Callable[[], Scanner | None], token: str, max_frames_cap: int = 64) -> FastAPI:
     if not token:
         raise ValueError("a bearer token is required (SCAN3D_TOKEN)")
     app = FastAPI(title="Basement Ready scan3d", docs_url=None, redoc_url=None, openapi_url=None)
@@ -93,7 +95,7 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
         if not authorized(request):
             return error(401, "missing or wrong bearer token")
         scanner = get_scanner()
-        return {"ok": True, "model": MODEL_ID, "revision": MODEL_REVISION, "device": scanner.device, "maxFrames": max_frames_cap}
+        return {"ok": True, "model": MODEL_ID, "revision": MODEL_REVISION, "device": scanner.device if scanner else "cpu", "maxFrames": max_frames_cap}
 
     @app.post("/scan")
     async def scan(request: Request):
@@ -146,7 +148,10 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
             except (TypeError, ValueError) as e:
                 raise ScanError("maxFaces must be a number") from e
             cameras = _cameras(options.get("cameras"), len(items))
-            result = await run_in_threadpool(get_scanner().scan, items, max_frames, known, max_points, skip_depth, cameras, max_faces)
+            scanner = get_scanner()
+            if scanner is None:
+                return error(503, "this endpoint only paints (POST /texture)")
+            result = await run_in_threadpool(scanner.scan, items, max_frames, known, max_points, skip_depth, cameras, max_faces)
         except (ScanError, json.JSONDecodeError) as e:
             return error(400, str(e))
 
@@ -189,5 +194,37 @@ def create_app(get_scanner: Callable[[], Scanner], token: str, max_frames_cap: i
         except (ScanError, json.JSONDecodeError, KeyError, ValueError, TypeError) as e:
             return error(400, str(e))
         return JSONResponse(out)
+
+    @app.post("/texture")
+    async def texture(request: Request):
+        """Paint the as-built model with the frames (scan3d/texture.py): multipart `job` (JSON: surfaces,
+        occluders, cameras, options, depthShapes), `frames` (images, in the order the cameras' `image`
+        index them) and `depth` (raw float16, one per depthShapes entry). Replies multipart: `index`
+        (the atlas index) and one JPEG part per atlas size."""
+        if not authorized(request):
+            return error(401, "missing or wrong bearer token")
+        try:
+            form = await request.form(max_files=MAX_FRAMES_IN + 64, max_fields=10)
+            raw = form.get("job")
+            if raw is None:
+                raise ScanError("send a job")
+            job = json.loads(raw if isinstance(raw, str) else await raw.read())
+            if not isinstance(job, dict) or not job.get("surfaces") or not job.get("cameras"):
+                raise ScanError("the job needs surfaces and cameras")
+            images = [decode_image(await f.read()) for f in form.getlist("frames") if not isinstance(f, str)]
+            shapes = job.get("depthShapes") or []
+            depths = []
+            for f, shape in zip([f for f in form.getlist("depth") if not isinstance(f, str)], shapes):
+                depths.append(np.frombuffer(await f.read(), "<f2").reshape(shape))
+            if any(not (0 <= c.get("image", -1) < len(images)) for c in job["cameras"]):
+                raise ScanError("every camera's image must be one of the frames sent")
+            index, files = await run_in_threadpool(paint, job, images, depths)
+        except (ScanError, json.JSONDecodeError, KeyError, ValueError) as e:
+            return error(400, str(e))
+        body, media = multipart([
+            ("index", "index.json", "application/json", json.dumps(index).encode()),
+            *[(name, name, "image/jpeg", data) for name, data in files.items()],
+        ])
+        return Response(body, media_type=media)
 
     return app

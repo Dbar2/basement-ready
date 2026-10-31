@@ -23,6 +23,7 @@ Node worker ──POST /scan (frames + options)──▶ scan3d ──▶ multip
 | `scan3d/export.py` | PLY and depth writers, reference `lift_box` |
 | `scan3d/api.py` | the HTTP contract below |
 | `scan3d/preview.py` | plan + side view PNG for checking a scan by eye |
+| `scan3d/texture.py` | paints the as-built model (the plan's walls, floors, ceilings, stairs) with the frames: one JPEG atlas. CPU only |
 | `scan3d/layout.py` | the whole basement's floor plan: floor, wall faces, rooms, doors, fixtures, typed corrections |
 | `scan3d/views.py`, `selfcheck.py`, `plandraw.py`, `planapi.py` | where the floor meets the walls in each frame, each wall checked against the depth, the pictures Spark reads, `/floorplan` |
 | `plan_eval.py` | scores a plan against the truth or a homeowner's sketch |
@@ -111,6 +112,22 @@ The reply is JSON:
 - `plan`: rooms as polygons, walls with their thickness and `check` (the self-check's confidence), openings, fixtures, each area's floor, and the verdict on every edit. In the plan frame: world (x, z) turned by −`rotation`, the floor at 0.
 - `rooms`: each room's box, the shape `server/basement.ts` places areas by.
 - `floorY`, `ceilingY`, `checked`, and `renders` (`topDown` PNG and `frames` JPEGs, base64) when asked.
+
+### `POST /texture`
+
+Paints the as-built model: the basement drawn from its plan (`src/three/AsBuiltModel.ts`), each surface rectified from the frames that see it best. Needs no GPU or model; `run_local.py serve --no-model` serves it (with `/floorplan`), and Modal's `paint_web` serves it alone.
+
+`multipart/form-data` with:
+
+| Part | Content |
+|---|---|
+| `job` | JSON: `surfaces` and `occluders` (`paintJob` in `src/three/AsBuiltModel.ts`), `cameras` (one per frame: `image` index, `K` 3×3 in that frame's pixels, `pose` 4×4 OpenCV camera-to-plan, `width`/`height`, `sharpness`, optional `depth: {map, frame, K, scale}`), `depthShapes`, `options: {ppm, maxPage}` |
+| `frames` | the images, in `image` order |
+| `depth` | raw float16 per `depthShapes` entry (`[frames, H, W]`), z-depth; `scale` turns it into plan metres |
+
+For each surface: score every camera on a 4 cm grid (how square, how close, how sharp, how far from the frame's edge, and whether the spot is in view: not behind another surface's room side or a known fixture, and the scan's depth puts the surface itself there, so clutter stays off), keep up to 8 frames that see it best between them, move a wall's paint to where the depth says the real wall is (back up to 35 cm, forward up to 10), warp, blend with each frame's exposure matched, and fill what no frame saw from the surface's neighbourhood, then its own colour.
+
+Reply: multipart with `index` (`{page, ppm, levels: {size: file}, surfaces: {id: {key, rect, coverage, frames, shiftM?}}, tones}`, rects in 0..1 of the page) and one JPEG per size (`atlas-512.jpg` up to `atlas-4096.jpg`). The Node side stores them under `scans/<id>/asbuilt/<plan key>/` (`server/asBuilt.ts`).
 
 ### `GET /health`
 

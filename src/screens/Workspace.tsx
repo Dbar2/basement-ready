@@ -23,9 +23,10 @@ import "../styles/journey.css";
 const money = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 
 export type Tab = "book" | "decision" | "permit" | "money" | "build";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "book", label: "Your book" },
-  { id: "decision", label: "The answer" },
+// `pre` drops on a phone so all five tabs fit one row ("Book", "Answer"…); the full name stays the tab's name.
+const TABS: { id: Tab; label: string; pre?: string }[] = [
+  { id: "book", label: "Your book", pre: "Your" },
+  { id: "decision", label: "The answer", pre: "The" },
   { id: "permit", label: "Permit" },
   { id: "money", label: "Money" },
   { id: "build", label: "Build" },
@@ -42,7 +43,7 @@ const PHOTO_EVERY_MS = 4000;
 const NEXT: Partial<Record<Tab, { label: string; tab: Tab }>> = {
   book: { label: "Your permit set", tab: "permit" },
   decision: { label: "Your permit set", tab: "permit" },
-  permit: { label: "Money you qualify for", tab: "money" },
+  permit: { label: "Money you can get", tab: "money" },
   money: { label: "Who builds it", tab: "build" },
 };
 
@@ -107,22 +108,8 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
         void getWorkspace(scanId)
           .then(setWs)
           .catch(() => setWs({ profile: null, state: {}, prefill: { legalDescription: null, pin: null, rollNumber: null, fromOtherBasement: null }, site: null, locked: "We couldn't open your workspace. Try again in a moment." }));
-      // The sample's answers from the wait screen, applied the way a real scan applies them, over
-      // the money answers the sample comes with.
-      const told = Object.fromEntries((s.result?.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer]));
-      const early = scanId === "sample" ? { ...told, ...sampleEarlyAnswers() } : {};
-      if (s.result && Object.keys(early).length) {
-        const { household, ...answers } = early;
-        const res = await fetch("/api/recheck", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ result: s.result, answers, household: household ?? s.result.household }),
-        });
-        if (res.ok) {
-          setSampleAnswers(early);
-          return setR((await res.json()).result);
-        }
-      }
+      // The sample's answers (it comes with some; the wait screen adds more): getScan applied them.
+      if (scanId === "sample") setSampleAnswers({ ...Object.fromEntries((s.result?.moneyAnswered ?? []).filter((q) => q.id !== "household").map((q) => [q.id, q.answer])), ...sampleEarlyAnswers() });
       setR(s.result);
     });
   }, [scanId]);
@@ -218,27 +205,37 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
         </header>
       )}
       <div className="ws-head">
-        {!readOnly && (
-          <p className="ws-tools">
-            <button className="link-quiet" onClick={() => void share()}>Share</button>
-            <button className="link-quiet" onClick={onRestart}>New scan</button>
-          </p>
-        )}
-        <p className="ws-address mono">{p ? `${p.address}, ${p.municipality}` : scanId === "sample" ? "The example basement" : r.demo ? "Demo house, Waterloo" : (r.city ?? "Your basement")}</p>
-        {scanId === "sample" && (
-          <p className="example-label" role="note">
-            <span className="tag-mono">Example</span> {EXAMPLE_LABEL}
-          </p>
-        )}
-        {r.demo && (
-          <p className="example-label" role="note">
-            <span className="tag-mono">Demo house</span> {DEMO_LABEL}
-          </p>
-        )}
+        {/* One line above the tabs: whose basement this is (or that it's the example), and Share and New scan. */}
+        <div className="ws-line">
+          {scanId === "sample" ? (
+            <p className="example-label" role="note">
+              <span className="tag-mono">Example</span> {EXAMPLE_LABEL}
+            </p>
+          ) : r.demo ? (
+            <p className="example-label" role="note">
+              <span className="tag-mono">Demo house</span> {DEMO_LABEL}
+            </p>
+          ) : (
+            <p className="ws-address">{p ? `${p.address}, ${p.municipality}` : (r.city ?? "Your basement")}</p>
+          )}
+          {!readOnly && (
+            <p className="ws-tools">
+              <button className="link-quiet" onClick={() => void share()}>Share</button>
+              <button className="link-quiet" onClick={onRestart}>New scan</button>
+            </p>
+          )}
+        </div>
         <nav className="ws-tabs" role="tablist" aria-label="Workspace">
           {TABS.filter((t) => !readOnly || t.id !== "book").map((t) => (
-            <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => go(t.id)}>
-              {t.label}
+            <button key={t.id} role="tab" aria-selected={tab === t.id} aria-label={t.label} onClick={() => go(t.id)}>
+              {t.pre ? (
+                <>
+                  <span className="ws-tab-pre">{t.pre} </span>
+                  <span className="ws-tab-word">{t.label.slice(t.pre.length + 1)}</span>
+                </>
+              ) : (
+                t.label
+              )}
             </button>
           ))}
         </nav>
@@ -282,12 +279,12 @@ export function Workspace({ scanId, onRestart }: { scanId: string; onRestart: ()
           <BuildTab {...props} />
         </div>
       )}
-      {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty mono ws-wait">Opening your workspace…</p>}
+      {!ws && tab !== "decision" && tab !== "book" && <p className="viewer-empty ws-wait">Opening your workspace…</p>}
 
       <SiteFooter />
       {readOnly && (
         <div className="result-bar">
-          <button className="btn btn-primary" onClick={() => void share()}>
+          <button className="btn btn-ghost" onClick={() => void share()}>
             Share
           </button>
         </div>

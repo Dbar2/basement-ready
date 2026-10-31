@@ -12,19 +12,21 @@ import { Readable } from "node:stream";
 import { claimBasements, deleteBasement, deleteUserData, ensureUser, listBasements } from "./accounts";
 import { db, migrateDb, schema, usingPglite } from "./db";
 import { enqueue, startWorker } from "./jobs";
+import { withTestTag } from "./testTag";
 import { listModels } from "./meta";
 import { buildPlan } from "./plan";
 import { resolveAddress, searchOntario } from "./address";
 import { suggestLayout } from "./layout";
 import { AERIAL_YEAR, fetchAerial, lookupProperty, type Property } from "./property";
-import { recheck, type Answers, type AnswerValue } from "./recheck";
+import { pricedForBasement, pricedSample } from "./priced";
+import { type Answers, type AnswerValue } from "./recheck";
 import { cameraLookup, cleanCapture } from "./capture";
 import { finishRooms, saveBasement3d, storedText, ANALYSIS_FPS, type Detection } from "./pipeline";
 import { scanBasement } from "./basement";
 import { readBasementPlan } from "./floorplan";
 import { cleanIdeas, cleanRooms, cleanSpoken, mainRoom, MAX_ROOMS, MAX_TAKE_S, MIN_ROOM_FRAMES, roomRanges } from "./rooms";
 import { liteSurfels, lowOverhead, runScan3d, scan3dReady, summarize, type Scan3d } from "./scan3d";
-import { admit, detectLive, LIVE_CONCEPTS } from "./live";
+import { admit, detectLive, liveKeys } from "./live";
 import { addLiveFrame, live3dEnabled, livePreview } from "./live3d";
 import { cleanMunicipality, MUNICIPALITIES, packFor, type Household } from "./rules";
 import { cleanMoneyAnswer, evaluateMoney, fromWho, STORED_MONEY_QUESTIONS, waitQuestions, WHO_ID, WHO_IDS, type MoneyAnswers, type Who } from "./eligibility";
@@ -41,7 +43,9 @@ import { allowance, clientIp, metaKey, mountLimits, overSpend, startSpendLedger,
 import { startSweeps } from "./sweep";
 import { DEMO_MUNICIPALITY, isDemo, labelled } from "./demo";
 import { mountViews } from "./views/routes";
+import { mountAsBuilt } from "./asBuilt";
 import { mountBook } from "./book/routes";
+import { mountGuide } from "./guide/routes";
 import { readPhotos, savePhotos, type PhotoTake } from "./photoInput";
 
 const MAX_VIDEO_BYTES = 400 * 1024 * 1024;
@@ -59,6 +63,8 @@ if (process.env.MODEL_API_KEY || process.env.RELAY_TOKEN) {
 }
 
 const app = new Hono();
+// In an end-to-end run, everything a request sets off is tagged with its journey (server/testTag.ts).
+app.use("*", (c, next) => withTestTag(c.req.header("x-e2e-test"), next));
 
 function rows<T>(result: unknown): T[] {
   return (Array.isArray(result) ? result : (result as { rows: T[] }).rows) as T[];
@@ -202,12 +208,13 @@ app.get("/api/scans/:id", async (c) => {
   // Scans from before layouts get one on the way out: it's pure, from the saved plan.
   const result = scan.result as any;
   const withLayout = result?.plan && !result.layout ? { ...result, layout: suggestLayout(result.plan) } : result;
-  // And scans from before the money questions get their money worked out again, with their answers.
   const answers = await savedAnswers(scan.basementId);
-  const withMoney = withLayout?.findings && !withLayout.moneyQuestions ? recheck(withLayout, answers) : withLayout;
   // Who it's for and every answer saved (rule, money, who, plans), and what's still worth asking.
   const [basement] = await db.select().from(schema.basements).where(eq(schema.basements.id, scan.basementId));
   const household = (basement?.household ?? "unsure") as Household;
+  // Re-checked with its answers and priced on the design they picked (server/priced.ts): the cost is
+  // that design's quote, the money is worked from it, and the fixes are one list.
+  const withMoney = withLayout?.findings ? await pricedForBasement(scan.id, scan.basementId, { ...withLayout, household: basement?.household ?? withLayout.household }, answers) : withLayout;
   // Only the owner answers; a shared link reads.
   const owner = await ownerOf(c, currentUser);
   const failure = scan.status === "error" ? failureOf(scan.error) : null;
@@ -367,16 +374,12 @@ app.post("/api/live/detect", async (c) => {
   const body = await c.req.parseBody();
   const frame = body.frame;
   const session = String(body.session ?? "").slice(0, 64);
-  let keys: string[] = [];
-  try {
-    keys = (JSON.parse(String(body.concepts ?? "[]")) as string[]).filter((k) => k in LIVE_CONCEPTS).slice(0, 3);
-  } catch {
-    keys = [];
-  }
-  if (!(frame instanceof File) || frame.size > 400 * 1024 || !keys.length || session.length < 8) {
+  // Only retired keys (an older app): no SAM call, but the frame still builds the 3D preview.
+  const { keys, retiredOnly } = liveKeys(body.concepts);
+  if (!(frame instanceof File) || frame.size > 400 * 1024 || (!keys.length && !retiredOnly) || session.length < 8) {
     return c.json({ error: "Send a small JPEG frame, a session id and 1–3 concepts." }, 400);
   }
-  const refused = admit(clientIp(c), session, keys.length) ?? ((await overSpend()) ? "daily limit" : null);
+  const refused = admit(clientIp(c), session, keys.length) ?? (keys.length && (await overSpend()) ? "daily limit" : null);
   const started = Date.now();
   const jpeg = Buffer.from(await frame.arrayBuffer());
   // The same frames build the 3D preview; the compass heading turns its map with the phone. A frame
@@ -384,7 +387,7 @@ app.post("/api/live/detect", async (c) => {
   const heading = body.heading == null ? NaN : Number(body.heading);
   if (refused !== "slow down") addLiveFrame(session, jpeg, Number.isFinite(heading) ? heading : null);
   if (refused) return c.json({ error: refused, finds: [] }, 429);
-  const finds = await detectLive(`data:image/jpeg;base64,${jpeg.toString("base64")}`, keys);
+  const finds = keys.length ? await detectLive(`data:image/jpeg;base64,${jpeg.toString("base64")}`, keys) : [];
   return c.json({ finds, ms: Date.now() - started });
 });
 
@@ -435,7 +438,8 @@ app.post("/api/recheck", async (c) => {
   const { pack } = packFor(body.result.municipality ?? "waterloo-on");
   const answers: Answers = Object.fromEntries(Object.entries(body.answers as Record<string, unknown>).map(([k, v]) => [k, answerFor(k, v, pack)]));
   const household = ["relative", "renter", "unsure"].includes(String(body.household)) ? body.household : body.result.household;
-  return c.json({ result: recheck({ ...body.result, household }, answers) });
+  // Priced on the design the example picked in this browser (it sends its workspace's model).
+  return c.json({ result: pricedSample({ ...body.result, household }, { model: body.model }, answers) });
 });
 
 // The 3D scan's files, for the scan reveal and the explorer. `?room=n` for rooms after the first.
@@ -564,11 +568,16 @@ mountModel(app, currentUser);
 
 // Pictures of a design from the scan's best real angles, all agreeing (server/views/routes.ts).
 mountViews(app);
+// The as-built 3D: the plan, painted with the video (server/asBuilt.ts).
+mountAsBuilt(app);
 
 // Swipe your style, then pick a layout (server/ideas/routes.ts).
 mountIdeas(app, currentUser);
 
 mountBook(app, currentUser);
+
+// The guide's thread: the script, its answers and its visuals (server/guide/routes.ts).
+mountGuide(app);
 
 // Queue and spend at a glance. Development only until admin auth lands.
 app.get("/api/ops/summary", async (c) => {

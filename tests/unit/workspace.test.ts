@@ -5,6 +5,9 @@ import { readFileSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { PDFArray, PDFDocument, PDFName, PDFRawStream, StandardFonts } from "pdf-lib";
 import { beforeAll, describe, expect, it } from "vitest";
+import { currentModel } from "../../server/model/current";
+import { chosenDesign } from "../../server/model/legacy";
+import { quote } from "../../server/quote/quote";
 import { applications, planAndLot } from "../../server/apply/applications";
 import { fillRegionForm, regionMarks } from "../../server/apply/regionForm";
 import { db, migrateDb, schema } from "../../server/db";
@@ -273,7 +276,11 @@ describe("materials takeoff", () => {
     expect(titles.indexOf("Plumbing under the floor")).toBeLessThan(titles.indexOf("Frame the walls"));
     expect(titles.indexOf("Insulation and vapour barrier")).toBeLessThan(titles.indexOf("Fire separation"));
     expect(d.steps.find((s) => s.title === "Plumbing under the floor")?.inspection).toBe("Underground plumbing");
-    expect(d.totals.hiredLow).toBe(17000);
+    // Both totals are the quote's for the chosen design, as the book has them.
+    const m = currentModel(result, { tape: { ceilingMm: 2400 } })!.model;
+    const q = quote(m, chosenDesign(m)!, { municipality: "kitchener-on" });
+    expect([d.totals.hiredLow, d.totals.hiredHigh, d.totals.diyLow, d.totals.diyHigh]).toEqual([q.totalLow, q.totalHigh, q.diy.low, q.diy.high]);
+    expect(d.totals.fromQuote).toBe(true);
     expect(d.totals.diyLow).toBeGreaterThan(t.materialsCAD);
     expect(d.trades.find((x) => x.id === "gas")?.owner).toBe("no");
     expect(d.trades.find((x) => x.id === "electrical")?.owner).toBe("with_permit");

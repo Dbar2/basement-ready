@@ -4,9 +4,9 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Design } from "../../server/model/types";
 import { chosen, downloadBook, getBook, quote, type BookData } from "./bookApi";
+import { cad } from "../studio/cost";
 import "./book.css";
 
-const cad = (n: number) => `$${Math.round(n).toLocaleString("en-CA")}`;
 const range = (lo: number, hi: number) => (lo === hi ? cad(lo) : `${cad(lo)}–${cad(hi)}`);
 const VERDICT = { yes: "Yes", fix: "Yes, after fixes", no: "Not as it is" } as const;
 // A line that buys two parts from the same listing names it once.
@@ -48,19 +48,19 @@ export function BookView({ scanId }: { scanId: string }) {
     <div className="book">
       <div className="book-actions">
         <span />
-        <button className="btn btn-primary" onClick={() => void download()} disabled={busy}>
+        <button className="link-quiet" onClick={() => void download()} disabled={busy}>
           {busy ? "Making the book…" : "Download the book (PDF)"}
         </button>
       </div>
 
       <header className="book-cover" data-verdict={b.verdict ?? undefined}>
-        <p className="book-kicker">Your basement, the book</p>
         <h1>{b.address}</h1>
+        <p className="book-kicker">Your basement, the book</p>
         {b.verdict && <span className="book-verdict">{VERDICT[b.verdict]}</span>}
         {b.headline && <p className="book-headline">{b.headline}</p>}
         <dl className="book-facts">
           {design && <div><dt>The design</dt><dd>{design.name}</dd></div>}
-          {q && <div><dt>Hired out</dt><dd>{range(q.totalLow, q.totalHigh)}</dd></div>}
+          {q && <div><dt>Hired out</dt><dd data-total data-low={q.totalLow} data-high={q.totalHigh}>{range(q.totalLow, q.totalHigh)}</dd></div>}
           {q && <div><dt>Built yourself</dt><dd>{range(q.diy.low, q.diy.high)}</dd></div>}
           {b.readiness.length > 0 && <div><dt>Permit</dt><dd>{ready} of {b.readiness.length} checks ready</dd></div>}
         </dl>
@@ -189,13 +189,13 @@ export function BookView({ scanId }: { scanId: string }) {
       </section>
 
       <section className="book-section">
-        <h2>Money you may qualify for</h2>
+        <h2>Money you may be eligible for</h2>
         {b.money.length ? (
           <ul className="book-money">
             {b.money.map((m) => (
               <li key={m.id}>
                 <strong>{m.name}</strong>
-                <span className="mono">{m.qualify === "yes" ? "You qualify" : "You may qualify"}</span>
+                <span className="book-fit" data-fit={m.qualify === "yes" ? "yes" : "maybe"}>{m.qualify === "yes" ? "Looks eligible" : "Could be eligible"}</span>
                 <p>{m.amount}{m.paidWhen ? ` Paid ${m.paidWhen}.` : ""}</p>
               </li>
             ))}

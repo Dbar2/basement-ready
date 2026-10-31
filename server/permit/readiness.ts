@@ -3,7 +3,7 @@
 // and a designer where one is needed. The submit copy is offered only once nothing is left. Pure, so
 // the Permit tab can show the same list the PDF prints.
 
-export type ReadyGroup = "design" | "tape" | "windows" | "owner" | "upstairs" | "lot" | "designer" | "review";
+export type ReadyGroup = "design" | "tape" | "windows" | "owner" | "upstairs" | "lot" | "water" | "designer" | "review";
 export type ReadyItem = { id: string; group: ReadyGroup; label: string; detail: string; done: boolean };
 export type Readiness = { left: number; items: ReadyItem[] };
 
@@ -14,6 +14,8 @@ export type ReadinessInput = {
   profile: { owners: { first: string; last: string }[]; phone: string; email: string; postalCode?: string | null } | null;
   upstairs: { bedrooms: unknown[]; none?: boolean | null } | null;
   lotLines: { id: string; mm?: number | null }[];
+  // Kitchener asks how the units' water is metered (BB 2026-04): null where the city doesn't.
+  waterMeter: { option?: string | null; where?: string | null } | null;
   sheets: { number: string; title: string }[];
   reviewed: { sheet: string; key: string }[];
   reviewKey: string;
@@ -23,6 +25,10 @@ export type ReadinessInput = {
 };
 
 const filled = (s: string | null | undefined) => Boolean(s && s.trim());
+
+// Kitchener Utilities' metering options for 2 to 10 units, on permits applied for from July 1, 2026
+// (City of Kitchener Building Bulletin BB 2026-04): the drawings say which, and where the meter is.
+export const asksWaterMeter = (municipality: string) => municipality.startsWith("kitchener");
 
 export function readiness(i: ReadinessInput): Readiness {
   const items: ReadyItem[] = [];
@@ -47,6 +53,8 @@ export function readiness(i: ReadinessInput): Readiness {
     const d = i.lotLines.find((l) => l.id === w.id);
     items.push({ id: `lot:${w.id}`, group: "lot", label: `Distance from window ${w.tag}'s wall to the lot line`, detail: "From the house wall straight out to the property line. Your survey shows it.", done: d?.mm != null });
   }
+  if (i.waterMeter)
+    items.push({ id: "water", group: "water", label: "Water meter: which option, and where it is", detail: "Kitchener asks every permit for two units to say how the water is metered: one meter for both units, or a meter for each in an interior meter room or an outside compartment (Kitchener Utilities, Building Bulletin BB 2026-04).", done: Boolean(i.waterMeter.option && filled(i.waterMeter.where)) });
   if (i.designer.needed || i.designer.chosen)
     items.push({
       id: "designer",

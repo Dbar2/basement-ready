@@ -3,22 +3,47 @@
 // Meta and 3D answers (server/replay.ts, once the end-to-end tests are on main), so nothing is spent.
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, rmSync } from "node:fs";
+import { connect, createServer } from "node:net";
 import { join } from "node:path";
 import { ROOT, MEDIA_ROOT } from "./paths";
 
 export const API_PORT = Number(process.env.QA_API_PORT ?? 48787);
 export const WEB_PORT = Number(process.env.QA_WEB_PORT ?? 48173);
 
+// Taken if anything answers on it (IPv4 or IPv6 localhost) or it can't be bound: another checkout may be
+// running its own QA servers, and a run must never talk to someone else's app.
+async function portTaken(port: number): Promise<boolean> {
+  const answers = (host: string) =>
+    new Promise<boolean>((res) => {
+      const c = connect({ host, port });
+      c.once("connect", () => (c.destroy(), res(true)));
+      c.once("error", () => res(false));
+      c.setTimeout(500, () => (c.destroy(), res(false)));
+    });
+  const binds = () =>
+    new Promise<boolean>((res) => {
+      const srv = createServer();
+      srv.once("error", () => res(false));
+      srv.listen(port, () => srv.close(() => res(true)));
+    });
+  return (await answers("127.0.0.1")) || (await answers("::1")) || !(await binds());
+}
+
+async function freePort(from: number, not: number[] = []): Promise<number> {
+  for (let p = from; p < from + 200; p++) if (!not.includes(p) && !(await portTaken(p))) return p;
+  throw new Error(`no free port near ${from}`);
+}
+
 export const replayAvailable = () => existsSync(join(ROOT, "server/replay.ts"));
 export const replayDirs = () => [join(MEDIA_ROOT, "private/replay"), join(ROOT, "tests/fixtures/replay")].filter((d) => existsSync(d));
 
-function apiEnv(runDir: string, takes: boolean): NodeJS.ProcessEnv {
+function apiEnv(runDir: string, takes: boolean, apiPort: number): NodeJS.ProcessEnv {
   // Only what the server needs: never the Anthropic key, never the Meta key.
   const keep = ["PATH", "HOME", "TMPDIR", "SHELL", "USER", "LANG", "TERM"];
   const base = Object.fromEntries(keep.filter((k) => process.env[k]).map((k) => [k, process.env[k]!]));
   return {
     ...base,
-    API_PORT: String(API_PORT),
+    API_PORT: String(apiPort),
     NODE_ENV: "development",
     PGLITE_DIR: join(runDir, "server/pglite"),
     LOCAL_STORAGE_DIR: join(runDir, "server/storage"),
@@ -43,11 +68,17 @@ function apiEnv(runDir: string, takes: boolean): NodeJS.ProcessEnv {
     // races (the 3D against the photos) go the way they went when recorded and every call is found.
     REPLAY_PACE: process.env.QA_PACE ?? (takes ? "0.25" : "0"),
     SCAN3D_PARALLEL: "3",
+    // As in the end-to-end tests: a picture with no exact recording (it depends on the browser's render and
+    // on timing) gets a recorded one of the same kind, logged as "loose". Everything else stays exact.
+    REPLAY_LOOSE: process.env.QA_LOOSE ?? "pictures",
     SCANS_PER_IP_PER_HOUR: "1000",
     SCANS_PER_DAY: "1000",
     DAILY_COST_CAP_USD: "1000",
     CLERK_SECRET_KEY: "",
     CLERK_PUBLISHABLE_KEY: "",
+    // The as-built 3D's painting isn't recorded: QA_SCAN3D_TEXTURE_URL points it at a local paint-only
+    // service (services/scan3d `run_local.py serve --no-model`, free, token "qa"). Without it, plain colours.
+    ...(process.env.QA_SCAN3D_TEXTURE_URL ? { SCAN3D_TEXTURE_URL: process.env.QA_SCAN3D_TEXTURE_URL } : {}),
   };
 }
 
@@ -98,22 +129,24 @@ export async function startServers(runDir: string, web: "dev" | "build", opts: {
     // The run's own throwaway database, storage and build (about 40 MB); the logs stay.
     for (const d of ["pglite", "storage", "dist"]) rmSync(join(runDir, "server", d), { recursive: true, force: true });
   };
+  const apiPort = await freePort(API_PORT);
+  const webPort = await freePort(WEB_PORT, [apiPort]);
   try {
     // The end-to-end tests' network guard, where the checkout has it: public data (city maps, the aerial
     // photo, city forms) replays too, so a run makes no network calls at all.
     const guard = join(ROOT, "tests/e2e/support/net-guard.ts");
-    const api = run("api", ["tsx", ...(existsSync(guard) ? ["--import", guard] : []), "server/index.ts"], apiEnv(runDir, Boolean(opts.takes)));
-    const webEnv = { ...apiEnv(runDir, false), API_PORT: String(API_PORT) };
+    const api = run("api", ["tsx", ...(existsSync(guard) ? ["--import", guard] : []), "server/index.ts"], apiEnv(runDir, Boolean(opts.takes), apiPort));
+    const webEnv = apiEnv(runDir, false, apiPort);
     if (web === "build") {
       const out = join(runDir, "server/dist");
       const build = run("build", ["vite", "build", "--outDir", out, "--emptyOutDir"], webEnv);
       await new Promise<void>((res, rej) => build.on("exit", (code) => (code === 0 ? res() : rej(new Error(`vite build exited with ${code}`)))));
-      run("web", ["vite", "preview", "--outDir", out, "--port", String(WEB_PORT), "--strictPort"], webEnv);
+      run("web", ["vite", "preview", "--outDir", out, "--port", String(webPort), "--strictPort"], webEnv);
     } else {
-      run("web", ["vite", "--port", String(WEB_PORT), "--strictPort"], webEnv);
+      run("web", ["vite", "--port", String(webPort), "--strictPort"], webEnv);
     }
-    const baseURL = `http://localhost:${WEB_PORT}`;
-    await waitFor(`http://localhost:${API_PORT}/api/health`, 60_000, api, "API");
+    const baseURL = `http://localhost:${webPort}`;
+    await waitFor(`http://localhost:${apiPort}/api/health`, 60_000, api, "API");
     await waitFor(baseURL, 60_000, procs[procs.length - 1], "web server");
     return { baseURL, stop, logs };
   } catch (e) {

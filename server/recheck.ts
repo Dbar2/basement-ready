@@ -1,6 +1,6 @@
 // Answers in, verdict out. Each answered rule is decided in code against the rules pack;
 // the scan's own reading is kept underneath, so clearing an answer puts it back.
-import { verdictFrom } from "./assess";
+import { verdictFrom, type DesignPricing } from "./assess";
 import { evaluateMoney, type MoneyAnswers } from "./eligibility";
 import type { Property } from "./property";
 import { packFor, type Household, type Pack, type Rule } from "./rules";
@@ -66,11 +66,13 @@ export function moneyAndSteps(
   verdict: Pick<ReturnType<typeof verdictFrom>, "fixGroups" | "standard" | "cost">,
   answers: Answers,
   pack: Pack,
+  suiteAreaM2: number | null = null,
 ) {
   const household = r.household ?? "unsure";
   const money = evaluateMoney(pack, { household, answers: answers as MoneyAnswers, property: r.property ?? null, costHigh: verdict.cost.high });
-  // The floor being finished: the scan's plan, or failing that the house's footprint.
-  const areaM2 = r.plan?.areaM2 ?? r.property?.building?.footprintM2 ?? null;
+  // The floor being finished: unit 2 in the chosen design, as the book, the quote and the permit set
+  // have it (server/model/suite.ts); before there's a design, the scan's plan, else the house's footprint.
+  const areaM2 = suiteAreaM2 ?? r.plan?.areaM2 ?? r.property?.building?.footprintM2 ?? null;
   const steps = planSteps({ city: r.city ?? "Ontario", authority: r.authority ?? (r.city && !["Ontario", "your city"].includes(r.city) ? `City of ${r.city}` : "your municipality"), household, programs: money.programs, ...verdict, areaM2 }, pack);
   return {
     grants: money.programs,
@@ -81,7 +83,8 @@ export function moneyAndSteps(
   };
 }
 
-export function recheck<R extends { municipality?: string; findings: AnyFinding[]; baseFindings?: AnyFinding[] }>(result: R, answers: Answers) {
+// `design`: the design they picked (server/priced.ts), whose quote is then the cost and the money's base.
+export function recheck<R extends { municipality?: string; findings: AnyFinding[]; baseFindings?: AnyFinding[] }>(result: R, answers: Answers, design: DesignPricing | null = null) {
   const { pack } = packFor(result.municipality ?? "waterloo-on");
   const rules = new Map(pack.rules.map((r) => [r.id, r]));
   // The scan's own reading, before any answers.
@@ -105,7 +108,7 @@ export function recheck<R extends { municipality?: string; findings: AnyFinding[
     };
   });
 
-  const verdict = verdictFrom(findings as any);
-  const money = moneyAndSteps(result as R & MoneyContext, verdict, answers, pack);
+  const verdict = verdictFrom(findings as any, design);
+  const money = moneyAndSteps(result as R & MoneyContext, verdict, answers, pack, design?.suiteAreaM2 ?? null);
   return { ...result, baseFindings: base, findings, ...verdict, ...money, answeredCount: findings.filter((f) => f.answer).length };
 }

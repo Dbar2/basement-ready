@@ -7,7 +7,7 @@ import { serviceFetch } from "../../../server/replay";
 const realFetch = globalThis.fetch;
 const local = (host: string) => host === "localhost" || host === "127.0.0.1" || host === "[::1]" || host.endsWith(".localhost");
 // Calls that already went through server/replay.ts reach here only in record mode, to go out for real.
-const handled = [process.env.META_API_BASE ?? "https://api.meta.ai/v1", process.env.SCAN3D_URL].filter((b): b is string => Boolean(b));
+const handled = [process.env.META_API_BASE ?? "https://api.meta.ai/v1", process.env.SCAN3D_URL, process.env.SCAN3D_TEXTURE_URL].filter((b): b is string => Boolean(b));
 
 globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
   const url = new URL(input instanceof Request ? input.url : String(input));

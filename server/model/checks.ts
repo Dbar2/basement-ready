@@ -6,6 +6,7 @@
 // Numbers from the rules pack (data/rules/waterloo-on.json) and the approved sets the City marked up:
 // 30-minute walls and 15-minute floors between the units, 20-minute doors with closers.
 import { burnsFuel } from "./alarms";
+import { ENTRANCE_RULE, ENTRANCE_SOURCE, newEntrance, outsideDoors } from "./entrance";
 import {
   add,
   along,
@@ -16,9 +17,9 @@ import {
   distToSegment,
   dot,
   edges,
+  floorArea,
   inPolygon,
   mul,
-  polygonArea,
   project,
   r2,
   solidPieces,
@@ -63,16 +64,9 @@ export function sides(design: Design, existing: Existing) {
   return { suite, others, region, at };
 }
 
-// Rooms overlap where the layout drew the living space over the stairs: count each floor once.
-function netArea(room: Room, others: Room[]) {
-  const a = bounds(room.polygon);
-  const cut = others.reduce((s, o) => {
-    const b = bounds(o.polygon);
-    const w = Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX), d = Math.min(a.maxZ, b.maxZ) - Math.max(a.minZ, b.minZ);
-    return s + (w > 0 && d > 0 ? w * d : 0);
-  }, 0);
-  return Math.max(0, polygonArea(room.polygon) - cut);
-}
+// Rooms overlap where the layout drew the living space over the stairs: count each floor once, as every
+// page does (geometry.ts floorArea).
+const netArea = (room: Room, others: Room[]) => floorArea(room, others);
 
 // Openings whose centre sits on a room's outline.
 export function openingsOn(room: Room, design: Design, kind: Opening["kind"]) {
@@ -125,11 +119,14 @@ export function reachable(design: Design, existing: Existing, radius: number, do
   for (let k = 0; k < nz; k++)
     for (let i = 0; i < nx; i++) {
       const p = pt(i, k);
-      if (!floor.some((poly) => inPolygon(p, poly))) continue;
-      const inDoor = doorsOpen && doors.some(({ o, w }) => {
-        const { t, off } = project(w, p);
-        return Math.abs(t - o.offsetM) <= o.widthM / 2 && Math.abs(off) < 0.35;
-      });
+      const inDoorway = (reach: number) =>
+        doors.some(({ o, w }) => {
+          const { t, off } = project(w, p);
+          return Math.abs(t - o.offsetM) <= o.widthM / 2 && Math.abs(off) < reach;
+        });
+      // A doorway is floor too: it crosses the wall between two rooms' outlines.
+      if (!floor.some((poly) => inPolygon(p, poly)) && !inDoorway(0.15)) continue;
+      const inDoor = doorsOpen && inDoorway(0.35);
       if (inDoor || pieces.every(([a, b]) => distToSegment(p, a, b) >= radius)) free[k * nx + i] = 1;
     }
   // Ways out: the stairs, and a door in a foundation wall (to the outside).
@@ -188,6 +185,32 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
   const studio = design.layout === "studio";
   const beds = S.suite.filter((r) => r.kind === "bedroom");
   const confirmedScale = existing.scale.source === "tape" || existing.scale.source === "arkit" || existing.scale.source === "user_measurement";
+
+  // First: its own way in (server/model/entrance.ts). A door straight outside from the suite, or one
+  // they say is there; where they say there's none, the design needs a new one, and the fix adds it.
+  if (existing.entrance) {
+    // Where they told us there's no door straight outside, only a new one is its way in.
+    const own = outsideDoors(walls, openings).filter((o) => existing.entrance!.status !== "needed" || o.status === "new").filter((o) => {
+      const w = walls.find((x) => x.id === o.wallId)!;
+      return S.suite.some((r) => edges(r.polygon).some(([p, q]) => distToSegment(along(w, o.offsetM), p, q) < 0.3));
+    });
+    const built = own.find((o) => o.status === "new");
+    const status = own.length ? "own" : existing.entrance.status;
+    const add = status === "needed" ? newEntrance(design) : null;
+    out.push({
+      id: "entrance",
+      label: "It has its own way in",
+      ok: status === "own" ? true : status === "needed" ? false : null,
+      detail: built
+        ? `A new entrance here, at the side or back of the house: a walk-up stairwell and its own outside door (${ENTRANCE_SOURCE}).`
+        : own.length
+          ? "Its own door straight outside."
+          : existing.entrance.why,
+      ruleId: ENTRANCE_RULE,
+      fix: add ? { label: "Add a separate entrance here", edits: [{ op: "add_opening", opening: add }] } : undefined,
+      at: built ? along(walls.find((w) => w.id === built.wallId)!, built.offsetM) : add ? along(walls.find((w) => w.id === add.wallId)!, add.offsetM) : undefined,
+    });
+  }
 
   // Bedroom sizes, and a one-tap fix: slide its new wall out far enough.
   if (!studio)
@@ -361,6 +384,19 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
     });
   }
 
+  // Stairs left open to the suite (inside a room kept as it is): they're the suite's, and the house is
+  // closed off at the top with a 20-minute self-closing door.
+  const openStairs = fixtures.filter((f) => f.kind === "stairs" && S.suite.some((r) => inPolygon(f.at, r.polygon)) && !rooms.some((r) => r.kind === "stairs" && inPolygon(f.at, r.polygon)));
+  if (openStairs.length)
+    out.push({
+      id: "stairs-top",
+      label: "A 20-minute door at the top of the stairs",
+      ok: null,
+      detail: "The stairs are the basement home's: a 20-minute self-closing door at the top closes the house off from them.",
+      ruleId: "fire_separation_between_units",
+      at: openStairs[0].at,
+    });
+
   // Alarms: in each bedroom and outside it, CO when something burns fuel, all wired together.
   const smoke = alarms.filter((a) => a.kind === "smoke" || a.kind === "combo");
   const bare = beds.filter((b) => !smoke.some((a) => inPolygon(a.at, b.polygon)));
@@ -451,7 +487,7 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
     detail: gaps.length ? `${gaps.length === 1 ? "One opening" : `${gaps.length} openings`} with no wall between the suite and the ${S.others.some((r) => r.kind === "stairs") ? "stair" : "rest of the house"}.` : "Continuous around the suite and the stair, and through bulkheads.",
     ruleId: "fire_separation_between_units",
     fix: gaps.length
-      ? { label: "Close the gaps with rated walls", edits: gaps.map((g) => ({ op: "add_wall", wall: { id: "", a: g.a, b: g.b, thicknessM: 0.12, kind: "new", rating: "30min" } })) }
+      ? { label: "Close the gaps with rated walls", edits: gaps.map((g) => ({ op: "add_wall", wall: { id: "", a: g.a, b: g.b, thicknessM: 0.12, kind: "new", rating: "30min", why: "Closes the 30-minute fire separation between the two homes." } })) }
       : undefined,
     at: gaps[0] ? mul(add(gaps[0].a, gaps[0].b), 0.5) : undefined,
   });
@@ -474,6 +510,40 @@ export function checkDesign(design: Design, existing: Existing): Check[] {
     fix: plainDoors.length ? { label: "Make them 20-minute doors", edits: plainDoors.map((o) => ({ op: "set_opening", openingId: o.id, rating: "20min" })) } : undefined,
     at: plainDoors[0] ? along(walls.find((w) => w.id === plainDoors[0].wallId)!, plainDoors[0].offsetM) : undefined,
   });
+
+  // The furnace and water heater serve both homes: in a room of their own off the suite (or on the
+  // house's side), behind the rated walls and a rated door.
+  const appliances = fixtures.filter((f) => f.kind === "furnace" || f.kind === "water_heater");
+  if (appliances.length) {
+    const loose = appliances.filter((f) => S.at(f.at) === 2);
+    const homes = rooms.filter((r) => r.unit !== 2 && appliances.some((f) => inPolygon(f.at, r.polygon)));
+    const touches = (w: Wall, r: Room) => {
+      const L = wallLength(w), n = wallNormal(w);
+      for (let t = Math.min(0.15, L / 2); t <= L - Math.min(0.15, L / 2) + 1e-9; t += 0.2) {
+        const p = along(w, t);
+        if (inPolygon(add(p, mul(n, 0.15)), r.polygon) || inPolygon(add(p, mul(n, -0.15)), r.polygon)) return true;
+      }
+      return false;
+    };
+    const around = walls.filter((w) => needs.has(w.id) && homes.some((r) => touches(w, r)));
+    const weak = around.filter((w) => w.rating !== "30min").length + openings.filter((o) => o.kind === "door" && around.some((w) => w.id === o.wallId) && o.rating !== "20min").length;
+    const furnace = appliances.some((f) => f.kind === "furnace"), heater = appliances.some((f) => f.kind === "water_heater");
+    const name = furnace && heater ? "The furnace and water heater" : furnace ? "The furnace" : "The water heater";
+    out.push({
+      id: "service-room",
+      label: `${name} ${furnace && heater ? "are" : "is"} in a fire-separated service room`,
+      ok: loose.length === 0 && weak === 0,
+      detail: loose.length
+        ? `${loose.length === appliances.length ? name : "One of them"} stands in the suite. ${furnace && heater ? "They serve" : "It serves"} both homes, so ${furnace && heater ? "they go" : "it goes"} in a room of ${furnace && heater ? "their" : "its"} own: 30-minute walls and a 20-minute door with a closer.`
+        : weak
+          ? "Its walls or door toward the suite aren't rated yet."
+          : homes[0]
+            ? `In the ${homes[0].name.toLowerCase()}, behind 30-minute walls and a 20-minute door with a closer.`
+            : "On the house's side of the fire separation.",
+      ruleId: "service_room_separation",
+      at: loose[0]?.at,
+    });
+  }
 
   // The stair everyone uses to get out.
   const stair = fixtures.find((f) => f.kind === "stairs" && f.sizeM);

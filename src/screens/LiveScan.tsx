@@ -402,7 +402,7 @@ export function LiveScan({ scanId, onDone }: Props) {
       {canEdit && <FlowHead scanId={scanId} step="style" remember={!done} />}
       <header className="live-top">
         {!canEdit && <Logo />}
-        <span className="live-left mono" data-state={failed ? "failed" : wait}>{leftText}</span>
+        <span className="live-left" data-state={failed ? "failed" : wait}>{leftText}</span>
       </header>
       {sample && (
         <p className="example-label" role="note">
@@ -483,8 +483,11 @@ export function LiveScan({ scanId, onDone }: Props) {
             </div>
           ) : ask ? (
             <div className="live-ask" key={ask.id}>
-              <span className="mono">
-                {answered.length + 1} of {answered.length + pending.length} · while we check{sample ? " · you're answering for the example household" : ""}
+              <span className="aside">
+                <span className="mono">
+                  {answered.length + 1} of {answered.length + pending.length}
+                </span>{" "}
+                · while we check{sample ? " · for the example household" : ""}
               </span>
               <h2>{ask.question}</h2>
               <svg viewBox="0 0 120 80" className="live-ask-pic" aria-hidden>
@@ -507,10 +510,10 @@ export function LiveScan({ scanId, onDone }: Props) {
                   }}
                 >
                   <input className="input" value={words} maxLength={160} onChange={(e) => setWords(e.target.value)} placeholder="Or say it your way" aria-label="What you'd like it to be, in your own words" />
-                  <button className="btn btn-primary" disabled={words.trim().length < 2}>Save</button>
+                  <button className="btn btn-ghost" disabled={words.trim().length < 2}>Save</button>
                 </form>
               )}
-              {ask.decides && ask.decides.length > 0 && <p className="live-ask-decides mono">Decides: {ask.decides.join(" · ")}</p>}
+              {ask.decides && ask.decides.length > 0 && <p className="live-ask-decides">Decides: {ask.decides.join(" · ")}</p>}
               {done && (
                 <button className="link-quiet" onClick={onDone}>
                   Skip, check my plan
@@ -532,8 +535,8 @@ export function LiveScan({ scanId, onDone }: Props) {
                 {photos.map((p) => (
                   <li key={p.n}>
                     <img src={p.url} alt={`${p.title}, virtually staged from your own video`} />
-                    <span className="live-photo-label mono">Virtually staged</span>
                     <b>{p.title}</b>
+                    <span className="live-photo-label">Virtually staged</span>
                   </li>
                 ))}
               </ul>
@@ -546,7 +549,7 @@ export function LiveScan({ scanId, onDone }: Props) {
         <section className="live-ideas" aria-labelledby="live-ideas-title">
           <div className="live-ideas-head">
             <h2 id="live-ideas-title">Swipe your style</h2>
-            <p className="muted">Your own basement, restyled while it measures. Right if you love it, left if it's not for you: your board sets the finishes.</p>
+            <p className="muted">Your own basement, restyled while it measures. What you love finishes your design.</p>
           </div>
           <Suspense fallback={null}>
             <StyleDeck scanId={scanId} onSwiped={setSwiped} />

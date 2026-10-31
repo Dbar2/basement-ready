@@ -5,7 +5,8 @@
 // the room's 3D puts it. The finds keep the video's Detection shape: one photo is one frame.
 import { minConfidence } from "./live";
 import type { Detection } from "./pipeline";
-import { parseSam } from "./sam";
+import { withoutNamed } from "./pointFinds";
+import { parseSam, type SamBox } from "./sam";
 
 type Concept = { concept: string; kind: string; label: string };
 
@@ -13,14 +14,29 @@ const FPS = 5; // server/pipeline.ts ANALYSIS_FPS: a photo's "seconds" is its fr
 const PER_PHOTO = 4; // at most this many of one thing in one photo
 const MIN_AREA = 0.001; // of the picture: smaller is a speck, not a find
 
+// SAM's "support beam" also outlines every joist, post, stud and stair stringer. A beam is long and level:
+// at least this much of the picture wide and this many times wider than tall (in pixels), which may be a
+// little less sure than the bar since its shape vouches for it. A photo keeps its widest one; a video keeps
+// one at a time (server/videoFinds.ts). Nothing else stands in: the fire rules no longer need a ceiling
+// find (server/assess.ts fireRules). Tuned on practice photos, checked on real takes (scripts/practice).
+export const BEAM = { minWidth: 0.4, minAspect: 2, min: 0.65 };
+
+export const isLongBeam = (b: SamBox, min = BEAM.min) =>
+  (b.c ?? 1) >= min && (b.x2 - b.x1) / b.w >= BEAM.minWidth && b.x2 - b.x1 >= BEAM.minAspect * (b.y2 - b.y1);
+
+function oneBeam(boxes: SamBox[], min: number): SamBox[] {
+  return boxes.filter((b) => isLongBeam(b, Math.min(min, BEAM.min))).sort((a, b) => b.x2 - b.x1 - (a.x2 - a.x1)).slice(0, 1);
+}
+
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
 const slug = (label: string) => label.toLowerCase().replace(/\s+/g, "-");
 
 // One photo's sure finds of one thing, biggest first.
 export function photoFinds(frame: number, c: Concept, raw: string, min = minConfidence(c.concept)): Detection[] {
-  return parseSam(raw)
+  const boxes = parseSam(raw)
     .map((t) => t.frames[0]?.box)
-    .filter((b): b is NonNullable<typeof b> => Boolean(b) && b.w > 0 && b.h > 0 && (b.c ?? 1) >= min)
+    .filter((b): b is SamBox => Boolean(b) && b.w > 0 && b.h > 0);
+  return (c.kind === "beam" ? oneBeam(boxes, min) : boxes.filter((b) => (b.c ?? 1) >= min))
     .map((b) => ({ x: b.x1 / b.w, y: b.y1 / b.h, w: (b.x2 - b.x1) / b.w, h: (b.y2 - b.y1) / b.h, c: b.c ?? null }))
     .filter((b) => b.w * b.h >= MIN_AREA)
     .sort((a, b) => b.w * b.h - a.w * a.h)
@@ -44,17 +60,20 @@ export function photoFinds(frame: number, c: Concept, raw: string, min = minConf
 
 // Every photo read for every thing, a few looks at a time, photo by photo, so each photo's finds land
 // together and in order. `landed` hears a photo's finds as soon as its last look is back. A look that
-// fails counts as nothing found, as a failed video concept does.
+// fails counts as nothing found, as a failed video concept does. `point` finds what SAM can't find by name
+// (server/pointFinds.ts), every photo at once from the start; its finds land with the photo's others, after them.
 export async function findInPhotos(
   count: number,
   concepts: Concept[],
   look: (concept: string, photo: number) => Promise<string>,
   landed: (photo: number, found: Detection[]) => Promise<void> = async () => {},
   atOnce = 8,
+  point?: (photo: number) => Promise<Detection[]>,
 ): Promise<Detection[]> {
   const tasks = Array.from({ length: count }, (_, n) => concepts.map((c, k) => ({ n, c, k }))).flat();
   const found: { k: number; d: Detection }[][] = Array.from({ length: count }, () => []);
   const left = new Array<number>(count).fill(concepts.length);
+  const pointed = Array.from({ length: count }, (_, n) => (point ? point(n).catch(() => []) : Promise.resolve([])));
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(atOnce, tasks.length) }, async () => {
@@ -63,13 +82,27 @@ export async function findInPhotos(
         const raw = await look(c.concept, n).catch(() => "");
         found[n].push(...photoFinds(n, c, raw).map((d) => ({ k, d })));
         if (--left[n] === 0) {
-          found[n].sort((a, b) => a.k - b.k);
+          const named = found[n].map((x) => x.d);
+          found[n].push(...withoutNamed(await pointed[n], named).map((d) => ({ k: concepts.length, d })));
+          const kept = new Set(withoutBeamsInside(found[n].map((x) => x.d)));
+          found[n] = found[n].filter((x) => kept.has(x.d)).sort((a, b) => a.k - b.k);
           await landed(n, found[n].map((x) => x.d));
         }
       }
     }),
   );
   return found.flatMap((f) => f.map((x) => x.d));
+}
+
+// A "beam" that sits mostly inside a duct or the stairs found in the same picture is that duct, or the
+// stairs' stringer. At three quarters inside, practice photos lose only those, never a beam beside a duct.
+const INSIDE = 0.75;
+
+export function withoutBeamsInside<T extends Pick<Detection, "kind" | "frame" | "box">>(found: T[]): T[] {
+  const others = found.filter((d) => d.kind === "duct" || d.kind === "stairs");
+  const inside = (a: T["box"], b: T["box"]) =>
+    (Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y))) / (a.w * a.h || 1);
+  return found.filter((d) => d.kind !== "beam" || !others.some((o) => o.frame === d.frame && inside(d.box, o.box) >= INSIDE));
 }
 
 // A room has one of these: two of them in a room's photos are two looks at the same one.

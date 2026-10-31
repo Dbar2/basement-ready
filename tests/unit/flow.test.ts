@@ -15,7 +15,7 @@ import type { Model } from "../../server/model/types";
 import { basementGeometry } from "../../server/permit/plans";
 import { permitModel } from "../../server/permit/model";
 import { modelFor } from "../../server/quote/fromScan";
-import { designAngles, designFor } from "../../server/views/load";
+import { designAngles, designFor, newWallSegs } from "../../server/views/load";
 import { mountViews } from "../../server/views/routes";
 import { StateSchema } from "../../server/workspace";
 import { isStep, neighbours, STEPS, stepUrl } from "../../src/flow/flow";
@@ -110,6 +110,17 @@ describe("the example's committed pictures", () => {
     expect(shuffled.map(designHash)).toEqual(model.designs.map(designHash));
   });
 
+  // A picture is taken from where the video was filmed, never from inside a piece of furniture
+  // (server/views/angles.ts): every design has to leave at least one of those spots clear to show it from.
+  it("leaves every design an angle to picture it from, in each of the studio's finishes", async () => {
+    const model = await served();
+    for (const d of model.designs)
+      for (const style of ["light", "warm", "deep"]) {
+        const design = d.finishes.style === style ? d : applyEdit(d, { op: "set_finishes", finishes: { style } });
+        expect((await designAngles("sample", 5, design.proposed.furniture, newWallSegs(design))).length, `${d.id} ${style}`).toBeGreaterThan(0);
+      }
+  });
+
   // The pictures step and the layout cards ask for a design's pictures by its hash; a design without
   // committed ones falls back to the 3D render (and the example never makes new ones), so this fails as
   // soon as the example's designs change without its pictures being made again (scripts in the
@@ -121,7 +132,7 @@ describe("the example's committed pictures", () => {
       for (const style of ["light", "warm", "deep"]) {
         const design = d.finishes.style === style ? d : applyEdit(d, { op: "set_finishes", finishes: { style } });
         const hash = designHash(design);
-        const angles = [...(await designAngles("sample", 5, design.proposed.furniture)), ...(await designAngles("sample", 4, design.proposed.furniture)).slice(0, 1)];
+        const angles = [...(await designAngles("sample", 5, design.proposed.furniture, newWallSegs(design))), ...(await designAngles("sample", 4, design.proposed.furniture, newWallSegs(design))).slice(0, 1)];
         expect(angles.length, `${d.id} has angles`).toBeGreaterThan(0);
         for (const a of angles) {
           const pointer = `public/samples/sample/views/${a.id}-d-${hash}.json`;

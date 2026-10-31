@@ -8,7 +8,7 @@ struct ServerOption: Identifiable, Hashable {
 }
 
 enum ServerSettings {
-  static let live = ServerOption(name: "Live site", url: URL(string: "https://web-production-0c550.up.railway.app")!)
+  static let live = ServerOption(name: "Live site", url: URL(string: "https://www.basementready.com")!)
   private static let key = "serverURL"
 
   // Debug builds carry the Mac's address from build time (scripts/dev-server.sh).

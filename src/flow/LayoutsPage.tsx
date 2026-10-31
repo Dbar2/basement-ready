@@ -3,7 +3,7 @@
 // card picks it (saved at once); the way on is the 3D studio, open on the one they picked.
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { DEMO_LABEL, EXAMPLE_LABEL, getScan, type ScanResult } from "../api";
+import { costLabel, DEMO_LABEL, EXAMPLE_LABEL, getScan, type ScanResult } from "../api";
 import { LayoutPicker } from "../ideas/LayoutPicker";
 import { loadModel, saveModel } from "../studio/api";
 import type { Model } from "../../server/model/types";
@@ -34,7 +34,11 @@ export function LayoutsPage() {
     setModel(next);
     setSaving("saving");
     saveModel(scanId, next)
-      .then(() => setSaving("saved"))
+      .then(() => {
+        setSaving("saved");
+        // The answer is priced on the picked design: its cost and money follow the pick.
+        return getScan(scanId).then((s) => setResult(s.result ?? null));
+      })
       .catch(() => setSaving("error"));
   };
   const chosen = model?.designs.find((d) => d.chosen) ?? null;
@@ -46,8 +50,8 @@ export function LayoutsPage() {
         <div className="flow-title">
           <h1>Pick a layout</h1>
           <p className="lede">
-            {model ? `${model.designs.length} ways to lay out your basement, each drawn on your plan and permit-ready from the start.` : "Drawing the layouts on your plan…"}
-            {model && !model.existing.confirmedAt && " They're drawn on the plan as measured: check it first to make them exact."}
+            {model ? `${model.designs.length} ways to lay out your basement, drawn on your plan.` : "Drawing the layouts on your plan…"}
+            {model && !model.existing.confirmedAt && " Check the plan first to make them exact."}
           </p>
         </div>
         {error ? (
@@ -56,7 +60,7 @@ export function LayoutsPage() {
             <FlowLink className="btn btn-primary" href={`/scans/${scanId}?tab=decision`}>See the answer</FlowLink>
           </div>
         ) : model ? (
-          <LayoutPicker scanId={scanId} model={model} onPick={pick} />
+          <LayoutPicker scanId={scanId} model={model} municipality={result?.municipality} fixes={result?.fixGroups} onPick={pick} />
         ) : (
           <div className="skeleton skeleton-plan" aria-busy="true" />
         )}
@@ -65,8 +69,8 @@ export function LayoutsPage() {
       <FlowFoot
         scanId={scanId}
         step="layouts"
-        next={{ label: chosen ? `Design ${chosen.name.toLowerCase()} in 3D` : "Design it in 3D", href: stepUrl(scanId, "studio"), disabled: !chosen }}
-        extra={<span className="mono muted save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "error" ? "Not saved" : ""}</span>}
+        next={{ label: "Design it in 3D", href: stepUrl(scanId, "studio"), disabled: !chosen }}
+        extra={<span className="aside save-state" aria-live="polite">{saving === "saving" ? "Saving…" : saving === "error" ? "Not saved" : ""}</span>}
       />
     </div>
   );
@@ -77,7 +81,7 @@ function Decision({ scanId, r }: { scanId: string; r: ScanResult }) {
   const upTo = r.money?.total ?? 0;
   return (
     <aside className="decision-card" data-verdict={r.verdict} aria-label="Your answer">
-      <p className="eyebrow mono">{r.verdict === "no" ? "Not likely as it is" : r.verdict === "fix" ? "Likely, after fixes" : "Likely"} · {scanId === "sample" ? "the example" : r.demo ? "the demo house" : (r.city ?? "your basement")}</p>
+      <p className="eyebrow">{r.verdict === "no" ? "Not likely as it is" : r.verdict === "fix" ? "Likely, after fixes" : "Likely"} · {scanId === "sample" ? "the example" : r.demo ? "the demo house" : (r.city ?? "your basement")}</p>
       {scanId === "sample" && <p className="muted small">{EXAMPLE_LABEL}</p>}
       {r.demo && <p className="muted small">{DEMO_LABEL}</p>}
       <h2>{r.headline}</h2>
@@ -85,8 +89,8 @@ function Decision({ scanId, r }: { scanId: string; r: ScanResult }) {
       <dl>
         {r.cost.high > 0 && (
           <>
-            <dt>Rough cost</dt>
-            <dd>{money(r.cost.low)}–{money(r.cost.high)}</dd>
+            <dt>{costLabel(r)}</dt>
+            <dd data-total data-low={r.cost.low} data-high={r.cost.high}>{money(r.cost.low)}–{money(r.cost.high)}</dd>
           </>
         )}
         {upTo > 0 && (

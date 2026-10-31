@@ -2,7 +2,9 @@
 // lens (focal length and centre, from the 3D) and pose, the real scan's surface drawn depth-only so the
 // real walls hide what's behind them, and the design's floor, walls and furniture lit on top. That is
 // laid over the real frame (the guide, sent to Muse Image), and drawn again with each piece in a flat
-// colour that names it (the object-id image, for tap-to-change).
+// colour that names it (the object-id image, for tap-to-change). The real frame, not the as-built
+// model (src/three/AsBuilt.tsx): Muse Image keeps a real window, the stairs and the furnace where they
+// are from a real frame, and loses or paints over them from the as-built's painting.
 import { Environment, Lightformer } from "@react-three/drei";
 import { Canvas, useThree } from "@react-three/fiber";
 import { Suspense, useEffect, useMemo, useRef } from "react";
@@ -12,14 +14,16 @@ import type { Design } from "../../server/model/types";
 import type { Angle } from "../../server/views/angles";
 import type { DrawnItem } from "../../server/views/photoreal";
 import type { Solid } from "../three/RealScan";
-import { DesignScene, roomBoxes, type FloorBox } from "./DesignScene";
-import { flipRows, idBoxes, idColour, type IdImage } from "./objectId";
+import { DesignScene, newDoors, roomBoxes, type FloorBox } from "./DesignScene";
+import { flipRows, idAt, idBoxes, idColour, type IdImage } from "./objectId";
 
 export type AngleView = Angle & { frameUrl: string; group: "design" | number };
 // `hash`: the design's. `view`: what this angle shows of it (its visible pieces, walls, rooms and
 // finishes): two designs that look the same from here share one picture. `walls`: where the design's
 // new walls stand in the picture, hiding whatever real door or window is behind them.
-export type Rendered = { hash: string; view: string; guide: Blob; url: string; ids: IdImage; items: DrawnItem[]; walls: DrawnItem["box"][] };
+// `doors`: each new door that shows, whole, in the picture: the photo must still have a door there, or
+// Muse Image took its wall away.
+export type Rendered = { hash: string; view: string; guide: Blob; url: string; ids: IdImage; items: DrawnItem[]; walls: DrawnItem["box"][]; doors: DrawnItem["box"][] };
 export type Snap = (angle: AngleView, frame: CanvasImageSource) => Promise<Rendered>;
 
 // A camera from OpenCV intrinsics (pixels) and a camera-to-basement pose (OpenCV axes).
@@ -153,7 +157,7 @@ function Snapper({ design, root, onReady }: { design: Design; root: React.RefObj
       const shown = new Set(items.map((i) => i.id));
       const view = designHash({ finishes: design.finishes, proposed: { ...design.proposed, furniture: design.proposed.furniture.filter((f) => shown.has(f.id)) } });
       const walls = [...idBoxes(img)].filter(([id, { share }]) => id.startsWith("wall:") && share > 0.002).map(([, { box }]) => box);
-      return { hash, view, guide, url: URL.createObjectURL(guide), ids: img, items, walls };
+      return { hash, view, guide, url: URL.createObjectURL(guide), ids: img, items, walls, doors: doorsShown(design, cam, img) };
     };
     onReady(snap, hash);
     return () => {
@@ -162,6 +166,23 @@ function Snapper({ design, root, onReady }: { design: Design; root: React.RefObj
     };
   }, [gl, scene, advance, root, design, hash, onReady]);
   return null;
+}
+
+// The new doors that show in the picture: inside it, big enough, and not hidden (most of the leaf is its
+// wall in the object-id image, not a piece of furniture or the real room in front).
+export function doorsShown(design: Design, cam: THREE.Camera, img: IdImage): DrawnItem["box"][] {
+  const v = new THREE.Vector3();
+  return newDoors(design).flatMap((d) => {
+    const pts = d.corners.map(([x, y, z]) => v.set(x, y, z).project(cam).clone());
+    if (pts.some((p) => p.z > 1)) return []; // behind the camera
+    const xs = pts.map((p) => (p.x + 1) / 2), ys = pts.map((p) => (1 - p.y) / 2);
+    const box = { x: Math.min(...xs), y: Math.min(...ys), w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+    if (box.x < 0 || box.y < -0.02 || box.x + box.w > 1 || box.y + box.h > 1.02 || box.w * box.h < 0.004) return [];
+    let seen = 0;
+    for (let i = 1; i <= 3; i++)
+      for (let j = 1; j <= 3; j++) if (idAt(img, (box.x + (box.w * i) / 4) * img.width, (box.y + (box.h * j) / 4) * img.height, 1) === `wall:${d.wallId}`) seen++;
+    return seen >= 7 ? [box] : [];
+  });
 }
 
 // Somewhere for the light to come from: soft daylight from above, warm pot lights, a little shadow.

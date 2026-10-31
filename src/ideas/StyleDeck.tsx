@@ -15,7 +15,7 @@ export function StyleDeck({ scanId, onSwiped }: { scanId: string; onSwiped?: (n:
   useEffect(() => onSwiped?.(n), [n, onSwiped]);
   return (
     <div className="ideas-split">
-      <SwipeDeck deck={ideas.deck} cards={ideas.cards} slots={ideas.slots} state={ideas.state} dispatch={ideas.dispatch} frameSrc={(f) => frameSrc(scanId, f)} error={ideas.error} />
+      <SwipeDeck deck={ideas.deck} cards={ideas.cards} slots={ideas.slots} state={ideas.state} dispatch={ideas.dispatch} frameSrc={(f) => frameSrc(scanId, f)} error={ideas.error} onRetry={ideas.retry} />
       <MoodBoard cards={ideas.cards} state={ideas.state} dispatch={ideas.dispatch} mood={ideas.mood} />
     </div>
   );

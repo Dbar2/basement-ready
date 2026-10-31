@@ -4,7 +4,7 @@
 // permit sheets and the materials list can read it until they read the model itself. Rooms the edits
 // turned into L shapes become their biggest clear rectangle.
 import type { Layout, LayoutZone, Plan, PlanSide } from "../../src/api";
-import { bounds, centroid, inPolygon, polygonArea, wallLength, type Box } from "./geometry";
+import { bounds, centroid, floorArea, inPolygon, polygonArea, wallLength, type Box } from "./geometry";
 import type { Design, Existing, Model, Pt } from "./types";
 
 export const chosenDesign = (model: Model | null | undefined): Design | null => model?.designs.find((d) => d.chosen) ?? model?.designs[0] ?? null;
@@ -93,7 +93,7 @@ export function layoutOf(existing: Existing, design: Design): { plan: Plan; layo
     .map((r) => {
       // Living space is furnished clear of the stair, the furnace room and the other rooms.
       const rect = r.kind === "living" ? mainRect(r.polygon, [...shared, ...fixed]) : mainRect(r.polygon);
-      return { kind: r.kind as LayoutZone["kind"], name: r.name, ...rect, areaM2: polygonArea(r.polygon) };
+      return { kind: r.kind as LayoutZone["kind"], name: r.name, ...rect, areaM2: floorArea(r, rooms) };
     });
   const isNew = new Set(walls.filter((w) => w.kind === "new").map((w) => w.id));
   const layoutWalls = walls.filter((w) => w.kind === "new").map((w) => ({ x0: w.a[0], z0: w.a[1], x1: w.b[0], z1: w.b[1] }));

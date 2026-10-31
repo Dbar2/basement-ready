@@ -6,6 +6,7 @@ import { useParams } from "@tanstack/react-router";
 import { AnimatePresence, MotionConfig, motion } from "motion/react";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { checkDesign, tally } from "../../server/model/checks";
+import { fixCount, fixesWord } from "../../server/model/fixes";
 import { applyEdit, applyEdits } from "../../server/model/edit";
 import { wallLength } from "../../server/model/geometry";
 import type { Check, Design, Edit, Model, Opening, Pt, Wall } from "../../server/model/types";
@@ -13,6 +14,7 @@ import { FlowFoot, FlowHead, FlowLink } from "../flow/FlowNav";
 import { stepUrl } from "../flow/flow";
 import { fmtLength, type Units } from "../components/FloorPlan";
 import { lazy3d, View3DBoundary } from "../components/View3D";
+import { getScan } from "../api";
 import { describeChange, loadModel, saveModel, type Proposal } from "./api";
 import { basisOf, cad, quoteFor } from "./cost";
 import { useHistory } from "./history";
@@ -44,12 +46,21 @@ function useReducedMotion() {
 export function Studio() {
   const { scanId } = useParams({ from: "/scans/$scanId/studio" });
   const [model, setModel] = useState<Model | null>(null);
+  const [municipality, setMunicipality] = useState<string | undefined>(undefined);
+  // The basement's own fixes from the answer: the studio counts them with the design's, as the headline does.
+  const [base, setBase] = useState<{ category: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     document.title = "Your basement, designed | Basement Ready";
     loadModel(scanId)
       .then((r) => setModel(r.model))
       .catch((e) => setError(e instanceof Error ? e.message : "We couldn't open your design."));
+    void getScan(scanId)
+      .then((s) => {
+        setMunicipality(s.result?.municipality);
+        setBase((s.result?.fixGroups ?? []).filter((g) => !g.fromDesign));
+      })
+      .catch(() => {});
   }, [scanId]);
   return (
     <MotionConfig reducedMotion="user">
@@ -58,7 +69,7 @@ export function Studio() {
         {error ? (
           <p className="error studio-wait">{error}</p>
         ) : model && model.designs.length ? (
-          <Editor scanId={scanId} initial={model} />
+          <Editor scanId={scanId} initial={model} municipality={municipality} base={base} />
         ) : model ? (
           <p className="studio-wait muted">There's no design for this basement yet: it needs a measured plan.</p>
         ) : (
@@ -72,7 +83,7 @@ export function Studio() {
   );
 }
 
-function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
+function Editor({ scanId, initial, municipality, base }: { scanId: string; initial: Model; municipality?: string; base: { category: string }[] | null }) {
   const reduced = useReducedMotion();
   const [model, setModel] = useState(initial);
   const first = initial.designs.find((d) => d.chosen) ?? initial.designs[0];
@@ -81,6 +92,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
   const existing = model.existing;
   const frame = useMemo(() => frameOf(existing, 0.6), [existing]);
   const [view, setView] = useState<View>("overview");
+  const [layer, setLayer] = useState<"built" | "scan">("built");
   const [pane, setPane] = useState<"3d" | "plan">("3d");
   const [units, setUnits] = useState<Units>("m");
   const [picked, setPicked] = useState<Picked>(null);
@@ -91,7 +103,8 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
   // The checks follow what's committed; the cost follows the finger.
   const checks = useMemo(() => checkDesign(hist.present, existing), [hist.present, existing]);
   const count = tally(checks);
-  const quote = useMemo(() => quoteFor(model, design), [model, design]);
+  const fixes = useMemo(() => (base ? fixCount(base, hist.present, existing) : null), [base, hist.present, existing]);
+  const quote = useMemo(() => quoteFor(model, design, municipality), [model, design, municipality]);
 
   // Each committed change goes into the model, which saves itself a moment later.
   const loaded = useRef(true);
@@ -136,7 +149,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
         <div className="studio-title">
           <div>
             <h1>Your basement, designed</h1>
-            <p className="lede">Permit-ready from the start. Drag a wall or a door, walk through it, or describe a change.</p>
+            <p className="lede">Drag a wall or a door, walk through it, or describe a change.</p>
           </div>
           <div className="ws-chips" role="radiogroup" aria-label="Design">
             {model.designs.map((d) => (
@@ -146,7 +159,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
             ))}
             {!existing.confirmedAt && (
               <FlowLink href={stepUrl(scanId, "plan")} className="link-quiet">
-                Check your plan first
+                Check the plan
               </FlowLink>
             )}
           </div>
@@ -159,12 +172,13 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
           </div>
           <div className="studio-3d" data-shown={pane === "3d"}>
             <View3DBoundary>
-              <Suspense fallback={<p className="viewer-empty mono">Building your basement in 3D…</p>}>
+              <Suspense fallback={<p className="viewer-empty">Building your basement in 3D…</p>}>
                 <Studio3D
                   scanId={scanId}
                   existing={existing}
                   design={design}
                   view={view}
+                  layer={layer}
                   finish={finish}
                   selected={picked}
                   marker={marker}
@@ -181,8 +195,18 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
                 <button aria-pressed={view === "overview"} onClick={() => setView("overview")}>From above</button>
                 <button aria-pressed={view === "walk"} onClick={() => setView("walk")}>Walk</button>
               </div>
+              <div className="segmented small" role="group" aria-label="3D model">
+                <button aria-pressed={layer === "built"} onClick={() => setLayer("built")}>As built</button>
+                <button aria-pressed={layer === "scan"} onClick={() => setLayer("scan")}>Scan</button>
+              </div>
+              {design.proposed.walls.some((w) => w.rating) && (
+                // What the red on top of a wall means.
+                <p className="studio-key">
+                  <i aria-hidden /> 30-min fire separation
+                </p>
+              )}
             </div>
-            <p className="viewer-hint mono">{view === "walk" ? "Drag to look · tap the floor to walk" : "Drag a wall or a green knob · drag elsewhere to turn"}</p>
+            <p className="viewer-hint">{view === "walk" ? "Drag to look · tap the floor to walk" : "Drag a wall or a green knob · drag elsewhere to turn"}</p>
           </div>
           <div className="studio-plan" data-shown={pane === "plan"}>
             <PlanSvg
@@ -243,12 +267,12 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
 
       <aside className="studio-side" aria-label="Checks and cost">
         <div className="studio-bar">
-          <button className="status-chip" data-state={count.fix ? "fix" : "ok"} aria-expanded={panel === "checks"} onClick={() => setPanel((p) => (p === "checks" ? null : "checks"))}>
+          <button className="status-chip" data-state={fixes ? "fix" : "ok"} aria-expanded={panel === "checks"} onClick={() => setPanel((p) => (p === "checks" ? null : "checks"))}>
             <span className="dot" />
-            Meets {count.ok} checks{count.fix ? ` · ${count.fix} to fix` : ""}
+            Meets {count.ok} checks{fixes != null ? ` · ${fixesWord(fixes)}` : ""}
           </button>
           <button className="status-chip" data-state="cost" aria-expanded={panel === "cost"} onClick={() => setPanel((p) => (p === "cost" ? null : "cost"))}>
-            {cad(quote.totalLow)}–{cad(quote.totalHigh)} hired out
+            <span data-total data-low={quote.totalLow} data-high={quote.totalHigh}>{cad(quote.totalLow)}–{cad(quote.totalHigh)} hired out</span>
           </button>
           <button className="status-chip" data-state="ask" aria-expanded={panel === "describe"} onClick={() => setPanel((p) => (p === "describe" ? null : "describe"))}>
             Describe a change
@@ -256,7 +280,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
           <div className="history" role="group" aria-label="Undo">
             <button className="chip" onClick={hist.undo} disabled={!hist.canUndo}>Undo</button>
             <button className="chip" onClick={hist.redo} disabled={!hist.canRedo}>Redo</button>
-            <span className="mono muted save-state" aria-live="polite">{saved === "saving" ? "Saving…" : saved === "error" ? "Not saved" : "Saved"}</span>
+            <span className="aside save-state" aria-live="polite">{saved === "saving" ? "Saving…" : saved === "error" ? "Not saved" : "Saved"}</span>
           </div>
         </div>
 
@@ -282,7 +306,7 @@ function Editor({ scanId, initial }: { scanId: string; initial: Model }) {
           )}
           {panel === "describe" && (
             <motion.div key="describe" className="side-card" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
-              <Describe scanId={scanId} design={hist.present} model={model} onPreview={hist.preview} onApply={(d) => hist.commit(d)} />
+              <Describe scanId={scanId} design={hist.present} model={model} municipality={municipality} base={base} onPreview={hist.preview} onApply={(d) => hist.commit(d)} />
             </motion.div>
           )}
         </AnimatePresence>
@@ -326,7 +350,7 @@ function Checks({ checks, onFix, onShow }: { checks: Check[]; onFix: (c: Check) 
                   {(c.fix || c.at) && (
                     <span className="check-actions">
                       {c.fix && c.ok === false && (
-                        <button className="btn btn-primary btn-small" onClick={() => onFix(c)}>
+                        <button className="btn btn-ghost btn-small" onClick={() => onFix(c)}>
                           {c.fix.label}
                         </button>
                       )}
@@ -349,7 +373,7 @@ function Checks({ checks, onFix, onShow }: { checks: Check[]; onFix: (c: Check) 
 
 // "Describe a change": their words, muse-spark's proposal, what it does to the checks and the cost,
 // then Apply. The proposal shows in the 3D and the plan while it's open.
-function Describe({ scanId, design, model, onPreview, onApply }: { scanId: string; design: Design; model: Model; onPreview: (d: Design | null) => void; onApply: (d: Design) => void }) {
+function Describe({ scanId, design, model, municipality, base, onPreview, onApply }: { scanId: string; design: Design; model: Model; municipality?: string; base: { category: string }[] | null; onPreview: (d: Design | null) => void; onApply: (d: Design) => void }) {
   const [ask, setAsk] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -357,8 +381,10 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
   useEffect(() => () => onPreview(null), [onPreview]);
   const before = useMemo(() => tally(checkDesign(design, model.existing)), [design, model.existing]);
   const after = useMemo(() => (proposal ? tally(checkDesign(proposal.result, model.existing)) : null), [proposal, model.existing]);
-  const costBefore = useMemo(() => quoteFor(model, design), [model, design]);
-  const costAfter = useMemo(() => (proposal ? quoteFor(model, proposal.result) : null), [model, proposal]);
+  const fixesBefore = useMemo(() => (base ? fixCount(base, design, model.existing) : null), [base, design, model.existing]);
+  const fixesAfter = useMemo(() => (base && proposal ? fixCount(base, proposal.result, model.existing) : null), [base, proposal, model.existing]);
+  const costBefore = useMemo(() => quoteFor(model, design, municipality), [model, design, municipality]);
+  const costAfter = useMemo(() => (proposal ? quoteFor(model, proposal.result, municipality) : null), [model, proposal, municipality]);
   const send = async () => {
     setBusy(true);
     setError(null);
@@ -388,7 +414,7 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
         }}
       >
         <textarea className="input" rows={3} maxLength={400} placeholder="Make the bedroom a bit bigger" value={ask} onChange={(e) => setAsk(e.target.value)} aria-label="The change you'd like" />
-        <button className="btn btn-primary" type="submit" disabled={busy || !ask.trim()}>
+        <button className="btn btn-ghost" type="submit" disabled={busy || !ask.trim()}>
           {busy ? "Thinking…" : "Propose it"}
         </button>
       </form>
@@ -397,16 +423,16 @@ function Describe({ scanId, design, model, onPreview, onApply }: { scanId: strin
         <div className="proposal" role="status">
           <p>{proposal.summary}</p>
           {proposal.edits.length > 0 && after && costAfter && (
-            <p className="mono muted small">
+            <p className="muted small">
               Checks met {before.ok} → {after.ok}
-              {after.fix !== before.fix ? `, to fix ${before.fix} → ${after.fix}` : ""} · cost {cad(costBefore.totalLow)} → {cad(costAfter.totalLow)}
+              {fixesBefore != null && fixesAfter != null && fixesAfter !== fixesBefore ? `, fixes ${fixesBefore} → ${fixesAfter}` : ""} · cost {cad(costBefore.totalLow)} → {cad(costAfter.totalLow)}
             </p>
           )}
           {proposal.dropped.length > 0 && <p className="muted small">Left out: {proposal.dropped.join(" ")}</p>}
           <div className="ws-actions">
             {proposal.edits.length > 0 && (
               <button
-                className="btn btn-primary"
+                className="btn btn-ghost"
                 onClick={() => {
                   onApply(proposal.result);
                   setProposal(null);

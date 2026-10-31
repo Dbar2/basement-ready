@@ -1,11 +1,16 @@
-// Your basement as it really is: one solid surface fused from every depth map MapAnything measured,
-// in the colours the camera saw, rising from the floor up. Scans without one show their surface points
-// as soft discs instead. Walk it at eye height (drag to look, tap the floor to go there), jump to the
-// spots where you filmed, or step back for an overview with the ceiling lifted off.
+// Your basement as it really is. By default the as-built model: drawn from the plan, painted with the
+// video (src/three/AsBuilt.tsx), so it's clean, square and exactly on the plan. "Scan" shows the raw
+// capture instead: one solid surface fused from every depth map MapAnything measured, in the colours
+// the camera saw, rising from the floor up (or, without one, its surface points as soft discs). Walk it
+// at eye height (drag to look, tap the floor to go there), jump to the spots where you filmed, or step
+// back for an overview with the ceiling lifted off.
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
+import type { Existing, Pt } from "../../server/model/types";
+import { AsBuiltScene, asBuiltOf, homeView, useAtlas } from "./AsBuilt";
+import { bestView, spotsOf } from "./AsBuiltView";
 import { Tag, TagRoot, TagTracker } from "./Tags";
 
 const EYE_M = 1.5;
@@ -316,7 +321,10 @@ function viewpoints(scan: any): Viewpoint[] {
 // `liteUrl`: a phone-sized file; without one, phones ask the server for `?lite=1`.
 // `meshUrl`: the solid surface; the points are only fetched when there isn't one.
 // `floors`: each room's floor box, filled in under the solid surface.
+// `asBuilt`: draw the as-built model of this scan's plan (its `existing`, or loaded from the model),
+// with a toggle to the raw scan, which is only downloaded when someone asks for it.
 export function RealScan(props: {
+  asBuilt?: { scanId: string; existing?: Existing | null };
   surfelsUrl: string;
   liteUrl?: string;
   meshUrl?: string;
@@ -336,24 +344,64 @@ export function RealScan(props: {
   const [spot, setSpot] = useState(0);
   const [jump, setJump] = useState<Viewpoint | null>(null);
   const [ideas, setIdeas] = useState(false);
+  const [existing, setExisting] = useState<Existing | null>(props.asBuilt?.existing ?? null);
+  const [layer, setLayer] = useState<"built" | "scan">(props.asBuilt ? "built" : "scan");
+  const { atlas } = useAtlas(props.asBuilt && existing ? props.asBuilt.scanId : null, existing);
+  const builtScanId = props.asBuilt?.scanId ?? null;
+  const givenExisting = props.asBuilt?.existing ?? null;
+
+  // The plan to build from: given, or the scan's model. Without one, the raw scan it is.
+  useEffect(() => {
+    if (!builtScanId) return;
+    if (givenExisting) return setExisting(givenExisting);
+    let gone = false;
+    // Loaded when needed: the wait screen imports this file, and the model's schema is big.
+    import("../studio/api")
+      .then(({ loadModel }) => loadModel(builtScanId))
+      .then(({ model }) => !gone && setExisting(model.existing))
+      .catch(() => !gone && setLayer("scan"));
+    return () => {
+      gone = true;
+    };
+  }, [builtScanId, givenExisting]);
 
   useEffect(() => {
+    let gone = false;
+    fetch(props.scanUrl)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => !gone && setScan(json))
+      .catch(() => {});
+    return () => {
+      gone = true;
+    };
+  }, [props.scanUrl]);
+
+  // The raw capture is big: fetched only when it's shown.
+  const wantScan = layer === "scan";
+  useEffect(() => {
+    if (!wantScan) return;
     let gone = false;
     const url = !phone ? props.surfelsUrl : (props.liteUrl ?? `${props.surfelsUrl}${props.surfelsUrl.includes("?") ? "&" : "?"}lite=1`);
     const get = (u: string) => fetch(u).then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))));
     const points = () => get(url).then((buf) => !gone && setSurfels(parseSurfels(buf)));
-    Promise.all([
-      props.meshUrl ? get(props.meshUrl).then((buf) => !gone && setSolid(parseMesh(buf)), points) : points(),
-      fetch(props.scanUrl).then((r) => (r.ok ? r.json() : null)).then((json) => !gone && setScan(json)),
-    ]).catch(() => !gone && setFailed(true));
+    (props.meshUrl ? get(props.meshUrl).then((buf) => !gone && setSolid(parseMesh(buf)), points) : points()).catch(() => !gone && setFailed(true));
     return () => {
       gone = true;
     };
-  }, [props.surfelsUrl, props.liteUrl, props.meshUrl, props.scanUrl, phone]);
+  }, [wantScan, props.surfelsUrl, props.liteUrl, props.meshUrl, phone]);
 
+  const k = existing?.scale.factor ?? 1;
+  // The as-built model stays up while the raw scan downloads.
+  const scanReady = Boolean(solid || surfels);
+  const built = existing && (layer === "built" || !scanReady) ? existing : null;
   const spots = useMemo(() => viewpoints(scan), [scan]);
   // The overview frames where most of the basement is, not its stray far points.
   const { center, span } = useMemo(() => {
+    if (built) {
+      // The model is in their tape's metres; the scan (and the walk's spots) in its own.
+      const b = asBuiltOf(built, null, null).box;
+      return { center: new THREE.Vector3((b.minX + b.maxX) / 2 / k, 0.8, (b.minZ + b.maxZ) / 2 / k), span: Math.max(4, (b.maxX - b.minX) / k, (b.maxZ - b.minZ) / k) };
+    }
     const pos = solid?.pos ?? surfels?.pos;
     if (!pos) return { center: new THREE.Vector3(), span: 8 };
     const xs: number[] = [], zs: number[] = [];
@@ -364,22 +412,56 @@ export function RealScan(props: {
     const pct = (a: number[], q: number) => a.sort((m, n) => m - n)[Math.floor(q * (a.length - 1))];
     const [x0, x1, z0, z1] = [pct(xs, 0.03), pct(xs, 0.97), pct(zs, 0.03), pct(zs, 0.97)];
     return { center: new THREE.Vector3((x0 + x1) / 2, 0.8, (z0 + z1) / 2), span: Math.max(4, x1 - x0, z1 - z0) };
-  }, [solid, surfels]);
+  }, [solid, surfels, built, k]);
 
-  // Start walking from the first place they filmed.
+  // The as-built model opens standing in the middle of the biggest room, looking across it; the raw
+  // scan where they started filming (often the stairs, looking down).
+  const home = useMemo((): Viewpoint | null => {
+    if (!existing || !props.asBuilt) return null;
+    // The filmed spot that looks furthest into the basement; without spots, the biggest room's long view.
+    // Doors count as shut: a long view through a doorway is a close-up of the door.
+    const walls = existing.walls.map((w): [Pt, Pt] => [w.a, w.b]);
+    const v = bestView(spotsOf(scan, k), walls, existing.rooms.map((r) => r.polygon));
+    // The model is in their tape's metres, the walk in the scan's.
+    if (v) return { position: new THREE.Vector3(v.at[0] / k, EYE_M, v.at[1] / k), forward: new THREE.Vector3(v.dir[0], -0.12, v.dir[1]).normalize() };
+    const h = homeView(existing);
+    if (!h) return null;
+    const at = new THREE.Vector3(...h.at).divideScalar(k);
+    return { position: at, forward: new THREE.Vector3(...h.look).divideScalar(k).sub(at).normalize() };
+  }, [existing, k, props.asBuilt, scan]);
   useEffect(() => {
-    if (spots.length) setJump(spots[0]);
-  }, [spots]);
+    if (home) {
+      setSpot(-1);
+      setJump(home);
+    } else if (spots.length) setJump(spots[0]);
+  }, [spots, home]);
   const arrived = useCallback(() => setJump(null), []);
 
-  if (failed) return <>{props.fallback ?? <p className="viewer-empty mono">The 3D scan isn't available for this one.</p>}</>;
-  if (!solid && !surfels) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
+  if (failed && !existing) return <>{props.fallback ?? <p className="viewer-empty mono">The 3D scan isn't available for this one.</p>}</>;
+  if (!built && !scanReady) return <p className="viewer-empty mono">Loading your basement in 3D…</p>;
 
+  // On the as-built model a filmed spot is stood in at eye height, looking about level: the phone
+  // was often held low or tipped at the floor, which up close reads as a smear, not a room.
+  const level = (v: Viewpoint): Viewpoint => {
+    const flat = new THREE.Vector3(v.forward.x, 0, v.forward.z);
+    if (flat.lengthSq() < 1e-4) return v;
+    const pitch = THREE.MathUtils.clamp(Math.asin(THREE.MathUtils.clamp(v.forward.y, -1, 1)), -0.3, 0.15);
+    return { position: new THREE.Vector3(v.position.x, EYE_M, v.position.z), forward: flat.normalize().multiplyScalar(Math.cos(pitch)).setY(Math.sin(pitch)) };
+  };
+  // Filmed facing a wall up close, it turns to look into the room (src/three/AsBuiltView.ts).
+  const intoRoom = (v: Viewpoint): Viewpoint => {
+    if (!built) return v;
+    const walls = built.walls.map((w): [Pt, Pt] => [w.a, w.b]);
+    const turned = bestView([{ at: [v.position.x * k, v.position.z * k], dir: [v.forward.x, v.forward.z] }], walls, []);
+    if (!turned) return v;
+    const pitch = Math.asin(THREE.MathUtils.clamp(v.forward.y, -1, 1));
+    return { position: v.position, forward: new THREE.Vector3(turned.dir[0] * Math.cos(pitch), Math.sin(pitch), turned.dir[1] * Math.cos(pitch)) };
+  };
   const go = (i: number) => {
     const n = (i + spots.length) % spots.length;
     setSpot(n);
     setMode("walk");
-    setJump(spots[n]);
+    setJump(built ? intoRoom(level(spots[n])) : spots[n]);
   };
   const ceiling = props.ceilingHeightM ?? 2.4;
 
@@ -389,7 +471,15 @@ export function RealScan(props: {
         <Canvas className="viewer-canvas" camera={{ fov: 70, near: 0.03, far: 100, position: [0, EYE_M, 0] }} dpr={[1, phone ? 1.5 : 2]} gl={{ antialias: true }}>
           <TagTracker />
           <color attach="background" args={[getComputedStyle(document.documentElement).getPropertyValue("--color-ink").trim() || "#0F2A1E"]} />
-          {solid ? <SolidView solid={solid} ceilingY={ceiling} overview={mode === "overview"} floors={props.floors ?? []} /> : surfels && <Cloud surfels={surfels} ceilingY={ceiling} overview={mode === "overview"} />}
+          {built ? (
+            <group scale={1 / k}>
+              <AsBuiltScene existing={built} atlas={atlas} overview={mode === "overview"} labels />
+            </group>
+          ) : solid ? (
+            <SolidView solid={solid} ceilingY={ceiling} overview={mode === "overview"} floors={props.floors ?? []} />
+          ) : (
+            surfels && <Cloud surfels={surfels} ceilingY={ceiling} overview={mode === "overview"} />
+          )}
           {ideas && <Suspense fallback={null}>{props.ideas}</Suspense>}
           {props.labels?.map((l, i) => (
             <Tag key={i} position={l.at}>
@@ -403,20 +493,30 @@ export function RealScan(props: {
       </TagRoot>
       <div className="stage-tools">
         <div className="segmented small" role="group" aria-label="View">
-          <button aria-pressed={mode === "walk"} onClick={() => go(spot)}>
+          <button aria-pressed={mode === "walk"} onClick={() => (spot < 0 && home ? (setMode("walk"), setJump(home)) : go(spot))}>
             Walk
           </button>
           <button aria-pressed={mode === "overview"} onClick={() => setMode("overview")}>
             Overview
           </button>
         </div>
+        {props.asBuilt && existing && (
+          <div className="segmented small" role="group" aria-label="3D model">
+            <button aria-pressed={layer === "built"} onClick={() => setLayer("built")}>
+              As built
+            </button>
+            <button aria-pressed={layer === "scan"} onClick={() => setLayer("scan")}>
+              Scan
+            </button>
+          </div>
+        )}
         {spots.length > 1 && (
           <div className="scan-spots" role="group" aria-label="Where you filmed">
             <button onClick={() => go(spot - 1)} aria-label="Previous spot">
               ‹
             </button>
             <span className="mono">
-              Spot {spot + 1} of {spots.length}
+              {spot < 0 ? `${spots.length} spots you filmed` : `Spot ${spot + 1} of ${spots.length}`}
             </span>
             <button onClick={() => go(spot + 1)} aria-label="Next spot">
               ›
@@ -434,7 +534,7 @@ export function RealScan(props: {
           </button>
         </div>
       )}
-      <p className="viewer-hint mono">{mode === "walk" ? "Drag to look · tap the floor to walk there" : "Drag to turn · pinch or scroll to zoom"}</p>
+      <p className="viewer-hint mono">{layer === "scan" && !scanReady ? (failed ? "The scan isn't available for this one" : "Loading the scan…") : mode === "walk" ? "Drag to look · tap the floor to walk there" : "Drag to turn · pinch or scroll to zoom"}</p>
     </>
   );
 }

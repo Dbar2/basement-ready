@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { db, migrateDb, schema } from "../../server/db";
 import { viewsFromArea } from "../../server/views/angles";
-import { anglePicks, cardsSoFar, deckAngles, checkedWords, makeDeck, pickViews, runCards, sharpen, type CardWork } from "../../server/ideas/cards";
+import { anglePicks, cardsSoFar, deckAngles, checkedWords, makeDeck, pickViews, retryCards, runCards, sharpen, type CardWork } from "../../server/ideas/cards";
 import { cardId, colourFurniture, disliked, emptySwipes, moodFrom, moodWords, planDeck, swipes, upNext, type Card, type Deck, type SwipeState, type View } from "../../server/ideas/deck";
 import { cardPrompt, COLOURS, DECK_STYLES, furnitureOf, STYLES, tagsFor } from "../../server/ideas/styles";
 
@@ -381,6 +381,28 @@ describe("idea cards: the job", () => {
     expect(deck.slots.length).toBeGreaterThanOrEqual(12);
     expect(deck.cards.length).toBe(deck.slots.length);
     expect(deck.cards.every((c) => c.id === cardId(c.n) && c.url.startsWith("/cards/"))).toBe(true);
+  });
+});
+
+describe("idea cards: try again", () => {
+  it("deals a failed deck anew: it reads as waiting at once, and the new plan is the one shown", async () => {
+    const [basement] = await db.insert(schema.basements).values({ claimToken: "t2", household: "renter", municipality: "waterloo-on", address: "" }).returning();
+    const [scan] = await db.insert(schema.scans).values({ basementId: basement.id, startedAt: new Date() }).returning();
+    const slot = (n: number, frame: number) => ({ n, frame, title: `View ${n}` });
+    await db.insert(schema.scanEvents).values([
+      { scanId: scan.id, at: 1, type: "cards", text: "2 cards on the way", data: { status: "pending", slots: [slot(1, 10), slot(2, 20)] } },
+      { scanId: scan.id, at: 2, type: "cards", text: "Cards failed", data: { status: "failed", slots: [] } },
+    ]);
+    expect((await cardsSoFar(scan.id)).status).toBe("failed");
+
+    const job = await retryCards(scan.id);
+    expect(job).toBeTruthy();
+    expect((await cardsSoFar(scan.id)).status).toBe("waiting");
+
+    await db.insert(schema.scanEvents).values({ scanId: scan.id, at: 3, type: "cards", text: "1 card on the way", data: { status: "pending", slots: [slot(1, 30)] } });
+    const deck = await cardsSoFar(scan.id);
+    expect(deck.status).toBe("pending");
+    expect(deck.slots.map((s) => s.frame)).toEqual([30]);
   });
 });
 

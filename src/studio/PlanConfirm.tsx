@@ -102,6 +102,9 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
   const opening = picked?.kind === "opening" ? e.openings.find((o) => o.id === picked.id) : null;
   const guesses = e.walls.filter((w) => w.guess).length + e.fixtures.filter((f) => f.guess).length;
   const area = e.rooms.reduce((s, r) => s + polygonArea(r.polygon), 0);
+  // The area rests on every wall, so while any wall is a guess it's only about that much.
+  const roughArea = e.walls.some((w) => w.guess);
+  const areaText = `${roughArea ? "About " : ""}${fmtArea(area, units)}`;
   const taped = e.scale.source === "tape";
   // A photo take's sizes are the 3D's own, about a fifth either way: one tape number on its longest
   // outside wall fixes them all.
@@ -150,7 +153,7 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
             layer={e}
             frame={frame}
             units={units}
-            label={`Your basement's plan, ${fmtArea(area, units)}. Pick a wall, room or find; arrow keys move it.`}
+            label={`Your basement's plan, ${areaText.toLowerCase()}. Pick a wall, room or find; arrow keys move it.`}
             selected={picked ?? (askTape ? { kind: "wall", id: longest!.id } : null)}
             onSelect={setPicked}
             canDragWall={() => true}
@@ -185,14 +188,15 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
 
       <aside className="studio-side" aria-label="Your basement">
         <div className="side-card">
-          <p className="mono side-eyebrow">{taped ? "Scaled to your tape" : e.scale.source === "arkit" ? "Measured by the iPhone app" : photos ? "From your photos, give or take a fifth" : "From the video, give or take a little"}</p>
-          <p className="side-big">{fmtArea(area, units)}</p>
-          <p className="muted">Ceiling {e.ceilingM ? fmtLength(e.ceilingM, units) : "not measured"}</p>
+          <p className="side-big">{areaText}</p>
+          {roughArea && <p className="muted">Until you check the dashed walls.</p>}
+          <p className="muted">Ceiling {e.ceilingM ? <span className="mono">{fmtLength(e.ceilingM, units)}</span> : "not measured"}</p>
+          <p className="side-eyebrow">{taped ? "Scaled to your tape." : e.scale.source === "arkit" ? "Measured by the iPhone app." : photos ? "From your photos, give or take a fifth." : "From the video, give or take a little."}</p>
         </div>
 
         {questions.length > 0 && (
           <div className="side-card plan-check" aria-live="polite">
-            <p className="mono side-eyebrow">Checked against your {photos ? "photos" : "video"}</p>
+            <p className="side-eyebrow">Checked against your {photos ? "photos" : "video"}</p>
             <h2>{questions.length === 1 ? "One thing to look at" : `${questions.length} things to look at`}</h2>
             <ul className="plan-questions">
               {questions.map(({ q, i }) => (
@@ -231,8 +235,18 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
 
         {wall ? (
           <div className="side-card" key={wall.id}>
-            <h2>{wall.kind === "foundation" ? "Outside wall" : "Wall"}</h2>
+            <h2>{wall.kind === "foundation" ? "Outside wall" : "Wall"}{wall.guess ? ", a guess" : ""}</h2>
+            {wall.guess && (
+              <p>
+                We couldn't see this wall clearly, so where it is is a guess. Drag it to where it really is, or say it's right.
+              </p>
+            )}
             <p className="muted">{fmtLength(wallLength(wall), units)} on the plan. Drag it, or pick it and use the arrow keys.</p>
+            {wall.guess && (
+              <button className="chip" onClick={() => edit({ op: "set_wall", wallId: wall.id, guess: false })}>
+                It's right here
+              </button>
+            )}
             <LengthInput
               label="Its length by tape (optional)"
               units={units}
@@ -265,7 +279,11 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
         ) : opening ? (
           <div className="side-card" key={opening.id}>
             <h2>{opening.kind === "door" ? "Door" : "Window"}</h2>
-            <p className="muted">{Math.round(opening.widthM * 100)} cm wide{opening.heightM ? `, ${Math.round(opening.heightM * 100)} cm tall` : ""}. Drag it along its wall.</p>
+            <p className="muted">
+              {opening.guess ? "About " : ""}
+              {Math.round(opening.widthM * 100)} cm wide{opening.heightM ? `, ${Math.round(opening.heightM * 100)} cm tall` : ""}.{" "}
+              {opening.guess && opening.kind === "window" ? "Seen on the video, but not where it is: drag it to its place." : opening.guess ? "Its width is a guess; a tape number fixes it." : "Drag it along its wall."}
+            </p>
             <LengthInput label="Its width by tape" units={units} onSubmit={(m) => edit({ op: "set_opening", openingId: opening.id, widthM: m })} cta="Set the width" />
             {opening.kind === "window" && <LengthInput label="Its height by tape" units={units} onSubmit={(m) => edit({ op: "set_opening", openingId: opening.id, heightM: m })} cta="Set the height" />}
             <button className="link-quiet" onClick={() => (edit({ op: "remove_opening", openingId: opening.id }), setPicked(null))}>
@@ -282,8 +300,8 @@ function Confirm({ scanId, model, photos, check }: { scanId: string; model: Mode
                     <i data-kind={"find" in f ? (f.kind === "door" ? "exit" : "window") : f.kind} />
                     <span>{"find" in f ? (f.kind === "door" ? "Door" : "Window") : FIXTURE_NAME[(f as Fixture).kind]}</span>
                     <span className="mono muted">
-                      {"find" in f ? `${Math.round(f.widthM * 100)} cm` : (f as Fixture).heightM != null ? `${fmtLength((f as Fixture).heightM!, units)} clear` : ""}
-                      {(f as Fixture).guess ? " · place it" : ""}
+                      {"find" in f ? `${f.guess ? "about " : ""}${Math.round(f.widthM * 100)} cm` : (f as Fixture).heightM != null ? `${fmtLength((f as Fixture).heightM!, units)} clear` : ""}
+                      {f.guess && !("find" in f && f.kind === "door") ? " · place it" : ""}
                     </span>
                   </button>
                 </li>

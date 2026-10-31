@@ -3,11 +3,12 @@
 // then the looks and the swipes they loved), the mood board, the quote by trade, how ready the permit is, the money they may
 // qualify for, a timeline from applying to moving in, and what to do next. Everything in it comes
 // from the model, the scan's answer and the dated catalog; nothing is made up on the way.
+import { areaText, suiteAreaM2 } from "../model/suite";
 import { PDFDocument, rgb } from "pdf-lib";
 import type { Design, Model } from "../model/types";
 import { cityPermit } from "../permit/data";
 import { lookPage, localDate } from "../permit/package";
-import { embedFonts, LETTER, newDoc, Sheet, type Fonts } from "../permit/pdf";
+import { embedBrandFonts, LETTER, newDoc, Sheet, type Fonts } from "../permit/pdf";
 import { quote as priceDesign, type Quote } from "../quote/quote";
 import type { StoredState } from "../workspace";
 import type { PictureKind } from "./pictures";
@@ -43,7 +44,7 @@ const VERDICT: Record<string, { label: string; color: ReturnType<typeof rgb> }> 
 function page(doc: PDFDocument, fonts: Fonts, kicker: string, title: string, o: { address: string }) {
   const s = new Sheet(doc.addPage(LETTER), fonts);
   s.rect(0, 0, s.width, s.height, { fill: rgb(1, 1, 1), stroke: false });
-  s.text(kicker.toUpperCase(), M, s.height - M, { size: 8, color: LEAF, font: fonts.bold });
+  s.text(kicker, M, s.height - M, { size: 9, color: LEAF, font: fonts.bold });
   s.text(o.address, s.width - M, s.height - M, { size: 8, color: MOSS, align: "right" });
   const y = s.wrap(title, M, s.height - M - 26, s.width - 2 * M, { size: 20, font: fonts.bold, color: FOREST, leading: 24 });
   s.text(`Basement Ready · page ${doc.getPageCount()}`, M, 30, { size: 7, color: MOSS });
@@ -89,7 +90,7 @@ export function readinessFrom(result: any, design: Design | null): ReadinessItem
 export async function buildBook(input: BookInput): Promise<BookOut> {
   const today = input.today ?? localDate();
   const doc = await newDoc(`Your basement book: ${input.address}`);
-  const fonts = await embedFonts(doc);
+  const fonts = await embedBrandFonts(doc);
   const pages: string[] = [];
   const o = { address: input.address };
   const designs = input.model.designs;
@@ -117,17 +118,18 @@ export async function buildBook(input: BookInput): Promise<BookOut> {
 function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design | null, q: Quote | null, ready: ReadinessItem[], today: string) {
   const s = new Sheet(doc.addPage(LETTER), fonts);
   s.rect(0, 0, s.width, s.height, { fill: rgb(0.957, 0.965, 0.949), stroke: false });
-  s.rect(0, s.height - 8, s.width, 8, { fill: MINT, stroke: false });
-  s.text("BASEMENT READY", M, s.height - M, { size: 9, color: FOREST, font: fonts.bold });
+  s.text("Basement Ready", M, s.height - M, { size: 11, color: FOREST, font: fonts.bold });
   s.text(today, s.width - M, s.height - M, { size: 9, color: MOSS, align: "right" });
   let y = s.height - 190;
-  s.text("YOUR BASEMENT, THE BOOK", M, y, { size: 9, color: LEAF, font: fonts.bold });
-  y = s.wrap(input.address, M, y - 30, s.width - 2 * M, { size: 30, font: fonts.bold, color: FOREST, leading: 34 }) - 18;
+  // Drawing Set (brand/ui.md): no label above the title, the verdict as a square and a word, no capitals.
+  y = s.wrap(input.address, M, y - 30, s.width - 2 * M, { size: 30, font: fonts.bold, color: FOREST, leading: 34 }) - 4;
+  s.text("Your basement, the book", M, y, { size: 11, color: MOSS });
+  y -= 30;
   const v = VERDICT[input.result?.verdict as string] ?? null;
   if (v) {
-    s.rect(M, y - 6, s.textWidth(v.label, 11, fonts.bold) + 20, 22, { fill: v.color, stroke: false });
-    s.text(v.label, M + 10, y + 1, { size: 11, font: fonts.bold, color: rgb(1, 1, 1) });
-    y -= 34;
+    s.rect(M, y - 1, 9, 9, { fill: v.color, stroke: false });
+    s.text(v.label, M + 16, y, { size: 12, font: fonts.bold, color: v.color });
+    y -= 30;
   }
   if (input.result?.demo) {
     y = s.wrap("The demo house: the City of Waterloo's rules on a house that isn't real.", M, y, s.width - 2 * M, { size: 10, color: AMBER, font: fonts.bold }) - 10;
@@ -136,8 +138,8 @@ function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design 
 
   const facts: [string, string][] = [];
   if (design) {
-    const area = design.proposed.rooms.filter((r) => r.unit === 2).reduce((t, r) => t + polyArea(r.polygon), 0);
-    facts.push(["The design", `${design.name}, about ${area.toFixed(0)} m² (${Math.round(area * 10.7639)} sq ft)`]);
+    const area = suiteAreaM2(design);
+    facts.push(["The design", area == null ? design.name : `${design.name}, ${areaText(area)}`]);
   }
   if (q) {
     facts.push(["Hired out", `${range(q.totalLow, q.totalHigh)} with contingency and HST`]);
@@ -147,16 +149,10 @@ function cover(doc: PDFDocument, fonts: Fonts, input: BookInput, design: Design 
   if (ready.length) facts.push(["Permit", `${done} of ${ready.length} checks ready`]);
   for (const [k, val] of facts) {
     s.line(M, y + 14, s.width - M, y + 14, { width: 0.5, color: LINE });
-    s.text(k.toUpperCase(), M, y, { size: 8, color: MOSS, font: fonts.bold });
+    s.text(k, M, y, { size: 9.5, color: MOSS });
     y = s.wrap(val, M + 130, y, s.width - 2 * M - 130, { size: 11, color: FOREST }) - 12;
   }
   s.wrap("A planning book, not a permit or a contract. Sizes come from your scan; prices are dated shelf prices and published rates. Pictures marked \"virtually staged\" are made by Muse Image from your own photos.", M, 70, s.width - 2 * M, { size: 7.5, color: MOSS });
-}
-
-function polyArea(p: [number, number][]) {
-  let a = 0;
-  for (let i = 0; i < p.length; i++) a += p[i][0] * p[(i + 1) % p.length][1] - p[(i + 1) % p.length][0] * p[i][1];
-  return Math.abs(a) / 2;
 }
 
 // ---- The design and its alternatives ----
@@ -208,7 +204,7 @@ async function picturesPages(doc: PDFDocument, fonts: Fonts, input: BookInput, o
   }
   // The permit package's look page, four to a page: their design first, then what they loved.
   for (let i = 0; i < pics.length && i < 12; i += 4) {
-    await lookPage(doc, pics.slice(i, i + 4).map((p) => ({ title: p.kind === "design" ? `Your design: ${p.title}` : p.title, jpeg: p.jpeg })), input.state ?? {});
+    await lookPage(doc, pics.slice(i, i + 4).map((p) => ({ title: p.kind === "design" ? `Your design: ${p.title}` : p.title, jpeg: p.jpeg })), input.state ?? {}, fonts);
     pages.push(i ? "Pictures (continued)" : "Pictures");
   }
 }
@@ -306,7 +302,7 @@ function quotePages(doc: PDFDocument, fonts: Fonts, q: Quote, o: { address: stri
   const f = new Flow(doc, fonts, "Quote by line", "Line by line", o, pages);
   for (const t of q.byTrade) {
     f.need(80);
-    f.s.text(t.label.toUpperCase(), M, f.y, { size: 8, color: LEAF, font: fonts.bold });
+    f.s.text(t.label, M, f.y, { size: 10, color: FOREST, font: fonts.bold });
     f.y -= 14;
     for (const l of t.lines) {
       const detail = `${l.qty.toLocaleString("en-CA")} ${l.unit}. ${l.basis}`;
@@ -365,7 +361,7 @@ function readinessPage(doc: PDFDocument, fonts: Fonts, ready: ReadinessItem[], o
   for (const [label, items, color] of groups) {
     if (!items.length) continue;
     f.need(30);
-    f.s.text(`${label.toUpperCase()} (${items.length})`, M, f.y, { size: 8, color, font: fonts.bold });
+    f.s.text(`${label} (${items.length})`, M, f.y, { size: 10, color, font: fonts.bold });
     f.y -= 15;
     for (const it of items) {
       f.need(26);
@@ -381,7 +377,7 @@ function readinessPage(doc: PDFDocument, fonts: Fonts, ready: ReadinessItem[], o
 
 function moneyPage(doc: PDFDocument, fonts: Fonts, result: any, o: { address: string }, pages: string[]) {
   const grants = (result?.grants ?? []).filter((g: any) => g.qualify !== "no");
-  const f = new Flow(doc, fonts, "Money", "Money you may qualify for", o, pages);
+  const f = new Flow(doc, fonts, "Money", "Money you may be eligible for", o, pages);
   if (!grants.length) {
     f.s.wrap("Answer the money questions on the workspace and the programs that fit show here.", M, f.y, f.s.width - 2 * M, { size: 10, color: MOSS });
     return;
@@ -390,7 +386,7 @@ function moneyPage(doc: PDFDocument, fonts: Fonts, result: any, o: { address: st
     const text = [g.amount, g.apply?.detail, g.apply?.paidWhen ? `Paid ${g.apply.paidWhen}.` : null].filter(Boolean).join(" ");
     f.need(f.s.measure(text, f.s.width - 2 * M - 12, 8.5) + 40);
     f.s.text(g.shortName ?? g.name, M, f.y, { size: 11, color: FOREST, font: fonts.bold });
-    f.s.text(g.qualify === "yes" ? "You qualify" : "You may qualify", f.s.width - M, f.y, { size: 8, color: g.qualify === "yes" ? LEAF : AMBER, font: fonts.bold, align: "right" });
+    f.s.text(g.qualify === "yes" ? "Looks eligible" : "Could be eligible", f.s.width - M, f.y, { size: 8, color: g.qualify === "yes" ? LEAF : AMBER, font: fonts.bold, align: "right" });
     f.y = f.s.wrap(text, M, f.y - 13, f.s.width - 2 * M - 12, { size: 8.5, color: MOSS });
     if (g.source?.url) f.y = f.s.wrap(`Source: ${g.source.title}, ${g.source.url}`, M, f.y, f.s.width - 2 * M, { size: 6.5, color: MOSS });
     f.y -= 10;

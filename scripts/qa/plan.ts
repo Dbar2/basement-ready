@@ -84,8 +84,8 @@ export const SCREENS: Screen[] = [
     priority: 2,
     purpose:
       "While the scan runs: the video with what the model found boxed on it, the stages (reading video, finding things, measuring rooms, checking the rules), a time left, and questions asked while it checks. For the example it says it's a recorded scan, replayed.",
-    checks: ["Boxes and labels sit on the right objects in the frame.", "The time left and the stages agree with each other.", "No internal model names, error codes or confidence numbers shown to the homeowner."],
-    captureNote: "Shot a few seconds in, with the first question up; it's one moment of a moving screen.",
+    checks: ["Boxes and labels sit on the right objects in the frame.", "The time left and the stages agree with each other.", "No error codes or confidence numbers shown to the homeowner (Meta model names are shown on purpose)."],
+    captureNote: "Shot a few seconds in, with the first question up; it's one moment of a moving screen. Only the example replays it: a finished take opens on its last step.",
   }),
   S({
     id: "workspace-book",
@@ -269,6 +269,8 @@ export const SCREENS: Screen[] = [
     purpose:
       "The confirmed plan's walls (magenta lines, thickness to scale), doors and windows (blue and teal ticks) and stairs or ducts (outlined boxes), drawn over a top-down render of the scan cut at about 1.2 m.",
     checks: ["Plan walls run along the scan's walls, not through the middle of the room or outside it.", "Openings sit where the scan shows gaps or windows.", "Stairs box covers the scanned stairs."],
+    captureNote:
+      "This is a QA view, not a screen homeowners see. The QA tool draws the magenta wall lines and bands, the blue and teal opening ticks, the yellow dashed boxes with raw ids (water_heater, plumbing…), the black legend box and the 1 m bar, and it puts the camera straight overhead. Never report their colours, wording, labels or placement, or that the legend covers the app's buttons. Judge only whether the plan (the QA drawing) matches the scanned geometry under it. The app's own pill labels (Door, Window, Stairs) are part of its 3D view.",
   }),
   S({
     id: "permit-pdf",
