@@ -2,7 +2,9 @@
 // once (services/scan3d /floorplan), with each area's depth, SAM's doors, windows, stairs and mechanicals
 // lifted into the phone's world, and the walls checked against the depth. Then muse-spark-1.3 looks at the
 // plan drawn over the points from above and into a few frames, and proposes typed corrections; the 3D
-// service keeps one only if the points agree. At most two rounds, each counted in the day's spend.
+// service keeps one only if the points agree. One round, counted in the day's spend, and capped (REVIEW_MS):
+// Spark takes a minute or more on a whole basement, so a scan's answer goes out with the plan as measured
+// and the review runs after it (server/pipeline.ts reviewPlanLater).
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BasementPlan } from "../src/api";
@@ -13,8 +15,11 @@ import type { Detection } from "./pipeline";
 import { locate } from "./plan";
 import { runFloorPlan, type FloorPlanResult, type Scan3d } from "./scan3d";
 
-const ROUNDS = 2;
+const ROUNDS = 1;
 const KEYFRAMES_PER_AREA = 2;
+// Spark's look at the plan is dropped past this, and the plan stays as measured. It runs after the answer,
+// so this only bounds how long the plan may still change; a whole basement has taken Spark 45 to 80 s.
+export const REVIEW_MS = 90_000;
 
 type V3 = [number, number, number];
 
@@ -127,9 +132,20 @@ export function applyWatch(plan: BasementPlan, watch: WatchLike, cameras: number
     r.name = (w.spokenName || w.name || r.name)?.slice(0, 40);
     if (w.kind === "closet" && r.areaM2 <= 5) r.kind = "closet";
     else if (w.kind === "hall") r.kind = "hall";
+    // A room the watch named for what it is ("Laundry room") is that kind of room, without waiting for
+    // Spark's review (which comes after the answer) to say so.
+    else if (r.kind === "other") r.kind = KIND_BY_NAME.find(([re]) => re.test(`${w.name ?? ""} ${w.spokenName ?? ""}`))?.[1] ?? r.kind;
   }
   return watch.rooms.filter((w) => !matched.has(w.id));
 }
+
+// The kinds a room's name says outright (Spark's review sets the same kinds: INSTRUCTIONS).
+const KIND_BY_NAME: [RegExp, string][] = [
+  [/laundry/i, "laundry"],
+  [/bath|washroom|powder room|toilet/i, "bathroom"],
+  [/furnace|utility|mechanical/i, "mechanical"],
+  [/storage|cold room|cold cellar/i, "storage"],
+];
 
 // A point inside a polygon, near its middle (the middle of an L isn't in it).
 export function inside(poly: [number, number][]): [number, number] {
@@ -219,7 +235,7 @@ function summary(plan: BasementPlan) {
   };
 }
 
-export async function askSpark(plan: BasementPlan, renders: NonNullable<FloorPlanResult["renders"]>, said: string, watch?: WatchLike | null) {
+export async function askSpark(plan: BasementPlan, renders: NonNullable<FloorPlanResult["renders"]>, said: string, watch?: WatchLike | null, signal?: AbortSignal) {
   const watched = watch && {
     rooms: watch.rooms.map((r) => ({ id: r.id, name: r.spokenName || r.name, kind: r.kind, enteredByCamera: r.entered, seenFrom: r.seenFrom })),
     doors: watch.doors.map((d) => ({ from: d.from, to: d.to, kind: d.kind })),
@@ -233,7 +249,7 @@ export async function askSpark(plan: BasementPlan, renders: NonNullable<FloorPla
       { type: "input_image", image_url: `data:image/jpeg;base64,${f}` },
     ]),
   ];
-  const r = await responses({ model: "muse-spark-1.3", input: [{ role: "developer", content: INSTRUCTIONS }, { role: "user", content }] });
+  const r = await responses({ model: "muse-spark-1.3", input: [{ role: "developer", content: INSTRUCTIONS }, { role: "user", content }] }, signal);
   const text = outputText(r);
   const start = text.indexOf("{"), end = text.lastIndexOf("}");
   if (start < 0 || end < start) return { corrections: [], unsure: [], note: "" };
@@ -247,16 +263,16 @@ export async function askSpark(plan: BasementPlan, renders: NonNullable<FloorPla
 
 const mid = (w: { a: [number, number]; b: [number, number] }): [number, number] => [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2];
 
-// The plan, read and then reviewed. `review` false: read only (no Meta calls).
-export async function readBasementPlan(
-  work: string,
-  b: BasementScan,
-  detections: Detection[],
-  // save: the final plan drawn from above over the points (PNG), for anything else that reads the plan.
-  opts: { said?: string; review?: boolean; log?: (text: string) => Promise<void>; ask?: typeof askSpark; save?: (png: Buffer) => Promise<unknown> } = {},
-): Promise<BasementPlan | null> {
+type Watched = Awaited<NonNullable<BasementScan["watch"]>> | null;
+
+// The plan as the 3D measured it, and what a review of it needs.
+export type PlanRead = { plan: BasementPlan; renders: FloorPlanResult["renders"]; hints: Record<string, unknown>; frames: ReturnType<typeof keyframes>; watch: Watched };
+
+type ReviewOpts = { said?: string; log?: (text: string) => Promise<void>; ask?: typeof askSpark; rounds?: number; timeoutMs?: number };
+
+// The plan as measured: no Meta calls. `save`: the plan drawn from above over the points (PNG).
+export async function measureBasementPlan(work: string, b: BasementScan, detections: Detection[], opts: { save?: (png: Buffer) => Promise<unknown> } = {}): Promise<PlanRead | null> {
   if (!b.tracked) return null;
-  const ask = opts.ask ?? askSpark;
   // The whole-take watch lands well before the 3D; don't hold the plan up long if it hasn't.
   const watch = b.watch ? await Promise.race([b.watch.catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 30_000))]) : null;
   const hints: Record<string, unknown> = hintsFrom(b.scans, detections);
@@ -264,45 +280,84 @@ export async function readBasementPlan(
   const peek = watch?.rooms.filter((r) => !r.entered).length ?? 0;
   if (peek) hints.peek = peek;
   const frames = keyframes(work, b.scans);
-  const review = opts.review ?? true;
-  let res = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints, keyframes: frames, render: true });
+  const res = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints, keyframes: frames, render: true });
   if (!res.plan) return null;
+  if (res.renders?.topDown) await opts.save?.(Buffer.from(res.renders.topDown, "base64")).catch(() => {});
+  return { plan: res.plan, renders: res.renders, hints, frames, watch };
+}
+
+// The measured plan as it goes out: the watch's names and the rooms it saw that the 3D didn't place.
+export function measuredPlan(read: PlanRead, b: BasementScan): BasementPlan {
+  return finish(structuredClone(read.plan), read.watch, b, [], { rounds: 0, note: "", reviewed: false });
+}
+
+// Spark's look at the plan (`rounds`, one by default), each correction kept only where the 3D agrees.
+// Null when Spark had nothing to change, didn't answer in time, or the day's spend is used up: the plan
+// stays as measured.
+export async function reviewBasementPlan(read: PlanRead, b: BasementScan, opts: ReviewOpts & { save?: (png: Buffer) => Promise<unknown> } = {}): Promise<BasementPlan | null> {
+  if (!b.tracked || !read.renders) return null;
+  const ask = opts.ask ?? askSpark;
+  let plan = structuredClone(read.plan);
+  let renders = read.renders;
   const edits: Record<string, unknown>[] = [];
   const unsure: [number, number][] = [];
   let rounds = 0;
   let note = "";
-  while (review && rounds < ROUNDS && res.renders && !(await overSpend())) {
+  let changed = false;
+  while (rounds < (opts.rounds ?? ROUNDS) && !(await overSpend())) {
     rounds++;
     await opts.log?.(rounds === 1 ? "Checking the floor plan against the video" : "Checking the floor plan again");
-    if (watch) applyWatch(res.plan!, watch, b.tracked.cameras, b.tracked.frames);
-    const said = await ask(res.plan!, res.renders, opts.said ?? "", watch).catch((err) => {
+    if (read.watch) applyWatch(plan, read.watch, b.tracked.cameras, b.tracked.frames);
+    const said = await ask(plan, renders, opts.said ?? "", read.watch, AbortSignal.timeout(opts.timeoutMs ?? REVIEW_MS)).catch((err) => {
       console.error(`[plan] Spark: ${err instanceof Error ? err.message : err}`);
       return null;
     });
     if (!said) break;
     note = said.note || note;
     for (const id of said.unsure) {
-      const w = res.plan!.walls.find((x) => x.id.toLowerCase() === id.toLowerCase());
+      const w = plan.walls.find((x) => x.id.toLowerCase() === id.toLowerCase());
       if (w) unsure.push(mid(w));
     }
-    const fresh = toEdits(res.plan!, said.corrections).map((e, i) => ({ ...e, n: edits.length + i + 1 }));
+    const fresh = toEdits(plan, said.corrections).map((e, i) => ({ ...e, n: edits.length + i + 1 }));
     if (!fresh.length) break;
     edits.push(...fresh);
-    res = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints, edits, keyframes: frames, render: true });
-    if (!res.plan) return null;
+    const next = await runFloorPlan(b.scans, b.tracked.cameras, { depth: true, hints: read.hints, edits, keyframes: read.frames, render: true });
+    if (!next.plan) break;
     const ids = new Set(fresh.map((e) => e.n));
-    const kept = res.plan.edits.filter((e) => ids.has(e.n as number) && e.ok).length;
+    const kept = next.plan.edits.filter((e) => ids.has(e.n as number) && e.ok).length;
     await opts.log?.(kept ? `Kept ${kept} of ${fresh.length} corrections the 3D agreed with` : "The 3D didn't support those corrections; keeping the plan as measured");
     if (!kept) break;
+    plan = next.plan;
+    renders = next.renders ?? renders;
+    changed = true;
   }
-  const plan = res.plan;
-  if (res.renders?.topDown) await opts.save?.(Buffer.from(res.renders.topDown, "base64")).catch(() => {});
-  const missing = watch ? applyWatch(plan, watch, b.tracked.cameras, b.tracked.frames) : [];
+  if (!changed && !unsure.length && !note) return null;
+  if (changed) await opts.save?.(Buffer.from(renders.topDown, "base64")).catch(() => {});
+  return finish(plan, read.watch, b, unsure, { rounds, note, reviewed: true });
+}
+
+// The plan, read and then reviewed in one go (the replan route and the harness). `review` false: read
+// only (no Meta calls).
+export async function readBasementPlan(
+  work: string,
+  b: BasementScan,
+  detections: Detection[],
+  opts: ReviewOpts & { review?: boolean; save?: (png: Buffer) => Promise<unknown> } = {},
+): Promise<BasementPlan | null> {
+  const read = await measureBasementPlan(work, b, detections, opts);
+  if (!read) return null;
+  return ((opts.review ?? true) && (await reviewBasementPlan(read, b, opts))) || measuredPlan(read, b);
+}
+
+// The watch's names and missing rooms, the walls Spark doubted marked as guesses, and what the review did.
+function finish(plan: BasementPlan, watch: Watched, b: BasementScan, unsure: [number, number][], r: { rounds: number; note: string; reviewed: boolean }): BasementPlan {
+  const missing = watch && b.tracked ? applyWatch(plan, watch, b.tracked.cameras, b.tracked.frames) : [];
   // Walls Spark doubted are guesses too: the plan screen asks about them.
   for (const p of unsure) {
     const w = plan.walls.reduce<(typeof plan.walls)[number] | null>((best, x) => (!best || Math.hypot(mid(x)[0] - p[0], mid(x)[1] - p[1]) < Math.hypot(mid(best)[0] - p[0], mid(best)[1] - p[1]) ? x : best), null);
     if (w && Math.hypot(mid(w)[0] - p[0], mid(w)[1] - p[1]) < 0.4) w.guess = true;
   }
-  plan.review = review || missing.length ? { rounds, unsure: plan.walls.filter((w) => w.guess).map((w) => w.id), ...(note ? { note } : {}), ...(missing.length ? { notPlaced: missing.map((r) => r.spokenName || r.name) } : {}) } : null;
+  const note = r.note;
+  plan.review = r.reviewed || missing.length ? { rounds: r.rounds, unsure: plan.walls.filter((w) => w.guess).map((w) => w.id), ...(note ? { note } : {}), ...(missing.length ? { notPlaced: missing.map((x) => x.spokenName || x.name) } : {}) } : null;
   return plan;
 }
