@@ -205,16 +205,8 @@ export function buildList(input: BuildInput): BuildList {
     });
   }
 
-  // The Build's opening line (the script has no intro of its own, by agreement with track B): before
-  // they've given anything, whichever permit item comes up first says what the set is, how much is
-  // left and about how long it takes. Once they've started, each item just asks.
-  const opener = items.find((i) => i.section === "permit" && !i.done);
-  if (opener && !items.some((i) => i.section === "permit" && i.done)) {
-    const left = st.readiness.left;
-    const minutes = items.filter((i) => i.section === "permit" && !i.done).reduce((sum, i) => sum + (MINUTES[i.step.split(":")[1]] ?? 2), 0);
-    opener.message = `I've drawn and filled your permit set. ${left === 1 ? "One thing is" : `${left} things are`} left before you can hand it in, about ${minutes} minutes. ${opener.message}`;
-    opener.choices = [{ label: "What's a permit set?", action: { type: "explain", term: "permit_set" } }, ...(opener.choices ?? [])];
-  }
+  // The script's build intro says what the set is, how much is left and about how long it takes (from
+  // `minutes`), with "What's a permit set?". Each item here just asks.
 
   // The money: one item per question that still decides a program, then applying for what fits
   // before any work starts. Whichever comes first says how much they may get.
