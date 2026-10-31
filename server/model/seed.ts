@@ -212,6 +212,10 @@ export function existingFromScan(result: ScanResultLike, tape: Tape = {}): Exist
   }
 
   fixtures.splice(0, fixtures.length, ...oneOfEach(fixtures, result.detections));
+  // An area of its own that the furnace or water heater stands in, whatever its size, is the service room
+  // the designs keep (the scan's furnace room): not the main area, and not a copy lying on its edge.
+  for (const r of rooms.slice(1))
+    if (fixtures.some((f) => (f.kind === "furnace" || f.kind === "water_heater") && inPolygon(f.at, r.polygon) && edgeDist(r.polygon, f.at) > 0.05)) r.kind = "mechanical";
   openings.push(...watchedWindows(rooms, walls, openings, result.watch));
 
   // Their tape on the escape window goes on the biggest window: that's the one the bedroom gets.
