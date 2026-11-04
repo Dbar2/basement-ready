@@ -9,6 +9,7 @@ import { Models } from "./scenes/Models";
 import { Answer, Build, Close, Design } from "./scenes/Guide";
 import { prog, easeDraw } from "./anim";
 import media from "./data/media.json";
+import { Thumbnail } from "./Thumbnail";
 
 const SCENE_VIEW: Record<SceneId, { name: string; C: React.FC<{ scene: SceneTiming }> }> = {
   question: { name: "The question", C: Question },
@@ -84,5 +85,8 @@ export const Demo: React.FC = () => {
 };
 
 export const Root: React.FC = () => (
-  <Composition id="Demo" component={Demo} durationInFrames={TIMELINE.total} fps={FPS} width={1920} height={1080} />
+  <>
+    <Composition id="Demo" component={Demo} durationInFrames={TIMELINE.total} fps={FPS} width={1920} height={1080} />
+    <Composition id="Thumbnail" component={Thumbnail} durationInFrames={1} fps={FPS} width={1280} height={720} />
+  </>
 );

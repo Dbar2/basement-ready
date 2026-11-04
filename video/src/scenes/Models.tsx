@@ -127,14 +127,14 @@ const LogPanel: React.FC<{ dur: number }> = ({ dur }) => {
   const lines = logs.lines as LogLine[];
   const p = prog(frame, 0, 12);
   const last = Math.max(1, lines[lines.length - 1]?.secs ?? 1);
-  const span = Math.max(30, dur - 40);
+  const span = Math.max(30, dur - 110); // every line is up about 3 s before the beat ends
   return (
     <div style={{ position: "absolute", left: 975, top: 162, width: 865, height: 790, background: C.ink, borderRadius: 6, padding: "22px 26px", boxSizing: "border-box", opacity: p, fontFamily: MONO, color: C.card, overflow: "hidden" }}>
       <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 21, color: C.card }}>{logs.title}</div>
       <div style={{ fontFamily: SANS, fontSize: 17, color: C.border, marginTop: 4, marginBottom: 18 }}>{logs.note}</div>
       {lines.map((l, i) => {
         // the burst of SAM calls lands together, the long Spark calls later, as in the real run
-        const show = 10 + Math.round((l.secs / last) ** 0.8 * span) + i * 2;
+        const show = 8 + Math.round((l.secs / last) ** 0.7 * span) + i;
         const o = prog(frame, show, 6);
         const [model, ...rest] = l.text.replace(/^\[meta\] /, "").split(" · ");
         return (
