@@ -158,17 +158,17 @@ export const Models: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
 
       {/* L06: SAM 3.1's outlines on the real wait screen */}
       <Sequence from={s6} durationInFrames={s7 - s6 + 10}>
-        <Under shot={wait} dur={s7 - s6 + 10} start={0.3} cam={[[0, 1.18, 0.3, 0.45], [6, 1.3, 0.3, 0.45]]} />
+        <Under shot={wait} dur={s7 - s6 + 10} start={0.3} cam={[[0, 1.3, 0, 0.45], [6, 1.36, 0, 0.45]]} />
       </Sequence>
       {/* L07: MapAnything's measured plan, real, with the figures */}
       <Sequence from={s7} durationInFrames={s8 - s7 + 10}>
-        <Under shot={SHOTS.home!} dur={s8 - s7 + 10} start={5.3} cam={[[0, 1.2, 0.8, 0.45], [8, 1.3, 0.8, 0.45]]}>
+        <Under shot={SHOTS.home!} dur={s8 - s7 + 10} start={5.3} cam={[[0, 1.35, 1, 0.45], [8, 1.42, 1, 0.45]]}>
           <Measured />
         </Under>
       </Sequence>
       {/* L08: Wonder and Spark, with the live Meta call log beside the wait screen */}
       <Sequence from={s8} durationInFrames={s9 - s8 + 10}>
-        <Under shot={wait} dur={s9 - s8 + 10} start={1.0} w={940} x={180} cam={[[0, 1.25, 0.25, 0.5]]}>
+        <Under shot={wait} dur={s9 - s8 + 10} start={1.0} w={940} x={180} cam={[[0, 1.32, 0, 0.5]]}>
           <LogPanel dur={s9 - s8} />
         </Under>
       </Sequence>

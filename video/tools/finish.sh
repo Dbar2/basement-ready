@@ -7,7 +7,9 @@ set -euo pipefail
 OUT=../media/video
 RAW=$OUT/basement-ready-demo-raw.mp4
 mkdir -p "$OUT"
-npx remotion render src/index.ts Demo "$RAW" --concurrency="${1:-2}" --crf=16 --audio-bitrate=320k --log=error
+# Remotion's own headless Chrome never finishes loading on this Mac (macOS 27); Playwright's works.
+BROWSER="${REMOTION_BROWSER:-$(ls -d "$HOME"/Library/Caches/ms-playwright/chromium_headless_shell-*/chrome-headless-shell-mac-arm64/chrome-headless-shell | tail -1)}"
+npx remotion render src/index.ts Demo "$RAW" --browser-executable="$BROWSER" --concurrency="${1:-2}" --crf=16 --audio-bitrate=320k --log=error
 
 # two-pass loudness normalisation of the mixed audio, picture copied as is
 M=$(ffmpeg -hide_banner -nostats -i "$RAW" -af loudnorm=I=-14:TP=-1:LRA=11:print_format=json -f null - 2>&1 | sed -n '/^{/,/^}/p')

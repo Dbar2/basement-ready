@@ -93,8 +93,8 @@ const Drawn: React.FC<{ l2: L; l3: L }> = ({ l2, l3 }) => {
   ];
   const costAt = l3.from + l3.dur * 0.5;
   const costP = prog(frame, costAt, 16);
-  const lo = Math.round(interpolate(frame, [costAt, costAt + 30], [0, 2000], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }) / 100) * 100;
-  const hi = Math.round(interpolate(frame, [costAt, costAt + 30], [0, 5000], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }) / 100) * 100;
+  const lo = Math.round(interpolate(frame, [costAt - 8, costAt + 24], [0, 2000], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }) / 100) * 100;
+  const hi = Math.round(interpolate(frame, [costAt - 8, costAt + 24], [0, 5000], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }) / 100) * 100;
   const qP = prog(frame, l3.from + 20, 24);
 
   return (

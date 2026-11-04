@@ -22,17 +22,17 @@ export const SHOTS: Partial<Record<
   // What's a fire separation? A drawing in section with the rule's source
   explain: d("explain", 1.0, [[0, 1, 0.5, 0.5], [3.2, 1, 0.5, 0.5], [5.0, 1.45, 0.3, 0.5]]),
   // Is this your basement? The measured plan; the window dragged along the wall
-  plan: d("plan", 3.4, [[0, 1, 0.5, 0.5], [1.4, 1, 0.5, 0.5], [3.4, 1.35, 0.32, 0.55]]),
+  plan: d("plan", 3.4, [[0, 1, 0.5, 0.5], [1.4, 1, 0.5, 0.5], [3.4, 1.34, 0, 0.55]]),
   // the layouts in 3D, One bedroom recommended
-  layouts: d("layouts", 3.2, [[0, 1, 0.5, 0.5], [2.5, 1, 0.5, 0.5], [6, 1.3, 0.35, 0.5]]),
+  layouts: d("layouts", 3.2, [[0, 1, 0.5, 0.5], [2.5, 1, 0.5, 0.5], [5, 1.32, 0, 0.5]]),
   // before and after, "After · virtually staged", the divider dragged
-  looks: d("looks", 18.6, [[0, 1.15, 0.38, 0.5], [9, 1.3, 0.38, 0.5]]),
+  looks: d("looks", 18.6, [[0, 1.32, 0, 0.5], [9, 1.38, 0, 0.5]]),
   // Build: the permit set, "2 of 15 ready"
-  build: { ...d("build", 3.6, [[0, 1, 0.5, 0.5], [1.6, 1, 0.5, 0.5], [3.6, 1.55, 0.36, 0.5]]), clip: 9.5 }, // stop before "Start" is tapped
+  build: { ...d("build", 3.6, [[0, 1, 0.5, 0.5], [1.6, 1, 0.5, 0.5], [3.6, 1.6, 0.3, 0.5]]), clip: 9.5 }, // stop before "Start" is tapped
   // only what it can't measure: the tape card
   tape: d("build", 10.4, [[0, 1.0, 0.5, 0.5], [1.4, 1.0, 0.5, 0.5], [3.0, 1.6, 1, 0.8]]),
   // the home base: the goal and the three milestones
-  homebase: d("homebase", 0.3, [[0, 1.3, 0.5, 0.36], [3.5, 1.65, 0.5, 0.42]], "basementready.com/scans/sample"),
+  homebase: d("homebase", 0.3, [[0, 1.25, 0.5, 0.18], [3.5, 1.5, 0.5, 0.18]], "basementready.com/scans/sample"),
   // the home page hero and Try the example
   home: d("home", 19.2, [[0, 1, 0.5, 0.5]], "basementready.com"),
 };

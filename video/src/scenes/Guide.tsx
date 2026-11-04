@@ -12,8 +12,8 @@ import type { CamKey } from "../components/kit";
 
 /** A span of the scene: fades in at `from`, out at `to` (scene frames). */
 const Span: React.FC<{ from: number; to: number; children: React.ReactNode; fade?: number }> = ({ from, to, children, fade = 10 }) => (
-  <Sequence from={from} durationInFrames={Math.max(1, to - from)}>
-    <Fader dur={to - from} fade={fade}>{children}</Fader>
+  <Sequence from={from} durationInFrames={Math.max(1, to - from + fade)}>
+    <Fader dur={to - from + fade} fade={fade}>{children}</Fader>
   </Sequence>
 );
 const Fader: React.FC<{ dur: number; fade: number; children: React.ReactNode }> = ({ dur, fade, children }) => {
@@ -178,7 +178,7 @@ export const Answer: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
         <Stamp out={l11.from + 20} />
       </Span>
       <Span from={l12.from - 6} to={l13.from - 6}>
-        <ShotView shot={{ ...SHOTS.homebase!, cam: [[0, 1.5, 0.78, 0.4], [9, 1.58, 0.78, 0.42]] }} span={l13.from - l12.from} />
+        <ShotView shot={{ ...SHOTS.homebase!, cam: [[0, 1.45, 0.78, 0.18], [9, 1.5, 0.78, 0.18]] }} span={l13.from - l12.from} />
         <Money />
       </Span>
       <Span from={l13.from - 6} to={scene.duration}>
@@ -368,7 +368,7 @@ export const Close: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   return (
     <>
       <Span from={0} to={l21.from - 8} fade={8}>
-        <ShotView shot={{ ...SHOTS.home!, start: 11.6, clip: 17.3, cam: [[0, 1.15, 0.85, 0.5], [9, 1.25, 0.85, 0.5]] }} span={l21.from} />
+        <ShotView shot={{ ...SHOTS.home!, start: 11.6, clip: 17.3, cam: [[0, 1.35, 1, 0.5], [9, 1.42, 1, 0.5]] }} span={l21.from} />
         <Promise />
       </Span>
       <Span from={l21.from - 8} to={endAt + 8} fade={8}>

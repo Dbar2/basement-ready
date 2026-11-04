@@ -54,8 +54,8 @@ export const Demo: React.FC = () => {
       {TIMELINE.scenes.map((s, i) => {
         const View = SCENE_VIEW[s.id].C;
         return (
-          <Sequence key={s.id} from={s.from} durationInFrames={s.duration}>
-            <SceneFade dur={s.duration} first={i === 0} last={i === TIMELINE.scenes.length - 1}>
+          <Sequence key={s.id} from={s.from} durationInFrames={s.duration + (i === TIMELINE.scenes.length - 1 ? 0 : 10)}>
+            <SceneFade dur={s.duration + 10} first={i === 0} last={i === TIMELINE.scenes.length - 1}>
               <View scene={s} />
             </SceneFade>
           </Sequence>
