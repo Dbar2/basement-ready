@@ -4,6 +4,7 @@
 import { useParams } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { Mark } from "../components/Logo";
+import { AppNewScan, inApp } from "../inApp";
 import { AskBar } from "./AskBar";
 import { Card, Visual } from "./mount";
 import { isMilestone, MILESTONES } from "./progress";
@@ -54,7 +55,7 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act, pl
 
   return (
     <div className="gs" data-milestone={state.milestone}>
-      <header className="gs-top">
+      <header className="gs-top" data-app={inApp() || undefined}>
         <a className="gs-home" href={`/scans/${scanId}`} aria-label="Your basement">
           <Mark title="Your basement" />
         </a>
@@ -67,6 +68,7 @@ export function GuideScreen({ scanId, state, busy = false, error = null, act, pl
             ))}
           </ol>
         </nav>
+        <AppNewScan className="link-quiet gs-new" />
       </header>
 
       <section className="gs-visual" data-visual={state.visual.kind} aria-label="Your basement">
