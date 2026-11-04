@@ -1,5 +1,5 @@
 import React from "react";
-import { Sequence, interpolate, useCurrentFrame } from "remotion";
+import { Img, Sequence, interpolate, staticFile, useCurrentFrame } from "remotion";
 import { C } from "../theme";
 import { MONO, SANS } from "../fonts";
 import { Browser, Draw } from "../components/kit";
@@ -119,24 +119,49 @@ const Measured: React.FC = () => {
   );
 };
 
-/** The live Meta call log from the server, beside the wait screen. Lines come from a real run (src/data/logs.json). */
+/** The live Meta call log from the server, beside the wait screen: real lines from a live run today
+ * (src/data/logs.json), shown exactly as logged, each appearing in order, timed to its real timestamp. */
+type LogLine = { at: string; secs: number; text: string };
 const LogPanel: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
-  const lines = logs.lines as string[];
+  const lines = logs.lines as LogLine[];
   const p = prog(frame, 0, 12);
-  const every = Math.max(6, Math.floor((dur - 30) / Math.max(1, lines.length)));
+  const last = Math.max(1, lines[lines.length - 1]?.secs ?? 1);
+  const span = Math.max(30, dur - 40);
   return (
-    <div style={{ position: "absolute", left: 1150, top: 162, width: 680, height: 780, background: C.ink, borderRadius: 6, padding: "22px 26px", boxSizing: "border-box", opacity: p, fontFamily: MONO, color: C.card, overflow: "hidden" }}>
-      <div style={{ fontSize: 16, color: C.mint, marginBottom: 14 }}>{logs.title}</div>
-      {lines.length === 0 ? (
-        <div style={{ fontSize: 20, color: C.border, lineHeight: 1.5, fontFamily: SANS }}>The live Meta call log goes here: footage from a real run, one line per call with its model id.</div>
-      ) : (
-        lines.map((l, i) => (
-          <div key={i} style={{ fontSize: 17, lineHeight: 1.55, opacity: frame >= 8 + i * every ? 1 : 0, whiteSpace: "pre-wrap" }}>
-            {l}
+    <div style={{ position: "absolute", left: 975, top: 162, width: 865, height: 790, background: C.ink, borderRadius: 6, padding: "22px 26px", boxSizing: "border-box", opacity: p, fontFamily: MONO, color: C.card, overflow: "hidden" }}>
+      <div style={{ fontFamily: SANS, fontWeight: 700, fontSize: 21, color: C.card }}>{logs.title}</div>
+      <div style={{ fontFamily: SANS, fontSize: 17, color: C.border, marginTop: 4, marginBottom: 18 }}>{logs.note}</div>
+      {lines.map((l, i) => {
+        // the burst of SAM calls lands together, the long Spark calls later, as in the real run
+        const show = 10 + Math.round((l.secs / last) ** 0.8 * span) + i * 2;
+        const o = prog(frame, show, 6);
+        const [model, ...rest] = l.text.replace(/^\[meta\] /, "").split(" · ");
+        return (
+          <div key={i} style={{ fontSize: 15.5, lineHeight: 1.5, opacity: o, paddingLeft: "9.6ch", textIndent: "-9.6ch", marginBottom: 3 }}>
+            <span style={{ color: C.border }}>{l.at} [meta] </span>
+            <span style={{ color: C.mint }}>{model}</span>
+            {rest.length ? " · " + rest.join(" · ") : ""}
           </div>
-        ))
-      )}
+        );
+      })}
+    </div>
+  );
+};
+
+/** The answer that live run came back with (a screenshot of the live site), over the left side as the log finishes. */
+const LiveAnswer: React.FC<{ from: number }> = ({ from }) => {
+  const frame = useCurrentFrame();
+  const p = prog(frame, from, 12);
+  if (p <= 0) return null;
+  const w = 770, h = (w * 667) / 1200;
+  return (
+    <div style={{ position: "absolute", left: 180, top: 300 + (1 - p) * 20, width: w, opacity: p, fontFamily: SANS }}>
+      <div style={{ border: `1.5px solid ${C.ink}`, borderRadius: 6, overflow: "hidden", background: C.card }}>
+        <Img src={staticFile("live-run-answer.jpg")} style={{ width: w, height: h, display: "block" }} />
+      </div>
+      <div style={{ fontSize: 22, color: C.ink, marginTop: 12, fontWeight: 600 }}>That live run's answer, 1.5 minutes later</div>
+      <div style={{ fontSize: 19, color: C.muted, marginTop: 4 }}>A new scan of the same video, today: measured, checked, "Yes, after 3 fixes".</div>
     </div>
   );
 };
@@ -168,8 +193,9 @@ export const Models: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
       </Sequence>
       {/* L08: Wonder and Spark, with the live Meta call log beside the wait screen */}
       <Sequence from={s8} durationInFrames={s9 - s8 + 10}>
-        <Under shot={wait} dur={s9 - s8 + 10} start={1.0} w={940} x={180} cam={[[0, 1.32, 0, 0.5]]}>
+        <Under shot={wait} dur={s9 - s8 + 10} start={1.0} w={770} x={180} cam={[[0, 1.32, 0, 0.5]]}>
           <LogPanel dur={s9 - s8} />
+          <LiveAnswer from={s9 - s8 - 78} />
         </Under>
       </Sequence>
       {/* L09: the guide asks while it measures */}

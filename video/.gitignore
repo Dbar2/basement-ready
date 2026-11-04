@@ -8,3 +8,4 @@ public/*.mp3
 public/*.mp4
 public/*.webm
 *.webm
+public/live-run-*.jpg
