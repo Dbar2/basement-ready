@@ -1,5 +1,5 @@
 import React from "react";
-import { Img, staticFile, useCurrentFrame } from "remotion";
+import { OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
 import { getPointAtLength, getLength, getTangentAtLength } from "@remotion/paths";
 import { C } from "../theme";
 import { Title } from "../components/kit";
@@ -7,12 +7,11 @@ import { Plan } from "../components/Plan";
 import { easeDraw, prog } from "../anim";
 import { SceneTiming } from "../timeline";
 
-const FRAMES = ["0000", "0015", "0021", "0034", "0042", "0044", "0049", "0055", "0059"];
 
 // Film it once: a phone traces a path through the example's measured plan, and frames drop along it.
 export const Film: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const frame = useCurrentFrame();
-  const px = 200, py = 330, s = 92;
+  const px = 190, py = 420, s = 72;
   const path = `M${px + 3.2 * s} ${py + 0.7 * s} C${px + 1.5 * s} ${py + 1.4 * s} ${px + 1.0 * s} ${py + 3.2 * s} ${px + 2.2 * s} ${py + 4.3 * s} S${px + 5.6 * s} ${py + 4.6 * s} ${px + 6.3 * s} ${py + 3.0 * s} S${px + 5.2 * s} ${py + 1.0 * s} ${px + 4.2 * s} ${py + 1.5 * s}`;
   const len = getLength(path);
   const walk = prog(frame, 16, scene.duration - 40, easeDraw);
@@ -25,7 +24,7 @@ export const Film: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   return (
     <>
       <div style={{ position: "absolute", left: 120, top: 120 }}>
-        <Title text="Film it once." size={112} width={900} />
+        <Title text="Film it once." size={112} width={700} />
       </div>
       <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
         <Plan x={px} y={py} s={s} frame={frame} start={4} />
@@ -39,17 +38,27 @@ export const Film: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
           <circle cx={0} cy={26} r={4} fill={C.ink} />
         </g>
       </svg>
-      {/* the frames it keeps */}
-      <div style={{ position: "absolute", left: 1150, top: 180, width: 660, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-        {FRAMES.slice(0, 8).map((f, i) => {
-          const t = 24 + (i / 8) * (scene.duration - 60);
-          const p = prog(frame, t, 12);
-          return (
-            <div key={f} style={{ opacity: p, transform: `translateY(${(1 - p) * 16}px)` }}>
-              <Img src={staticFile(`sample/sample/frames/${f}.jpg`)} style={{ width: "100%", borderRadius: 4, display: "block" }} />
-            </div>
-          );
-        })}
+      {/* the example's real phone video, in a drawn phone held sideways */}
+      <div
+        style={{
+          position: "absolute",
+          left: 880,
+          top: 250 + (1 - prog(frame, 0, 16)) * 30,
+          width: 952 + 28,
+          height: 536 + 28,
+          borderRadius: 44,
+          background: C.ink,
+          padding: 14,
+          boxSizing: "border-box",
+          opacity: prog(frame, 0, 16),
+        }}
+      >
+        <div style={{ width: 952, height: 536, borderRadius: 30, overflow: "hidden" }}>
+          <OffthreadVideo src={staticFile("sample/sample-basement.mp4")} muted style={{ width: 952, height: 536, display: "block" }} />
+        </div>
+      </div>
+      <div style={{ position: "absolute", left: 880, top: 836, fontSize: 22, color: C.muted, opacity: prog(frame, 20, 12) }}>
+        The example basement, filmed on a phone in one take
       </div>
     </>
   );

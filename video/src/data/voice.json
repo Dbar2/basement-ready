@@ -1,4 +1,10 @@
 {
+ "L00": {
+  "take": null,
+  "seconds": 6.0,
+  "wer": 0,
+  "text": "Everything you'll see was built during the Meta AI Developer Hackathon, starting from an empty repo on October 28."
+ },
  "L01": {
   "take": null,
   "seconds": 6.56,
@@ -61,9 +67,9 @@
  },
  "L11": {
   "take": null,
-  "seconds": 10.94,
+  "seconds": 11.5,
   "wer": 0,
-  "text": "This basement in Waterloo can be a second home after one fix: a fire separation between the two homes. It's marked on the measured plan, with a rough cost, and a source for every rule."
+  "text": "This basement in Waterloo can be a second home after four fixes. The first is a fire separation between the two homes. Each fix is marked on the measured plan, with a rough cost, and a source for every rule."
  },
  "L12": {
   "take": null,

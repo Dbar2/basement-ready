@@ -11,9 +11,9 @@ export type SceneId = "question" | "film" | "models" | "answer" | "design" | "bu
 // Each scene: its voice lines, the breath before the first line, the pause between lines and after the last.
 // Some lines get extra room after them (`hold`) where the picture needs to land.
 const SCENES: { id: SceneId; lines: string[]; lead: number; gap: number; tail: number; hold?: Record<string, number> }[] = [
-  { id: "question", lines: ["L01", "L02", "L03"], lead: 1.6, gap: 0.7, tail: 0.6 },
+  { id: "question", lines: ["L00", "L01", "L02", "L03"], lead: 0.6, gap: 0.6, tail: 0.6 },
   { id: "film", lines: ["L04"], lead: 0.5, gap: 0.6, tail: 1.4 },
-  { id: "models", lines: ["L05", "L06", "L07", "L08", "L09"], lead: 0.3, gap: 0.6, tail: 0.6, hold: { L06: 1.4, L07: 1.4, L08: 1.0, L09: 1.6 } },
+  { id: "models", lines: ["L05", "L06", "L07", "L08", "L09"], lead: 0.3, gap: 0.6, tail: 0.6, hold: { L06: 1.0, L07: 1.0, L08: 0.8, L09: 1.2 } },
   { id: "answer", lines: ["L10", "L11", "L12", "L13"], lead: 0.4, gap: 0.6, tail: 0.6, hold: { L10: 1.6, L11: 1.2, L12: 0.8, L13: 1.6 } },
   { id: "design", lines: ["L14", "L15", "L16"], lead: 0.4, gap: 0.6, tail: 0.6, hold: { L14: 1.4, L15: 1.8, L16: 2.0 } },
   { id: "build", lines: ["L17", "L18", "L19"], lead: 0.4, gap: 0.6, tail: 0.6, hold: { L17: 1.4, L18: 1.2, L19: 1.6 } },

@@ -1,17 +1,68 @@
 import React from "react";
-import { interpolate, useCurrentFrame } from "remotion";
+import { interpolate, Sequence, useCurrentFrame } from "remotion";
 import { C } from "../theme";
 import { MONO, SANS } from "../fonts";
-import { Dim, Draw, Title } from "../components/kit";
+import { Browser, Dim, Draw, Title } from "../components/kit";
+import { SHOTS } from "../shots";
 import { easeDraw, prog } from "../anim";
 import { SceneTiming, lineIn } from "../timeline";
 
-// The hook: a house drawn in section, the grade line, and the basement below it.
+type L = { from: number; dur: number };
+
+// The opening: the live home page, with what was built this week on screen; then the question drawn
+// in section (the house, the grade line, the basement below it) for the rules and the cost.
 export const Question: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
-  const frame = useCurrentFrame();
-  const l1 = lineIn(scene, "L01");
+  const l0 = lineIn(scene, "L00");
   const l2 = lineIn(scene, "L02");
   const l3 = lineIn(scene, "L03");
+  const D = l2.from - 10;
+  const home = SHOTS.home!;
+  return (
+    <>
+      <Sequence from={0} durationInFrames={D + 12}>
+        <HomeOpen dur={D + 12} l0={l0} l1at={lineIn(scene, "L01").from} />
+      </Sequence>
+      <Sequence from={D}>
+        <Drawn l2={{ from: l2.from - D, dur: l2.dur }} l3={{ from: l3.from - D, dur: l3.dur }} />
+      </Sequence>
+      <div style={{ display: "none" }}>{home.file}</div>
+    </>
+  );
+};
+
+const HomeOpen: React.FC<{ dur: number; l0: L; l1at: number }> = ({ dur, l0, l1at }) => {
+  const frame = useCurrentFrame();
+  const o = 1 - prog(frame, dur - 12, 12, easeDraw);
+  const card = Math.min(prog(frame, l0.from + 4, 14), 1 - prog(frame, l0.from + l0.dur + 24, 12, easeDraw));
+  return (
+    <div style={{ position: "absolute", inset: 0, opacity: o }}>
+      <Browser x={180} y={38} w={1560} src="footage/desktop-home.mp4" start={0.2} rate={0.27} url="basementready.com" cam={[[0, 1, 0.5, 0.5], [l1at / 30 - 0.2, 1, 0.5, 0.5], [l1at / 30 + 1.4, 1.38, 0.1, 0.5]]} />
+      <div
+        style={{
+          position: "absolute",
+          left: 850,
+          top: 170,
+          width: 860,
+          padding: "26px 32px 28px",
+          background: C.card,
+          border: `1.5px solid ${C.ink}`,
+          borderRadius: 6,
+          opacity: card,
+          transform: `translateY(${(1 - card) * 16}px)`,
+          fontFamily: SANS,
+        }}
+      >
+        <div style={{ fontWeight: 800, fontSize: 40, letterSpacing: "-0.02em", lineHeight: 1.1 }}>Everything you'll see was built during the hackathon.</div>
+        <div style={{ fontSize: 26, color: C.muted, marginTop: 14 }}>
+          It started from an empty repo on <span style={{ fontFamily: MONO, fontSize: 24, color: C.ink }}>Oct 28, 2026</span>.
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const Drawn: React.FC<{ l2: L; l3: L }> = ({ l2, l3 }) => {
+  const frame = useCurrentFrame();
 
   // the section drawing
   const gx0 = 940, gx1 = 1830, gy = 560; // grade line
@@ -20,23 +71,13 @@ export const Question: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const pGrade = prog(frame, 4, 26, easeDraw);
   const pHouse = prog(frame, 14, 40, easeDraw);
   const pBase = prog(frame, 40, 36, easeDraw);
-  const fillBase = prog(frame, l1.from + 20, 24);
+  const fillBase = prog(frame, 70, 24);
   const hatch = Array.from({ length: 56 }, (_, i) => {
     const x = gx0 + i * 16;
     if (x > hx0 - 30 && x < hx1 + 30) return "";
     return `M${x} ${gy + 4} L${x - 12} ${gy + 16}`;
   }).join(" ");
   const soil = Array.from({ length: 16 }, (_, i) => `M${hx0 - 20} ${gy + 30 + i * 16} L${hx0 - 32} ${gy + 42 + i * 16} M${hx1 + 32} ${gy + 30 + i * 16} L${hx1 + 20} ${gy + 42 + i * 16}`).join(" ");
-
-  // who the basement could be for, swapped with the words of L01
-  const who = ["A home for Mom?", "For a grown kid?", "A rental?"];
-  const whoAt = [l1.from + l1.dur * 0.32, l1.from + l1.dur * 0.55, l1.from + l1.dur * 0.75];
-  let whoIdx = -1;
-  whoAt.forEach((t, i) => {
-    if (frame >= t) whoIdx = i;
-  });
-  const whoP = whoIdx < 0 ? 0 : prog(frame, whoAt[whoIdx], 10);
-  const leaderP = prog(frame, whoAt[0] - 6, 14, easeDraw);
 
   // L02: up to three homes
   const threeP = prog(frame, l2.from + 6, 16);
@@ -126,17 +167,6 @@ export const Question: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
         <Draw d={`M${hx1} ${gy + 96} L${hx1 + 80} ${gy + 96} L${hx1 + 80} ${gy}`} p={prog(frame, 70, 16)} width={2} />
         {/* stairs down */}
         <Draw d={Array.from({ length: 7 }, (_, i) => `M${1200 + i * 34} ${gy + 34 * i + 6} L${1234 + i * 34} ${gy + 34 * i + 6} L${1234 + i * 34} ${gy + 34 * (i + 1) + 6}`).join(" ")} p={prog(frame, 72, 24)} width={1.5} />
-
-        {/* L01: the callout leader and who it's for */}
-        <g opacity={1 - prog(frame, l2.from, 10)}>
-          <Draw d={`M1400 700 L1300 900 L1060 900`} p={leaderP} width={1.5} />
-          <circle cx={1400} cy={700} r={5} fill={C.ink} opacity={leaderP} />
-          {whoIdx >= 0 && (
-            <text x={1064} y={888} fontFamily={SANS} fontWeight={700} fontSize={32} fill={C.ink} opacity={whoP} transform={`translate(0 ${(1 - whoP) * 8})`}>
-              {who[whoIdx]}
-            </text>
-          )}
-        </g>
 
         {/* L03: what nobody has measured yet */}
         <g opacity={qP}>

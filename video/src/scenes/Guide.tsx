@@ -8,6 +8,7 @@ import { Plan } from "../components/Plan";
 import { easeDraw, easeOut, prog } from "../anim";
 import { SceneTiming, lineIn } from "../timeline";
 import { SHOTS, Shot } from "../shots";
+import type { CamKey } from "../components/kit";
 
 /** A span of the scene: fades in at `from`, out at `to` (scene frames). */
 const Span: React.FC<{ from: number; to: number; children: React.ReactNode; fade?: number }> = ({ from, to, children, fade = 10 }) => (
@@ -76,6 +77,37 @@ const Verdict: React.FC = () => {
   );
 };
 
+/** The verdict as a stamp landing on the real answer screen. */
+const Stamp: React.FC<{ out: number }> = ({ out }) => {
+  const frame = useCurrentFrame();
+  const s = prog(frame, 14, 9, easeOut);
+  const o = Math.min(s, 1 - prog(frame, out, 12, easeDraw));
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: 330,
+        top: 380,
+        background: C.card,
+        border: `7px solid ${C.fix}`,
+        borderRadius: 6,
+        padding: "22px 44px 28px",
+        color: C.fix,
+        fontFamily: SANS,
+        fontWeight: 900,
+        fontSize: 104,
+        letterSpacing: "-0.045em",
+        lineHeight: 1,
+        opacity: o,
+        transform: `rotate(-3deg) scale(${1.35 - 0.35 * s})`,
+      }}
+    >
+      Yes, after 4 fixes
+      <div style={{ fontSize: 28, fontWeight: 600, letterSpacing: "-0.01em", color: C.ink, marginTop: 14 }}>The first: a fire separation between the two homes</div>
+    </div>
+  );
+};
+
 /** The answer, drawn: the measured plan with the fix marked. Used when there's no footage. */
 const AnswerDrawn: React.FC = () => {
   const frame = useCurrentFrame();
@@ -106,48 +138,53 @@ const GRANTS: [string, string, number][] = [
 ];
 const Money: React.FC = () => {
   const frame = useCurrentFrame();
+  const p = prog(frame, 4, 14);
   return (
-    <div style={{ position: "absolute", left: 120, top: 210, width: 1680, fontFamily: SANS }}>
-      <div style={{ fontWeight: 900, fontSize: 96, letterSpacing: "-0.045em", lineHeight: 0.95, opacity: prog(frame, 0, 12) }}>The money that fits</div>
-      <div style={{ borderTop: `1.5px solid ${C.ink}`, marginTop: 56 }}>
+    <div style={{ position: "absolute", left: 1090, top: 150, width: 610, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "26px 30px", fontFamily: SANS, opacity: p, transform: `translateY(${(1 - p) * 14}px)` }}>
+      <div style={{ fontWeight: 900, fontSize: 52, letterSpacing: "-0.04em", lineHeight: 0.95 }}>The money that fits</div>
+      <div style={{ borderTop: `1.5px solid ${C.ink}`, marginTop: 24 }}>
         {GRANTS.map(([name, who, max], i) => {
-          const p = prog(frame, 10 + i * 12, 14);
-          const n = Math.round(interpolate(frame, [14 + i * 12, 44 + i * 12], [0, max], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }) / 100) * 100;
+          const q = prog(frame, 12 + i * 12, 14);
+          const n = Math.round(interpolate(frame, [16 + i * 12, 46 + i * 12], [0, max], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }) / 100) * 100;
           return (
-            <div key={name} style={{ display: "flex", alignItems: "baseline", padding: "26px 0", borderBottom: `1px solid ${C.border}`, opacity: p, transform: `translateY(${(1 - p) * 14}px)` }}>
-              <span style={{ fontWeight: 800, fontSize: 42, letterSpacing: "-0.02em", width: 860 }}>{name}</span>
-              <span style={{ fontSize: 26, color: C.muted }}>{who}</span>
-              <span style={{ marginLeft: "auto", display: "flex", alignItems: "baseline", gap: 14 }}>
-                <span style={{ fontSize: 24, color: C.muted }}>up to</span>
-                <span style={{ fontWeight: 900, fontSize: 56, letterSpacing: "-0.03em", width: 230, textAlign: "right" }}>${n.toLocaleString("en-CA")}</span>
-              </span>
+            <div key={name} style={{ padding: "16px 0", borderBottom: `1px solid ${C.border}`, opacity: q }}>
+              <div style={{ fontWeight: 700, fontSize: 26, lineHeight: 1.2 }}>{name}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 6 }}>
+                <span style={{ fontSize: 21, color: C.muted }}>{who}</span>
+                <span>
+                  <span style={{ fontSize: 20, color: C.muted, marginRight: 10 }}>up to</span>
+                  <span style={{ fontWeight: 900, fontSize: 40, letterSpacing: "-0.03em" }}>${n.toLocaleString("en-CA")}</span>
+                </span>
+              </div>
             </div>
           );
         })}
       </div>
-      <div style={{ fontSize: 28, color: C.muted, marginTop: 30, opacity: prog(frame, 50, 12) }}>Each with its source, its conditions and how to apply.</div>
+      <div style={{ fontSize: 21, color: C.muted, marginTop: 16 }}>Each with its source and how to apply.</div>
     </div>
   );
 };
 
 export const Answer: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const l10 = lineIn(scene, "L10"), l11 = lineIn(scene, "L11"), l12 = lineIn(scene, "L12"), l13 = lineIn(scene, "L13");
+  const ans = SHOTS.answer!;
+  // the answer footage holds wide while the stamp lands, then eases in on the verdict, then on the fix in the plan
+  const t11 = l11.from / 30;
+  const cam: CamKey[] = [[0, 1, 0.5, 0.5], [t11 + 0.4, 1, 0.5, 0.5], [t11 + 2.2, 1.75, 1, 0.8], [t11 + 6.4, 1.75, 1, 0.8], [t11 + 8.4, 1.45, 0.28, 0.32]];
   return (
     <>
-      <Span from={0} to={l11.from - 6} fade={6}>
-        <Milestones current={0} start={4} enter />
-        <Verdict />
-      </Span>
-      <Span from={l11.from - 6} to={l12.from - 6}>
-        {SHOTS.answer ? <ShotView shot={SHOTS.answer} span={l12.from - l11.from} headline="The answer comes first." sub="The fix marked on the measured plan, a rough cost, and a source for every rule." /> : <AnswerDrawn />}
+      <Span from={0} to={l12.from - 6} fade={8}>
+        <ShotView shot={{ ...ans, cam }} span={l12.from} />
+        <Stamp out={l11.from + 20} />
       </Span>
       <Span from={l12.from - 6} to={l13.from - 6}>
-        <Milestones current={0} />
+        <ShotView shot={{ ...SHOTS.homebase!, cam: [[0, 1.5, 0.78, 0.4], [9, 1.58, 0.78, 0.42]] }} span={l13.from - l12.from} />
         <Money />
       </Span>
       <Span from={l13.from - 6} to={scene.duration}>
-        {SHOTS.explain ? <ShotView shot={SHOTS.explain} span={scene.duration - l13.from + 6} headline="Ask anything." sub="What's a fire separation? A drawing in section, with the rule's source." /> : <AskDrawn />}
+        <ShotView shot={SHOTS.explain!} span={scene.duration - l13.from + 6} />
       </Span>
+      <div style={{ display: "none" }}>{l10.id}</div>
     </>
   );
 };
@@ -305,30 +342,18 @@ const PermitSheets: React.FC = () => {
 
 export const Build: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const l17 = lineIn(scene, "L17"), l18 = lineIn(scene, "L18"), l19 = lineIn(scene, "L19");
-  const sheetsEnd = SHOTS.build ? l17.from + Math.round(l17.dur * 0.55) : l18.from - 6;
-  const bookEnd = l19.from + Math.round(l19.dur * 0.62);
   return (
     <>
-      <Span from={0} to={sheetsEnd} fade={8}>
-        <Milestones current={2} start={0} />
-        <PermitSheets />
+      <Span from={0} to={l18.from - 6} fade={8}>
+        <ShotView shot={SHOTS.build!} span={l18.from} />
       </Span>
-      {SHOTS.build && (
-        <Span from={sheetsEnd} to={l18.from - 6}>
-          <ShotView shot={SHOTS.build} span={l18.from - sheetsEnd} headline="How much is ready" sub="The permit set, drawn and filled in from the scan." />
-        </Span>
-      )}
       <Span from={l18.from - 6} to={l19.from - 6}>
-        {SHOTS.tape ? <ShotView shot={SHOTS.tape} span={l19.from - l18.from} /> : <BigLine text="Only what it can't measure." />}
+        <ShotView shot={SHOTS.tape!} span={l19.from - l18.from} />
       </Span>
-      <Span from={l19.from - 6} to={SHOTS.homebase ? bookEnd : scene.duration}>
-        <BookDrawn />
+      <Span from={l19.from - 6} to={scene.duration}>
+        <ShotView shot={SHOTS.homebase!} span={scene.duration - l19.from + 6} />
       </Span>
-      {SHOTS.homebase && (
-        <Span from={bookEnd} to={scene.duration}>
-          <ShotView shot={SHOTS.homebase} span={scene.duration - bookEnd} />
-        </Span>
-      )}
+      <div style={{ display: "none" }}>{l17.id}</div>
     </>
   );
 };
@@ -339,17 +364,17 @@ const BigLine: React.FC<{ text: string }> = ({ text }) => (
 
 export const Close: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const l20 = lineIn(scene, "L20"), l21 = lineIn(scene, "L21");
+  const endAt = l21.from + l21.dur + 34;
   return (
     <>
       <Span from={0} to={l21.from - 8} fade={8}>
+        <ShotView shot={{ ...SHOTS.home!, start: 11.6, clip: 17.3, cam: [[0, 1.15, 0.85, 0.5], [9, 1.25, 0.85, 0.5]] }} span={l21.from} />
         <Promise />
       </Span>
-      {SHOTS.home && (
-        <Span from={l21.from - 8} to={l21.from + l21.dur + 40} fade={8}>
-          <ShotView shot={SHOTS.home} span={l21.dur + 48} />
-        </Span>
-      )}
-      <Span from={SHOTS.home ? l21.from + l21.dur + 32 : l21.from - 8} to={scene.duration + 10} fade={12}>
+      <Span from={l21.from - 8} to={endAt + 8} fade={8}>
+        <ShotView shot={SHOTS.home!} span={endAt - l21.from + 16} />
+      </Span>
+      <Span from={endAt} to={scene.duration + 10} fade={12}>
         <EndCard />
       </Span>
       <div style={{ display: "none" }}>{l20.id}</div>
@@ -372,9 +397,9 @@ const EndCard: React.FC = () => {
       </div>
       <div style={{ marginTop: 64, fontSize: 30, fontWeight: 600, opacity: p(22) }}>Built for the Meta AI Developer Hackathon</div>
       <div style={{ marginTop: 18, fontSize: 22, color: C.muted, opacity: p(30), textAlign: "center", lineHeight: 1.5 }}>
-        SAM 3.1 · MapAnything · Muse Wonder · Muse Spark · Muse Image
+        sam-3.1 · muse-spark-1.3 · muse-wonder-1.0 · muse-image-1.0 · muse-voice-transcribe-1.0 · MapAnything · DINOv2
         <br />
-        Voice: Chatterbox (Resemble AI, open source) · Music: Meta MusicGen
+        Voice: Chatterbox (Resemble AI, open source) · Music: “New Day” by Lee Rosevere, CC BY 4.0
       </div>
     </div>
   );
@@ -386,18 +411,18 @@ const Promise: React.FC = () => {
   const rows: [string, string][] = [
     ["Your scan is private", "only your phone or your account opens it"],
     ["Nothing is sent without you", "forms, emails and quote requests are drafts"],
-    ["It screens", "the city decides; a designer confirms the details"],
+    ["It screens; the city decides", "a designer confirms the details"],
   ];
+  const p = prog(frame, 4, 14);
   return (
-    <div style={{ position: "absolute", left: 120, top: 200, width: 1680, fontFamily: SANS }}>
-      <div style={{ fontWeight: 900, fontSize: 112, letterSpacing: "-0.045em", lineHeight: 0.95, opacity: prog(frame, 0, 12) }}>It screens. The city decides.</div>
-      <div style={{ borderTop: `1.5px solid ${C.ink}`, marginTop: 64 }}>
+    <div style={{ position: "absolute", left: 220, top: 470, width: 760, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "26px 32px", fontFamily: SANS, opacity: p, transform: `translateY(${(1 - p) * 14}px)` }}>
+      <div style={{ borderTop: `1.5px solid ${C.ink}` }}>
         {rows.map(([a, b], i) => {
-          const p = prog(frame, 12 + i * 10, 14);
+          const q = prog(frame, 10 + i * 12, 14);
           return (
-            <div key={a} style={{ display: "flex", alignItems: "baseline", padding: "24px 0", borderBottom: `1px solid ${C.border}`, opacity: p, transform: `translateY(${(1 - p) * 12}px)` }}>
-              <span style={{ fontWeight: 800, fontSize: 40, letterSpacing: "-0.02em", width: 760 }}>{a}</span>
-              <span style={{ fontSize: 28, color: C.muted }}>{b}</span>
+            <div key={a} style={{ padding: "16px 0", borderBottom: `1px solid ${C.border}`, opacity: q }}>
+              <div style={{ fontWeight: 800, fontSize: 32, letterSpacing: "-0.02em" }}>{a}</div>
+              <div style={{ fontSize: 23, color: C.muted, marginTop: 4 }}>{b}</div>
             </div>
           );
         })}

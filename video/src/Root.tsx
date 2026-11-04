@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, Audio, Composition, Sequence, interpolate, staticFile, useCurrentFrame } from "remotion";
 import "./fonts";
 import { Caption, Sheet } from "./components/kit";
-import { FPS, SceneId, SceneTiming, TIMELINE } from "./timeline";
+import { FPS, SceneId, SceneTiming, TIMELINE, sceneById } from "./timeline";
 import { Question } from "./scenes/Question";
 import { Film } from "./scenes/Film";
 import { Models } from "./scenes/Models";
@@ -22,6 +22,9 @@ const SCENE_VIEW: Record<SceneId, { name: string; C: React.FC<{ scene: SceneTimi
 
 // Every voice line, in video frames, for captions and for ducking the music under the voice.
 const VOICE = TIMELINE.scenes.flatMap((s) => s.lines.map((l) => ({ ...l, at: s.from + l.from })));
+
+// The music starts so its lift (media.lift seconds into public/music.wav) lands as the verdict stamp lands.
+const MUSIC_AT = Math.max(0, sceneById("answer").from + Math.round(0.75 * FPS) - Math.round(media.lift * FPS));
 
 const duck = (f: number) => {
   // 1 with no voice, down to UNDER while a line plays, with short ramps either side.
@@ -65,11 +68,15 @@ export const Demo: React.FC = () => {
         </Sequence>
       ))}
       {media.music && (
-        <Audio
-          src={staticFile("music.wav")}
-          startFrom={Math.round(media.musicOffset * FPS)}
-          volume={(f) => duck(f) * interpolate(f, [0, 12, total - 75, total - 5], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" })}
-        />
+        <Sequence from={MUSIC_AT}>
+          <Audio
+            src={staticFile("music.wav")}
+            volume={(f) => {
+              const g = f + MUSIC_AT;
+              return 0.55 * duck(g) * interpolate(g, [MUSIC_AT, MUSIC_AT + 75, total - 90, total - 5], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+            }}
+          />
+        </Sequence>
       )}
     </Sheet>
   );

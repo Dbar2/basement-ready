@@ -28,7 +28,7 @@ export const SHOTS: Partial<Record<
   // before and after, "After · virtually staged", the divider dragged
   looks: d("looks", 18.6, [[0, 1.15, 0.38, 0.5], [9, 1.3, 0.38, 0.5]]),
   // Build: the permit set, "2 of 15 ready"
-  build: d("build", 3.6, [[0, 1, 0.5, 0.5], [1.2, 1, 0.5, 0.5], [3.2, 1.55, 0.36, 0.5]]),
+  build: { ...d("build", 3.6, [[0, 1, 0.5, 0.5], [1.6, 1, 0.5, 0.5], [3.6, 1.55, 0.36, 0.5]]), clip: 9.5 }, // stop before "Start" is tapped
   // only what it can't measure: the tape card
   tape: d("build", 10.4, [[0, 1.0, 0.5, 0.5], [1.4, 1.0, 0.5, 0.5], [3.0, 1.6, 1, 0.8]]),
   // the home base: the goal and the three milestones
