@@ -1,6 +1,6 @@
 # Sources: Kitchener, ON rules pack
 
-All sources were checked on **2026-10-28**. Public official sources only; nothing came from the Gablebird/divinedesigner repository or the `/Volumes/Crucial X9` drive.
+All sources were checked on **2026-10-28**. Public official sources only.
 
 Building Code rules (ceiling heights, egress windows, fire separation, alarms, exits, HVAC, sound, stairs, ESA, plumbing, room sizes), the Region of Waterloo loan and the federal programs are reused from the Waterloo pack with their sources; see [SOURCES.md](SOURCES.md) for those. This file lists what is new or different for Kitchener.
 

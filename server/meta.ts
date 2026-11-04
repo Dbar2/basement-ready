@@ -176,7 +176,7 @@ export async function listModels(): Promise<string[]> {
 export const dataUrl = (path: string, mime: string) =>
   `data:${mime};base64,${readFileSync(path).toString("base64")}`;
 
-// Muse Image: edit a photo by instruction (OpenAI-style images/edits). Returns the new image's bytes.
+// Muse Image: edit a photo by instruction (the Meta Model API's /images/edits). Returns the new image's bytes.
 // $0.01 an image. `size` sets the aspect ratio only; the server picks the pixels (up to 1600 px).
 export async function museEdit(image: Buffer, mime: string, prompt: string, size: string): Promise<Buffer> {
   const form = new FormData();

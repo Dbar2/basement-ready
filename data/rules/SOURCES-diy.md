@@ -1,6 +1,6 @@
 # Sources: permit package and do-it-yourself (Ontario-wide, and each city's `permitPackage`)
 
-Checked on **2026-10-29** unless a row says otherwise. Government, regulator and city sources only, except one other-province regulator (British Columbia) marked unverified. Nothing came from the Gablebird/divinedesigner repository.
+Checked on **2026-10-29** unless a row says otherwise. Government, regulator and city sources only, except one other-province regulator (British Columbia) marked unverified.
 
 Files: `data/rules/ontario-diy.json` (drawing notes, alarm placement, who may do which work, what needs a pro, electrical rules and ESA fees) and the `permitPackage` section of each city pack (who signs, drawing checklist, forms with their URLs, portal, what to upload, owner-builder, inspections, plumbing fees).
 

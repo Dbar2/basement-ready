@@ -1,6 +1,6 @@
-# Scan accuracy eval
+# Scan eval on synthetic basements
 
-Synthetic basements with known answers, so we can measure the scan instead of guessing. Real phone footage has no ground truth; these do.
+Synthetic basements with known answers, so we can check the scan against them instead of guessing. Real phone footage has no ground truth; these do.
 
 | File | What it does |
 |---|---|

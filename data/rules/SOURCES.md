@@ -1,6 +1,6 @@
 # Sources: Waterloo, ON rules pack
 
-All sources were checked on **2026-10-28**. Public sources only; nothing came from the Gablebird/divinedesigner repository.
+All sources were checked on **2026-10-28**. Public sources only.
 
 ## Conflicts between sources
 

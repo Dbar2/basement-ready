@@ -8,7 +8,6 @@ tmp
 !.env.example
 .git
 .claude
-brand/explorations
 docs
 tests
 *.tsbuildinfo

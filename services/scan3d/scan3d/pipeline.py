@@ -235,7 +235,7 @@ class Scanner:
             # Research note: images-only metric scale is typically 10-25% off indoors.
             scale = {"source": "model", "factor": 1.0, "confidence": "low", "expectedErrorPct": 20}
         elif source == "arkit":
-            # The phone's tracking fixes scale and drift; the research note has depth error near 5.6% with poses.
+            # The phone's tracking fixes scale and drift, so depth is much closer with poses than without.
             share = sum(c is not None for c in known_cams) / len(known_cams)
             scale = {"source": "arkit", "factor": 1.0, "confidence": "high" if share >= 0.8 else "medium", "expectedErrorPct": 5 if share >= 0.8 else 8, "knownShare": round(share, 2)}
         else:
