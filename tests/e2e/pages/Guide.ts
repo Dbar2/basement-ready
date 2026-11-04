@@ -190,6 +190,8 @@ export class Guide {
   // One Build card: fill it in and save it (or download what it offers). "end" once the book is in hand.
   private async card(card: { kind: string; label: string; el: Locator }, o: WalkOptions, out: Walked): Promise<"next" | "end"> {
     const el = card.el;
+    // A card loads its permit set first ("Opening your permit set…"): nothing to tap until it has.
+    await expect(el.locator(".gc-loading")).toHaveCount(0, { timeout: 60_000 });
     const save = el.getByRole("button", { name: /^Save$/ });
     const fill = async (values: (label: string, placeholder: string | null, i: number) => string) => {
       const inputs = el.locator("input");
