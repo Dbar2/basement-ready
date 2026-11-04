@@ -240,8 +240,8 @@ const camAt = (keys: CamKey[] | undefined, t: number) => {
 
 /** A drawn browser window holding a desktop recording, with an easing camera to make small text readable. */
 export const Browser: React.FC<{
-  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number; cam?: CamKey[]; tilt?: boolean;
-}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1, cam, tilt = false }) => {
+  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number; cam?: CamKey[]; tilt?: boolean; tag?: string;
+}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1, cam, tilt = false, tag }) => {
   const frame = useCurrentFrame();
   const h = (w * 1080) / 1920;
   const bar = 40;
@@ -291,6 +291,7 @@ export const Browser: React.FC<{
         >
           {url}
         </span>
+        {tag && <span style={{ marginLeft: "auto", fontFamily: SANS, fontWeight: 600, fontSize: 17, color: C.ink, padding: "3px 12px", border: `1.5px solid ${C.ink}`, borderRadius: 4 }}>{tag}</span>}
       </div>
       <div style={{ width: w, height: h, overflow: "hidden", position: "relative" }}>
         <div style={{ width: w, height: h, transform: `translate(${cx}px, ${cy}px) scale(${c.z})`, transformOrigin: "50% 50%", filter: blur > 0.3 ? `blur(${blur.toFixed(2)}px)` : undefined }}>

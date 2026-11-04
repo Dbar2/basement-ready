@@ -117,7 +117,7 @@ const Punch: React.FC<{ text: string; at: number; out?: number; x: number; y: nu
 
 /** A recording in a tilted, floating device frame, filling the sheet. */
 const Rec: React.FC<{ shot: Shot; from?: number; cam?: CamKey[]; rate?: number; x?: number; y?: number; w?: number }> = ({ shot, from, cam, rate = 1, x = 180, y = 46, w = 1560 }) => (
-  <Browser x={x} y={y} w={w} src={shot.file} start={from ?? shot.start} url={shot.url} cam={cam ?? shot.cam} rate={rate} tilt />
+  <Browser x={x} y={y} w={w} src={shot.file} start={from ?? shot.start} url={shot.url} cam={cam ?? shot.cam} rate={rate} tilt tag="The example basement, replayed" />
 );
 
 /** One of the 3D clips (public/clips), framed on the sheet with a slow push-in. */
@@ -422,7 +422,7 @@ const DROP_EDIT = cue("And the answer") / FPS;
 const M = take.music2;
 const barAt = (k: number) => M.drop - k * M.bar;
 const LOOP_A = barAt(M.loopFromBars), LOOP_B = barAt(M.loopToBars); // repeat [LOOP_A, LOOP_B]
-const REPEAT = LOOP_B - LOOP_A;
+const REPEAT = M.drop >= DROP_EDIT ? 0 : LOOP_B - LOOP_A;
 const M0 = M.drop + REPEAT - DROP_EDIT; // where the track starts at frame 0
 const SEAM = LOOP_B - M0; // edit time of the jump back
 const speaking = (t: number) => SECS.some((s) => t >= s.start - 0.25 && t <= s.end + 0.35);
