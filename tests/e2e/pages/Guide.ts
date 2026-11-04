@@ -228,7 +228,7 @@ export class Guide {
       await o.step("build: bedrooms upstairs", () => el.getByRole("button", { name: "There are no bedrooms upstairs" }).click());
     } else if (card.kind === "waterMeter") {
       out.build.push("water");
-      const w = o.waterMeter ?? { option: "One meter for both units", where: "unit 1's furnace room" };
+      const w = o.waterMeter ?? { option: "One meter for both", where: "unit 1's furnace room" };
       await o.step("build: the water meter", async () => {
         await el.getByRole("group", { name: "How the water is metered" }).getByRole("button", { name: w.option }).click();
         await el.locator("input").fill(w.where);
@@ -278,11 +278,14 @@ export class Guide {
       } else {
         out.build.push("apply");
         await o.step("build: apply before work starts", async () => {
+          // Each program marked in turn: its buttons are disabled while the last mark saves, then it drops off.
+          const marks = el.getByRole("button", { name: /^(Not for me|Got it)$/ });
           for (let i = 0; i < 12; i++) {
-            const mark = el.getByRole("button", { name: /^(Not for me|Got it)$/ }).first();
-            if (!(await mark.count())) break;
-            await mark.click();
-            await expect(this.thread).not.toHaveAttribute("aria-busy", "true");
+            const n = await marks.count();
+            if (!n) break;
+            await expect(marks.first()).toBeEnabled({ timeout: 30_000 });
+            await marks.first().click();
+            await expect.poll(() => marks.count(), { timeout: 30_000 }).toBeLessThan(n);
           }
         });
       }

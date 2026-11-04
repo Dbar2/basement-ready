@@ -44,7 +44,7 @@ Saved answers live in two folders:
 - `tests/fixtures/replay/`: committed and small. Right now it holds Meta's model list (the server asks for it at boot) and the two Waterloo permit forms the sample's package fills in.
 - `media/private/replay/` (gitignored, in the main checkout): recordings of real takes, including David's own footage. Every checkout and worktree shares these answers: they're keyed by what was asked, so branches never clash.
 - **What a take came out as** (verdict, rooms and sizes, finds, questions, the design it picked with its price, fixes, every studio check, unit 2's area and the permit fee, permit sheets and things left, photo and card counts) is the code's, so it's kept per branch: `takes/<id>.json` for main, `takes/<branch>/<id>.json` for a branch. Replay reads its own branch's first, then main's, and must match it.
-- **When the product changes on purpose** (new wording, a new model call, a changed Spark prompt): replay shows named misses or a changed outcome. Record the take again with `E2E_TAKES=…` (only what's new costs anything) and the outcome file is rewritten.
+- **When the product changes on purpose** (new wording, a new model call, a changed Spark prompt): replay shows named misses or a changed outcome. With no misses, `E2E_REWRITE=1 pnpm test:e2e --project=chromium-desktop tests/e2e/takes.spec.ts` writes the new outcomes from a replay, which can't cost anything. With misses, record the take again with `E2E_TAKES=…` (only what's new costs anything; ask David first) and the outcome file is rewritten.
 
 ## What's recorded (Oct 30, topped up on main 8002e78 that night)
 

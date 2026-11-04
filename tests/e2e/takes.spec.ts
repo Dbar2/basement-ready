@@ -39,6 +39,12 @@ for (const take of TAKES) {
   });
 
   async function run(page: Page, journey: Journey, info: TestInfo, made: (scanId: string) => void) {
+    // Without the file in this tab (the app path), the guide's video asks for the server's copy until it's
+    // saved (src/guide/visuals/VideoFinds.tsx): those 404s are expected.
+    journey.allowConsole(/status of 404 .*@ .*\/api\/scans\/[0-9a-f-]+\/video$/);
+    // Known, WebKit only: leaving the uploaded video revokes its blob URL while WebKit's video element is
+    // still reading it. The page has moved on; nothing is lost.
+    if (info.project.name.startsWith("webkit")) journey.allowConsole(/WebKitBlobResource error 1\.\) @ blob:/);
     const home = new Home(page);
     const guide = new Guide(page);
 
@@ -86,7 +92,7 @@ for (const take of TAKES) {
       saveAs: pdf,
       step: journey.step,
       measuringMs: mode === "record" ? 15 * 60_000 : 5 * 60_000,
-      waterMeter: kitchener ? { option: "One meter for both units", where: "unit 1's furnace room" } : undefined,
+      waterMeter: kitchener ? { option: "One meter for both", where: "unit 1's furnace room" } : undefined,
     });
     expect(walked.answer, "the guide gave its answer").not.toBeNull();
 
@@ -154,6 +160,10 @@ for (const take of TAKES) {
       saveOutcome(take, outcome);
       // What recording it cost: the calls that really went out (saved answers reused are free).
       journey.timing({ kind: "cost", take: take.id, frames, ...costOf(realCalls(started), frames, Boolean(process.env.E2E_SCAN3D_URL?.includes(".modal.run"))) });
+    } else if (process.env.E2E_REWRITE === "1") {
+      // The product changed on purpose and nothing new is asked of a model: the outcome is written from a
+      // replay, which never calls the network, so it can't cost anything.
+      saveOutcome(take, outcome);
     } else {
       // Everything the models decided, exactly as recorded. The photos' count is kept but not held to: which
       // frames get staged depends on what the 3D has measured by then (server/replay.ts looseKeys).
