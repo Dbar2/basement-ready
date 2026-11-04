@@ -98,7 +98,8 @@ const WHY: Record<string, string> = {
   plans: "the design and the pictures follow it.",
   look: "I'll show your basement finished in it.",
   exit_from_suite: "a separate way in is one of the rules for a second home.",
-  plumbing_fixtures_and_shutoff: "pipes already there make a bathroom much cheaper.",
+  // The hint (server/triage.ts) says why pipes already there help, so this doesn't repeat it.
+  plumbing_fixtures_and_shutoff: "a second home needs its own bathroom.",
 };
 const whyFor = (a: WaitAsk) => WHY[a.id] ?? (a.kind === "money" ? "it decides which money fits." : "the video couldn't show it, and the rules ask for it.");
 
@@ -315,7 +316,10 @@ function withStep(t: Thread, ctx: Ctx, messages: GuideMessage[], awaiting: Threa
   const step = stepOf(ctx, t);
   const all = [...t.messages, ...messages];
   const visual = [...all].reverse().find((m) => m.visual)?.visual ?? { kind: "video" };
-  return { ...t, step, milestone: milestoneOf(step), done: doneOf(t, step), messages: all, visual, awaiting };
+  // A milestone once done stays done while they look back at it.
+  const d = doneOf(t, step);
+  const done = { ...d, answer: d.answer || Boolean(t.done?.answer), design: d.design || Boolean(t.done?.design) };
+  return { ...t, step, milestone: milestoneOf(step), done, messages: all, visual, awaiting };
 }
 
 // A fresh thread: the first thing the guide says.
@@ -384,6 +388,16 @@ function youSaid(t: Thread, action: GuideAction, ctx: Ctx): string | null {
   }
 }
 
+// Back to a milestone they've finished (a home base row, the top bar): its steps are walked again from
+// the verdict or the layouts, so it shows again. What they gave (answers, the plan, the design, the
+// build cards) stays, and the build opener isn't said twice.
+const ORDER: Milestone[] = ["answer", "design", "build"];
+function goingBack(t: Thread, action: GuideAction, ctx: Ctx): string[] {
+  if (action.type !== "go" || action.to === "home") return [];
+  if (ORDER.indexOf(action.to) >= ORDER.indexOf(milestoneOf(stepOf(ctx, t)))) return [];
+  return action.to === "answer" ? ["answer", "design.layouts", "design.look"] : ["design.layouts", "design.look"];
+}
+
 // The steps an action moves them past.
 function passing(t: Thread, action: GuideAction, ctx: Ctx): string[] {
   const at = stepOf(ctx, t);
@@ -416,7 +430,9 @@ export function act(t: Thread, action: GuideAction, ctx: Ctx, reply?: Reply): { 
   const you = youSaid(t, action, ctx);
   if (you) out.push(message(t, out, { from: "you", text: you, at: ctx.now }));
   const before = stepOf(ctx, t);
-  const moved: Thread = { ...t, passed: [...new Set([...t.passed, ...passing(t, action, ctx)])] };
+  const back = new Set(goingBack(t, action, ctx));
+  const kept = t.passed.filter((s) => !back.has(s));
+  const moved: Thread = { ...t, passed: [...new Set([...kept, ...(back.size ? [] : passing(t, action, ctx))])] };
   const step = stepOf(ctx, moved);
   const aside = reply ?? (action.type === "explain" ? explainReply(action.term) : null);
   if (aside && step === before) {

@@ -7,6 +7,7 @@ import { aerialUrl, costLabel, getScan, type Grant, type ScanResult } from "../a
 import { FloorPlan } from "../components/FloorPlan";
 import { Logo } from "../components/Logo";
 import { conceptUrl } from "../components/StagedViews";
+import { sampleAnswer } from "../guide/api";
 import "../styles/brief.css";
 
 // "$20,000 grant", "Saves fees", "Financing": what a program is worth here.
@@ -64,7 +65,8 @@ export function Brief() {
       </header>
 
       <section className="brief-decision">
-        <h1>{r.headline}</h1>
+        {/* The example's answer depends on the answers given in this browser: say what its guide said. */}
+        <h1>{(scanId === "sample" ? sampleAnswer()?.headline : null) ?? r.headline}</h1>
         {r.summary && <p>{r.summary}</p>}
         <dl>
           <div>

@@ -3,7 +3,7 @@ import { Cited, MarketingPage, PageHead, Ref, Section, SourceList } from "./part
 import { PATHS } from "./site";
 import type { SourceId } from "./sources";
 
-const CITED: SourceId[] = ["quarts", "codePart9", "costLegalToronto"];
+const CITED: SourceId[] = ["quarts", "codePart9"];
 
 // The example plan is the example basement anyone can try (public/samples/sample), with its own numbers
 // (./example.ts). No real homeowner's details.
@@ -16,8 +16,9 @@ const MEASURES = [
   { label: "Door width", value: opening("door") },
 ];
 
+// No counts or prices here: the example's full answer can add fixes after its questions, so it has them.
 const FIXES = [
-  ...(EXAMPLE.fix ? [{ what: "Fire and smoke separation", why: "Joists and ducts look exposed", cost: <>{EXAMPLE.fix.cost}<Ref id="costLegalToronto" /></> }] : []),
+  ...(EXAMPLE.fix ? [{ what: "Fire and smoke separation", why: "Joists and ducts look exposed", cost: "Priced in the answer" }] : []),
   { what: "A safe way out", why: "Waiting on the homeowner's answer", cost: "Quote needed" },
   { what: "Kitchen, bath, water shut-off", why: "Waiting on the homeowner's answer", cost: "Quote needed" },
 ];
@@ -92,7 +93,7 @@ export function ForPros() {
                   </li>
                 ))}
               </ol>
-              <figcaption>The drawing is for illustration. Rough costs from published price guides: estimates, not quotes.</figcaption>
+              <figcaption>The drawing is for illustration. The example's full answer lists every fix with a rough cost: an estimate, not a quote.</figcaption>
             </figure>
 
             <ul className="mk-rows mk-includes">
@@ -106,7 +107,8 @@ export function ForPros() {
           </div>
           <p className="mk-note">
             Measurements come from phone video, not a tape. Treat them as a starting point and confirm on site. The
-            rules behind each fix are from Ontario's 2024 Building Code<Ref id="codePart9" />.
+            rules behind each fix are from Ontario's 2024 Building Code<Ref id="codePart9" />. Every fix and its rough
+            cost are in the <a href="/scans/sample">example's full answer</a>.
           </p>
         </Section>
 
@@ -115,7 +117,7 @@ export function ForPros() {
             <div className="mk-inbox-row" style={{ "--i": 0 } as React.CSSProperties}>
               <span className="mk-inbox-dot" />
               <span className="mk-inbox-text">Basement suite, the example</span>
-              <span className="mk-inbox-mono">1 fix, 2 to confirm</span>
+              <span className="mk-inbox-mono">Fixes and questions</span>
               <span className="mk-inbox-mono">Example</span>
             </div>
             {[1, 2].map((i) => (

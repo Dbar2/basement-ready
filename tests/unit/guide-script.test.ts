@@ -268,6 +268,30 @@ describe("the guide's answer", () => {
   });
 });
 
+describe("going back to a finished milestone (a home base row)", () => {
+  const building = () => at(["answer", "design.plan", "design.layouts", "design.look", "build"]);
+
+  it("Answer shows the verdict again, and its way on walks to the layouts", () => {
+    const t = building();
+    expect(t.milestone).toBe("build");
+    const r = act(t, { type: "go", to: "answer" }, ctx());
+    expect(r.thread.step).toBe("answer");
+    expect(r.messages.map((m) => m.from)).toEqual(["guide"]);
+    expect(r.messages[0].text).toContain("Yes, your basement can be a second home");
+    expect(r.thread.done).toMatchObject({ answer: true, design: true });
+    expect(act(r.thread, { type: "go", to: "design" }, ctx()).thread.step).toBe("design.layouts");
+  });
+
+  it("Design shows the layouts again, and 'Looks good' returns to the build where they were", () => {
+    const r = act(building(), { type: "go", to: "design" }, ctx());
+    expect(r.thread.step).toBe("design.layouts");
+    expect(r.thread.milestone).toBe("design");
+    const chose = act(r.thread, { type: "chooseDesign", designId: "one_bedroom" }, ctx());
+    expect(chose.thread.step).toBe("design.look");
+    expect(act(chose.thread, { type: "go", to: "build" }, ctx()).thread.step).toBe("build.permit:tape");
+  });
+});
+
 describe("the guide's design: the plan, the layouts, the look", () => {
   it("'Show me what it could be' goes to the plan: is this your basement?", () => {
     const r = act(start(ctx()), { type: "go", to: "design" }, ctx());

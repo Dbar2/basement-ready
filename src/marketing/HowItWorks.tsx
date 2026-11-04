@@ -39,7 +39,7 @@ const STEPS: { glyph: StepGlyph; title: string; spec: string; body: React.ReactN
     body: (
       <>
         Muse Spark checks what was found against Ontario's Building Code and your city's zoning, and gives a straight
-        answer, like "Looks possible if you fix 3 things." Each fix shows the frame from your video, the rule in plain
+        answer, like "Yes, after a few fixes." Each fix shows the frame from your video, the rule in plain
         words with its source, and a rough cost. If something can't be seen, it asks you instead of guessing.
       </>
     ),
@@ -47,10 +47,10 @@ const STEPS: { glyph: StepGlyph; title: string; spec: string; body: React.ReactN
   {
     glyph: "model",
     title: "See it in 3D",
-    spec: "1 starting layout",
+    spec: "Layouts in 3D",
     body: (
       <>
-        See your own basement with a starting layout that meets the rules: a bedroom by an escape window, a bathroom,
+        See your own basement with layouts that meet the rules, and the one we'd start with: a bedroom by an escape window, a bathroom,
         a kitchen, with the real windows and stairs where they are. It's virtually staged, to show the idea, and a
         designer turns it into a real plan.
       </>

@@ -12,7 +12,7 @@ import { Logo, Mark } from "../components/Logo";
 import { getPermitStatus, getWorkspace, useDrawingsLink, type Workspace } from "../workspaceApi";
 import type { Fixture, Model, Pt, Wall } from "../../server/model/types";
 import { getGuide, sampleAnswer } from "./api";
-import { DRAWN_FOR_YOU } from "./visuals/BuildVisuals";
+import { permitLines } from "./visuals/BuildVisuals";
 import { guideUrl, MILESTONES, progress, type MilestoneStatus, type Progress } from "./progress";
 import type { Milestone } from "./types";
 import "./home.css";
@@ -68,7 +68,10 @@ export function Home() {
         .catch(() => {});
       if (p.status.design === "done")
         void getPermitStatus(scanId)
-          .then((st) => !gone && setPermit({ done: st.items.filter((i) => i.done).length + DRAWN_FOR_YOU.length, total: st.items.length + DRAWN_FOR_YOU.length }))
+          .then((st) => {
+            const lines = permitLines(st.items);
+            if (!gone) setPermit({ done: lines.filter((l) => l.done).length, total: lines.length });
+          })
           .catch(() => {});
     })();
     return () => {

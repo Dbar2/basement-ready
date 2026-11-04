@@ -25,10 +25,12 @@ function keepSample(state: GuideState) {
 }
 
 // The example's answer as its guide last said it (its answers live here, never on its stored result),
-// so its home base counts the same fixes as the thread.
-export function sampleAnswer(): { verdict: "yes" | "fix" | "no"; fixes: number } | null {
-  const said = readSample()?.messages.findLast((m) => m.visual?.kind === "plan" && m.visual.verdict)?.visual;
-  return said?.kind === "plan" && said.verdict ? { verdict: said.verdict, fixes: said.fixes ?? 0 } : null;
+// so its home base and its brief say the same as the thread. `headline` is the answer's first bold line.
+export function sampleAnswer(): { verdict: "yes" | "fix" | "no"; fixes: number; headline: string | null } | null {
+  const m = readSample()?.messages.findLast((x) => x.visual?.kind === "plan" && x.visual.verdict);
+  const said = m?.visual;
+  if (said?.kind !== "plan" || !said.verdict) return null;
+  return { verdict: said.verdict, fixes: said.fixes ?? 0, headline: /\*\*(.+?)\*\*/.exec(m?.text ?? "")?.[1] ?? null };
 }
 
 // Starts the example again from its first question.

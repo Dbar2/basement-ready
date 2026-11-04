@@ -23,7 +23,7 @@ Then open http://localhost:5173 and tap **Try the example**. To scan your own ba
   <img src="docs/screens/plan.png" width="200" alt="Is this your basement? The measured plan, editable on the plan itself">
   <img src="docs/screens/layouts.png" width="200" alt="Two layouts in 3D that keep the stairs, furnace and window, with one recommended and why">
   <img src="docs/screens/look.png" width="200" alt="Before and after: the example's own frame, and the design in the look picked, labelled virtually staged">
-  <img src="docs/screens/build.png" width="200" alt="Build: the permit set drawn and filled, 2 of 15 ready, and what only you can give">
+  <img src="docs/screens/build.png" width="200" alt="Build: the permit set drawn and filled, how much is ready, and what only you can give">
   <img src="docs/screens/home.png" width="200" alt="The basement's home base: the goal and the three milestones">
 </p>
 

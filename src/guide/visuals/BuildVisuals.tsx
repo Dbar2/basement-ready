@@ -12,28 +12,35 @@ import "./build-visuals.css";
 // reads 0 beside two ticks. The home base counts them too.
 export const DRAWN_FOR_YOU = ["Drawings to scale", "City forms filled"] as const;
 
+// One line per kind of thing, in the order the guide asks.
+const GROUPS: { group: string; label: string }[] = [
+  { group: "design", label: "Your design meets the rules" },
+  { group: "tape", label: "Tape numbers" },
+  { group: "windows", label: "Window sizes" },
+  { group: "owner", label: "Owner's name" },
+  { group: "upstairs", label: "Bedrooms upstairs" },
+  { group: "lot", label: "Distance to the lot line" },
+  { group: "water", label: "Water meter" },
+  { group: "designer", label: "Your designer" },
+  { group: "review", label: "Each sheet looked over" },
+];
+
+// The checklist's lines. "N of M ready" counts these lines, so the number agrees with the list and
+// with the guide's "five things only you can give"; the home base counts them the same way.
+export function permitLines(items: { group: string; done: boolean }[]): { label: string; done: boolean }[] {
+  return [
+    ...DRAWN_FOR_YOU.map((label) => ({ label, done: true })),
+    ...GROUPS.filter((g) => items.some((i) => i.group === g.group)).map((g) => ({ label: g.label, done: items.filter((i) => i.group === g.group).every((i) => i.done) })),
+  ];
+}
+
 export function PermitVisual({ scanId }: VisualProps<"permit">) {
   const { status, result } = useBuild(scanId);
   const city = result?.authority ?? (result?.city ? `City of ${result.city}` : null);
   if (!status) return <Pane caption={city ? `Your permit set, ${city}` : "Your permit set"} note="Opening your permit set…" />;
-  const total = status.items.length + DRAWN_FOR_YOU.length;
-  const ready = total - status.left;
-  // One line per kind of thing, in the order the guide asks.
-  const groups: { group: string; label: string }[] = [
-    { group: "design", label: "Your design meets the rules" },
-    { group: "tape", label: "Tape numbers" },
-    { group: "windows", label: "Window sizes" },
-    { group: "owner", label: "Owner's name" },
-    { group: "upstairs", label: "Bedrooms upstairs" },
-    { group: "lot", label: "Distance to the lot line" },
-    { group: "water", label: "Water meter" },
-    { group: "designer", label: "Your designer" },
-    { group: "review", label: "Each sheet looked over" },
-  ];
-  const all = [
-    ...DRAWN_FOR_YOU.map((label) => ({ label, done: true })),
-    ...groups.filter((g) => status.items.some((i) => i.group === g.group)).map((g) => ({ label: g.label, done: status.items.filter((i) => i.group === g.group).every((i) => i.done) })),
-  ];
+  const all = permitLines(status.items);
+  const total = all.length;
+  const ready = all.filter((l) => l.done).length;
   // A computer's pane shows every line. A phone's (build-visuals.css, by the pane's own width) shows
   // what's still open, three at most and the rest as a count; once nothing is, the last three done.
   const todo = all.filter((l) => !l.done);
