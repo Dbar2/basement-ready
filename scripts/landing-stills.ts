@@ -1,5 +1,5 @@
 // Renders the home page's still frames (public/img/scan-1.webp … scan-6.webp) from the live scroll story,
-// so the stills are the example's real scan, drawn by the same scene. They're the poster while the 3D
+// so the stills are the example's real scan and its as-built 3D, drawn by the same scene. They're the poster while the 3D
 // loads, and the whole story for reduced motion or no WebGL. Re-run after the example changes.
 //
 //   pnpm exec vite --port 5191 &   then   pnpm exec tsx scripts/landing-stills.ts [http://localhost:5191]
@@ -21,6 +21,8 @@ page.on("pageerror", (e) => console.error("page error:", e.message));
 await page.goto(BASE, { waitUntil: "load" });
 await page.waitForSelector(".lp-stage canvas", { timeout: 60_000 });
 await page.waitForSelector(".lp-poster[data-hidden]", { timeout: 60_000 });
+// The as-built model's painting, at its sharpest (src/three/AsBuilt.tsx marks the canvas).
+await page.waitForSelector('.lp-stage canvas[data-atlas="2048"]', { timeout: 60_000 });
 
 const tmp = mkdtempSync(join(tmpdir(), "stills-"));
 for (let step = 1; step <= 6; step++) {
