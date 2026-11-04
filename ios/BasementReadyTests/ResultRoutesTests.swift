@@ -26,6 +26,14 @@ final class ResultRoutesTests: XCTestCase {
     XCTAssertEqual(ResultView.route(URL(string: "https://192.168.1.20:8787/")!, server: mac), .safari)
   }
 
+  // A page that couldn't be reached gets "try again"; a load the app turned away itself doesn't.
+  @MainActor func testOnlyAPageThatCouldntBeReachedCountsAsNotLoaded() {
+    XCTAssertTrue(WebPageCheck.couldntLoad(URLError(.cannotConnectToHost)))
+    XCTAssertTrue(WebPageCheck.couldntLoad(URLError(.notConnectedToInternet)))
+    XCTAssertFalse(WebPageCheck.couldntLoad(URLError(.cancelled)))
+    XCTAssertFalse(WebPageCheck.couldntLoad(NSError(domain: "WebKitErrorDomain", code: 102)))
+  }
+
   // The web's in-app "New scan" link (basementready://new) goes back to the app's start screen.
   func testTheAppsOwnNewScanLink() {
     XCTAssertEqual(ResultView.route(URL(string: "basementready://new")!, server: server), .newScan)

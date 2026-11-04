@@ -10,6 +10,7 @@
 // One bar: once the page shows its own (the guide's and the home base's end with New scan,
 // basementready://new, when the page knows it's in the app), the app's bar gives way to it. A page
 // without one, such as a server from before Nov 1, keeps the app's bar, so New scan is always there.
+import os
 import SwiftUI
 import WebKit
 
@@ -24,18 +25,38 @@ struct ResultView: View {
   @StateObject private var web = WebController()
   @State private var start: URL?
   @State private var pageHasBar = false
+  @State private var failed: URL? // a page that didn't load: no signal in the basement, say
 
   var body: some View {
     VStack(spacing: 0) {
       if !pageHasBar { appBar }
       if let start {
-        WebPage(url: start, home: scan.homeURL ?? start, claim: scan, controller: web, onNewScan: onNewScan, onPageBar: { pageHasBar = $0 })
+        WebPage(url: start, home: scan.homeURL ?? start, claim: scan, controller: web, onNewScan: onNewScan,
+                onPageBar: { pageHasBar = $0 }, onLoad: { failed = $0 })
+          .overlay { if let failed { notLoaded(failed) } }
       } else {
         Spacer()
       }
     }
     .background(Brand.bg.ignoresSafeArea())
     .task { start = await Self.firstPage(scan, page) }
+  }
+
+  private func notLoaded(_ url: URL) -> some View {
+    VStack(alignment: .leading, spacing: Space.s3) {
+      Text("The page didn't load.").heading(22).foregroundStyle(Brand.ink)
+      Text("Your video is safe on the server. Check your connection, then try again.")
+        .font(Brand.body(17)).foregroundStyle(Brand.inkMuted)
+      Button("Try again") {
+        self.failed = nil
+        web.load(url)
+      }
+      .buttonStyle(PrimaryButton())
+      Spacer()
+    }
+    .padding(Space.s3)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .background(Brand.bg)
   }
 
   private var appBar: some View {
@@ -105,8 +126,24 @@ private struct WebPage: UIViewRepresentable {
   let controller: WebController
   let onNewScan: () -> Void
   let onPageBar: (Bool) -> Void
+  let onLoad: (URL?) -> Void // nil: a page loaded; else the page that couldn't
 
-  func makeCoordinator() -> Coordinator { Coordinator(home: home, onNewScan: onNewScan, onPageBar: onPageBar) }
+  func makeCoordinator() -> Coordinator { Coordinator(home: home, onNewScan: onNewScan, onPageBar: onPageBar, onLoad: onLoad) }
+
+  #if DEBUG
+  static let debugScript = """
+  (() => {
+    const send = (kind, text) => { try { window.webkit.messageHandlers.brLog.postMessage(kind + ": " + String(text).slice(0, 400)); } catch (e) {} };
+    window.addEventListener("error", (e) => send("error", (e.message || e) + " @ " + (e.filename || "") + ":" + (e.lineno || "")));
+    window.addEventListener("unhandledrejection", (e) => send("rejection", e.reason && (e.reason.stack || e.reason.message) || e.reason));
+    const err = console.error.bind(console);
+    console.error = (...a) => { send("console", a.map(String).join(" ")); err(...a); };
+    let n = 0;
+    const words = () => { send("page", location.pathname + " | " + (document.body ? document.body.innerText.replace(/\\s+/g, " ").slice(0, 160) : "(no body)")); if (++n < 4) setTimeout(words, 2500); };
+    setTimeout(words, 1500);
+  })();
+  """
+  #endif
 
   // Tells the app whether the page shows its own New scan (basementready://new), as it changes: the
   // page's router swaps screens without a navigation, so it watches the document.
@@ -130,6 +167,11 @@ private struct WebPage: UIViewRepresentable {
     config.userContentController.addUserScript(WKUserScript(source: Self.claimScript(claim), injectionTime: .atDocumentStart, forMainFrameOnly: true))
     config.userContentController.addUserScript(WKUserScript(source: Self.barScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true))
     config.userContentController.add(MessageRelay(context.coordinator), name: "brPage")
+    #if DEBUG
+    // Debug builds: the page's errors and its first words go to the app's log (category "web").
+    config.userContentController.addUserScript(WKUserScript(source: Self.debugScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    config.userContentController.add(MessageRelay(context.coordinator), name: "brLog")
+    #endif
     let web = WKWebView(frame: .zero, configuration: config)
     web.navigationDelegate = context.coordinator
     web.uiDelegate = context.coordinator
@@ -138,6 +180,9 @@ private struct WebPage: UIViewRepresentable {
     web.backgroundColor = UIColor(Brand.bg)
     web.load(URLRequest(url: url))
     controller.view = web
+    #if DEBUG
+    web.isInspectable = true // Safari's Develop menu can inspect it
+    #endif
     // The page's own router changes the address without a navigation; the front page still means home.
     context.coordinator.watch(web)
     return web
@@ -165,13 +210,39 @@ private struct WebPage: UIViewRepresentable {
     let home: URL
     let onNewScan: () -> Void
     let onPageBar: (Bool) -> Void
+    let onLoad: (URL?) -> Void
     private var watching: NSKeyValueObservation?
     private var wentHome = Date.distantPast
-    init(home: URL, onNewScan: @escaping () -> Void, onPageBar: @escaping (Bool) -> Void) {
+    init(home: URL, onNewScan: @escaping () -> Void, onPageBar: @escaping (Bool) -> Void, onLoad: @escaping (URL?) -> Void) {
       self.home = home
       self.onNewScan = onNewScan
       self.onPageBar = onPageBar
+      self.onLoad = onLoad
     }
+
+    func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) { onLoad(nil) }
+
+    // A page that couldn't be reached; not one the app turned away itself (home, Safari, New scan).
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+      #if DEBUG
+      let e0 = error as NSError
+      Self.log.notice("BRWEB failed \(e0.code) \(e0.userInfo[NSURLErrorFailingURLStringErrorKey] as? String ?? "?", privacy: .public)")
+      #endif
+      if Self.couldntLoad(error) { onLoad((error as NSError).userInfo[NSURLErrorFailingURLErrorKey] as? URL ?? webView.url ?? home) }
+    }
+
+    static func couldntLoad(_ error: Error) -> Bool { WebPageCheck.couldntLoad(error) }
+
+    private static let log = Logger(subsystem: "com.davidbarry.basementready", category: "web")
+    func logMessage(_ body: Any) {
+      Self.log.notice("BRWEB \(String(describing: body), privacy: .public)")
+    }
+
+    #if DEBUG
+    func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+      Self.log.notice("BRWEB load \(webView.url?.absoluteString ?? "?", privacy: .public)")
+    }
+    #endif
 
     func pageMessage(_ body: Any) {
       if let has = (body as? [String: Any])?["newScan"] as? Bool { onPageBar(has) }
@@ -238,7 +309,15 @@ private final class MessageRelay: NSObject, WKScriptMessageHandler {
   init(_ target: WebPage.Coordinator) { self.target = target }
 
   func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-    let body = message.body
-    MainActor.assumeIsolated { target?.pageMessage(body) }
+    let body = message.body, name = message.name
+    MainActor.assumeIsolated { name == "brLog" ? target?.logMessage(body) : target?.pageMessage(body) }
+  }
+}
+
+enum WebPageCheck {
+  // A page that couldn't be reached (no signal, server down), not one the app cancelled itself.
+  static func couldntLoad(_ error: Error) -> Bool {
+    let e = error as NSError
+    return e.domain == NSURLErrorDomain && e.code != NSURLErrorCancelled
   }
 }
