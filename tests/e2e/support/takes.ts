@@ -3,7 +3,7 @@
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import type { WaitAnswers } from "../pages/WaitScreen";
+import type { WaitAnswers } from "../pages/Guide";
 import { COMMITTED_REPLAY, MEDIA_ROOT, mode, PRIVATE_REPLAY, RECORD_DIR, ROOT } from "./run";
 
 export type Take = {
@@ -79,12 +79,19 @@ export type Outcome = {
   headline: string;
   rooms: { name: string; size: string | null }[];
   finds: Record<string, number>;
+  // The guide's questions while it measured, and the answers tapped.
   asked: { question: string; answer: string }[];
-  permit: { pages: number; sheets: Record<string, string>; left: number };
-  // The design they picked, as the screens and the permit set price and check it.
-  design: { name: string; price: string; fixes: string[]; checks: string[]; unitArea: string | null; permitFee: string | null };
+  // What the guide said with the answer: the headline, the first fix, the price and the money back.
+  answer: string;
+  // The design it recommended and they used, as the screens and the permit set price and check it.
+  design: { name: string; look: string | null; price: string | null; fixes: string[]; checks: string[]; unitArea: string | null; permitFee: string | null };
+  // Each Build message in order, by its card or what it asked; where the walk stopped, if it did.
+  build: string[];
+  stopped: string | null;
+  permit: { pages: number; sheets: Record<string, string>; submitPages: number | null };
+  water: string | null;
+  book: number | null;
   photos: number;
-  cards: number;
 };
 
 // Beside its saved answers, one per branch: the saved answers are shared by every checkout (they're keyed

@@ -22,7 +22,9 @@ export const baseURL = `http://localhost:${WEB_PORT}`;
 // Saved answers: the small committed set, then the private ones (David's own takes), gitignored.
 export const COMMITTED_REPLAY = join(ROOT, "tests/fixtures/replay");
 // Local media (gitignored): the main checkout's, also when this runs from a worktree in .claude/worktrees.
-export const MEDIA_ROOT = process.env.E2E_MEDIA ?? [join(ROOT, "media"), join(ROOT, "../../../media")].find((p) => existsSync(p)) ?? join(ROOT, "media");
+// The media folder that holds the recordings: this checkout's, or the main checkout's from a worktree (a
+// worktree's own media/ can hold just a cache, the City's forms a unit test fetched).
+export const MEDIA_ROOT = process.env.E2E_MEDIA ?? [join(ROOT, "media"), join(ROOT, "../../../media")].find((p) => existsSync(join(p, "private/replay"))) ?? join(ROOT, "media");
 export const PRIVATE_REPLAY = join(MEDIA_ROOT, "private/replay");
 // Recording writes to the first folder: private unless E2E_RECORD_TO=committed.
 const replayDirs = process.env.E2E_RECORD_TO === "committed" ? [COMMITTED_REPLAY, PRIVATE_REPLAY] : [PRIVATE_REPLAY, COMMITTED_REPLAY];
