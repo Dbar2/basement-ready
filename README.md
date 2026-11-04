@@ -102,9 +102,6 @@ Film it (iPhone app or browser), upload a video, or add 5–20 photos
 
 ```mermaid
 flowchart LR
-  web["Web app<br/>React, Vite, three.js"] -->|video or photos, answers| api
-  ios["iPhone app<br/>SwiftUI, ARKit"] -->|video and camera path| api
-  sample["The example<br/>public/samples, recorded once"] -.->|replayed, no calls| api
   subgraph server["Server: Node and Hono"]
     api["API and the guide's script"]
     worker["Job worker: the scan pipeline"]
@@ -112,7 +109,10 @@ flowchart LR
     api --> worker
     api --> code
   end
-  worker -->|"SAM 3.1, Muse Spark, Muse Wonder,<br/>Muse Image, Muse Voice Transcribe"| meta[("Meta Model API")]
+  web["Web app<br/>React, Vite, three.js"] -->|video or photos, answers| api
+  ios["iPhone app<br/>SwiftUI, ARKit"] -->|video and camera path| api
+  sample["The example<br/>public/samples, recorded once"] -.->|replayed, no calls| api
+  server -->|"SAM 3.1, Muse Spark, Muse Wonder,<br/>Muse Image, Muse Voice Transcribe"| meta[("Meta Model API")]
   worker -->|frames| scan3d["3D service: MapAnything + DINOv2<br/>Python, on Modal or a Mac"]
   api --- db[("Postgres, or PGlite locally")]
   api --- files[("Cloudflare R2, or local files")]
@@ -131,7 +131,7 @@ The example basement runs on your own computer with no keys, no GPU and no paid 
 
 ### 1. No keys: the example basement
 
-You need Node 22.12 or newer and pnpm 10. No pnpm yet? `corepack enable` (it comes with Node) gives you the version this repo pins.
+You need Node 22.12 or newer and pnpm 10. No pnpm yet? On Node 22 or 24, `corepack enable` gives you the version this repo pins. Node 25 and newer don't include corepack, so use `npm install -g pnpm@10`.
 
 ```bash
 git clone https://github.com/Dbar2/basement-ready.git
@@ -155,23 +155,23 @@ Open http://localhost:5173 and tap **Try the example** (or go straight to http:/
 - **Check my basement** opens too, but without a key it says "This copy has no Meta key, so it can't read new videos" and offers the example. It never makes up a result.
 - pnpm may warn that it ignored a build script for `@clerk/shared`. That's fine.
 
-Run the unit tests (no keys, about 20 seconds):
+Run the unit tests (no keys, under a minute):
 
 ```bash
 pnpm test
 ```
 
-The end-to-end journeys in `tests/e2e` drive the app in real browsers (Chromium and WebKit, phone and desktop sizes), replaying saved model answers instead of calling Meta (`server/replay.ts`). The example's journey runs from a fresh clone (it needs Playwright's browsers: `pnpm exec playwright install chromium webkit`):
+The end-to-end journeys in `tests/e2e` drive the app in real browsers (Chromium and WebKit, phone and desktop sizes), replaying saved model answers instead of calling Meta (`server/replay.ts`). The example's journey runs with no keys. This is the run we checked, on Chromium at phone size, in about 35 seconds (it needs Playwright's Chromium first: `pnpm exec playwright install chromium`):
 
 ```bash
-pnpm test:e2e tests/e2e/sample.spec.ts
+pnpm test:e2e tests/e2e/sample.spec.ts --project=chromium-phone
 ```
 
 The other journeys replay takes whose recordings are private, so they need those first. How record and replay work: [`tests/e2e/README.md`](tests/e2e/README.md). On every push, CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) typechecks, runs the unit tests, builds the app and runs the 3D service's own tests, all without keys.
 
 #### If something goes wrong
 
-- **`pnpm: command not found`:** run `corepack enable`, then `pnpm install` again. Or `npm install -g pnpm@10`.
+- **`pnpm: command not found`:** run `corepack enable` (Node 22 or 24) or `npm install -g pnpm@10`, then `pnpm install` again.
 - **"Unsupported engine", or an error as soon as it starts:** check `node -v`. Vite and Vitest need Node 22.12 or newer.
 - **Port 8787 is already in use:** `API_PORT=8788 pnpm dev` moves the API, and the web app follows it. If 5173 is taken, Vite picks the next free port and prints it.
 - **The example opens on its home base, not the first question:** it remembers how far you got in this browser. Open it in a private window to start from the top.
