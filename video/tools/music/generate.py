@@ -70,6 +70,26 @@ PLAN = [
 ]
 
 
+def make_plan(lift: float, total: float):
+    """Sections so the build ends and the full groove starts at `lift` seconds, ending past `total`."""
+    plan, t = [("intro", 30)], 30.0
+    while t < lift - 10 - 0.5:
+        n = min(20, round(lift - 10 - t))
+        if n < 6:  # fold a short remainder into the build
+            break
+        plan.append(("intro_cont", n)); t += n
+    plan.append(("build", round(lift - t))); t = lift
+    breathe_at = lift + 50
+    while t < total - 25:
+        if abs(t - breathe_at) <= 10 and not any(k == "breathe" for k, _ in plan):
+            plan.append(("breathe", 20)); t += 20
+        else:
+            n = min(20, round(total - 25 - t)) or 10
+            plan.append(("full", max(10, n))); t += max(10, n)
+    plan += [("outro", 20), ("outro", 12)]
+    return plan
+
+
 def load_model(name: str, device: str, dtype: torch.dtype):
     processor = AutoProcessor.from_pretrained(name)
     model = MusicgenForConditionalGeneration.from_pretrained(name, torch_dtype=dtype)
@@ -182,7 +202,15 @@ def main():
     ap.add_argument("--to", dest="stop", type=int, default=len(PLAN) - 1, help="last pass")
     ap.add_argument("--cands", type=int, default=1, help="candidates per pass (batched)")
     ap.add_argument("--speedtest", type=float, default=0, help="only time N seconds of generation")
+    ap.add_argument("--lift", type=float, default=0, help="seconds where the lift (full groove) lands; 0 keeps PLAN")
+    ap.add_argument("--length", type=float, default=195, help="track length to cover, seconds")
     args = ap.parse_args()
+    global PLAN
+    if args.lift:
+        PLAN = make_plan(args.lift, args.length)
+        if args.stop == len(make_plan(60, 195)) - 1 or args.stop >= len(PLAN):
+            args.stop = len(PLAN) - 1
+    print("plan:", PLAN, flush=True)
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

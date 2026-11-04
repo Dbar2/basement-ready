@@ -22,11 +22,14 @@ const Fader: React.FC<{ dur: number; fade: number; children: React.ReactNode }> 
 };
 
 /** Real footage, laid out for its kind: a browser across the sheet, or a phone beside a headline. */
-const ShotView: React.FC<{ shot: Shot; headline?: string; sub?: string; offset?: number }> = ({ shot, headline, sub, offset = 0 }) => {
+export const ShotView: React.FC<{ shot: Shot; span?: number; headline?: string; sub?: string; offset?: number }> = ({ shot, span = 0, headline, sub, offset = 0 }) => {
   const frame = useCurrentFrame();
   const p = prog(frame, 0, 16);
+  // slow the clip a touch if the voice needs longer than what's left of it
+  const left = (shot.clip - shot.start - offset - 0.1) * 30;
+  const rate = span > left ? Math.max(0.6, left / span) : 1;
   if (shot.kind === "desktop") {
-    return <Browser x={290} y={152} w={1340} src={shot.file} start={shot.start + offset} p={p} url="basementready.com/scans/sample" />;
+    return <Browser x={180} y={38} w={1560} src={shot.file} start={shot.start + offset} p={p} url={shot.url} cam={shot.cam} rate={rate} />;
   }
   return (
     <>
@@ -63,10 +66,10 @@ const Verdict: React.FC = () => {
           transform: `rotate(-3deg) scale(${1.35 - 0.35 * s})`,
         }}
       >
-        Yes, after 1 fix
+        Yes, after 4 fixes
       </div>
       <div style={{ marginTop: 52, display: "flex", gap: 40, alignItems: "baseline", opacity: prog(frame, 26, 12) }}>
-        <span style={{ fontSize: 30, fontWeight: 600 }}>Fire separation between the two homes</span>
+        <span style={{ fontSize: 30, fontWeight: 600 }}>The first: a fire separation between the two homes</span>
         <Status kind="fix" size={26}>To fix</Status>
       </div>
     </div>
@@ -82,7 +85,7 @@ const AnswerDrawn: React.FC = () => {
         <Plan x={300} y={290} s={92} frame={frame} start={0} fix={20} />
       </svg>
       <div style={{ position: "absolute", left: 1180, top: 300, width: 640, fontFamily: SANS, opacity: prog(frame, 10, 12) }}>
-        <div style={{ fontWeight: 900, fontSize: 64, letterSpacing: "-0.04em", lineHeight: 0.95, color: C.fix }}>Yes, after 1 fix</div>
+        <div style={{ fontWeight: 900, fontSize: 64, letterSpacing: "-0.04em", lineHeight: 0.95, color: C.fix }}>Yes, after 4 fixes</div>
         <div style={{ borderTop: `1.5px solid ${C.ink}`, marginTop: 30 }}>
           {[["Fire separation", "To fix"], ["Rough cost", "a range"], ["Every rule", "with its source"]].map(([a, b]) => (
             <div key={a} style={{ display: "flex", justifyContent: "space-between", padding: "14px 0", borderBottom: `1px solid ${C.border}`, fontSize: 26 }}>
@@ -131,18 +134,19 @@ export const Answer: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const l10 = lineIn(scene, "L10"), l11 = lineIn(scene, "L11"), l12 = lineIn(scene, "L12"), l13 = lineIn(scene, "L13");
   return (
     <>
-      <Milestones current={0} start={4} enter />
-      <Span from={l10.from - 4} to={l11.from - 6}>
+      <Span from={0} to={l11.from - 6} fade={6}>
+        <Milestones current={0} start={4} enter />
         <Verdict />
       </Span>
       <Span from={l11.from - 6} to={l12.from - 6}>
-        {SHOTS.answer ? <ShotView shot={SHOTS.answer} headline="The answer comes first." sub="The fix marked on the measured plan, a rough cost, and a source for every rule." /> : <AnswerDrawn />}
+        {SHOTS.answer ? <ShotView shot={SHOTS.answer} span={l12.from - l11.from} headline="The answer comes first." sub="The fix marked on the measured plan, a rough cost, and a source for every rule." /> : <AnswerDrawn />}
       </Span>
       <Span from={l12.from - 6} to={l13.from - 6}>
+        <Milestones current={0} />
         <Money />
       </Span>
       <Span from={l13.from - 6} to={scene.duration}>
-        {SHOTS.explain ? <ShotView shot={SHOTS.explain} headline="Ask anything." sub="What's a fire separation? A drawing in section, with the rule's source." /> : <AskDrawn />}
+        {SHOTS.explain ? <ShotView shot={SHOTS.explain} span={scene.duration - l13.from + 6} headline="Ask anything." sub="What's a fire separation? A drawing in section, with the rule's source." /> : <AskDrawn />}
       </Span>
     </>
   );
@@ -211,10 +215,9 @@ export const Design: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const l14 = lineIn(scene, "L14"), l15 = lineIn(scene, "L15"), l16 = lineIn(scene, "L16");
   return (
     <>
-      <Milestones current={1} start={0} />
       <Span from={0} to={l15.from - 6} fade={8}>
         {SHOTS.plan ? (
-          <ShotView shot={SHOTS.plan} headline="Is this your basement?" sub="Fix any wall right on the drawing." />
+          <ShotView shot={SHOTS.plan} span={l15.from} headline="Is this your basement?" sub="Fix any wall right on the drawing." />
         ) : (
           <>
             <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
@@ -226,13 +229,13 @@ export const Design: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
       </Span>
       <Span from={l15.from - 6} to={l16.from - 6}>
         {SHOTS.layouts ? (
-          <ShotView shot={SHOTS.layouts} headline="Pick a layout." sub="It keeps the stairs, the furnace and the window where they are." />
+          <ShotView shot={SHOTS.layouts} span={l16.from - l15.from} headline="Pick a layout." sub="It keeps the stairs, the furnace and the window where they are." />
         ) : (
           <LayoutDrawn />
         )}
       </Span>
       <Span from={l16.from - 6} to={scene.duration}>
-        <BeforeAfter dur={scene.duration - l16.from} />
+        {SHOTS.looks ? <ShotView shot={SHOTS.looks} span={scene.duration - l16.from + 6} /> : <BeforeAfter dur={scene.duration - l16.from} />}
       </Span>
       <div style={{ display: "none" }}>{l14.id}</div>
     </>
@@ -303,23 +306,29 @@ const PermitSheets: React.FC = () => {
 export const Build: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const l17 = lineIn(scene, "L17"), l18 = lineIn(scene, "L18"), l19 = lineIn(scene, "L19");
   const sheetsEnd = SHOTS.build ? l17.from + Math.round(l17.dur * 0.55) : l18.from - 6;
+  const bookEnd = l19.from + Math.round(l19.dur * 0.62);
   return (
     <>
-      <Milestones current={2} start={0} />
       <Span from={0} to={sheetsEnd} fade={8}>
+        <Milestones current={2} start={0} />
         <PermitSheets />
       </Span>
       {SHOTS.build && (
         <Span from={sheetsEnd} to={l18.from - 6}>
-          <ShotView shot={SHOTS.build} headline="How much is ready" sub="The permit set, drawn and filled in from the scan." />
+          <ShotView shot={SHOTS.build} span={l18.from - sheetsEnd} headline="How much is ready" sub="The permit set, drawn and filled in from the scan." />
         </Span>
       )}
       <Span from={l18.from - 6} to={l19.from - 6}>
-        {SHOTS.book ? <ShotView shot={SHOTS.book} headline="Only what it can't measure." sub="A few tape numbers, the window's size, who owns the house." /> : <BigLine text="Only what it can't measure." />}
+        {SHOTS.tape ? <ShotView shot={SHOTS.tape} span={l19.from - l18.from} /> : <BigLine text="Only what it can't measure." />}
       </Span>
-      <Span from={l19.from - 6} to={scene.duration}>
-        {SHOTS.money ? <ShotView shot={SHOTS.money} headline="Then who builds it." sub="Registered designers and trades to ask for quotes, and one book to hand over." /> : <BigLine text="Then who builds it." />}
+      <Span from={l19.from - 6} to={SHOTS.homebase ? bookEnd : scene.duration}>
+        <BookDrawn />
       </Span>
+      {SHOTS.homebase && (
+        <Span from={bookEnd} to={scene.duration}>
+          <ShotView shot={SHOTS.homebase} span={scene.duration - bookEnd} />
+        </Span>
+      )}
     </>
   );
 };
@@ -333,13 +342,14 @@ export const Close: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   return (
     <>
       <Span from={0} to={l21.from - 8} fade={8}>
-        {SHOTS.homebase ? (
-          <ShotView shot={SHOTS.homebase} headline="It screens. The city decides." sub="Your scan is private. Nothing is sent without you; a designer confirms the details." />
-        ) : (
-          <BigLine text="It screens. The city decides." />
-        )}
+        <Promise />
       </Span>
-      <Span from={l21.from - 8} to={scene.duration + 10} fade={12}>
+      {SHOTS.home && (
+        <Span from={l21.from - 8} to={l21.from + l21.dur + 40} fade={8}>
+          <ShotView shot={SHOTS.home} span={l21.dur + 48} />
+        </Span>
+      )}
+      <Span from={SHOTS.home ? l21.from + l21.dur + 32 : l21.from - 8} to={scene.duration + 10} fade={12}>
         <EndCard />
       </Span>
       <div style={{ display: "none" }}>{l20.id}</div>
@@ -367,5 +377,85 @@ const EndCard: React.FC = () => {
         Voice: Chatterbox (Resemble AI, open source) · Music: Meta MusicGen
       </div>
     </div>
+  );
+};
+
+/** It screens; the city decides. The home base behind, quiet. */
+const Promise: React.FC = () => {
+  const frame = useCurrentFrame();
+  const rows: [string, string][] = [
+    ["Your scan is private", "only your phone or your account opens it"],
+    ["Nothing is sent without you", "forms, emails and quote requests are drafts"],
+    ["It screens", "the city decides; a designer confirms the details"],
+  ];
+  return (
+    <div style={{ position: "absolute", left: 120, top: 200, width: 1680, fontFamily: SANS }}>
+      <div style={{ fontWeight: 900, fontSize: 112, letterSpacing: "-0.045em", lineHeight: 0.95, opacity: prog(frame, 0, 12) }}>It screens. The city decides.</div>
+      <div style={{ borderTop: `1.5px solid ${C.ink}`, marginTop: 64 }}>
+        {rows.map(([a, b], i) => {
+          const p = prog(frame, 12 + i * 10, 14);
+          return (
+            <div key={a} style={{ display: "flex", alignItems: "baseline", padding: "24px 0", borderBottom: `1px solid ${C.border}`, opacity: p, transform: `translateY(${(1 - p) * 12}px)` }}>
+              <span style={{ fontWeight: 800, fontSize: 40, letterSpacing: "-0.02em", width: 760 }}>{a}</span>
+              <span style={{ fontSize: 28, color: C.muted }}>{b}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+/** The money to apply for, who builds it, and the book: pages coming up one after another. */
+const PAGES = ["The answer", "Your plan", "The permit set", "The money", "Who builds it", "Next steps"];
+const BookDrawn: React.FC = () => {
+  const frame = useCurrentFrame();
+  return (
+    <>
+      <Milestones current={2} />
+      <div style={{ position: "absolute", left: 120, top: 220, width: 620, fontFamily: SANS, opacity: prog(frame, 0, 12) }}>
+        <div style={{ fontWeight: 900, fontSize: 96, letterSpacing: "-0.045em", lineHeight: 0.95 }}>One book to hand over</div>
+        <div style={{ borderTop: `1.5px solid ${C.ink}`, marginTop: 44 }}>
+          {[["The money to apply for", "with how to apply"], ["Registered designers and trades", "you pick who gets asked"]].map(([a, b], i) => (
+            <div key={a} style={{ padding: "18px 0", borderBottom: `1px solid ${C.border}`, opacity: prog(frame, 10 + i * 10, 12) }}>
+              <div style={{ fontWeight: 700, fontSize: 30 }}>{a}</div>
+              <div style={{ fontSize: 24, color: C.muted, marginTop: 4 }}>{b}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      {PAGES.map((name, i) => {
+        const p = prog(frame, 14 + i * 9, 16, easeOut);
+        const col = i % 3, row = Math.floor(i / 3);
+        return (
+          <div
+            key={name}
+            style={{
+              position: "absolute",
+              left: 860 + col * 320,
+              top: 190 + row * 380 + (1 - p) * 30,
+              width: 290,
+              height: 350,
+              background: C.card,
+              border: `1.5px solid ${C.ink}`,
+              borderRadius: 4,
+              opacity: p,
+              fontFamily: SANS,
+            }}
+          >
+            <svg width={290} height={350} style={{ position: "absolute", inset: 0 }}>
+              <line x1={22} y1={40} x2={170} y2={40} stroke={C.ink} strokeWidth={6} />
+              {[70, 88, 106].map((y) => <line key={y} x1={22} y1={y} x2={250} y2={y} stroke={C.border} strokeWidth={4} />)}
+              {i === 1 && <path d="M40 140 H250 V280 H40 Z M40 210 H140 V280 M180 140 V200" fill="none" stroke={C.ink} strokeWidth={2.5} />}
+              {i === 2 && <rect x={60} y={140} width={170} height={140} fill="none" stroke={C.ink} strokeWidth={2} />}
+              {i === 3 && [0, 1, 2].map((r) => <line key={r} x1={22} y1={150 + r * 40} x2={268} y2={150 + r * 40} stroke={C.ink} strokeWidth={1} />)}
+              {i === 0 && <rect x={22} y={140} width={200} height={56} fill="none" stroke={C.fix} strokeWidth={4} />}
+            </svg>
+            <div style={{ position: "absolute", left: 22, bottom: 20, fontWeight: 700, fontSize: 22 }}>{name}</div>
+            <div style={{ position: "absolute", right: 18, bottom: 22, fontFamily: MONO, fontSize: 16, color: C.muted }}>{String(i + 1).padStart(2, "0")}</div>
+          </div>
+        );
+      })}
+    </>
   );
 };

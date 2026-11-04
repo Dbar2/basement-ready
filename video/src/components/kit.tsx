@@ -220,12 +220,38 @@ export const Title: React.FC<{
   );
 };
 
-/** A drawn browser window holding a desktop recording. */
+/** Camera keys for a recording: [seconds into the shot, zoom, focus x 0..1, focus y 0..1]. */
+export type CamKey = [number, number, number, number];
+
+const camAt = (keys: CamKey[] | undefined, t: number) => {
+  if (!keys || !keys.length) return { z: 1, fx: 0.5, fy: 0.5 };
+  if (t <= keys[0][0]) return { z: keys[0][1], fx: keys[0][2], fy: keys[0][3] };
+  for (let i = 0; i < keys.length - 1; i++) {
+    const [t0, z0, x0, y0] = keys[i];
+    const [t1, z1, x1, y1] = keys[i + 1];
+    if (t <= t1) {
+      const k = easeDraw(Math.min(1, Math.max(0, (t - t0) / Math.max(0.001, t1 - t0))));
+      return { z: z0 + (z1 - z0) * k, fx: x0 + (x1 - x0) * k, fy: y0 + (y1 - y0) * k };
+    }
+  }
+  const l = keys[keys.length - 1];
+  return { z: l[1], fx: l[2], fy: l[3] };
+};
+
+/** A drawn browser window holding a desktop recording, with an easing camera to make small text readable. */
 export const Browser: React.FC<{
-  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number;
-}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1 }) => {
+  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number; cam?: CamKey[];
+}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1, cam }) => {
+  const frame = useCurrentFrame();
   const h = (w * 1080) / 1920;
   const bar = 40;
+  const c = camAt(cam, frame / 30);
+  // keep the zoomed picture inside the frame: translate so the focus point moves toward the centre
+  const tx = (0.5 - c.fx) * w * (c.z - 1);
+  const ty = (0.5 - c.fy) * h * (c.z - 1);
+  const maxX = (w * (c.z - 1)) / 2, maxY = (h * (c.z - 1)) / 2;
+  const cx = Math.max(-maxX, Math.min(maxX, tx));
+  const cy = Math.max(-maxY, Math.min(maxY, ty));
   return (
     <div
       style={{
@@ -259,7 +285,11 @@ export const Browser: React.FC<{
           {url}
         </span>
       </div>
-      <OffthreadVideo src={staticFile(src)} startFrom={Math.round(start * 30)} playbackRate={rate} muted style={{ width: w, height: h, display: "block" }} />
+      <div style={{ width: w, height: h, overflow: "hidden", position: "relative" }}>
+        <div style={{ width: w, height: h, transform: `translate(${cx}px, ${cy}px) scale(${c.z})`, transformOrigin: "50% 50%" }}>
+          <OffthreadVideo src={staticFile(src)} startFrom={Math.round(start * 30)} playbackRate={rate} muted style={{ width: w, height: h, display: "block" }} />
+        </div>
+      </div>
     </div>
   );
 };

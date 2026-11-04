@@ -2,7 +2,7 @@ import React from "react";
 import { Img, Loop, Sequence, staticFile, useCurrentFrame } from "remotion";
 import { C, FIND } from "../theme";
 import { MONO, SANS } from "../fonts";
-import { Draw, Phone, Status } from "../components/kit";
+import { Browser, Draw, Phone, Status } from "../components/kit";
 import { Plan } from "../components/Plan";
 import { SamVideo, firstSeen } from "../components/SamVideo";
 import { easeDraw, prog } from "../anim";
@@ -82,13 +82,13 @@ export const Models: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
       <div style={{ position: "absolute", left: NX, top: NY + NH + 22, width: 1730, borderTop: `1px solid ${C.border}`, opacity: prog(frame, l5.from + 30, 10) }} />
 
       {/* L05: the hand-off line under the diagram */}
-      <div style={{ position: "absolute", left: NX, top: 330, opacity: panel(l5.from + 10, end6 - 30), fontFamily: SANS }}>
+      <div style={{ position: "absolute", left: NX, top: 330, opacity: panel(l5.from + 10, l6.from - 10), fontFamily: SANS }}>
         <div style={{ fontWeight: 900, fontSize: 112, letterSpacing: "-0.045em", lineHeight: 0.95, width: 1200 }}>Meta's models go to work.</div>
       </div>
 
       {/* L06: SAM 3.1 on the real example video */}
       <Sequence from={l6.from - 8} durationInFrames={end6 - l6.from + 18}>
-        <SamPanel o={1} />
+        <SamPanel dur={end6 - l6.from + 18} />
       </Sequence>
       <div style={{ position: "absolute", inset: 0, opacity: 0 }} />
 
@@ -97,11 +97,6 @@ export const Models: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
         <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
           <Plan x={260} y={390} s={78} frame={frame - (l7.from - 8)} start={0} dims={18} finds={34} />
         </svg>
-        {SHOTS.scan3d ? (
-          <Sequence from={l7.from - 8}>
-            <Img src={staticFile("sample/sample/frames/0000.jpg")} style={{ display: "none" }} />
-          </Sequence>
-        ) : null}
         <MeasureList frame={frame - l7.from} />
       </div>
 
@@ -119,9 +114,9 @@ export const Models: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   );
 };
 
-const SamPanel: React.FC<{ o: number }> = () => {
+const SamPanel: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
-  const p = prog(frame, 0, 14);
+  const p = Math.min(prog(frame, 0, 14), 1 - prog(frame, dur - 12, 10, easeDraw));
   const seen = firstSeen();
   const t = frame / 30;
   return (
@@ -153,10 +148,10 @@ const SamPanel: React.FC<{ o: number }> = () => {
 
 const MeasureList: React.FC<{ frame: number }> = ({ frame }) => {
   const rows: [string, string][] = [
-    ["Floor", "7.55 × 5.52 m"],
+    ["Floor", "7.56 × 5.52 m"],
     ["Area", "41.7 m²"],
-    ["Ceiling", "2.09 m"],
-    ["Window", "0.45 m wide"],
+    ["Ceiling", "2.08 m"],
+    ["Under the duct", "1.64 m clear"],
   ];
   return (
     <div style={{ position: "absolute", left: 1250, top: 300, width: 576 }}>
@@ -184,8 +179,8 @@ const WonderStrip: React.FC<{ frame: number; dur: number }> = ({ frame, dur }) =
   const labels = [
     [0.05, "window"],
     [0.3, "ducts, low beam"],
-    [0.62, "stairs"],
-    [0.9, "furnace, water heater"],
+    [0.65, "stairs"],
+    [0.82, "furnace, water heater"],
   ] as const;
   return (
     <>
@@ -224,8 +219,8 @@ const WonderStrip: React.FC<{ frame: number; dur: number }> = ({ frame, dur }) =
 };
 
 const RULES: [string, string, "fix" | "check" | "ok"][] = [
-  ["Ceiling height in the suite", "2.09 m measured", "check"],
-  ["Bedroom escape window", "0.35 m² opening", "check"],
+  ["Clearance under the duct", "1.64 m clear", "check"],
+  ["Bedroom escape window", "0.45 m wide", "check"],
   ["Fire separation between the homes", "no drywall seen", "fix"],
   ["Furnace room separation", "open to the basement", "fix"],
 ];
@@ -252,28 +247,20 @@ const SparkRules: React.FC<{ frame: number }> = ({ frame }) => (
   </div>
 );
 
-const WaitShot: React.FC<{ dur: number }> = ({ dur }) => {
+const WaitShot: React.FC<{ dur: number }> = () => {
   const frame = useCurrentFrame();
   const p = prog(frame, 0, 16);
   const shot = SHOTS.wait;
+  if (shot) return <Browser x={180} y={38} w={1560} src={shot.file} start={shot.start} p={p} url={shot.url} cam={shot.cam} />;
   return (
     <div style={{ position: "absolute", inset: 0, opacity: p }}>
-      <div style={{ position: "absolute", left: 120, top: 330, width: 760, fontFamily: SANS }}>
-        <div style={{ fontWeight: 900, fontSize: 92, letterSpacing: "-0.045em", lineHeight: 0.95 }}>It asks only what it can't see.</div>
-        <div style={{ fontSize: 28, color: C.muted, marginTop: 30, lineHeight: 1.35, width: 620 }}>Each question says why it's asking. Answer anything, or "Not sure".</div>
-      </div>
-      {shot ? (
-        <Phone x={1120} y={60} h={880} src={shot.file} start={shot.start} p={p} />
-      ) : (
-        <Phone x={1120} y={60} h={880} p={p}>
-          <Loop durationInFrames={360}>
-            <div style={{ position: "absolute", top: 90, left: 0 }}>
-              <SamVideo w={402} />
-            </div>
-          </Loop>
-        </Phone>
-      )}
-      <div style={{ display: "none" }}>{dur}</div>
+      <Phone x={1120} y={60} h={880} p={p}>
+        <Loop durationInFrames={360}>
+          <div style={{ position: "absolute", top: 90, left: 0 }}>
+            <SamVideo w={402} />
+          </div>
+        </Loop>
+      </Phone>
     </div>
   );
 };

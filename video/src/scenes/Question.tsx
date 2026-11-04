@@ -68,8 +68,15 @@ export const Question: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
           <span style={{ fontFamily: SANS, fontWeight: 900, fontSize: 150, letterSpacing: "-0.05em", lineHeight: 0.9 }}>{count}</span>
           <span style={{ fontFamily: SANS, fontWeight: 600, fontSize: 38, lineHeight: 1.15, maxWidth: 460 }}>homes allowed on a serviced lot in Ontario</span>
         </div>
-        <div style={{ fontFamily: SANS, fontSize: 22, color: C.muted, marginTop: 18 }}>
-          Planning Act, <span style={{ fontFamily: MONO, fontSize: 20 }}>s. 35.1</span>
+        <div style={{ display: "flex", alignItems: "center", gap: 18, marginTop: 22 }}>
+          {doorsP.map((p, i) => (
+            <svg key={i} width={58} height={52} style={{ opacity: p, transform: `translateY(${(1 - p) * 10}px)` }}>
+              <path d="M5 24 L29 4 L53 24 M10 20 V48 H48 V20 M24 48 V34 H34 V48" fill={i === 2 ? C.mint : "none"} stroke={C.ink} strokeWidth={2.5} strokeLinejoin="miter" />
+            </svg>
+          ))}
+          <span style={{ fontFamily: SANS, fontSize: 22, color: C.muted, marginLeft: 14 }}>
+            Planning Act, <span style={{ fontFamily: MONO, fontSize: 20 }}>s. 35.1</span>
+          </span>
         </div>
       </div>
 
@@ -119,20 +126,6 @@ export const Question: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
         <Draw d={`M${hx1} ${gy + 96} L${hx1 + 80} ${gy + 96} L${hx1 + 80} ${gy}`} p={prog(frame, 70, 16)} width={2} />
         {/* stairs down */}
         <Draw d={Array.from({ length: 7 }, (_, i) => `M${1200 + i * 34} ${gy + 34 * i + 6} L${1234 + i * 34} ${gy + 34 * i + 6} L${1234 + i * 34} ${gy + 34 * (i + 1) + 6}`).join(" ")} p={prog(frame, 72, 24)} width={1.5} />
-
-        {/* L02: one door per home */}
-        {doorsP.map((p, i) => {
-          const pos = [[1560, 474, 60], [1260, 474, 60], [1500, 690, 110]][i];
-          return p > 0 ? (
-            <g key={i} opacity={(1 - threeOut) * p}>
-              <rect x={pos[0]} y={pos[1] + 20 - (i === 2 ? 0 : 0)} width={34} height={pos[2] > 100 ? 110 : 0} fill="none" />
-              <circle cx={pos[0] + 16} cy={pos[1] - 18 + (i === 2 ? 30 : 0)} r={22} fill={C.ink} />
-              <text x={pos[0] + 16} y={pos[1] - 10 + (i === 2 ? 30 : 0)} textAnchor="middle" fontFamily={MONO} fontSize={22} fill={C.card}>
-                {i + 1}
-              </text>
-            </g>
-          ) : null;
-        })}
 
         {/* L01: the callout leader and who it's for */}
         <g opacity={1 - prog(frame, l2.from, 10)}>

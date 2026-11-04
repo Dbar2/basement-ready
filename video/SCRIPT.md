@@ -33,7 +33,7 @@ Voice: plain, warm and confident, like a good contractor who's also a neighbour.
 | Line | Voiceover | Picture |
 |---|---|---|
 | L10 | Then, the answer comes first. | The milestones Answer · Design · Build draw in; the Answer underline draws. A verdict stamp lands. |
-| L11 | This basement in Waterloo can be a second home after one fix: a fire separation between the two homes. It's marked on the measured plan, with a rough cost, and a source for every rule. | Real footage: the verdict, the plan with the fix marked, the rough cost. |
+| L11 | This basement in Waterloo can be a second home after four fixes. The first is a fire separation between the two homes. Each fix is marked on the measured plan, with a rough cost, and a source for every rule. | Real footage: the verdict "Yes, after 4 fixes", the plan with the fire separation marked, $49k–$85k rough. |
 | L12 | It finds the money that fits: a federal tax credit, a city grant and the Region's forgivable loan, each with how to apply. | Ruled list draws in: tax credit up to $7,000, City of Waterloo grant up to $20,000, Region forgivable loan up to $25,000, figures counting up. |
 | L13 | Not sure what a fire separation is? Ask, and it draws it for you. | Real footage: the fire separation explainer drawing. |
 
