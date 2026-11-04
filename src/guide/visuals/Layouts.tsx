@@ -4,7 +4,7 @@
 // between the designs; under the picture, the shown design's reason (server/model/seed.ts whyOf) and its
 // rough price hired out (server/quote). The guide's thread offers "Use …" for the one it recommends; for
 // another design shown here, the button under it does the same (`chooseDesign`).
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Design, Model } from "../../../server/model/types";
 import { getScan } from "../../api";
 import { loadModel } from "../../studio/api";
@@ -74,13 +74,38 @@ export function Layouts({ scanId, visual, act }: VisualProps<"layouts">) {
   );
 }
 
-// The shot, as big as the pane allows, with the suite's rooms named where they are.
+// The shot, as big as the pane allows, with the suite's rooms named where they are. Where names would
+// overlap (each other, the reason and price, or the edge), the bigger room keeps its name.
 function Shot({ shot, name }: { shot: LayoutShot; name: string }) {
+  const fig = useRef<HTMLElement>(null);
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+  useLayoutEffect(() => {
+    const el = fig.current;
+    if (!el) return;
+    const place = () => {
+      const hit = (a: DOMRect, b: DOMRect) => a.left < b.right + 2 && b.left < a.right + 2 && a.top < b.bottom + 2 && b.top < a.bottom + 2;
+      const box = el.getBoundingClientRect();
+      const kept = [...(el.closest(".gs-lay")?.querySelectorAll(".gs-lay-about > *, .gs-lay-chips") ?? [])].map((n) => n.getBoundingClientRect()).filter((r) => r.width > 0);
+      const out = new Set<string>();
+      for (const l of [...shot.labels].sort((a, b) => b.areaM2 - a.areaM2)) {
+        const r = el.querySelector<HTMLElement>(`[data-room="${CSS.escape(l.roomId)}"]`)?.getBoundingClientRect();
+        if (!r) continue;
+        const outside = r.left < box.left || r.right > box.right || r.top < box.top || r.bottom > box.bottom;
+        if (outside || kept.some((k) => hit(r, k))) out.add(l.roomId);
+        else kept.push(r);
+      }
+      setHidden((h) => (h.size === out.size && [...out].every((id) => h.has(id)) ? h : out));
+    };
+    place();
+    const ro = new ResizeObserver(place);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [shot]);
   return (
-    <figure className="gs-lay-pic" style={{ ["--ratio" as string]: `${RATIO}` }}>
+    <figure ref={fig} className="gs-lay-pic" style={{ ["--ratio" as string]: `${RATIO}` }}>
       <img src={shot.url} alt={`${name}, drawn in 3D in your basement`} draggable={false} />
       {shot.labels.map((l) => (
-        <span key={l.roomId} className="gs-lay-room" style={{ left: `${l.x * 100}%`, top: `${l.y * 100}%` }}>
+        <span key={l.roomId} data-room={l.roomId} className="gs-lay-room" aria-hidden={hidden.has(l.roomId) || undefined} style={{ left: `${l.x * 100}%`, top: `${l.y * 100}%`, visibility: hidden.has(l.roomId) ? "hidden" : undefined }}>
           <b>{l.name}</b> <span className="mono">{Math.round(l.areaM2)} m²</span>
         </span>
       ))}
