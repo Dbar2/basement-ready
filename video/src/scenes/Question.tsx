@@ -36,7 +36,7 @@ const HomeOpen: React.FC<{ dur: number; l0: L; l1at: number }> = ({ dur, l0, l1a
   const card = Math.min(prog(frame, l0.from + 4, 14), 1 - prog(frame, l0.from + l0.dur + 24, 12, easeDraw));
   return (
     <div style={{ position: "absolute", inset: 0, opacity: o }}>
-      <Browser x={180} y={38} w={1560} src="footage/desktop-home.mp4" start={0.2} rate={0.27} url="basementready.com" cam={[[0, 1, 0.5, 0.5], [l1at / 30 - 0.2, 1, 0.5, 0.5], [l1at / 30 + 1.4, 1.38, 0.1, 0.5]]} />
+      <Browser x={180} y={38} w={1560} src="footage/desktop-home.mp4" start={0.2} rate={0.27} url="basementready.com" cam={[[0, 1, 0.5, 0.5], [l1at / 30 - 0.2, 1, 0.5, 0.5], [l1at / 30 + 1.4, 1.38, 0, 0.5]]} />
       <div
         style={{
           position: "absolute",

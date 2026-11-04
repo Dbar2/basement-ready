@@ -27,13 +27,14 @@ const VOICE = TIMELINE.scenes.flatMap((s) => s.lines.map((l) => ({ ...l, at: s.f
 const MUSIC_AT = Math.max(0, sceneById("answer").from + Math.round(0.75 * FPS) - Math.round(media.lift * FPS));
 
 const duck = (f: number) => {
-  // 1 with no voice, down to UNDER while a line plays, with short ramps either side.
-  const UNDER = 0.3;
+  // 1 with no voice; about 12 dB under the voice while a line plays. It stays down through the short
+  // pauses between lines (no pumping) and comes back up over a second in the longer ones.
+  const UNDER = 0.32;
   let level = 1;
   for (const v of VOICE) {
-    const a = v.at - 9, b = v.at + v.dur + 6;
-    if (f < a - 12 || f > b + 18) continue;
-    const down = interpolate(f, [a - 12, a, b, b + 18], [1, UNDER, UNDER, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+    const a = v.at - 10, b = v.at + v.dur + 26;
+    if (f < a - 14 || f > b + 30) continue;
+    const down = interpolate(f, [a - 14, a, b, b + 30], [1, UNDER, UNDER, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
     level = Math.min(level, down);
   }
   return level;
@@ -73,7 +74,7 @@ export const Demo: React.FC = () => {
             src={staticFile("music.wav")}
             volume={(f) => {
               const g = f + MUSIC_AT;
-              return 0.55 * duck(g) * interpolate(g, [MUSIC_AT, MUSIC_AT + 75, total - 90, total - 5], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+              return 0.25 * duck(g) * interpolate(g, [MUSIC_AT, MUSIC_AT + 75, total - 90, total - 5], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
             }}
           />
         </Sequence>
