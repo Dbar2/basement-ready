@@ -11,7 +11,7 @@ import type { Model } from "../../server/model/types";
 import { expectSheets, Guide, sheetText } from "./pages/Guide";
 import { Home } from "./pages/Home";
 import { costOf, realCalls } from "./support/costs";
-import { claimedApi, claimsHeader, expect, oneAtATime, test, type Journey } from "./support/fixtures";
+import { claimedApi, claimsHeader, expect, missesFor, oneAtATime, test, type Journey } from "./support/fixtures";
 import { mode, runDir } from "./support/run";
 import { recordedOutcome, saveOutcome, TAKES, unavailable, type Outcome } from "./support/takes";
 import { milestones, scanEvents } from "./support/timing";
@@ -162,7 +162,8 @@ for (const take of TAKES) {
       journey.timing({ kind: "cost", take: take.id, frames, ...costOf(realCalls(started), frames, Boolean(process.env.E2E_SCAN3D_URL?.includes(".modal.run"))) });
     } else if (process.env.E2E_REWRITE === "1") {
       // The product changed on purpose and nothing new is asked of a model: the outcome is written from a
-      // replay, which never calls the network, so it can't cost anything.
+      // replay, which never calls the network, so it can't cost anything. Never from a replay that missed.
+      expect(missesFor(`${info.testId}-${info.retry}`), "no missing answers before writing the outcome").toBe(0);
       saveOutcome(take, outcome);
     } else {
       // Everything the models decided, exactly as recorded. The photos' count is kept but not held to: which
