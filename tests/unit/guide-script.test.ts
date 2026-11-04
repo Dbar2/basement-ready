@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lookQuestion, type WaitAsk } from "../../server/eligibility";
-import { act, k, milestoneOf, range, start, stepOf, sync, type BuildItem, type Ctx, type Thread } from "../../server/guide/script";
+import { act, answerWords, k, milestoneOf, range, start, stepOf, sync, type BuildItem, type Ctx, type Thread } from "../../server/guide/script";
 import type { GuideMessage } from "../../src/guide/types";
 
 const NOW = "2026-10-31T12:00:00.000Z";
@@ -128,6 +128,27 @@ describe("the guide's wait: one question at a time while it measures", () => {
     ]);
     expect(r.thread.step).toBe("wait.q:rent");
     expect(r.messages[1].why).toBe("it decides which money fits.");
+  });
+
+  it("their bubble is the button's words, even when the saved thread comes back with its keys reordered", () => {
+    const goal: WaitAsk = { ...plans, options: [{ label: "A suite for family", value: "family_suite" }, { label: "A rec room", value: "rec_room" }] };
+    const c = ctx({ result: null, asks: [goal, exit, rent] });
+    // As Postgres jsonb hands a saved thread back: each answer action's keys in another order.
+    const fromDb = (t: Thread): Thread =>
+      JSON.parse(JSON.stringify(t, (_k, v) => (v && typeof v === "object" && v.type === "answer" ? { value: v.value, type: v.type, questionId: v.questionId } : v)));
+    const r1 = act(fromDb(start(c)), { type: "answer", questionId: "plans", value: "family_suite" }, { ...c, asks: [exit, rent] });
+    expect(r1.messages[0]).toMatchObject({ from: "you", text: "A suite for family" });
+    const r2 = act(fromDb(r1.thread), { type: "answer", questionId: "exit_from_suite", value: "unsure" }, { ...c, asks: [rent] });
+    expect(r2.messages[0]).toMatchObject({ from: "you", text: "Not sure" });
+  });
+
+  it("an answer with no button left to find still reads as words, never its raw value", () => {
+    const c = ctx({ result: null, asks: [rent] });
+    const r = act(start(c), { type: "answer", questionId: "plans", value: "family_suite" }, c);
+    expect(r.messages[0]).toMatchObject({ from: "you", text: "A suite for family" });
+    expect(answerWords("unsure")).toBe("Not sure");
+    expect(answerWords("rec_room")).toBe("Rec room");
+    expect(answerWords(false)).toBe("No");
   });
 
   it("a scan that stopped says what happened, offers to try again when that can help, and waits again once it does", () => {

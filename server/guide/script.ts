@@ -334,11 +334,26 @@ export function sync(t: Thread, ctx: Ctx): { thread: Thread; messages: GuideMess
   return { thread, messages: [m] };
 }
 
+// An action as text with its keys sorted. A saved thread comes back from Postgres jsonb with its keys
+// reordered ({type, value, questionId}), so a plain JSON.stringify of a tapped choice wouldn't match.
+export const sameAction = (v: unknown): string =>
+  JSON.stringify(v, (_k, x) => (x && typeof x === "object" && !Array.isArray(x) ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : x));
+
+// An answer's words when no button can be found for it: never the raw value ("family_suite").
+const ANSWER_WORDS: Record<string, string> = { unsure: "Not sure", family_suite: "A suite for family" };
+export const answerWords = (value: unknown): string => {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  const v = String(value ?? "");
+  if (ANSWER_WORDS[v]) return ANSWER_WORDS[v];
+  const words = v.replace(/_/g, " ").trim();
+  return words ? words[0].toUpperCase() + words.slice(1) : "";
+};
+
 // What they said, as their own bubble: the choice's label when they tapped one (the newest that
 // offers it), else their words.
 function youSaid(t: Thread, action: GuideAction, ctx: Ctx): string | null {
-  const same = JSON.stringify(action);
-  const tapped = [...t.messages].reverse().flatMap((m) => (m.from === "guide" ? (m.choices ?? []) : [])).find((c) => JSON.stringify(c.action) === same);
+  const same = sameAction(action);
+  const tapped = [...t.messages].reverse().flatMap((m) => (m.from === "guide" ? (m.choices ?? []) : [])).find((c) => sameAction(c.action) === same);
   if (tapped) return tapped.label.replace(/\s*→$/, "");
   switch (action.type) {
     case "chooseDesign":
@@ -352,8 +367,11 @@ function youSaid(t: Thread, action: GuideAction, ctx: Ctx): string | null {
       return `That wall is ${action.lengthM} m.`;
     case "setLook":
       return action.look === "none" ? "None of these" : LOOK_NAMES[action.look];
-    case "answer":
-      return typeof action.value === "boolean" ? (action.value ? "Yes" : "No") : String(action.value ?? "");
+    case "answer": {
+      // The question's own button words, if it's still asked; else plain words for the value.
+      const option = ctx.asks.find((a) => a.id === action.questionId)?.options.find((o) => sameAction(o.value) === sameAction(action.value));
+      return option?.label ?? answerWords(action.value);
+    }
     case "permitItem": {
       // A card says what it saved: "Walls 7.56 m and 5.52 m, ceiling 2.08 m".
       const s = (action.value as { said?: unknown } | null)?.said;
