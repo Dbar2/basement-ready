@@ -2,13 +2,14 @@
 // with a drawing, where it stands and one line, then Continue. While it measures, and until they've had
 // their answer, it opens the guide instead: that's where the wait and the answer happen. Inside the app
 // the logo always comes here. A shared link reads the answer and changes nothing.
-import { Link, useParams, useRouter } from "@tanstack/react-router";
+import { useParams, useRouter } from "@tanstack/react-router";
 import { useEffect, useState, type ReactNode } from "react";
 import { DEMO_LABEL, EXAMPLE_LABEL, getScan, type ScanResult } from "../api";
 import { AccountNav } from "../auth";
+import { AppNewScan, inApp, newScanHref } from "../inApp";
 import { chosen, downloadBook } from "../book/bookApi";
 import { Logo, Mark } from "../components/Logo";
-import { getPermitStatus, getWorkspace, type Workspace } from "../workspaceApi";
+import { getPermitStatus, getWorkspace, useDrawingsLink, type Workspace } from "../workspaceApi";
 import type { Fixture, Model, Pt, Wall } from "../../server/model/types";
 import { getGuide } from "./api";
 import { guideUrl, MILESTONES, progress, type MilestoneStatus, type Progress } from "./progress";
@@ -81,14 +82,14 @@ export function Home() {
     return () => clearTimeout(id);
   }, [view, checks]);
 
-  if (view.kind === "loading") return <main className="result-loading"><Logo /></main>;
+  if (view.kind === "loading") return <main className="result-loading"><Logo href={`/scans/${scanId}`} /></main>;
   if (view.kind === "missing")
     return (
       <main className="not-found">
         <Logo />
         <h1>We couldn't open that scan.</h1>
         <p className="muted">Scans are private: open it on the phone or computer you filmed with, or sign in to the account you saved it to.</p>
-        <Link to="/" className="btn btn-primary">Scan a basement</Link>
+        <a href={newScanHref()} className="btn btn-primary">{inApp() ? "New scan" : "Scan a basement"}</a>
       </main>
     );
   if (view.kind === "measuring")
@@ -112,6 +113,7 @@ function Top({ scanId }: { scanId: string }) {
       </a>
       <p className="hb-title">Your basement</p>
       <span className="hb-account">
+        <AppNewScan className="link-quiet hb-new" />
         <AccountNav />
       </span>
     </header>
@@ -172,12 +174,15 @@ function HomeBase({ scanId, r, owner, p, ws, model, permit }: { scanId: string; 
       setMaking(false);
     }
   };
-  // The one-page plan made for a designer (src/screens/Brief.tsx).
+  // For a designer: the drawings, by the signed link that opens for them although scans are private
+  // (src/workspaceApi.ts drawingsLink). The example's one-page plan is public, so it shares that.
+  const drawings = useDrawingsLink(scanId, owner && scanId !== "sample" && !r.demo);
+  const shareUrl = scanId === "sample" ? `${window.location.origin}/scans/sample/brief` : drawings;
   const share = async () => {
-    const url = `${window.location.origin}/scans/${scanId}/brief`;
-    if (navigator.share) return void (await navigator.share({ title: "Our basement plan", url }).catch(() => {}));
-    const copied = await navigator.clipboard?.writeText(url).then(() => true).catch(() => false);
-    setNote(copied ? { text: "Link copied. It opens the one-page plan." } : { text: url });
+    if (!shareUrl) return;
+    if (navigator.share) return void (await navigator.share({ title: "Our basement plan", url: shareUrl }).catch(() => {}));
+    const copied = await navigator.clipboard?.writeText(shareUrl).then(() => true).catch(() => false);
+    setNote(copied ? { text: scanId === "sample" ? "Link copied. It opens the one-page plan." : "Link copied: the drawings only, no contact details." } : { text: shareUrl });
   };
 
   return (
@@ -205,14 +210,23 @@ function HomeBase({ scanId, r, owner, p, ws, model, permit }: { scanId: string; 
             <button type="button" className="link-quiet" onClick={() => void book()} disabled={making}>
               Your book (PDF)
             </button>
-            <button type="button" className="link-quiet" onClick={() => void share()}>
-              Share with a designer
-            </button>
-            <a className="link-quiet" href="/">Scan another basement</a>
+            {shareUrl && (
+              <button type="button" className="link-quiet" onClick={() => void share()}>
+                Share with a designer
+              </button>
+            )}
+            {/* In the app, "New scan" is in the top bar. */}
+            {!inApp() && (
+              <a className="link-quiet" href="/">
+                Scan another basement
+              </a>
+            )}
           </p>
         ) : (
           <p className="hb-links">
-            <a className="link-quiet" href="/">Scan your own basement</a>
+            <a className="link-quiet" href={newScanHref()}>
+              Scan your own basement
+            </a>
           </p>
         )}
         <p className={note?.error ? "error hb-note" : "hb-note"} role="status" aria-live="polite">
