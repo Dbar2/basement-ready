@@ -8,6 +8,14 @@ Everything here was built during the Meta AI Developer Hackathon. The first comm
 - **Example basement:** https://www.basementready.com/scans/sample (no account, no keys, nothing sent)
 - **Demo video (3 min):** _link coming_ <!-- TODO: add the demo video link -->
 
+**Try it with no login.** Open the example on the live site (link above), or run it yourself with no keys (Node 22.12+ and pnpm 10):
+
+```bash
+git clone https://github.com/Dbar2/basement-ready.git && cd basement-ready && pnpm install && pnpm dev
+```
+
+Then open http://localhost:5173 and tap **Try the example**. To scan your own basement, copy `.env.example` to `.env` and put your Meta Model API key in `MODEL_API_KEY`. Full steps and fixes: [Run it yourself](#run-it-yourself).
+
 <p>
   <img src="docs/screens/wait.jpg" width="200" alt="While it measures: the example's video with SAM's finds (ducts, a beam, the door, the stairs), and one question with why it's asked">
   <img src="docs/screens/answer.png" width="200" alt="The answer: yes after 2 fixes, with the fix marked on the measured plan, the rough cost and the money">
@@ -48,7 +56,19 @@ The example remembers how far you got in your browser. To start again from the f
 
 ## The Meta models
 
-Every model the app calls at runtime is Meta's. The hosted ones go through the [Meta Model API](https://dev.meta.ai/); MapAnything and DINOv2 run on our own 3D service.
+**Every AI model the app calls at runtime is a Meta model.** Nothing else runs in the web app, the server, the 3D service or the iPhone app: no other AI service, no on-device model, no browser or phone speech recognizer, and no text-to-speech.
+
+| Model | Exact ID | Where it runs |
+|---|---|---|
+| SAM 3.1 | `sam-3.1` | [Meta Model API](https://dev.meta.ai/), hosted; every call goes through `server/meta.ts` |
+| Muse Spark 1.3 | `muse-spark-1.3` | Meta Model API, hosted, through `server/meta.ts` |
+| Muse Wonder 1.0 | `muse-wonder-1.0` | Meta Model API, hosted, through `server/meta.ts` |
+| Muse Image 1.0 | `muse-image-1.0` | Meta Model API, hosted, through `server/meta.ts` |
+| Muse Voice Transcribe 1.0 | `muse-voice-transcribe-1.0` | Meta Model API, hosted, through `server/meta.ts` |
+| MapAnything | code [`facebookresearch/map-anything`](https://github.com/facebookresearch/map-anything) at commit `9d1db2d` (tag v1.1.3); weights [`facebook/map-anything-apache`](https://huggingface.co/facebook/map-anything-apache) | Open Meta model in our Python 3D service (`services/scan3d`), on Modal or a Mac |
+| DINOv2 | [`facebookresearch/dinov2`](https://github.com/facebookresearch/dinov2) at commit `7764ea0`, MapAnything's image encoder | Inside MapAnything, in the same 3D service |
+
+What each one does and what we built on top:
 
 | Model | What it does here | What we built on top | Code |
 |---|---|---|---|
@@ -73,7 +93,7 @@ Every model the app calls at runtime is Meta's. The hosted ones go through the [
 - **The guide's script** decides what it says and asks next, the same way every time (`server/guide/script.ts`). Words like "fire separation" are answered from a glossary with the pack's sources (`server/guide/glossary.ts`). Only free-text questions and changes on your own basement go to Muse Spark. The example's guide never calls a model.
 - **Rules, money and steps** are written rules packs with sources (`data/rules`), checked in code (`server/triage.ts`, `server/eligibility.ts`, `server/steps.ts`).
 - **Layouts, prices and the permit set** are worked out in code from the measured plan (`server/model`, `server/quote`, `server/permit`). What the Build still needs, in order, is a list in code (`server/guide/build.ts`).
-- **The filming guide's voice** is 82 short MP3 clips in `public/voice`, recorded once before shipping with open-source text-to-speech ([Chatterbox](https://github.com/resemble-ai/chatterbox), MIT, with a reference voice made with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M), Apache-2.0). The scripts are in `tools/voice`. The app never calls a voice model.
+- **The filming guide's voice** is 82 short MP3 clips in `public/voice`, recorded once before shipping with open-source text-to-speech ([Chatterbox](https://github.com/resemble-ai/chatterbox), MIT, with a reference voice made with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M), Apache-2.0). The scripts are in `tools/voice`. The app plays these files and makes no text-to-speech calls.
 - **The iPhone app** sends ARKit's camera path with the video. ARKit is Apple's tracking, not a model call.
 
 ## How it works
@@ -302,5 +322,4 @@ Every rule, program and price has its source and the date it was read, in `data/
 | `tests/unit/`, `tests/e2e/`, `tests/fixtures/replay/` | Unit tests; browser journeys; the small committed replay answers |
 | `scripts/`, `tools/` | Development-only tools, never part of the app: building the example, an eval on test basements, a screenshot reviewer for QA, voice and staging asset scripts |
 | `docs/` | The capture contract, saved test logs and the README's screenshots (the example only) |
-
-The screenshot reviewer in `scripts/qa` asks Claude to look at screenshots while we build. It's a development tool only: nothing in `src/` or `server/` imports it, the app's build leaves it out, and the app itself calls only Meta models ([`scripts/qa/README.md`](scripts/qa/README.md)).
+| `scripts/qa/` | A developer tool, not part of the app: it asks Claude to review screenshots while we build. Nothing in `src/` or `server/` imports it, the build and the Docker image leave it out, and its SDK (`@anthropic-ai/sdk`) is a dev dependency only ([`scripts/qa/README.md`](scripts/qa/README.md)) |
