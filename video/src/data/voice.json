@@ -130,5 +130,83 @@
   "seconds": 2.628,
   "wer": 0.0,
   "text": "See the example at basementready.com."
+ },
+ "N02": {
+  "take": null,
+  "seconds": 11.0,
+  "wer": 0,
+  "text": "Ontario allows up to three homes on a lot. But finding out if yours can work means the Building Code, the Fire Code, city by-laws, and thousands on drawings before you even know."
+ },
+ "N03": {
+  "take": null,
+  "seconds": 7.33,
+  "wer": 0,
+  "text": "So this week we built Basement Ready. You film your basement once on your phone, walking through each room, and upload it."
+ },
+ "N04": {
+  "take": null,
+  "seconds": 9.0,
+  "wer": 0,
+  "text": "Meta's models take it from there. SAM 3.1 finds and tracks the windows, stairs, ducts and beams. MapAnything measures every wall from ordinary video. No LiDAR needed."
+ },
+ "N05": {
+  "take": null,
+  "seconds": 10.0,
+  "wer": 0,
+  "text": "Muse Wonder watches the whole take, and Muse Spark checks what they found against the Ontario Building Code. Every line here is a live Meta call, logged by the server."
+ },
+ "N06b": {
+  "take": null,
+  "seconds": 2.67,
+  "wer": 0,
+  "text": "Here's the example basement, on the live site."
+ },
+ "N07b": {
+  "take": null,
+  "seconds": 10.0,
+  "wer": 0,
+  "text": "In minutes, the answer: this basement can be a second home after four fixes, each marked on its measured plan, with a rough cost and the source for every rule."
+ },
+ "N08": {
+  "take": null,
+  "seconds": 6.0,
+  "wer": 0,
+  "text": "It finds the money that fits: tax credits, city grants and forgivable loans, each with how to apply."
+ },
+ "N09": {
+  "take": null,
+  "seconds": 9.33,
+  "wer": 0,
+  "text": "Then it designs it with you. Check the measured plan, and pick a layout in 3D that keeps the stairs, the furnace and the window where they are."
+ },
+ "N10": {
+  "take": null,
+  "seconds": 5.0,
+  "wer": 0,
+  "text": "Muse Image shows your own basement finished, in the look you picked, labelled virtually staged."
+ },
+ "N11": {
+  "take": null,
+  "seconds": 8.0,
+  "wer": 0,
+  "text": "Then it gets you building: a draft permit set, drawn and filled in from the scan, with just a few tape numbers from you."
+ },
+ "N12": {
+  "take": null,
+  "seconds": 5.67,
+  "wer": 0,
+  "text": "Then registered designers and trades to ask for quotes, and one book with everything, to hand over."
+ },
+ "N13": {
+  "take": null,
+  "seconds": 5.0,
+  "wer": 0,
+  "text": "Your scan stays private, and nothing is sent without you. It screens; the city decides."
+ },
+ "N14": {
+  "take": null,
+  "seconds": 4.67,
+  "wer": 0,
+  "text": "Basement Ready. The first answer in minutes, from your phone. See it at basementready.com."
  }
 }

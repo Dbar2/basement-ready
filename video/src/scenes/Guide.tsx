@@ -166,26 +166,63 @@ const Money: React.FC = () => {
 };
 
 export const Answer: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
-  const l10 = lineIn(scene, "L10"), l11 = lineIn(scene, "L11"), l12 = lineIn(scene, "L12"), l13 = lineIn(scene, "L13");
+  const n7 = lineIn(scene, "N07b"), n8 = lineIn(scene, "N08"), l13 = lineIn(scene, "L13");
   const ans = SHOTS.answer!;
-  // the answer footage holds wide while the stamp lands, then eases in on the verdict, then on the fix in the plan
-  const t11 = l11.from / 30;
-  const cam: CamKey[] = [[0, 1, 0.5, 0.5], [t11 + 0.4, 1, 0.5, 0.5], [t11 + 2.2, 1.75, 1, 0.8], [t11 + 6.4, 1.75, 1, 0.8], [t11 + 8.4, 1.45, 0.28, 0.32]];
+  const t7 = n7.from / 30;
+  // hold wide while the stamp lands, ease in on the guide's verdict, then on the fix marked in the plan
+  const cam: CamKey[] = [[0, 1, 0.5, 0.5], [t7 + 2.2, 1, 0.5, 0.5], [t7 + 3.8, 1.75, 1, 0.8], [t7 + 6.2, 1.75, 1, 0.8], [t7 + 7.8, 1.45, 0.28, 0.32]];
   return (
     <>
-      <Span from={0} to={l12.from - 6} fade={8}>
-        <ShotView shot={{ ...ans, cam }} span={l12.from} />
-        <Stamp out={l11.from + 20} />
+      <Span from={0} to={n8.from - 6} fade={8}>
+        <ShotView shot={{ ...ans, cam }} span={n8.from} />
+        <Stamp out={n7.from + 66} />
+        <FixPulse at={n7.from + Math.round(7.9 * 30)} />
+        <CostCard at={n7.from + 118} out={n7.from + 228} />
       </Span>
-      <Span from={l12.from - 6} to={l13.from - 6}>
-        <ShotView shot={{ ...SHOTS.homebase!, cam: [[0, 1.45, 0.78, 0.18], [9, 1.5, 0.78, 0.18]] }} span={l13.from - l12.from} />
+      <Span from={n8.from - 6} to={l13.from - 6}>
+        <ShotView shot={{ ...SHOTS.homebase!, cam: [[0, 1.45, 0.78, 0.18], [9, 1.5, 0.78, 0.18]] }} span={l13.from - n8.from} />
         <Money />
       </Span>
       <Span from={l13.from - 6} to={scene.duration}>
         <ShotView shot={SHOTS.explain!} span={scene.duration - l13.from + 6} />
       </Span>
-      <div style={{ display: "none" }}>{l10.id}</div>
     </>
+  );
+};
+
+/** The fix on the measured plan, ringed and pulsing once the camera is on it. */
+const FixPulse: React.FC<{ at: number }> = ({ at }) => {
+  const frame = useCurrentFrame();
+  const o = prog(frame, at, 10);
+  if (o <= 0) return null;
+  const k = ((frame - at) % 36) / 36;
+  // where the stairs' fire separation sits on screen once the camera has eased in on the plan (frame 4 of the clip)
+  const cx = 640, cy = 327;
+  return (
+    <svg width={1920} height={1080} style={{ position: "absolute", inset: 0, opacity: o }}>
+      <ellipse cx={cx} cy={cy} rx={225 + k * 60} ry={110 + k * 40} fill="none" stroke={C.fix} strokeWidth={4} opacity={1 - k} />
+      <ellipse cx={cx} cy={cy} rx={225} ry={110} fill="none" stroke={C.fix} strokeWidth={3} />
+    </svg>
+  );
+};
+
+/** The rough cost and the money back, counting up, over the answer. */
+const CostCard: React.FC<{ at: number; out: number }> = ({ at, out }) => {
+  const frame = useCurrentFrame();
+  const p = Math.min(prog(frame, at, 14), 1 - prog(frame, out, 10, easeDraw));
+  if (p <= 0) return null;
+  const n = (v: number) => Math.round(interpolate(frame, [at + 4, at + 34], [0, v], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }));
+  return (
+    <div style={{ position: "absolute", left: 230, top: 640, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "20px 28px", fontFamily: SANS, opacity: p, transform: `translateY(${(1 - p) * 14}px)`, display: "flex", gap: 48 }}>
+      <div>
+        <div style={{ fontSize: 22, color: C.muted }}>Rough cost, hired out</div>
+        <div style={{ fontWeight: 900, fontSize: 56, letterSpacing: "-0.04em" }}>${n(49)}k–${n(85)}k</div>
+      </div>
+      <div>
+        <div style={{ fontSize: 22, color: C.muted }}>Money back</div>
+        <div style={{ fontWeight: 900, fontSize: 56, letterSpacing: "-0.04em" }}>up to ${n(7)},000</div>
+      </div>
+    </div>
   );
 };
 
@@ -248,33 +285,19 @@ const BeforeAfter: React.FC<{ dur: number }> = ({ dur }) => {
 };
 
 export const Design: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
-  const frame = useCurrentFrame();
-  const l14 = lineIn(scene, "L14"), l15 = lineIn(scene, "L15"), l16 = lineIn(scene, "L16");
+  const n9 = lineIn(scene, "N09"), n10 = lineIn(scene, "N10");
+  const layoutsAt = n9.from + Math.round(n9.dur * 0.42);
   return (
     <>
-      <Span from={0} to={l15.from - 6} fade={8}>
-        {SHOTS.plan ? (
-          <ShotView shot={SHOTS.plan} span={l15.from} headline="Is this your basement?" sub="Fix any wall right on the drawing." />
-        ) : (
-          <>
-            <svg width={1920} height={1080} style={{ position: "absolute", inset: 0 }}>
-              <Plan x={300} y={290} s={92} frame={frame} start={4} dims={20} />
-            </svg>
-            <div style={{ position: "absolute", left: 1180, top: 300, fontFamily: SANS, fontWeight: 900, fontSize: 80, letterSpacing: "-0.045em", lineHeight: 0.95, width: 640 }}>Is this your basement?</div>
-          </>
-        )}
+      <Span from={0} to={layoutsAt} fade={8}>
+        <ShotView shot={SHOTS.plan!} span={layoutsAt} />
       </Span>
-      <Span from={l15.from - 6} to={l16.from - 6}>
-        {SHOTS.layouts ? (
-          <ShotView shot={SHOTS.layouts} span={l16.from - l15.from} headline="Pick a layout." sub="It keeps the stairs, the furnace and the window where they are." />
-        ) : (
-          <LayoutDrawn />
-        )}
+      <Span from={layoutsAt} to={n10.from - 6}>
+        <ShotView shot={SHOTS.layouts!} span={n10.from - layoutsAt} />
       </Span>
-      <Span from={l16.from - 6} to={scene.duration}>
-        {SHOTS.looks ? <ShotView shot={SHOTS.looks} span={scene.duration - l16.from + 6} /> : <BeforeAfter dur={scene.duration - l16.from} />}
+      <Span from={n10.from - 6} to={scene.duration}>
+        <ShotView shot={SHOTS.looks!} span={scene.duration - n10.from + 6} />
       </Span>
-      <div style={{ display: "none" }}>{l14.id}</div>
     </>
   );
 };
@@ -341,19 +364,48 @@ const PermitSheets: React.FC = () => {
 };
 
 export const Build: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
-  const l17 = lineIn(scene, "L17"), l18 = lineIn(scene, "L18"), l19 = lineIn(scene, "L19");
+  const n11 = lineIn(scene, "N11"), n12 = lineIn(scene, "N12");
+  const tapeAt = n11.from + Math.round(n11.dur * 0.66);
   return (
     <>
-      <Span from={0} to={l18.from - 6} fade={8}>
-        <ShotView shot={SHOTS.build!} span={l18.from} />
+      <Span from={0} to={tapeAt} fade={8}>
+        <ShotView shot={SHOTS.build!} span={tapeAt} />
+        <SheetStack at={n11.from + 40} />
       </Span>
-      <Span from={l18.from - 6} to={l19.from - 6}>
-        <ShotView shot={SHOTS.tape!} span={l19.from - l18.from} />
+      <Span from={tapeAt} to={n12.from - 6}>
+        <ShotView shot={SHOTS.tape!} span={n12.from - tapeAt} />
       </Span>
-      <Span from={l19.from - 6} to={scene.duration}>
-        <ShotView shot={SHOTS.homebase!} span={scene.duration - l19.from + 6} />
+      <Span from={n12.from - 6} to={scene.duration}>
+        <ShotView shot={SHOTS.homebase!} span={scene.duration - n12.from + 6} />
       </Span>
-      <div style={{ display: "none" }}>{l17.id}</div>
+    </>
+  );
+};
+
+/** Permit sheets sliding in and stacking beside the app's own permit set. */
+const STACK = ["Floor plan", "Section", "Fire separation", "City forms"];
+const SheetStack: React.FC<{ at: number }> = ({ at }) => {
+  const frame = useCurrentFrame();
+  return (
+    <>
+      {STACK.map((name, i) => {
+        const p = prog(frame, at + i * 9, 16, easeOut);
+        if (p <= 0) return null;
+        return (
+          <div key={name} style={{ position: "absolute", left: 1290 + (1 - p) * 420 + i * 14, top: 250 + i * 18, width: 360, height: 470, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 4, opacity: p, fontFamily: SANS, transform: `rotate(${(i - 1.5) * 1.2}deg)` }}>
+            <svg width={360} height={470} style={{ position: "absolute", inset: 0 }}>
+              <rect x={16} y={16} width={328} height={370} fill="none" stroke={C.border} />
+              {i === 0 && <path d="M60 90 H300 V320 H60 Z M60 200 H170 V320 M220 90 V180" fill="none" stroke={C.ink} strokeWidth={2.5} />}
+              {i === 1 && <path d="M40 200 H320 M70 200 V340 H290 V200 M60 200 L180 100 L300 200" fill="none" stroke={C.ink} strokeWidth={2.5} />}
+              {i === 2 && <path d="M60 130 H300 M60 142 H300 M60 154 H300 M110 170 V340 M250 170 V340" fill="none" stroke={C.fix} strokeWidth={3} />}
+              {i === 3 && [0, 1, 2, 3, 4, 5].map((r) => <rect key={r} x={50} y={80 + r * 46} width={260} height={26} fill="none" stroke={C.border} />)}
+              <line x1={0} y1={400} x2={360} y2={400} stroke={C.ink} />
+            </svg>
+            <div style={{ position: "absolute", left: 18, bottom: 22, fontWeight: 700, fontSize: 22 }}>{name}</div>
+            <div style={{ position: "absolute", right: 18, bottom: 24, fontFamily: MONO, fontSize: 16 }}>A-{String(i + 1).padStart(2, "0")}</div>
+          </div>
+        );
+      })}
     </>
   );
 };
@@ -363,21 +415,21 @@ const BigLine: React.FC<{ text: string }> = ({ text }) => (
 );
 
 export const Close: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
-  const l20 = lineIn(scene, "L20"), l21 = lineIn(scene, "L21");
-  const endAt = l21.from + l21.dur + 34;
+  const n13 = lineIn(scene, "N13"), n14 = lineIn(scene, "N14");
+  const endAt = n14.from + n14.dur - 20;
   return (
     <>
-      <Span from={0} to={l21.from - 8} fade={8}>
-        <ShotView shot={{ ...SHOTS.home!, start: 11.6, clip: 17.3, cam: [[0, 1.35, 1, 0.5], [9, 1.42, 1, 0.5]] }} span={l21.from} />
+      <Span from={0} to={n14.from - 8} fade={8}>
+        <ShotView shot={{ ...SHOTS.home!, start: 11.6, clip: 17.3, cam: [[0, 1.35, 1, 0.5], [9, 1.42, 1, 0.5]] }} span={n14.from} />
         <Promise />
       </Span>
-      <Span from={l21.from - 8} to={endAt + 8} fade={8}>
-        <ShotView shot={SHOTS.home!} span={endAt - l21.from + 16} />
+      <Span from={n14.from - 8} to={endAt + 8} fade={8}>
+        <ShotView shot={SHOTS.home!} span={endAt - n14.from + 16} />
       </Span>
       <Span from={endAt} to={scene.duration + 10} fade={12}>
         <EndCard />
       </Span>
-      <div style={{ display: "none" }}>{l20.id}</div>
+      <div style={{ display: "none" }}>{n13.id}</div>
     </>
   );
 };

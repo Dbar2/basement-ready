@@ -20,5 +20,18 @@
  "L18": "The guide asks only for what it can't measure, like a few tape numbers and who owns the house.",
  "L19": "Then the money to apply for, and registered designers and trades to ask for quotes, all in one book you can hand to a designer.",
  "L20": "Your scan is private, and nothing is sent without you. It screens; the city decides, and a designer confirms the details.",
- "L21": "See the example at basementready.com."
+ "L21": "See the example at basementready.com.",
+ "N02": "Ontario allows up to three homes on a lot. But finding out if yours can work means the Building Code, the Fire Code, city by-laws, and thousands on drawings before you even know.",
+ "N03": "So this week we built Basement Ready. You film your basement once on your phone, walking through each room, and upload it.",
+ "N04": "Meta's models take it from there. SAM 3.1 finds and tracks the windows, stairs, ducts and beams. MapAnything measures every wall from ordinary video. No LiDAR needed.",
+ "N05": "Muse Wonder watches the whole take, and Muse Spark checks what they found against the Ontario Building Code. Every line here is a live Meta call, logged by the server.",
+ "N08": "It finds the money that fits: tax credits, city grants and forgivable loans, each with how to apply.",
+ "N09": "Then it designs it with you. Check the measured plan, and pick a layout in 3D that keeps the stairs, the furnace and the window where they are.",
+ "N10": "Muse Image shows your own basement finished, in the look you picked, labelled virtually staged.",
+ "N11": "Then it gets you building: a draft permit set, drawn and filled in from the scan, with just a few tape numbers from you.",
+ "N12": "Then registered designers and trades to ask for quotes, and one book with everything, to hand over.",
+ "N13": "Your scan stays private, and nothing is sent without you. It screens; the city decides.",
+ "N14": "Basement Ready. The first answer in minutes, from your phone. See it at basementready.com.",
+ "N06b": "Here's the example basement, on the live site.",
+ "N07b": "In minutes, the answer: this basement can be a second home after four fixes, each marked on its measured plan, with a rough cost and the source for every rule."
 }

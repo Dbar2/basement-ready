@@ -13,8 +13,10 @@ type L = { from: number; dur: number };
 // in section (the house, the grade line, the basement below it) for the rules and the cost.
 export const Question: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const l0 = lineIn(scene, "L00");
-  const l2 = lineIn(scene, "L02");
-  const l3 = lineIn(scene, "L03");
+  const n2 = lineIn(scene, "N02");
+  // the drawing tells N02 in two halves: the three homes, then the rules and the cost
+  const l2 = { from: n2.from, dur: Math.round(n2.dur * 0.32) };
+  const l3 = { from: n2.from + Math.round(n2.dur * 0.32), dur: n2.dur - Math.round(n2.dur * 0.32) };
   const D = l2.from - 10;
   const home = SHOTS.home!;
   return (

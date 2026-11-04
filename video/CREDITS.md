@@ -5,6 +5,7 @@ Everything in the video is either real footage of the live app, the example base
 | What | Source | Licence |
 |---|---|---|
 | Footage | Screen recordings of https://www.basementready.com walking the public example basement, made with Playwright (`tools/record/record.mjs`) | Ours |
+| Live Meta call log and its answer | Railway server log lines from a live run on basementready.com (Nov 4, 2026, 5:27 PM ET: the public example video uploaded as a new scan), shown exactly as logged (`src/data/logs.json`), and a screenshot of that run's answer (`public/live-run-answer.jpg`, git-ignored). Both relayed by the director session | Ours |
 | Example basement | `public/samples` in this repo: the example video, SAM 3.1's tracks, the measured plan (MapAnything) | Ours |
 | Motion graphics | Drawn in React/SVG with Remotion (`src/`), in the Drawing Set style (`brand/ui.md`, `brand/tokens.css`) | Ours |
 | Fonts | Hanken Grotesk and Geist Mono, via Google Fonts (`@remotion/google-fonts`) | SIL Open Font License 1.1 |

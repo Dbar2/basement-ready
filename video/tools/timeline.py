@@ -10,8 +10,8 @@ f = lambda s: round(s * FPS)
 scenes = re.findall(r'\{ id: "(\w+)", lines: \[([^\]]*)\], lead: ([\d.]+), gap: ([\d.]+), tail: ([\d.]+)(?:, hold: \{([^}]*)\})? \}', src)
 cursor = 0
 for sid, lines, lead, gap, tail, hold in scenes:
-    ids = re.findall(r'"(L\d\d)"', lines)
-    holds = {k: float(v) for k, v in re.findall(r'(L\d\d): ([\d.]+)', hold or "")}
+    ids = re.findall(r'"([LN]\d\d\w?)"', lines)
+    holds = {k: float(v) for k, v in re.findall(r'([LN]\d\d\w?): ([\d.]+)', hold or "")}
     t = f(float(lead))
     starts = []
     for i, lid in enumerate(ids):

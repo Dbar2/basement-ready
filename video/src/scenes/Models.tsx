@@ -80,13 +80,13 @@ const Pipeline: React.FC<{ frame: number; enter: number; rise: number; leave: nu
 };
 
 /** Footage under the pipeline strip. */
-const Under: React.FC<{ shot: Shot; cam?: Shot["cam"]; start?: number; dur: number; w?: number; x?: number; children?: React.ReactNode }> = ({ shot, cam, start, dur, w = 1350, x, children }) => {
+const Under: React.FC<{ shot: Shot; cam?: Shot["cam"]; start?: number; dur: number; w?: number; x?: number; y?: number; children?: React.ReactNode }> = ({ shot, cam, start, dur, w = 1350, x, y = 162, children }) => {
   const frame = useCurrentFrame();
   const o = Math.min(prog(frame, 0, 12), 1 - prog(frame, dur - 10, 10, easeDraw));
   const left = x ?? (1920 - w) / 2;
   return (
     <div style={{ position: "absolute", inset: 0, opacity: o }}>
-      <Browser x={left} y={162} w={w} src={shot.file} start={start ?? shot.start} url={shot.url} cam={cam ?? shot.cam} />
+      <Browser x={left} y={y} w={w} src={shot.file} start={start ?? shot.start} url={shot.url} cam={cam ?? shot.cam} />
       {children}
     </div>
   );
@@ -168,15 +168,23 @@ const LiveAnswer: React.FC<{ from: number }> = ({ from }) => {
 
 export const Models: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   const frame = useCurrentFrame();
-  const l5 = lineIn(scene, "L05"), l6 = lineIn(scene, "L06"), l7 = lineIn(scene, "L07"), l8 = lineIn(scene, "L08"), l9 = lineIn(scene, "L09");
-  const s6 = l6.from - 8, s7 = l7.from - 8, s8 = l8.from - 8, s9 = l9.from - 8;
+  // N06b: the example on the live site. N04: the pipeline, SAM, then MapAnything. N05: Wonder and Spark
+  // with the live log. L09: the guide's questions.
+  const n6 = lineIn(scene, "N06b"), n4 = lineIn(scene, "N04"), n5 = lineIn(scene, "N05"), l9 = lineIn(scene, "L09");
+  const l5 = { from: n4.from, dur: 60 };
+  const l8 = n5;
+  const s6 = n4.from + 66, s7 = n4.from + Math.round(n4.dur * 0.56), s8 = n5.from - 8, s9 = l9.from - 8;
   const sparkAt = l8.from + Math.round(l8.dur * 0.42);
   const active = frame >= s9 ? "" : frame >= sparkAt ? "spark" : frame >= s8 ? "wonder" : frame >= s7 ? "map" : frame >= s6 ? "sam" : frame >= l5.from + 12 ? "video" : "";
   const big = Math.min(prog(frame, l5.from + 8, 12), 1 - prog(frame, s6 - 12, 10, easeDraw));
   const wait = SHOTS.wait!;
   return (
     <>
-      {/* L05: the pipeline on its own, briefly */}
+      {/* N06b: the example basement on the live site, measuring */}
+      <Sequence from={0} durationInFrames={n4.from + 6}>
+        <Under shot={wait} dur={n4.from + 6} start={0.3} w={1560} x={180} y={38} cam={[[0, 1, 0.5, 0.5], [1.2, 1, 0.5, 0.5], [3.4, 1.25, 0, 0.45]]} />
+      </Sequence>
+      {/* N04: the pipeline on its own, briefly */}
       <div style={{ position: "absolute", left: NX, top: 560, opacity: big, fontFamily: SANS, fontWeight: 900, fontSize: 104, letterSpacing: "-0.045em", lineHeight: 0.95 }}>
         Meta's models go to work.
       </div>

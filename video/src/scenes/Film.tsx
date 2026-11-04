@@ -1,8 +1,8 @@
 import React from "react";
-import { OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
+import { useCurrentFrame } from "remotion";
 import { getPointAtLength, getLength, getTangentAtLength } from "@remotion/paths";
 import { C } from "../theme";
-import { Title } from "../components/kit";
+import { Phone, Title } from "../components/kit";
 import { Plan } from "../components/Plan";
 import { easeDraw, prog } from "../anim";
 import { SceneTiming } from "../timeline";
@@ -38,27 +38,10 @@ export const Film: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
           <circle cx={0} cy={26} r={4} fill={C.ink} />
         </g>
       </svg>
-      {/* the example's real phone video, in a drawn phone held sideways */}
-      <div
-        style={{
-          position: "absolute",
-          left: 880,
-          top: 250 + (1 - prog(frame, 0, 16)) * 30,
-          width: 952 + 28,
-          height: 536 + 28,
-          borderRadius: 44,
-          background: C.ink,
-          padding: 14,
-          boxSizing: "border-box",
-          opacity: prog(frame, 0, 16),
-        }}
-      >
-        <div style={{ width: 952, height: 536, borderRadius: 30, overflow: "hidden" }}>
-          <OffthreadVideo src={staticFile("sample/sample-basement.mp4")} muted style={{ width: 952, height: 536, display: "block" }} />
-        </div>
-      </div>
-      <div style={{ position: "absolute", left: 880, top: 836, fontSize: 22, color: C.muted, opacity: prog(frame, 20, 12) }}>
-        The example basement, filmed on a phone in one take
+      {/* a real basement, filmed on a phone */}
+      <Phone x={1180} y={60} h={880} src="footage/david-phone.mp4" start={0} p={prog(frame, 0, 16)} />
+      <div style={{ position: "absolute", left: 880, top: 820, width: 270, fontSize: 22, color: C.muted, opacity: prog(frame, 20, 12), lineHeight: 1.35 }}>
+        A real basement, filmed on a phone in one take
       </div>
     </>
   );
