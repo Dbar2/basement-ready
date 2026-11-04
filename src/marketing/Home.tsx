@@ -58,15 +58,10 @@ const STEPS: { title: string; body: ReactNode; alt: string }[] = [
     body: (
       <>
         SAM 3.1 finds the window, door and stairs. Muse Spark checks them against Ontario's Building Code: the ceiling looks clear of
-        the <span className="mono">{EXAMPLE.ceilingMin}</span> minimum, and
-        {EXAMPLE.fix ? (
-          <>
-            {" "}
-            {EXAMPLE.fix.count} fix is needed: {EXAMPLE.fix.title.toLowerCase()}, roughly <span className="mono">{EXAMPLE.fix.cost}</span>.
-          </>
-        ) : (
-          " nothing has to change."
-        )}
+        the <span className="mono">{EXAMPLE.ceilingMin}</span> minimum
+        {/* No count or cost here: the example's full answer can add fixes after its questions, so it has the numbers. */}
+        {EXAMPLE.fix ? <>, and the first fix is {EXAMPLE.fix.title.toLowerCase()}.</> : "."} The example's full answer lists every fix, the
+        cost and the money.
       </>
     ),
     alt: `The window, door and stairs outlined in the example basement. ${EXAMPLE.openings.map((o) => `${o.kind === "window" ? "Window" : "Door"} ${o.width} wide`).join(", ")}.`,
