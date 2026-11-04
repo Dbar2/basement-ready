@@ -31,27 +31,27 @@ const STEPS: { title: string; body: ReactNode; alt: string }[] = [
         The line is the path the phone took in the example.
       </>
     ),
-    alt: "The path the phone took while filming the example basement, drawn as a green line.",
+    alt: "The path the phone took while filming the example basement, drawn as a green line over its floor.",
   },
   {
     title: "Every frame, measured.",
     body: <>Meta's MapAnything reads the depth in each frame of the video. Points rise where the camera saw a surface: walls, floor, stairs and ducts.</>,
-    alt: "Green and dark points rising into the shape of the example basement.",
+    alt: "Green and dark points rising inside the example basement, where the camera saw its walls, floor and stairs.",
   },
   {
     title: "Then one solid basement.",
-    body: <>The points fuse into one surface, in the colours the camera saw. It's ready about 2–3 minutes after you upload, and you can walk through it.</>,
-    alt: "The example basement as a solid 3D surface in its real colours: concrete walls, stairs and furnace.",
+    body: <>Straight walls, a level floor, the stairs and the furnace, fitted to the points and painted with what the camera saw. It's ready about 2–3 minutes after you upload, and you can walk through it.</>,
+    alt: "The example basement as a clean 3D model, painted from its video: concrete walls, a level floor, stairs, furnace and water heater.",
   },
   {
-    title: "Measured, with the ceiling off.",
+    title: "Measured, wall to wall.",
     body: (
       <>
         The plan comes from the scan: <span className="mono">{EXAMPLE.size}</span>, about <span className="mono">{EXAMPLE.area}</span>, ceiling{" "}
         <span className="mono">{EXAMPLE.ceiling}</span>. Sizes from video are rough, so a designer checks them with a tape.
       </>
     ),
-    alt: `The example basement from above with its ceiling removed and the plan drawn on the floor: ${EXAMPLE.width} by ${EXAMPLE.depth}, ceiling ${EXAMPLE.ceiling}.`,
+    alt: `The example basement from above with the plan drawn on the floor: ${EXAMPLE.width} by ${EXAMPLE.depth}, ceiling ${EXAMPLE.ceiling}.`,
   },
   {
     title: "What it found.",
