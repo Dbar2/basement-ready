@@ -1,7 +1,7 @@
 // Before and after (track E): their own steady frame, and the same view finished as the chosen design in
 // the chosen look, one over the other with a line to drag (src/views/BeforeAfter.tsx). The frames are the
 // design's own angles from the views API (server/views/routes.ts: only steady, level, well-lit frames,
-// server/views/stable.ts), each with its `before`. A picture already made shows at once; the rest are
+// server/views/stable.ts), or the rooms' best where none shows the design clearly, each with its `before`. A picture already made shows at once; the rest are
 // drawn in a hidden canvas and finished by Muse Image (the photo, checked by SAM) as the pictures always
 // were. The after is only ever that photo: until it lands their frame shows with a progress line, and
 // where none could be made (SAM turned it down twice, today's budget is used up, or the example has none
@@ -73,7 +73,13 @@ export function BeforeAfterVisual({ scanId, visual, act }: VisualProps<"beforeAf
     // The design as drawn (its hash), not every new object for it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scanId, hash]);
-  const angles = useMemo(() => (data?.angles ?? []).filter((a) => a.group === "design").slice(0, ANGLES), [data]);
+  // The design's own angles (the frames that show it best); where none shows it clearly, the rooms' best
+  // steady frames: the same room finished in the look, whatever of the furniture is in view.
+  const angles = useMemo(() => {
+    const all = data?.angles ?? [];
+    const own = all.filter((a) => a.group === "design");
+    return (own.length ? own : [...new Map(all.map((a) => [a.id, a])).values()]).slice(0, ANGLES);
+  }, [data]);
   const angle = angles.find((a) => a.id === current) ?? angles.find((a) => a.id === visual.angleId) ?? angles[0] ?? null;
 
   // The ones not made yet: drawn, then sent for their photo, the one showing first.
