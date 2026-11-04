@@ -3,8 +3,10 @@
 // design's own angles from the views API (server/views/routes.ts: only steady, level, well-lit frames,
 // server/views/stable.ts), each with its `before`. A picture already made shows at once; the rest are
 // drawn in a hidden canvas and finished by Muse Image (the photo, checked by SAM) as the pictures always
-// were. Until a photo lands, the 3D drawn over the frame stands in, tagged as such. Under it, the four
-// looks (a tap is `setLook`) and, with more than one angle, a thumbnail of each.
+// were. The after is only ever that photo: until it lands their frame shows with a progress line, and
+// where none could be made (SAM turned it down twice, today's budget is used up, or the example has none
+// for that look) the frame says the picture is coming. Never the 3D laid over the photo. Under it, the
+// four looks (a tap is `setLook`) and, with more than one angle, a thumbnail of each.
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { designHash } from "../../../server/model/furniture";
 import type { Design, Model } from "../../../server/model/types";
@@ -21,8 +23,8 @@ import "./design.css";
 const AngleRenderer = lazy(() => import("../../views/AngleRender").then((m) => ({ default: m.AngleRenderer })));
 
 const ANGLES = 4; // at most, the design's own
-// What an angle shows as its after: the photo, or the 3D drawn over the frame while (or if) there's none.
-type After = { url: string; kind: "photo" | "render"; making: boolean };
+// An angle's after: the photo (`url`), still being made, or none to show (`url` null, not making).
+type After = { url: string | null; making: boolean };
 
 const loadImage = (url: string) =>
   new Promise<HTMLImageElement>((resolve, reject) => {
@@ -62,7 +64,7 @@ export function BeforeAfterVisual({ scanId, visual, act }: VisualProps<"beforeAf
       .then((d) => {
         if (gone) return;
         setData(d);
-        setAfters(new Map(d.pictures.map((p) => [p.angleId, { url: p.url, kind: p.kind, making: false }])));
+        setAfters(new Map(d.pictures.map((p) => [p.angleId, { url: p.kind === "photo" ? p.url : null, making: false }])));
       })
       .catch(() => !gone && setFailed(true));
     return () => {
@@ -100,11 +102,11 @@ export function BeforeAfterVisual({ scanId, visual, act }: VisualProps<"beforeAf
         if (!frame || stop) continue;
         const r = await snap.fn(a, frame).catch(() => null);
         if (!r || stop) continue;
-        setAfters((m) => new Map(m).set(a.id, { url: r.url, kind: "render", making: true }));
+        setAfters((m) => new Map(m).set(a.id, { url: null, making: true }));
         postPicture(scanId, a.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, doors: r.doors, finishes: design.finishes })
-          // Nothing kept on the server (the example past its committed pictures, or no budget today): the 3D stays.
-          .then((p) => !stop && setAfters((m) => new Map(m).set(a.id, p.url ? { url: p.url, kind: p.kind, making: false } : { url: r.url, kind: "render", making: false })))
-          .catch(() => !stop && setAfters((m) => new Map(m).set(a.id, { url: r.url, kind: "render", making: false })));
+          // Only a photo that passed SAM's check is an after.
+          .then((p) => !stop && setAfters((m) => new Map(m).set(a.id, { url: p.url && p.kind === "photo" ? p.url : null, making: false })))
+          .catch(() => !stop && setAfters((m) => new Map(m).set(a.id, { url: null, making: false })));
       }
     })().finally(() => {
       if (running.current === hash) running.current = null;
@@ -125,24 +127,26 @@ export function BeforeAfterVisual({ scanId, visual, act }: VisualProps<"beforeAf
 
   const after = afters.get(angle.id);
   const ratio = angle.intrinsics.width / angle.intrinsics.height;
+  const state = after?.url ? "photo" : !after || after.making ? "making" : "coming";
   return (
-    <div className="gs-ba" data-state={after ? (after.kind === "photo" ? "photo" : after.making ? "making" : "render") : "drawing"} data-angle={angle.id} data-look={visual.look}>
+    <div className="gs-ba" data-state={state} data-angle={angle.id} data-look={visual.look}>
       <div className="gs-ba-stage">
         <div className="gs-ba-fit" style={{ ["--ratio" as string]: `${ratio}` }}>
-          {after ? (
+          {after?.url ? (
             <BeforeAfter
               key={`${angle.id}:${after.url}`}
               before={angle.frameUrl}
               after={after.url}
               alt={`${design.name} in ${lookName(visual.look)}, virtually staged in your basement`}
               ratio={`${ratio}`}
-              afterLabel={after.kind === "photo" ? "After · virtually staged" : "After · 3D sketch"}
+              afterLabel="After · virtually staged"
             />
           ) : (
             <img className="gs-ba-frame" src={angle.frameUrl} alt="Your basement, as you filmed it" draggable={false} />
           )}
         </div>
-        {(!after || after.making) && <p className="gs-ba-progress">Finishing it in {lookName(visual.look)}, about 20 seconds</p>}
+        {state === "making" && <p className="gs-ba-progress">Finishing it in {lookName(visual.look)}, about 20 seconds</p>}
+        {state === "coming" && <p className="gs-ba-progress gs-ba-coming">Picture coming: this look isn't finished for this angle yet</p>}
       </div>
       <div className="gs-ba-bar">
         {looks}
