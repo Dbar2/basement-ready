@@ -3,7 +3,7 @@ import { AbsoluteFill, OffthreadVideo, staticFile, useCurrentFrame } from "remot
 import { getLength } from "@remotion/paths";
 import { C } from "../theme";
 import { MONO, SANS } from "../fonts";
-import { easeDraw, prog } from "../anim";
+import { easeDraw, easeOut, prog } from "../anim";
 
 export const W = 1920;
 export const H = 1080;
@@ -230,7 +230,7 @@ const camAt = (keys: CamKey[] | undefined, t: number) => {
     const [t0, z0, x0, y0] = keys[i];
     const [t1, z1, x1, y1] = keys[i + 1];
     if (t <= t1) {
-      const k = easeDraw(Math.min(1, Math.max(0, (t - t0) / Math.max(0.001, t1 - t0))));
+      const k = easeOut(Math.min(1, Math.max(0, (t - t0) / Math.max(0.001, t1 - t0))));
       return { z: z0 + (z1 - z0) * k, fx: x0 + (x1 - x0) * k, fy: y0 + (y1 - y0) * k };
     }
   }
@@ -240,12 +240,17 @@ const camAt = (keys: CamKey[] | undefined, t: number) => {
 
 /** A drawn browser window holding a desktop recording, with an easing camera to make small text readable. */
 export const Browser: React.FC<{
-  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number; cam?: CamKey[];
-}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1, cam }) => {
+  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number; cam?: CamKey[]; tilt?: boolean;
+}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1, cam, tilt = false }) => {
   const frame = useCurrentFrame();
   const h = (w * 1080) / 1920;
   const bar = 40;
   const c = camAt(cam, frame / 30);
+  const c0 = camAt(cam, (frame - 1) / 30);
+  const blur = Math.min(3.5, Math.abs(c.z - c0.z) * 140 + (Math.abs(c.fx - c0.fx) + Math.abs(c.fy - c0.fy)) * 180);
+  const rotY = tilt ? 3.2 * Math.sin(frame / 95 + x / 400) : 0;
+  const rotX = tilt ? 1.6 + 1.1 * Math.sin(frame / 130) : 0;
+  const floatY = tilt ? 5 * Math.sin(frame / 55) : 0;
   // keep the zoomed picture inside the frame: translate so the focus point moves toward the centre
   const tx = (0.5 - c.fx) * w * (c.z - 1);
   const ty = (0.5 - c.fy) * h * (c.z - 1);
@@ -265,6 +270,8 @@ export const Browser: React.FC<{
         background: C.card,
         overflow: "hidden",
         opacity: p,
+        transform: tilt ? `perspective(2600px) rotateY(${rotY}deg) rotateX(${rotX}deg) translateY(${floatY}px)` : undefined,
+        boxShadow: tilt ? "0 28px 64px -30px rgb(15 42 30 / 0.5)" : undefined,
       }}
     >
       <div style={{ height: bar, display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderBottom: `1px solid ${C.border}` }}>
@@ -286,7 +293,7 @@ export const Browser: React.FC<{
         </span>
       </div>
       <div style={{ width: w, height: h, overflow: "hidden", position: "relative" }}>
-        <div style={{ width: w, height: h, transform: `translate(${cx}px, ${cy}px) scale(${c.z})`, transformOrigin: "50% 50%" }}>
+        <div style={{ width: w, height: h, transform: `translate(${cx}px, ${cy}px) scale(${c.z})`, transformOrigin: "50% 50%", filter: blur > 0.3 ? `blur(${blur.toFixed(2)}px)` : undefined }}>
           <OffthreadVideo src={staticFile(src)} startFrom={Math.round(start * 30)} playbackRate={rate} muted style={{ width: w, height: h, display: "block" }} />
         </div>
       </div>

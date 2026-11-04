@@ -11,7 +11,7 @@ import { SHOTS, Shot } from "../shots";
 import type { CamKey } from "../components/kit";
 
 /** A span of the scene: fades in at `from`, out at `to` (scene frames). */
-const Span: React.FC<{ from: number; to: number; children: React.ReactNode; fade?: number }> = ({ from, to, children, fade = 10 }) => (
+export const Span: React.FC<{ from: number; to: number; children: React.ReactNode; fade?: number }> = ({ from, to, children, fade = 10 }) => (
   <Sequence from={from} durationInFrames={Math.max(1, to - from + fade)}>
     <Fader dur={to - from + fade} fade={fade}>{children}</Fader>
   </Sequence>
@@ -78,7 +78,7 @@ const Verdict: React.FC = () => {
 };
 
 /** The verdict as a stamp landing on the real answer screen. */
-const Stamp: React.FC<{ out: number }> = ({ out }) => {
+export const Stamp: React.FC<{ out: number }> = ({ out }) => {
   const frame = useCurrentFrame();
   const s = prog(frame, 14, 9, easeOut);
   const o = Math.min(s, 1 - prog(frame, out, 12, easeDraw));
@@ -136,7 +136,7 @@ const GRANTS: [string, string, number][] = [
   ["City of Waterloo ARU grant", "City of Waterloo", 20000],
   ["Region of Waterloo forgivable loan", "Region of Waterloo", 25000],
 ];
-const Money: React.FC = () => {
+export const Money: React.FC = () => {
   const frame = useCurrentFrame();
   const p = prog(frame, 4, 14);
   return (
@@ -191,7 +191,7 @@ export const Answer: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
 };
 
 /** The fix on the measured plan, ringed and pulsing once the camera is on it. */
-const FixPulse: React.FC<{ at: number }> = ({ at }) => {
+export const FixPulse: React.FC<{ at: number }> = ({ at }) => {
   const frame = useCurrentFrame();
   const o = prog(frame, at, 10);
   if (o <= 0) return null;
@@ -207,7 +207,7 @@ const FixPulse: React.FC<{ at: number }> = ({ at }) => {
 };
 
 /** The rough cost and the money back, counting up, over the answer. */
-const CostCard: React.FC<{ at: number; out: number }> = ({ at, out }) => {
+export const CostCard: React.FC<{ at: number; out: number }> = ({ at, out }) => {
   const frame = useCurrentFrame();
   const p = Math.min(prog(frame, at, 14), 1 - prog(frame, out, 10, easeDraw));
   if (p <= 0) return null;
@@ -236,7 +236,7 @@ const LOOKS = ["warm", "bright", "green", "cottage"] as const;
 const LOOK_NAMES: Record<string, string> = { warm: "Warm", bright: "Bright", green: "Green", cottage: "Cottage" };
 
 /** Before and after on the example's own frame: the real frame, then Muse Image's picture of it. */
-const BeforeAfter: React.FC<{ dur: number }> = ({ dur }) => {
+export const BeforeAfter: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
   const w = 1100, h = (w * 720) / 1280;
   const wipe = prog(frame, 16, 34, easeDraw);
@@ -384,7 +384,7 @@ export const Build: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
 
 /** Permit sheets sliding in and stacking beside the app's own permit set. */
 const STACK = ["Floor plan", "Section", "Fire separation", "City forms"];
-const SheetStack: React.FC<{ at: number }> = ({ at }) => {
+export const SheetStack: React.FC<{ at: number }> = ({ at }) => {
   const frame = useCurrentFrame();
   return (
     <>
@@ -434,7 +434,7 @@ export const Close: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
   );
 };
 
-const EndCard: React.FC = () => {
+export const EndCard: React.FC = () => {
   const frame = useCurrentFrame();
   const p = (d: number) => prog(frame, d, 14);
   return (

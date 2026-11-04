@@ -3,6 +3,8 @@
 # pauses inside it. Writes public/voice/<id>.wav and src/data/voice.json (durations for the edit).
 # Usage (from video/): <python with openai-whisper> tools/voice/pick_takes.py
 import glob
+import os
+import sys
 import json
 import re
 import shutil
@@ -41,8 +43,13 @@ def longest_gap(segments):
 lines = json.load(open("tools/voice/voice-lines.json"))
 say = json.load(open("tools/voice/say.json"))
 model = whisper.load_model("small.en")
-picked, report = {}, []
+# Only these lines (comma-separated) if given; the rest keep their picks in src/data/voice.json.
+only = sys.argv[1].split(",") if len(sys.argv) > 1 else None
+picked = json.load(open("src/data/voice.json")) if only and os.path.exists("src/data/voice.json") else {}
+report = []
 for line_id, text in lines.items():
+    if only and line_id not in only:
+        continue
     takes = sorted(glob.glob(f"public/voice/{line_id}_t*.wav"))
     scored = []
     for take in takes:

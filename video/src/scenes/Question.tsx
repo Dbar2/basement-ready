@@ -63,7 +63,7 @@ const HomeOpen: React.FC<{ dur: number; l0: L; l1at: number }> = ({ dur, l0, l1a
   );
 };
 
-const Drawn: React.FC<{ l2: L; l3: L }> = ({ l2, l3 }) => {
+export const Drawn: React.FC<{ l2: L; l3: L }> = ({ l2, l3 }) => {
   const frame = useCurrentFrame();
 
   // the section drawing

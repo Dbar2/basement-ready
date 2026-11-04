@@ -20,7 +20,7 @@ const NODES = [
 const NW = 252, NGAP = 44, NX = 96;
 
 /** The pipeline: drawn big on its own for a moment, then it rises into a strip over the real footage. */
-const Pipeline: React.FC<{ frame: number; enter: number; rise: number; leave: number; active: string }> = ({ frame, enter, rise, leave, active }) => {
+export const Pipeline: React.FC<{ frame: number; enter: number; rise: number; leave: number; active: string }> = ({ frame, enter, rise, leave, active }) => {
   const t = prog(frame, rise, 16, easeDraw);
   const y = lerp(330, 44, t);
   const h = lerp(132, 88, t);
@@ -93,7 +93,7 @@ const Under: React.FC<{ shot: Shot; cam?: Shot["cam"]; start?: number; dur: numb
 };
 
 /** What MapAnything measured, from the live plan: a card over the footage with the figures counting up. */
-const Measured: React.FC = () => {
+export const Measured: React.FC = () => {
   const frame = useCurrentFrame();
   const n = (v: number, d: number) => interpolate(frame, [12 + d, 40 + d], [0, v], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw });
   const rows: [string, string][] = [
@@ -122,7 +122,7 @@ const Measured: React.FC = () => {
 /** The live Meta call log from the server, beside the wait screen: real lines from a live run today
  * (src/data/logs.json), shown exactly as logged, each appearing in order, timed to its real timestamp. */
 type LogLine = { at: string; secs: number; text: string };
-const LogPanel: React.FC<{ dur: number }> = ({ dur }) => {
+export const LogPanel: React.FC<{ dur: number }> = ({ dur }) => {
   const frame = useCurrentFrame();
   const lines = logs.lines as LogLine[];
   const p = prog(frame, 0, 12);
@@ -150,7 +150,7 @@ const LogPanel: React.FC<{ dur: number }> = ({ dur }) => {
 };
 
 /** The answer that live run came back with (a screenshot of the live site), over the left side as the log finishes. */
-const LiveAnswer: React.FC<{ from: number }> = ({ from }) => {
+export const LiveAnswer: React.FC<{ from: number }> = ({ from }) => {
   const frame = useCurrentFrame();
   const p = prog(frame, from, 12);
   if (p <= 0) return null;
@@ -191,7 +191,7 @@ export const Models: React.FC<{ scene: SceneTiming }> = ({ scene }) => {
 
       {/* L06: SAM 3.1's outlines on the real wait screen */}
       <Sequence from={s6} durationInFrames={s7 - s6 + 10}>
-        <Under shot={wait} dur={s7 - s6 + 10} start={0.3} cam={[[0, 1.3, 0, 0.45], [6, 1.36, 0, 0.45]]} />
+        <Under shot={wait} dur={s7 - s6 + 10} start={4.0} cam={[[0, 1.3, 0, 0.45], [6, 1.36, 0, 0.45]]} />
       </Sequence>
       {/* L07: MapAnything's measured plan, real, with the figures */}
       <Sequence from={s7} durationInFrames={s8 - s7 + 10}>

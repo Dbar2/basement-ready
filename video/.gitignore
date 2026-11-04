@@ -9,3 +9,4 @@ public/*.mp4
 public/*.webm
 *.webm
 public/live-run-*.jpg
+public/audio/
