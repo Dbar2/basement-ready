@@ -50,7 +50,7 @@ Saved answers live in two folders:
 
 | Take | How it's sent | Where its answers live | Recorded outcome |
 |---|---|---|---|
-| `david-05x`: David's 0.5× take, 2 min, 601 frames | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | "Yes … after 2 fixes"; One bedroom, $67,776–$115,090, unit 2 60.7 m², fee $797; Build: tape, owners, upstairs, lot line, designer, review, who builds it, submit (14 pages), book (17 pages) |
+| `david-05x`: a private take of a real basement, 2 min | Start sheet: the app's example address, "Family, no rent", then Upload a video | `media/private/replay` (private) | Kept private |
 | `b2-family`: rendered basement b2, 64 s, 320 frames | Posted like the iPhone app, with its true camera path; "Rental at market rent" | `media/private/replay` (too big to commit) | "Looks like yes"; Studio, $48,965–$83,752, unit 2 30.7 m², fee $597; Build: tape, four windows, owners, upstairs, review, who builds it, submit (13 pages), book (16 pages) |
 | `b2-kitchener`: b2 again, as a Kitchener house (desktop Chromium and phone WebKit only) | Posted like the iPhone app with the city "kitchener-on" and no address | `media/private/replay` | "Looks like yes"; Studio, $48,531–$83,318, fee $163 (Kitchener's minimum); Build adds the water meter ("One meter for both", at "unit 1's furnace room", on the submit copy's A1 and A2) and apply before work starts |
 | Sample basement | The app's own sample (its deck cards are in the repo) | The committed Meta model list and two city forms | — |

@@ -5,7 +5,7 @@ import { and, eq, gt, gte, sql } from "drizzle-orm";
 import { Hono, type Context } from "hono";
 import { streamSSE } from "hono/streaming";
 import { randomBytes } from "node:crypto";
-import { mkdirSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
@@ -592,12 +592,15 @@ app.get("/api/ops/summary", async (c) => {
   return c.json({ scans24h: recent.length, spend24h: recent.reduce((s, r) => s + r.cost, 0), queue });
 });
 
-// In production the built web app is served from the same process.
+// In production the built web app is served from the same process. In `pnpm dev` there's no build yet
+// and Vite serves the web app, so the API skips it.
 // /admin: every scan, behind ADMIN_TOKEN (server/admin.ts). Before the web app takes every other path.
 mountAdmin(app);
 
-app.use("/*", serveStatic({ root: "./dist" }));
-app.get("*", serveStatic({ path: "./dist/index.html" }));
+if (existsSync("./dist/index.html")) {
+  app.use("/*", serveStatic({ root: "./dist" }));
+  app.get("*", serveStatic({ path: "./dist/index.html" }));
+}
 
 // PGlite is single-process, so in development the worker runs here. Production runs `pnpm worker`.
 if (usingPglite || process.env.WORKER_INLINE === "1") {

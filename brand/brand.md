@@ -4,7 +4,6 @@ Locked Oct 28, 2026. This replaces "Fresh Plaster," which was rejected: its terr
 
 **Personality:** confident, warm, practical.
 **Idea:** "your basement, scanned, then what it could become." Real footage with a scan drawn over it, then a cutaway of the finished home.
-**Visual references:** `brand/explorations/AD-green.png` (the locked direction), and A and D, which it combines.
 
 ## Palette
 

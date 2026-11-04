@@ -1,5 +1,5 @@
-// Refresh the shelf prices in data/rules/prices-on.json from Home Depot Canada, the way Gablebird gets
-// them: the public Apify actor yugenox~home-depot-canada-scraper, run offline (never by the app), at
+// Refresh the shelf prices in data/rules/prices-on.json from Home Depot Canada with
+// the public Apify actor yugenox~home-depot-canada-scraper, run offline (never by the app), at
 // the Home Depot stores nearest Waterloo Region. A row counts only when it's in CAD, at an Ontario
 // store, with a 10-digit SKU and a homedepot.ca https link, and its name matches the product we
 // asked for at the same pack size. Every existing entry and its source stays; a store price we found

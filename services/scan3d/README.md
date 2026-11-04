@@ -7,7 +7,7 @@ A Python service that runs Meta's **MapAnything** (`facebook/map-anything-apache
 - a per-frame depth lookup, so SAM boxes can be lifted into 3D
 - a fitted room: floor, ceiling, walls, width × depth × height, and how far to trust the scale
 
-It runs on Modal (one L40S, scales to zero) or locally on a Mac for development. Built during the Meta hackathon (Oct 27 – Nov 4, 2026). Background and sources: [`docs/research/mapanything.md`](../../docs/research/mapanything.md).
+It runs on Modal (one L40S, scales to zero) or locally on a Mac for development. Built during the Meta hackathon (Oct 27 – Nov 4, 2026). Background: the [MapAnything code and paper](https://github.com/facebookresearch/map-anything).
 
 ```
 Node worker ──POST /scan (frames + options)──▶ scan3d ──▶ multipart reply: scan.json + points.ply + depth.bin
@@ -145,7 +145,7 @@ Reply: multipart with `index` (`{page, ppm, levels: {size: file}, surfaces: {id:
   "scale": {
     "source": "model", "factor": 1.0,       // factor applied to the model's geometry
     "confidence": "low",                    // "low" (model) | "medium" | "high" (measured, ceiling level)
-    "expectedErrorPct": 20,                 // research note: images-only scale is 10–25% off indoors; 3.5% once aligned
+    "expectedErrorPct": …,                  // a safety margin the rules checks use near a threshold; never shown
     "modelCeilingHeightM": 2.31,            // before the tape fix, so you can show the correction
     "modelMetricScale": 1.46,               // MapAnything's internal metric scale factor
     "known": { "floorToJoistsM": 2.1 }
@@ -268,17 +268,17 @@ const geometry = loader.parse(ply);                          // position + color
 
 ## Scale
 
-MapAnything predicts metric geometry, but from images alone the scale is often 10–25% off indoors (research note §4). Shape within a scan is consistent, so one number fixes everything:
+MapAnything predicts metric geometry, but from images alone the overall scale can be off indoors. Shape within a scan is consistent, so one number fixes everything:
 
-- **No measurement:** `scaleSource: "model"`, `confidence: "low"`, `expectedErrorPct: 20`. Show sizes as "estimated".
-- **`floorToJoistsM` given:** the service fits floor and ceiling planes and sets `factor = tape / scanHeight`. Every point, depth, camera position and length is multiplied by it; rotations and intrinsics don't change. `scaleSource: "user_measurement"`, and `expectedErrorPct` is 3.5 when the ceiling is level (6 otherwise). A tape number more than 1.5× off the scan's estimate is still applied, with a warning to check it.
+- **No measurement:** `scaleSource: "model"`, `confidence: "low"`. Show sizes as "estimated".
+- **`floorToJoistsM` given:** the service fits floor and ceiling planes and sets `factor = tape / scanHeight`. Every point, depth, camera position and length is multiplied by it; rotations and intrinsics don't change. `scaleSource: "user_measurement"`, with `confidence: "high"` when the ceiling is level. A tape number more than 1.5× off the scan's estimate is still applied, with a warning to check it.
 - **No ceiling found:** the measurement can't be used. The scale stays `model`, with a warning.
 
 Plane-to-plane height averages thousands of points, which is why it's the reference. A single window width depends on edge pixels.
 
 ## Pass/fail bar (Thursday's real-basement test)
 
-From the research note: **walls aren't doubled, the floor is one flat plane, and ceiling height is within 5 cm after the one-measurement fix.** `quality.pass` checks the first two and the levelness half of the third automatically.
+The bar: **walls aren't doubled, the floor is one flat plane, and the ceiling is level.** `quality.pass` checks the first two and the levelness half of the third automatically.
 
 | Check | Field | Rule |
 |---|---|---|
@@ -289,7 +289,7 @@ From the research note: **walls aren't doubled, the floor is one flat plane, and
 Then by hand:
 
 1. Tape-measure floor to joists, one window (width and height), and the room length.
-2. Run the scan with `--floor-to-joists`, then check that `widthM`/`depthM` and the lifted window are within about 5% of the tape.
+2. Run the scan with `--floor-to-joists`, then compare `widthM`/`depthM` and the lifted window with the tape.
 3. Open `preview.png` (red walls are the doubled ones) or `points.ply` in Blender.
 
 ```bash
@@ -349,7 +349,7 @@ L40S on Modal is $0.000542/s ($1.95/h), checked Oct 28, 2026. CPU and RAM are bi
 
 | Phase | Time (est.) | Cost |
 |---|---|---|
-| Warm scan, 48 frames: decode + model + fit + export | 10–20 s (model 3–6 s per research note; the fit took 1.4 s for 16 frames on an M3 Pro) | $0.005–0.011 |
+| Warm scan, 48 frames: decode + model + fit + export | 10–20 s (model 3–6 s; the fit took 1.4 s for 16 frames on an M3 Pro) | $0.005–0.011 |
 | Cold start: container + loading 4.9 GB from the Volume | +40–90 s | +$0.02–0.05 |
 | Idle tail before scale-to-zero (`scaledown_window=60`) | +60 s | +$0.033 |
 | **One isolated scan (cold + idle tail)** | ~2–3 min billed | **≈ $0.06–0.10** |

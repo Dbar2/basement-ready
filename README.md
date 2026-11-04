@@ -9,15 +9,17 @@ Everything here was built during the Meta AI Developer Hackathon. The first comm
 - **Demo video (3 min):** _link coming_ <!-- TODO: add the demo video link -->
 
 <p>
-  <img src="docs/screens/wait.jpg" width="200" alt="While it measures: the example's video with SAM's find of the window, and one question with why it's asked">
-  <img src="docs/screens/answer.png" width="200" alt="The answer: the plan with the fix marked, the verdict, the rough cost and the money">
+  <img src="docs/screens/wait.jpg" width="200" alt="While it measures: the example's video with SAM's finds (ducts, a beam, the door, the stairs), and one question with why it's asked">
+  <img src="docs/screens/answer.png" width="200" alt="The answer: yes after 2 fixes, with the fix marked on the measured plan, the rough cost and the money">
   <img src="docs/screens/explain.png" width="200" alt="What's a fire separation? A drawing in section with the rule's source">
   <img src="docs/screens/plan.png" width="200" alt="Is this your basement? The measured plan, editable on the plan itself">
-  <img src="docs/screens/build.png" width="200" alt="Build: the permit set drawn and filled, 0 of 13 ready, and what only you can give">
+  <img src="docs/screens/layouts.png" width="200" alt="Two layouts in 3D that keep the stairs, furnace and window, with one recommended and why">
+  <img src="docs/screens/look.png" width="200" alt="Before and after: the example's own frame, and the design in the look picked, labelled virtually staged">
+  <img src="docs/screens/build.png" width="200" alt="Build: the permit set drawn and filled, 2 of 15 ready, and what only you can give">
   <img src="docs/screens/home.png" width="200" alt="The basement's home base: the goal and the three milestones">
 </p>
 
-_The example basement, at phone size._
+_The example basement on the live site, at phone size (Nov 4, 2026)._
 
 ## Who it's for, and why it matters
 
@@ -35,12 +37,14 @@ It screens; it doesn't decide. The municipality decides, and a designer confirms
 
 ## A 3-minute path for judges
 
-1. Open https://www.basementready.com and tap **Try the example**. It's a real unfinished basement, filmed on a phone and scanned once. Nothing you do is sent.
+1. Open https://www.basementready.com on a phone or a computer and tap **Try the example**. It's a real unfinished basement, filmed on a phone and scanned once. Nothing you do is sent, and no account is needed.
 2. **While it measures** the guide shows the video with what SAM finds, and asks one question at a time, each with why it's asking: a door straight outside, a bathroom rough-in, the look you like. Answer anything, or "Not sure". The top bar shows the three milestones: **Answer · Design · Build**.
 3. **The answer comes first:** yes, yes after fixes, or not as it is, with the fix marked on the measured plan, the rough cost and the money. Tap **What's a fire separation?** for a drawing with the rule's source, or type a question in the ask bar (the example answers from its glossary; on your own basement, Muse Spark answers anything).
 4. **Design:** "Is this your basement?" on the plan itself (tap a wall, drag a knob, or say "the right wall is 5.5 metres"). Then two layouts that keep the stairs, furnace and window where they are, with one recommended and why, and your own frames before and after in the look you picked, labelled "Virtually staged".
 5. **Build:** the permit set, drawn and filled from the scan, with how much is ready. The guide asks only what it can't know (a few tape numbers, the window's size, the owners, the bedrooms upstairs, a look over the sheets), then the money to apply for and who builds it. It ends at **Download the submit copy** and the book (PDF).
-6. **The home base** (https://www.basementready.com/scans/sample, once you've had the answer): the goal, each milestone and where it stands, **Your book (PDF)**, **Share with a designer**, and **Continue**.
+6. **The home base** (https://www.basementready.com/scans/sample, once you've had the answer): the goal, each milestone and where it stands, **Your book (PDF)**, **Share with a designer**, and a **Continue** button to the next step.
+
+The example remembers how far you got in your browser. To start again from the first question, open it in a private window.
 
 ## The Meta models
 
@@ -52,7 +56,7 @@ Every model the app calls at runtime is Meta's. The hosted ones go through the [
 | **Muse Spark 1.3** (`muse-spark-1.3`) | Reads SAM's finds, the proof frames, what the homeowner said and the rules, and says which rules pass, which need a fix and what to ask. It points at the furnace, water heater, panel, rough-in or bulkhead for SAM to outline, and reviews the drawn plan over the video's frames. In the guide it answers questions typed about your own basement, and turns a change in your words ("make the bedroom bigger") into edits to the design. | The trust rule, in code: no proof in the video, no claim. Code does the maths, groups the fixes and prices them. Every guide reply is checked in code before it's said: it never promises eligibility or an approval, uses only dollar figures the facts hold, and cites sources only from the rules pack. Design edits are validated against the design before they're shown. | `server/assess.ts`, `server/pointFinds.ts`, `server/floorplan.ts`, `server/guide/ask.ts`, `server/model/describe.ts` |
 | **Muse Wonder 1.0** (`muse-wonder-1.0`) | Watches the whole take once, with its sound: the rooms in the order they were filmed, which were only seen through a doorway, how they join, ceilings, low ducts and beams, windows, and what the homeowner said about each room. Before "Is this your basement?", it compares the plan with the take. | Its rooms name the 3D areas and decide how they connect on the plan. Each place where the plan and the take disagree becomes one plain yes-or-no question. It describes and never measures. Wonder is in preview, so Spark watches instead if it fails. | `server/watch.ts`, `server/watchScan.ts`, `server/planCheck.ts` |
 | **Muse Image 1.0** (`muse-image-1.0`) | Restyles the homeowner's own frames into the "after" of the before and after: their design, in the look they picked. | Each picture starts from a render of the 3D design over the real frame, from the camera's real position in the video, so the same pieces show from every angle. Every picture is labelled "Virtually staged". | `server/concepts.ts`, `server/views/photoreal.ts` |
-| **Muse Voice Transcribe 1.0** (`muse-voice-transcribe-1.0`) | Turns what the homeowner says while filming ("this could be Mom's room") into text with timings, and what they say into the guide's microphone into their question. | The words from the take go to Spark with the finds, so what the homeowner wants shapes the answer. A spoken question lands in the ask bar to check before it's sent. | `server/pipeline.ts`, `server/meta.ts`, `src/guide/AskBar.tsx` |
+| **Muse Voice Transcribe 1.0** (`muse-voice-transcribe-1.0`) | Turns what the homeowner says while filming ("this could be Mom's room") into text with timings, and what they say into the guide's microphone into their question. | The words from the take go to Spark with the finds, so what the homeowner wants shapes the answer. A spoken question lands in the ask bar to check before it's sent. | `server/pipeline.ts`, `server/meta.ts`, `server/guide/voice.ts`, `src/guide/AskBar.tsx` |
 | **MapAnything** ([`facebook/map-anything-apache`](https://huggingface.co/facebook/map-anything-apache), open weights) | Camera position and metric depth for every frame of an ordinary phone video. No LiDAR needed. | A 3D service around it: picking sharp frames, fitting floor, ceiling and walls, measuring each area and joining them into one basement, the floor plan with rooms, doors and fixtures, a check of each wall against the depth, and the as-built model painted with the video. One tape number rescales everything. | `services/scan3d`, `server/scan3d.ts`, `server/basement.ts`, `server/floorplan.ts`, `server/asBuilt.ts` |
 | **DINOv2** (Meta, open weights) | MapAnything's image encoder. | Pinned at a fixed commit and baked into the 3D service's image. | `services/scan3d/app.py` |
 
@@ -71,7 +75,6 @@ Every model the app calls at runtime is Meta's. The hosted ones go through the [
 - **Layouts, prices and the permit set** are worked out in code from the measured plan (`server/model`, `server/quote`, `server/permit`). What the Build still needs, in order, is a list in code (`server/guide/build.ts`).
 - **The filming guide's voice** is 82 short MP3 clips in `public/voice`, recorded once before shipping with open-source text-to-speech ([Chatterbox](https://github.com/resemble-ai/chatterbox), MIT, with a reference voice made with [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M), Apache-2.0). The scripts are in `tools/voice`. The app never calls a voice model.
 - **The iPhone app** sends ARKit's camera path with the video. ARKit is Apple's tracking, not a model call.
-- **Brand concept boards** in `brand/explorations` were made with an image model while designing the look. The app doesn't use them.
 
 ## How it works
 
@@ -95,6 +98,26 @@ Film it (iPhone app or browser), upload a video, or add 5–20 photos
             ──▶ who builds it ──▶ the submit copy and the book
 ```
 
+### The parts
+
+```mermaid
+flowchart LR
+  web["Web app<br/>React, Vite, three.js"] -->|video or photos, answers| api
+  ios["iPhone app<br/>SwiftUI, ARKit"] -->|video and camera path| api
+  sample["The example<br/>public/samples, recorded once"] -.->|replayed, no calls| api
+  subgraph server["Server: Node and Hono"]
+    api["API and the guide's script"]
+    worker["Job worker: the scan pipeline"]
+    code["Rules, prices, layouts,<br/>permit set and book, in code"]
+    api --> worker
+    api --> code
+  end
+  worker -->|"SAM 3.1, Muse Spark, Muse Wonder,<br/>Muse Image, Muse Voice Transcribe"| meta[("Meta Model API")]
+  worker -->|frames| scan3d["3D service: MapAnything + DINOv2<br/>Python, on Modal or a Mac"]
+  api --- db[("Postgres, or PGlite locally")]
+  api --- files[("Cloudflare R2, or local files")]
+```
+
 ## Your scan is private
 
 - Only the device that filmed a basement (a key kept in that browser) or your account, if you sign in, can open its guide and change anything. Anyone you send a link to sees the answer and changes nothing.
@@ -104,9 +127,11 @@ Film it (iPhone app or browser), upload a video, or add 5–20 photos
 
 ## Run it yourself
 
-You need Node 22 or newer, pnpm 10 and ffmpeg (with ffprobe) on your PATH. The steps below were checked on macOS: from a fresh clone on Oct 30, 2026, and the example's guide again on Oct 31.
+The example basement runs on your own computer with no keys, no GPU and no paid calls. These steps were checked on macOS from a fresh clone on Nov 4, 2026, with Node 22.22 and Node 26.7 and pnpm 10.33.
 
 ### 1. No keys: the example basement
+
+You need Node 22.12 or newer and pnpm 10. No pnpm yet? `corepack enable` (it comes with Node) gives you the version this repo pins.
 
 ```bash
 git clone https://github.com/Dbar2/basement-ready.git
@@ -121,17 +146,13 @@ pnpm install
 ```
 
 ```bash
-cp .env.example .env
-```
-
-```bash
 pnpm dev
 ```
 
-Open http://localhost:5173 and tap **Try the example** (or go straight to http://localhost:5173/scans/sample). It opens the guide while the example measures.
+Open http://localhost:5173 and tap **Try the example** (or go straight to http://localhost:5173/scans/sample/guide). `pnpm dev` is the one command: it starts the API on port 8787 and the web app on 5173.
 
-- The `.env` file has to exist, even with nothing filled in: the API reads it at start.
-- The example is a real scan recorded once and committed under `public/samples`: its frames, SAM's finds, the 3D, the plan and the pictures. The app replays it and its guide is scripted, so the whole flow runs with no Meta key and no GPU, and makes no paid calls.
+- No `.env` is needed. The example is a real scan recorded once and committed under `public/samples`: its frames, SAM's finds, the 3D, the plan and the pictures. The app replays it and its guide is scripted, so it makes no model calls.
+- **Check my basement** opens too, but without a key it says "This copy has no Meta key, so it can't read new videos" and offers the example. It never makes up a result.
 - pnpm may warn that it ignored a build script for `@clerk/shared`. That's fine.
 
 Run the unit tests (no keys, about 20 seconds):
@@ -140,11 +161,27 @@ Run the unit tests (no keys, about 20 seconds):
 pnpm test
 ```
 
-The end-to-end journeys in `tests/e2e` drive the app in real browsers (Chromium and WebKit, phone and desktop sizes), replaying saved model answers instead of calling Meta (`server/replay.ts`). They're being rewritten for the guide, so for now `pnpm test` is the check to run. How record and replay work: [`tests/e2e/README.md`](tests/e2e/README.md). On every push, CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) typechecks, runs the unit tests, builds the app and runs the 3D service's own tests, all without keys.
+The end-to-end journeys in `tests/e2e` drive the app in real browsers (Chromium and WebKit, phone and desktop sizes), replaying saved model answers instead of calling Meta (`server/replay.ts`). The example's journey runs from a fresh clone (it needs Playwright's browsers: `pnpm exec playwright install chromium webkit`):
+
+```bash
+pnpm test:e2e tests/e2e/sample.spec.ts
+```
+
+The other journeys replay takes whose recordings are private, so they need those first. How record and replay work: [`tests/e2e/README.md`](tests/e2e/README.md). On every push, CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) typechecks, runs the unit tests, builds the app and runs the 3D service's own tests, all without keys.
+
+#### If something goes wrong
+
+- **`pnpm: command not found`:** run `corepack enable`, then `pnpm install` again. Or `npm install -g pnpm@10`.
+- **"Unsupported engine", or an error as soon as it starts:** check `node -v`. Vite and Vitest need Node 22.12 or newer.
+- **Port 8787 is already in use:** `API_PORT=8788 pnpm dev` moves the API, and the web app follows it. If 5173 is taken, Vite picks the next free port and prints it.
+- **The example opens on its home base, not the first question:** it remembers how far you got in this browser. Open it in a private window to start from the top.
+- **The 3D stays blank:** the layouts and the 3D need WebGL. Turn on hardware acceleration in your browser.
+- **On Windows:** the scripts use macOS and Linux shell syntax, so run it in WSL.
+- **ffmpeg** (with ffprobe) is only needed for your own videos and photos, not for the example.
 
 ### 2. Your own basement: a Meta key and the 3D
 
-1. Get a Meta Model API key at https://dev.meta.ai/api-keys/ and put it in `.env` as `MODEL_API_KEY`. It stays on the server; the browser never sees it.
+1. Get a Meta Model API key at https://dev.meta.ai/api-keys/. Copy the settings file (`cp .env.example .env`) and put the key in it as `MODEL_API_KEY`. It stays on the server; the browser never sees it. Install ffmpeg (with ffprobe) too: the server uses it to read videos.
 2. Run `pnpm dev`, tap **Check my basement**, enter an Ontario address (or use the demo house), and upload a video or photos.
    - To film from your phone instead, run `pnpm dev:phone`. It serves the app over HTTPS on your Wi-Fi, since phones only open the camera on HTTPS.
    - A two-minute video costs roughly $1.50 of Meta credit, most of it SAM. Local limits default to 5 real scans a day and $25 of calls a day; raise `SCANS_PER_DAY` and `DAILY_COST_CAP_USD` in `.env` if you need more.
@@ -212,6 +249,7 @@ More, including the replay tests and what needs a real phone: [`ios/README.md`](
 
 | What | Licence |
 |---|---|
+| Basement Ready's own code, rules packs and docs | MIT, see [`LICENSE`](LICENSE) |
 | SAM 3.1, Muse Spark, Muse Wonder, Muse Image, Muse Voice Transcribe | Called through the [Meta Model API](https://dev.meta.ai/) under its terms; no weights are in this repo |
 | MapAnything code | Apache-2.0, [facebookresearch/map-anything](https://github.com/facebookresearch/map-anything), pinned at v1.1.3 |
 | MapAnything weights | Apache-2.0, [facebook/map-anything-apache](https://huggingface.co/facebook/map-anything-apache) (not the CC-BY-NC `facebook/map-anything`) |
@@ -263,6 +301,6 @@ Every rule, program and price has its source and the date it was read, in `data/
 | `brand/` | The look: `brand.md`, `ui.md` ("Drawing Set"), tokens |
 | `tests/unit/`, `tests/e2e/`, `tests/fixtures/replay/` | Unit tests; browser journeys; the small committed replay answers |
 | `scripts/`, `tools/` | Development-only tools, never part of the app: building the example, an eval on test basements, a screenshot reviewer for QA, voice and staging asset scripts |
-| `docs/` | Research notes, the capture contract and the README's screenshots (the example only) |
+| `docs/` | The capture contract, saved test logs and the README's screenshots (the example only) |
 
 The screenshot reviewer in `scripts/qa` asks Claude to look at screenshots while we build. It's a development tool only: nothing in `src/` or `server/` imports it, the app's build leaves it out, and the app itself calls only Meta models ([`scripts/qa/README.md`](scripts/qa/README.md)).

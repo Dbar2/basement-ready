@@ -387,7 +387,7 @@
   .guide-bars i { animation: none !important; }
 }
 
-/* ---------- filming with the guide (brand/explorations/M1-filming-guides.png) ---------- */
+/* ---------- filming with the guide ---------- */
 
 /* the find outline: mint corner ticks and a label */
 .cap-flash { position: absolute; z-index: 3; pointer-events: none; border: 1.5px solid color-mix(in srgb, var(--color-mint) 70%, transparent); animation: cap-flash 1600ms var(--ease-out) both; }
