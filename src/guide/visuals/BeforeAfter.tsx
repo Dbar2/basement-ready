@@ -95,35 +95,45 @@ export function BeforeAfterVisual({ scanId, visual, act }: VisualProps<"beforeAf
   }, [data, missing.length, solid]);
   const [snap, setSnap] = useState<{ fn: Snap; hash: string } | null>(null);
   const onReady = useCallback((fn: Snap | null, h: string) => setSnap((s) => (fn ? { fn, hash: h } : s?.hash === h ? null : s)), []);
-  const running = useRef<string | null>(null);
-  const anyMissing = missing.length > 0;
+  // What's showing now, for the run below (which goes on while pictures land) and its late answers.
+  const hashRef = useRef(hash);
+  hashRef.current = hash;
+  const missingRef = useRef(missing);
+  missingRef.current = missing;
   useEffect(() => {
-    if (!snap || !design || snap.hash !== hash || !missing.length || running.current === hash) return;
-    running.current = hash;
+    if (!snap || !design || snap.hash !== hash || !missingRef.current.length) return;
     let stop = false;
     (async () => {
-      for (const a of missing) {
+      for (const a of missingRef.current) {
         if (stop) return;
+        // A frame that won't load or draw says the picture is coming, rather than waiting forever.
+        const none = () => !stop && setAfters((m) => new Map(m).set(a.id, { url: null, making: false }));
         const frame = await loadImage(a.frameUrl).catch(() => null);
-        if (!frame || stop) continue;
+        if (stop) return;
+        if (!frame) {
+          none();
+          continue;
+        }
         const r = await snap.fn(a, frame).catch(() => null);
-        if (!r || stop) continue;
+        if (stop) return;
+        if (!r) {
+          none();
+          continue;
+        }
         setAfters((m) => new Map(m).set(a.id, { url: null, making: true }));
+        // A photo lands whenever it's still this design in this look; only one that passed SAM's check is an after.
+        const done = (url: string | null) => hashRef.current === r.hash && setAfters((m) => new Map(m).set(a.id, { url, making: false }));
         postPicture(scanId, a.id, r.guide, { designHash: r.hash, viewKey: r.view, items: r.items, walls: r.walls, doors: r.doors, finishes: design.finishes })
-          // Only a photo that passed SAM's check is an after.
-          .then((p) => !stop && setAfters((m) => new Map(m).set(a.id, { url: p.url && p.kind === "photo" ? p.url : null, making: false })))
-          .catch(() => !stop && setAfters((m) => new Map(m).set(a.id, { url: null, making: false })));
+          .then((p) => done(p.url && p.kind === "photo" ? p.url : null))
+          .catch(() => done(null));
       }
-    })().finally(() => {
-      if (running.current === hash) running.current = null;
-    });
+    })();
     return () => {
       stop = true;
-      running.current = null;
     };
-    // `missing` only says whether there's anything left to draw.
+    // Started once per design and look, when its canvas is ready.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [snap, hash, anyMissing, scanId]);
+  }, [snap, hash, scanId]);
 
   const pickLook = (look: Parameters<typeof lookName>[0]) => look !== "custom" && act({ type: "setLook", look });
   const looks = <LookPicker look={visual.look} onPick={pickLook} />;
