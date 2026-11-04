@@ -11,7 +11,8 @@ import { chosen, downloadBook } from "../book/bookApi";
 import { Logo, Mark } from "../components/Logo";
 import { getPermitStatus, getWorkspace, useDrawingsLink, type Workspace } from "../workspaceApi";
 import type { Fixture, Model, Pt, Wall } from "../../server/model/types";
-import { getGuide } from "./api";
+import { getGuide, sampleAnswer } from "./api";
+import { DRAWN_FOR_YOU } from "./visuals/BuildVisuals";
 import { guideUrl, MILESTONES, progress, type MilestoneStatus, type Progress } from "./progress";
 import type { Milestone } from "./types";
 import "./home.css";
@@ -67,7 +68,7 @@ export function Home() {
         .catch(() => {});
       if (p.status.design === "done")
         void getPermitStatus(scanId)
-          .then((st) => !gone && setPermit({ done: st.items.filter((i) => i.done).length, total: st.items.length }))
+          .then((st) => !gone && setPermit({ done: st.items.filter((i) => i.done).length + DRAWN_FOR_YOU.length, total: st.items.length + DRAWN_FOR_YOU.length }))
           .catch(() => {});
     })();
     return () => {
@@ -125,12 +126,15 @@ function HomeBase({ scanId, r, owner, p, ws, model, permit }: { scanId: string; 
   const [making, setMaking] = useState(false);
   const design = chosen(model);
   const look = ws?.state.ideas?.finish ?? null;
-  const fixes = r.fixGroups.length;
+  // The example's answers live in this browser: its thread's answer, when there is one.
+  const said = scanId === "sample" ? sampleAnswer() : null;
+  const verdict = said?.verdict ?? r.verdict;
+  const fixes = said ? said.fixes : r.fixGroups.length;
   const goal = r.route === "basement_finish" ? "A finished basement, built to code" : "A legal second home downstairs";
   const where = scanId === "sample" ? "the example basement" : r.demo ? "the demo house" : r.property ? `${r.property.address}, ${r.property.municipality}` : (r.city ?? "your basement");
 
   const lines: Record<Milestone, ReactNode> = {
-    answer: r.verdict === "yes" ? "Yes, as it is" : r.verdict === "fix" ? (fixes ? `Yes, after ${fixes} ${fixes === 1 ? "fix" : "fixes"}` : "Yes, after fixes") : "Not as it is",
+    answer: verdict === "yes" ? "Yes, as it is" : verdict === "fix" ? (fixes ? `Yes, after ${fixes} ${fixes === 1 ? "fix" : "fixes"}` : "Yes, after fixes") : "Not as it is",
     design: p.status.design === "done" && design ? `${design.name}${look && LOOKS[look] ? `, ${LOOKS[look]}` : ""}` : "Pick a layout and a look",
     build:
       p.status.build === "todo" ? (

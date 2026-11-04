@@ -9,7 +9,9 @@ export type GlossaryTerm = "fire_separation" | "egress_window" | "ceiling_height
 // What the visual pane shows. One owner track per kind (see the tracks).
 export type VisualRef =
   | { kind: "video" } // while it measures: their video/photos with finds (C)
-  | { kind: "plan"; mark?: string } // the answer: plan with a check/fix id marked (C)
+  // `verdict`/`fixes`: the answer as the message said it, so the plan's badge counts the same fixes
+  // (the example's answers live in the browser, never on its stored result).
+  | { kind: "plan"; mark?: string; verdict?: "yes" | "fix" | "no"; fixes?: number } // the answer: plan with a check/fix id marked (C)
   | { kind: "explain"; term: GlossaryTerm } // a drawing that explains a term (C)
   | { kind: "planEdit" } // check the plan, editable (D)
   | { kind: "layouts"; designId: string } // clean 3D of a design, chips to switch (E)

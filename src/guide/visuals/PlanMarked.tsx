@@ -80,9 +80,9 @@ export function placeMark(mark: string | undefined, existing: Existing, checks: 
 
 const VERDICT: Record<ScanResult["verdict"], string> = { yes: "Yes", fix: "Yes, after fixes", no: "Not as it is" };
 
-function verdictWords(r: ScanResult) {
-  if (r.verdict !== "fix") return VERDICT[r.verdict];
-  const n = r.fixGroups?.length ?? 0;
+// The message's own answer when it carries one (the example's answers aren't on its stored result).
+function verdictWords(verdict: ScanResult["verdict"], n: number) {
+  if (verdict !== "fix") return VERDICT[verdict];
   return n ? `Yes, after ${n} fix${n === 1 ? "" : "es"}` : VERDICT.fix;
 }
 
@@ -176,9 +176,9 @@ export function PlanMarked({ scanId, visual }: Pick<VisualProps<"plan">, "scanId
 
   return (
     <div className="plan-marked" ref={rootRef} data-state="ready" data-marked={target ? true : undefined}>
-      {result && (
-        <p className="plan-marked-verdict" data-verdict={result.verdict}>
-          <i aria-hidden /> {verdictWords(result)}
+      {(visual.verdict || result) && (
+        <p className="plan-marked-verdict" data-verdict={visual.verdict ?? result?.verdict}>
+          <i aria-hidden /> {visual.verdict ? verdictWords(visual.verdict, visual.fixes ?? 0) : verdictWords(result!.verdict, result!.fixGroups?.length ?? 0)}
         </p>
       )}
       <div className="plan-marked-frame">

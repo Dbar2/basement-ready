@@ -24,6 +24,13 @@ function keepSample(state: GuideState) {
   }
 }
 
+// The example's answer as its guide last said it (its answers live here, never on its stored result),
+// so its home base counts the same fixes as the thread.
+export function sampleAnswer(): { verdict: "yes" | "fix" | "no"; fixes: number } | null {
+  const said = readSample()?.messages.findLast((m) => m.visual?.kind === "plan" && m.visual.verdict)?.visual;
+  return said?.kind === "plan" && said.verdict ? { verdict: said.verdict, fixes: said.fixes ?? 0 } : null;
+}
+
 // Starts the example again from its first question.
 export function forgetSample() {
   try {

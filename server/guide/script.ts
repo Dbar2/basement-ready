@@ -165,7 +165,7 @@ function answerSaid(r: ResultLike): Said {
     { label: "Why that cost?", action: { type: "ask", text: "Why that cost?" } },
     { label: r.verdict === "no" ? "Show me the plan anyway" : "Show me what it could be", action: { type: "go", to: "design" }, primary: true },
   ];
-  return { text: parts.join(" "), choices, visual: { kind: "plan", ...(fixes[0] ? { mark: fixes[0].category } : {}) } };
+  return { text: parts.join(" "), choices, visual: { kind: "plan", verdict: r.verdict, fixes: fixes.length, ...(fixes[0] ? { mark: fixes[0].category } : {}) } };
 }
 const article = (name: string) => (/^[aeiou]/i.test(name) ? `an ${name}` : `a ${name}`);
 

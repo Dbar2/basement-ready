@@ -189,7 +189,8 @@ describe("the guide's answer", () => {
       ["Show me what it could be", true],
     ]);
     expect(m.choices?.[0].action).toEqual({ type: "explain", term: "fire_separation" });
-    expect(m.visual).toEqual({ kind: "plan", mark: "fire" });
+    // The plan's badge counts what the message said (the example's answers are never on its stored result).
+    expect(m.visual).toEqual({ kind: "plan", mark: "fire", verdict: "fix", fixes: 1 });
   });
 
   it("names the first of several fixes, leaves out a cost the quote holds, and says money that depends on answers", () => {

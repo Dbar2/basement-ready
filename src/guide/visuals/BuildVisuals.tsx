@@ -8,11 +8,15 @@ import type { VisualProps } from "../mount";
 import { dollars, useBuild } from "../cards/data";
 import "./build-visuals.css";
 
+// Done for them from the scan: ticked on the list and counted in "N of M ready", so the count never
+// reads 0 beside two ticks. The home base counts them too.
+export const DRAWN_FOR_YOU = ["Drawings to scale", "City forms filled"] as const;
+
 export function PermitVisual({ scanId }: VisualProps<"permit">) {
   const { status, result } = useBuild(scanId);
   const city = result?.authority ?? (result?.city ? `City of ${result.city}` : null);
   if (!status) return <Pane caption={city ? `Your permit set, ${city}` : "Your permit set"} note="Opening your permit set…" />;
-  const total = status.items.length;
+  const total = status.items.length + DRAWN_FOR_YOU.length;
   const ready = total - status.left;
   // One line per kind of thing, in the order the guide asks.
   const groups: { group: string; label: string }[] = [
@@ -27,8 +31,7 @@ export function PermitVisual({ scanId }: VisualProps<"permit">) {
     { group: "review", label: "Each sheet looked over" },
   ];
   const all = [
-    { label: "Drawings to scale", done: true },
-    { label: "City forms filled", done: true },
+    ...DRAWN_FOR_YOU.map((label) => ({ label, done: true })),
     ...groups.filter((g) => status.items.some((i) => i.group === g.group)).map((g) => ({ label: g.label, done: status.items.filter((i) => i.group === g.group).every((i) => i.done) })),
   ];
   // A computer's pane shows every line. A phone's (build-visuals.css, by the pane's own width) shows
