@@ -59,7 +59,18 @@ export class Guide {
   }
 
   async open(scanId: string) {
-    await this.page.goto(`/scans/${scanId}/guide`);
+    const at = new RegExp(`/scans/${scanId}/guide(\\?.*)?$`);
+    // The basement's home base may forward to the guide by itself (after an upload, or the example): a
+    // second navigation to the same address then interrupts it in WebKit, so it's waited for, not raced.
+    // Going there over it cancels the page's own requests (WebKit then reports them as page errors).
+    const onScan = new RegExp(`/scans/${scanId}(\\?.*)?$`).test(this.page.url());
+    if (onScan) await this.page.waitForURL(at, { timeout: 10_000 }).catch(() => {});
+    if (!at.test(this.page.url())) {
+      await this.page.goto(`/scans/${scanId}/guide`).catch((err: unknown) => {
+        if (!/interrupted by another navigation/.test(String(err))) throw err;
+      });
+      await this.page.waitForURL(at);
+    }
     await this.expectOpen();
   }
 
