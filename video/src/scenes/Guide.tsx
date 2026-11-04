@@ -451,7 +451,7 @@ export const EndCard: React.FC = () => {
       <div style={{ marginTop: 18, fontSize: 22, color: C.muted, opacity: p(30), textAlign: "center", lineHeight: 1.5 }}>
         sam-3.1 · muse-spark-1.3 · muse-wonder-1.0 · muse-image-1.0 · muse-voice-transcribe-1.0 · MapAnything · DINOv2
         <br />
-        Voice: Chatterbox (Resemble AI, open source) · Music: “New Day” by Lee Rosevere, CC BY 4.0
+        Voice and music made with ElevenLabs
       </div>
     </div>
   );

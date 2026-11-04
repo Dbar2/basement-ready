@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, Audio, Img, Loop, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { AbsoluteFill, Audio, Img, OffthreadVideo, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
 import take from "./data/take.json";
 import { C } from "./theme";
 import { MONO, SANS } from "./fonts";
@@ -120,6 +120,17 @@ const Rec: React.FC<{ shot: Shot; from?: number; cam?: CamKey[]; rate?: number; 
   <Browser x={x} y={y} w={w} src={shot.file} start={from ?? shot.start} url={shot.url} cam={cam ?? shot.cam} rate={rate} tilt />
 );
 
+/** One of the 3D clips (public/clips), framed on the sheet with a slow push-in. */
+const Clip3D: React.FC<{ file: string; from?: number; rate?: number }> = ({ file, from = 0, rate = 1 }) => {
+  const frame = useCurrentFrame();
+  const push = 1 + frame * 0.0006;
+  return (
+    <div style={{ position: "absolute", left: 160, top: 40, width: 1600, height: 900, borderRadius: 6, overflow: "hidden", boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)", transform: `perspective(2600px) rotateY(${1.6 * Math.sin(frame / 90)}deg)` }}>
+      <OffthreadVideo src={staticFile(`clips/${file}`)} startFrom={Math.round(from * FPS)} playbackRate={rate} muted style={{ width: 1600, height: 900, transform: `scale(${push})` }} />
+    </div>
+  );
+};
+
 /** One stretch of a section: fades and slides in, slides out. */
 const Part: React.FC<{ from: number; to: number; children: React.ReactNode }> = ({ from, to, children }) => (
   <Sequence from={from} durationInFrames={Math.max(1, to - from + 8)}>
@@ -140,7 +151,7 @@ const len = (s: Sec) => Math.round((s.v1 - s.v0) * FPS);
 
 const Hook: React.FC<P> = ({ s }) => {
   const frame = useCurrentFrame();
-  const wipe = prog(frame, 14, 30, easeDraw);
+  const wipe = prog(frame, 40, 34, easeDraw);
   const push = interpolate(frame, [0, len(s)], [1, 1.07]);
   const could = local(s, cue("Could it become"));
   const parent = local(s, cue("For a parent"));
@@ -202,16 +213,14 @@ const Input: React.FC<P> = ({ s }) => {
       </Part>
       {/* SAM 3.1 on the example video: its real tracks, drawn */}
       <Part from={sam - 4} to={map - 4}>
-        <div style={{ position: "absolute", left: 240, top: 210, transform: `perspective(2600px) rotateY(${2.5 * Math.sin(frame / 90)}deg)`, boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)" }}>
-          <Loop durationInFrames={360}>
-            <SamVideo w={1440} />
-          </Loop>
+        <div style={{ position: "absolute", left: 240, top: 210, width: 1440, height: 810, transform: `perspective(2600px) rotateY(${2.5 * Math.sin(frame / 90)}deg)`, boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)" }}>
+          <SamVideo w={1440} />
         </div>
       </Part>
       {/* MapAnything: the points and the solid model, from the live site's own story */}
       <Part from={map - 4} to={wonder - 4}>
-        <Rec shot={SHOTS.home!} from={8.6} y={170} x={285} w={1350} cam={[[0, 1.35, 1, 0.45], [8, 1.45, 1, 0.45]]} />
-        <Sequence from={map + 6 - (map - 4)}>
+        <Clip3D file="01-assemble.mp4" rate={Math.min(1.15, 7 / Math.max(1, (wonder - map) / FPS))} />
+        <Sequence from={Math.round((wonder - map) * 0.55)}>
           <Measured />
         </Sequence>
       </Part>
@@ -301,8 +310,8 @@ const Breakthrough: React.FC<P> = ({ s }) => {
         <Punch text="Drag a wall. Everything updates." at={6} x={140} y={640} size={76} width={1100} mark={3} />
       </Part>
       <Part from={one - 4} to={L}>
-        <Rec shot={SHOTS.home!} from={13.4} y={170} x={285} w={1350} cam={[[0, 1.35, 1, 0.45], [6, 1.5, 1, 0.45]]} />
-        <Punch text="One model, scan to drawings." at={10} x={140} y={70} size={64} width={1500} />
+        <Clip3D file="03-plan-to-3d.mp4" rate={Math.max(1, 8 / Math.max(1, (L - one) / FPS))} />
+        <Punch text="One model, scan to drawings." at={10} x={200} y={70} size={60} width={1500} />
       </Part>
     </>
   );
@@ -312,10 +321,14 @@ const Design: React.FC<P> = ({ s }) => {
   const L = len(s);
   const muse = local(s, cue("Muse Image"));
   const fin = local(s, cue("so you see"));
+  const walk = local(s, cue("and walk around"));
   return (
     <>
-      <Part from={0} to={muse - 4}>
+      <Part from={0} to={walk - 4}>
         <Rec shot={SHOTS.layouts!} from={3.4} cam={[[0, 1.05, 0.2, 0.5], [3, 1.32, 0, 0.5], [7, 1.42, 0, 0.55]]} />
+      </Part>
+      <Part from={walk - 4} to={muse - 4}>
+        <Clip3D file="04-flythrough.mp4" />
       </Part>
       <Part from={muse - 4} to={L}>
         <Rec shot={SHOTS.looks!} from={19.6} cam={[[0, 1.32, 0, 0.5], [9, 1.4, 0, 0.5]]} />
@@ -358,11 +371,7 @@ const Close: React.FC<P> = ({ s }) => {
   return (
     <>
       <Part from={0} to={plain - 4}>
-        <div style={{ position: "absolute", left: 240, top: 230, opacity: 0.9 }}>
-          <Loop durationInFrames={360}>
-            <SamVideo w={1440} offset={150} />
-          </Loop>
-        </div>
+        <Clip3D file="02-finds.mp4" rate={Math.max(1, 8 / Math.max(1, plain / FPS))} />
         <Pipeline frame={frame} enter={4} rise={34} leave={plain + 100} active={frame > 40 ? (["sam", "map", "wonder", "spark", "image"][Math.floor((frame - 40) / 22) % 5]) : ""} />
       </Part>
       <Part from={plain - 4} to={turns - 4}>
@@ -385,7 +394,7 @@ const Close: React.FC<P> = ({ s }) => {
         <Punch text="It screens. The city decides." at={screens - plain + 4} x={140} y={720} size={72} width={1200} />
       </Part>
       <Part from={turns - 4} to={tryIt + 40}>
-        <Rec shot={SHOTS.home!} from={0.4} cam={[[0, 1.0, 0.5, 0.5], [4, 1.3, 0, 0.5]]} />
+        <Rec shot={SHOTS.home!} from={0.4} rate={0.4} cam={[[0, 1.0, 0.5, 0.5], [4, 1.3, 0, 0.5]]} />
       </Part>
       <Sequence from={tryIt + 30}>
         <EndCard />
@@ -406,10 +415,16 @@ const VIEWS: Record<string, { name: string; C: React.FC<P> }> = {
   close: { name: "Under the hood", C: Close },
 };
 
-// Music: the drop (lift seconds into the track) lands on "And the answer comes first".
+// Music (public/audio/music.wav, cues in take.json): its drop lands on "And the answer comes first". The
+// voice needs more time before the drop than the track's intro has, so 8 bars of the calm intro play twice,
+// cut on bar lines, and the track starts with the video.
 const DROP_EDIT = cue("And the answer") / FPS;
-const MUSIC_SKIP = Math.max(0, take.musicDrop - DROP_EDIT);
-const MUSIC_DELAY = Math.max(0, DROP_EDIT - take.musicDrop);
+const M = take.music2;
+const barAt = (k: number) => M.drop - k * M.bar;
+const LOOP_A = barAt(M.loopFromBars), LOOP_B = barAt(M.loopToBars); // repeat [LOOP_A, LOOP_B]
+const REPEAT = LOOP_B - LOOP_A;
+const M0 = M.drop + REPEAT - DROP_EDIT; // where the track starts at frame 0
+const SEAM = LOOP_B - M0; // edit time of the jump back
 const speaking = (t: number) => SECS.some((s) => t >= s.start - 0.25 && t <= s.end + 0.35);
 const musicLevel = (f: number) => {
   // under the voice while it speaks, up in the gaps, with half-second ramps
@@ -417,9 +432,19 @@ const musicLevel = (f: number) => {
   let k = 0;
   for (const d of [-0.5, -0.25, 0, 0.25, 0.5]) k += speaking(t + d) ? 1 : 0;
   const under = k / 5;
-  const level = take.musicFree * (1 - under) + take.musicUnder * under;
-  return level * interpolate(f, [0, 20, TOTAL - 75, TOTAL - 3], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const level = M.free * (1 - under) + M.under * under;
+  return level * interpolate(f, [0, 12, TOTAL - 75, TOTAL - 3], [0, 1, 1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
 };
+
+// Sound design: a whoosh into each section, a riser into the drop, an impact on it, clicks on the verdicts.
+const SFX: { at: number; file: string; vol: number }[] = (() => {
+  const out: { at: number; file: string; vol: number }[] = [];
+  SECS.slice(1).forEach((s, i) => out.push({ at: s.v0 - 0.25, file: ["whoosh-1", "whoosh-3", "whoosh-1"][i % 3], vol: 0.35 }));
+  out.push({ at: DROP_EDIT - 1.77, file: "riser", vol: 0.45 });
+  out.push({ at: DROP_EDIT, file: "impact", vol: 0.6 });
+  for (const p of ["Yes. Not", "Not as it", "Or, yes"]) out.push({ at: cue(p) / FPS, file: "click", vol: 0.5 });
+  return out;
+})();
 
 export const Cut: React.FC = () => {
   const frame = useCurrentFrame();
@@ -446,9 +471,17 @@ export const Cut: React.FC = () => {
           </Sequence>
         );
       })}
-      <Sequence from={Math.round(MUSIC_DELAY * FPS)}>
-        <Audio src={staticFile("audio/music.mp3")} startFrom={Math.round(MUSIC_SKIP * FPS)} volume={(f) => musicLevel(f + Math.round(MUSIC_DELAY * FPS))} />
+      <Sequence from={0} durationInFrames={Math.round(SEAM * FPS) + 2}>
+        <Audio src={staticFile("audio/music.wav")} startFrom={Math.round(M0 * FPS)} volume={(f) => musicLevel(f) * Math.min(1, (Math.round(SEAM * FPS) + 2 - f) / 3)} />
       </Sequence>
+      <Sequence from={Math.round(SEAM * FPS)}>
+        <Audio src={staticFile("audio/music.wav")} startFrom={Math.round(LOOP_A * FPS)} volume={(f) => musicLevel(f + Math.round(SEAM * FPS)) * Math.min(1, (f + 1) / 3)} />
+      </Sequence>
+      {SFX.map((x, i) => (
+        <Sequence key={`sfx-${i}`} from={Math.max(0, Math.round(x.at * FPS))} durationInFrames={90}>
+          <Audio src={staticFile(`audio/sfx/${x.file}.wav`)} volume={x.vol} />
+        </Sequence>
+      ))}
       <Captions />
       <div style={{ display: "none" }}>{durationInFrames}</div>
     </Sheet>
