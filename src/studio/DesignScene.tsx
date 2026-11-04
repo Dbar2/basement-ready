@@ -17,7 +17,7 @@ import { SolidView, type Solid } from "../three/RealScan";
 import { StagedFurniture } from "../three/StagedBasement";
 import { DesignFurniture } from "../views/DesignScene";
 
-export type Finish = "light" | "warm" | "deep";
+export type Finish = "light" | "warm" | "deep" | "plain";
 
 export const css = (name: string, fallback: string) => (typeof document === "undefined" ? fallback : getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback);
 

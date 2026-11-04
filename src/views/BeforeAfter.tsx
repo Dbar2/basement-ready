@@ -5,7 +5,8 @@
 import { useState } from "react";
 import "./views.css";
 
-export function BeforeAfter({ before, after, alt, ratio, start = 50 }: { before: string; after: string; alt: string; ratio?: string; start?: number }) {
+// `afterLabel`: the after's tag ("After · virtually staged" for a finished photo).
+export function BeforeAfter({ before, after, alt, ratio, start = 50, afterLabel = "After" }: { before: string; after: string; alt: string; ratio?: string; start?: number; afterLabel?: string }) {
   const [at, setAt] = useState(start);
   return (
     <div className="before-after" style={ratio ? { aspectRatio: ratio } : undefined}>
@@ -16,7 +17,7 @@ export function BeforeAfter({ before, after, alt, ratio, start = 50 }: { before:
         Before
       </span>
       <span className="ba-tag" data-side="after" aria-hidden="true">
-        After
+        {afterLabel}
       </span>
       <input className="ba-range" type="range" min={0} max={100} value={at} onChange={(e) => setAt(Number(e.target.value))} aria-label="Slide between the frame from your video and the picture" />
     </div>

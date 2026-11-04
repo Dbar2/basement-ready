@@ -1,0 +1,57 @@
+/* The Design milestone's visuals (track E): the layouts in clean 3D (Layouts.tsx), before and after
+   (BeforeAfter.tsx) and the four looks (LookPicker.tsx). Each fills the guide's visual pane; the picture is
+   as big as the pane allows, with its words and chips laid over its edges. */
+
+.gs-lay, .gs-ba { position: relative; height: 100%; min-height: 0; display: grid; background: var(--color-surface); overflow: hidden; }
+.gs-lay-stage, .gs-ba-stage { position: relative; min-height: 0; display: grid; place-items: center; container-type: size; }
+.gs-lay-note, .gs-ba-note { margin: 0; align-self: center; justify-self: center; max-width: 34ch; padding: 0 16px; text-align: center; color: var(--color-ink-muted); font-size: var(--text-small); }
+.gs-lay[data-state="loading"], .gs-lay[data-state="error"], .gs-ba[data-state="loading"], .gs-ba[data-state="error"], .gs-ba[data-state="none"] { place-content: center; }
+
+/* Chips: the designs, or the looks with their swatches. */
+.gs-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.gs-chips::-webkit-scrollbar { display: none; }
+.gs-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 3px 10px; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); color: var(--color-ink); font-weight: 600; font-size: 13px; white-space: nowrap; }
+.gs-chip:hover { border-color: var(--color-ink); }
+.gs-chip[aria-pressed="true"] { border-color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-ink); }
+.gs-look { padding-left: 4px; }
+.gs-swatch { width: 24px; height: 24px; display: grid; grid-template-rows: 1fr 1fr; overflow: hidden; border-radius: 3px; border: 1px solid color-mix(in srgb, var(--color-ink) 15%, transparent); }
+.gs-swatch i { display: block; }
+
+/* The layouts. */
+.gs-lay { grid-template-rows: minmax(0, 1fr); }
+.gs-lay-pic { position: relative; margin: 0; width: min(100cqw, calc(100cqh * var(--ratio, 1.33))); aspect-ratio: var(--ratio, 1.33); animation: fade-in var(--dur-3) var(--ease-out); }
+.gs-lay-pic img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; user-select: none; }
+.gs-lay-room { position: absolute; transform: translate(-50%, -50%); padding: 2px 7px; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); color: var(--color-ink); font-size: var(--text-tiny); line-height: 1.35; white-space: nowrap; pointer-events: none; }
+.gs-lay-room .mono { color: var(--color-ink-muted); font-size: 11px; }
+.gs-lay-about { position: absolute; left: 12px; right: 12px; top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; pointer-events: none; }
+.gs-lay-about > * { pointer-events: auto; }
+.gs-lay-why, .gs-lay-price { margin: 0; padding: 4px 8px; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); font-size: 13px; line-height: 1.3; }
+.gs-lay-why { max-width: min(100%, 52ch); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.gs-lay-why span { color: var(--color-ink-muted); }
+.gs-lay-price { color: var(--color-ink-muted); }
+.gs-lay-price .mono { color: var(--color-ink); font-size: 13px; }
+.gs-lay-use { min-height: 36px; padding: 0 12px; background: var(--color-card); font-size: 14px; }
+.gs-lay-chips { position: absolute; left: 12px; right: 12px; bottom: 10px; }
+
+/* Before and after. */
+.gs-ba { grid-template-rows: minmax(0, 1fr) auto; }
+.gs-ba-fit { position: relative; width: min(100cqw, calc(100cqh * var(--ratio, 1.33))); aspect-ratio: var(--ratio, 1.33); }
+.gs-ba-fit .before-after { width: 100%; height: 100%; border-radius: 0; }
+.gs-ba .ba-tag { top: 8px; bottom: auto; border: var(--line); }
+.gs-ba-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; user-select: none; }
+.gs-ba-progress { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); margin: 0; padding: 4px 10px; border: var(--line); border-radius: var(--radius-1); background: var(--color-card); font-size: 13px; white-space: nowrap; }
+.gs-ba-progress::after { content: ""; display: block; height: 2px; margin-top: 4px; background: linear-gradient(90deg, var(--color-ink) 40%, var(--color-border) 40%); background-size: 250% 100%; animation: gs-ba-progress 1.6s linear infinite; }
+.gs-ba-coming::after { display: none; }
+@keyframes gs-ba-progress { from { background-position: 100% 0; } to { background-position: 0 0; } }
+.gs-ba-bar { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-top: var(--line); background: var(--color-bg); overflow-x: auto; scrollbar-width: none; }
+.gs-ba-bar::-webkit-scrollbar { display: none; }
+.gs-ba-bar .gs-looks { flex: none; overflow: visible; }
+.gs-ba-thumbs { flex: none; display: flex; gap: 6px; padding-left: 10px; border-left: var(--line); }
+.gs-ba-thumb { flex: none; width: 40px; height: 36px; padding: 0; border: var(--line); border-radius: var(--radius-1); overflow: hidden; background: var(--color-surface); }
+.gs-ba-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gs-ba-thumb[aria-pressed="true"] { border-color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-ink); }
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-lay-pic { animation: none; }
+  .gs-ba-progress::after { animation: none; }
+}
