@@ -17,7 +17,27 @@ function auth(): Record<string, string> {
 // Every call to Meta goes out here, so tests can record and replay them (server/replay.ts).
 const call = (route: string, init: RequestInit = {}) => serviceFetch("meta", BASE, route, init, auth);
 
+// One line in the server log for every Meta call: the model ID, what it was given, how long it took.
+// `[meta] sam-3.1 · video · "basement window" · 3.4 s`. Quiet under the unit tests.
+export function logCall(model: string, parts: (string | undefined)[], startedAt: number) {
+  if (process.env.VITEST) return;
+  const secs = ((Date.now() - startedAt) / 1000).toFixed(1);
+  console.log(`[meta] ${[model, ...parts.filter(Boolean), `${secs} s`].join(" · ")}`);
+}
+
+// What a Responses call was given, for the log: the media kind and the first words of its text.
+function callParts(body: any, usage: any): (string | undefined)[] {
+  const content = (body?.input ?? []).flatMap((m: any) => (Array.isArray(m?.content) ? m.content : []));
+  const images = content.filter((c: any) => c.type === "input_image").length;
+  const kind = content.some((c: any) => c.type === "input_video") ? "video" : images ? `${images} image${images === 1 ? "" : "s"}` : "text";
+  const text = String(content.find((c: any) => c.type === "input_text")?.text ?? "").replace(/\s+/g, " ").trim();
+  const said = /^sam/.test(String(body?.model)) && text ? `"${text.slice(0, 40)}"` : undefined;
+  const tokens = usage?.input_tokens ? `${usage.input_tokens} in / ${usage.output_tokens ?? 0} out tokens` : undefined;
+  return [kind, said, tokens];
+}
+
 export async function responses(body: unknown, signal?: AbortSignal): Promise<any> {
+  const startedAt = Date.now();
   const res = await call("/responses", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -27,6 +47,7 @@ export async function responses(body: unknown, signal?: AbortSignal): Promise<an
   const text = await res.text();
   if (!res.ok) throw new Error(`Meta API ${res.status}: ${text.slice(0, 300)}`);
   const r = JSON.parse(text);
+  logCall(String((body as { model?: string }).model), callParts(body, r.usage), startedAt);
   // Spark and Wonder bill by the token; SAM by the frame, counted where it's called.
   const cost = tokenCost(String((body as { model?: string }).model), r.usage);
   if (cost) charge(cost.kind, cost.usd);
@@ -134,9 +155,11 @@ export async function transcribe(wavPath: string): Promise<{ transcript: string;
     }),
   );
   form.append("audio", new Blob([readFileSync(wavPath)], { type: "audio/wav" }), "voice.wav");
+  const startedAt = Date.now();
   const res = await call("/asr/transcribe", { method: "POST", body: form });
   const text = await res.text();
   if (!res.ok) throw new Error(`Transcribe ${res.status}: ${text.slice(0, 300)}`);
+  logCall("muse-voice-transcribe-1.0", [`${Math.round(statSync(wavPath).size / 32000)} s of audio`], startedAt);
   // 16 kHz mono 16-bit WAV: 32,000 bytes a second.
   charge("transcribe", (statSync(wavPath).size / 32000 / 60) * PRICES.transcribeMinute);
   const json = JSON.parse(text);
@@ -162,9 +185,11 @@ export async function museEdit(image: Buffer, mime: string, prompt: string, size
   form.append("n", "1");
   form.append("size", size);
   form.append("image", new Blob([new Uint8Array(image)], { type: mime }), mime === "image/png" ? "frame.png" : "frame.jpg");
+  const startedAt = Date.now();
   const res = await call("/images/edits", { method: "POST", body: form, signal: AbortSignal.timeout(120_000) });
   const text = await res.text();
   if (!res.ok) throw new Error(`Muse Image ${res.status}: ${text.slice(0, 300)}`);
+  logCall("muse-image-1.0", ["edit 1 image", `"${prompt.replace(/\s+/g, " ").slice(0, 40)}"`], startedAt);
   charge("muse_image", PRICES.museImage);
   const b64 = JSON.parse(text).data?.[0]?.b64_json;
   if (!b64) throw new Error("Muse Image returned no image");
