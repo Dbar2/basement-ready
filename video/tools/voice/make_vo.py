@@ -20,16 +20,19 @@ device = os.environ.get("VOICE_DEVICE") or ("mps" if torch.backends.mps.is_avail
 
 model = ChatterboxTTS.from_pretrained(device=device)
 lines = json.load(open("tools/voice/voice-lines.json"))
+# How a line is said, where that differs from its caption (e.g. "SAM three point one" for "SAM 3.1").
+say = json.load(open("tools/voice/say.json")) if os.path.exists("tools/voice/say.json") else {}
 out_dir = "public/voice"
 os.makedirs(out_dir, exist_ok=True)
 
 for line_id, text in lines.items():
     if only and line_id not in only:
         continue
-    for t in range(1, takes + 1):
+    first = 1 + len([f for f in os.listdir(out_dir) if f.startswith(f"{line_id}_t")])
+    for t in range(first, first + takes):
         torch.manual_seed(1000 * t + int(line_id[1:]))
         # A narrator: warm but steady, unhurried.
-        wav = model.generate(text, audio_prompt_path=reference, exaggeration=0.5, cfg_weight=0.3, temperature=0.75)
+        wav = model.generate(say.get(line_id, text), audio_prompt_path=reference, exaggeration=0.5, cfg_weight=0.3, temperature=0.75)
         raw = os.path.join(out_dir, f"{line_id}_t{t}.raw.wav")
         torchaudio.save(raw, wav, model.sr)
         trim = ("silenceremove=start_periods=1:start_threshold=-48dB,areverse,"

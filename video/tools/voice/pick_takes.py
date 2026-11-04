@@ -39,6 +39,7 @@ def longest_gap(segments):
 
 
 lines = json.load(open("tools/voice/voice-lines.json"))
+say = json.load(open("tools/voice/say.json"))
 model = whisper.load_model("small.en")
 picked, report = {}, []
 for line_id, text in lines.items():
@@ -47,7 +48,7 @@ for line_id, text in lines.items():
     for take in takes:
         res = model.transcribe(take, language="en", fp16=False)
         dur = duration(take)
-        score = (round(wer(text, res["text"]), 3), round(longest_gap(res["segments"]), 2))
+        score = (round(min(wer(text, res["text"]), wer(say.get(line_id, text), res["text"])), 3), round(longest_gap(res["segments"]), 2))
         scored.append((score, take, res["text"].strip(), dur))
     if not scored:
         continue
