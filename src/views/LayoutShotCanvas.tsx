@@ -6,19 +6,36 @@ import { useProgress } from "@react-three/drei";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { bounds } from "../../server/model/geometry";
+import { bounds, centroid, polygonArea } from "../../server/model/geometry";
 import type { Design, Existing } from "../../server/model/types";
+import { finishKeyFor } from "../../server/views/finishWords";
 import { useAtlas, type Atlas } from "../three/AsBuilt";
 import { DesignScene, wallHeight } from "../studio/DesignScene";
 import { layoutCamera } from "./layoutCamera";
 
 export const SHOT_SIZE: [number, number] = [960, 720];
+
+// A room's name where it shows in the picture: its middle on the floor, as shares of the picture's
+// width and height (0..1 from the top left).
+export type ShotLabel = { roomId: string; name: string; areaM2: number; x: number; y: number };
+
+// The suite's rooms (2 m² or more) where the camera sees them.
+function labelsOf(design: Design, camera: THREE.Camera): ShotLabel[] {
+  return design.proposed.rooms
+    .filter((r) => r.unit === 2 && polygonArea(r.polygon) >= 2)
+    .flatMap((r) => {
+      const [x, z] = centroid(r.polygon);
+      const v = new THREE.Vector3(x, 0.1, z).project(camera);
+      const at = { x: (v.x + 1) / 2, y: (1 - v.y) / 2 };
+      return at.x > 0.04 && at.x < 0.96 && at.y > 0.04 && at.y < 0.96 ? [{ roomId: r.id, name: r.name, areaM2: polygonArea(r.polygon), ...at }] : [];
+    });
+}
 const SETTLE_FRAMES = 30; // frames drawn with nothing loading and nothing added before the picture is kept
 const MIN_MS = 1200; // never sooner than this after a design goes in: its pieces load in their own time
 const SHARPEST_MS = 4000; // past this, the first paint (1024) does: a card is small
 const GIVE_UP_MS = 20000; // keep what's there by then, painted or not
 
-function Snapper({ design, existing, atlas, onShot }: { design: Design; existing: Existing; atlas: Atlas | null; onShot: (blob: Blob | null) => void }) {
+function Snapper({ design, existing, atlas, onShot }: { design: Design; existing: Existing; atlas: Atlas | null; onShot: (blob: Blob | null, labels: ShotLabel[]) => void }) {
   const { camera, gl, size, scene } = useThree();
   const loading = useProgress((s) => s.active);
   const quiet = useRef(0);
@@ -64,17 +81,18 @@ function Snapper({ design, existing, atlas, onShot }: { design: Design; existing
     if ((quiet.current < SETTLE_FRAMES || age < MIN_MS) && age < GIVE_UP_MS) return;
     done.current = true;
     // The frame just drawn is still in the buffer (preserveDrawingBuffer).
-    gl.domElement.toBlob((blob) => onShot(blob), "image/webp", 0.86);
+    const labels = labelsOf(design, camera);
+    gl.domElement.toBlob((blob) => onShot(blob, labels), "image/webp", 0.86);
   });
   return null;
 }
 
-export function LayoutShotCanvas({ design, existing, atlas, onShot }: { design: Design; existing: Existing; atlas: Atlas | null; onShot: (blob: Blob | null) => void }) {
+export function LayoutShotCanvas({ design, existing, atlas, onShot }: { design: Design; existing: Existing; atlas: Atlas | null; onShot: (blob: Blob | null, labels: ShotLabel[]) => void }) {
   const [w, h] = SHOT_SIZE;
   return (
     <div aria-hidden style={{ position: "fixed", left: -10 - w, top: 0, width: w, height: h, opacity: 0, pointerEvents: "none" }}>
       <Canvas dpr={1} gl={{ preserveDrawingBuffer: true, antialias: true, alpha: true }} camera={{ fov: 35, position: [0, 10, 10] }}>
-        <DesignScene existing={existing} design={design} built={{ atlas }} overview rated={false} reveal={false} />
+        <DesignScene existing={existing} design={design} finish={finishKeyFor(design.finishes)} built={{ atlas }} overview rated={false} reveal={false} />
         <Snapper design={design} existing={existing} atlas={atlas} onShot={onShot} />
       </Canvas>
     </div>
@@ -84,8 +102,8 @@ export function LayoutShotCanvas({ design, existing, atlas, onShot }: { design: 
 // For src/views/layoutShots.tsx, loaded only when a card needs a picture: the scan's paint first (the
 // example's is in the repo, a real scan's comes from the server), then each design in turn in one canvas.
 // `painted`: false while the server is still painting (the picture is plain and is drawn again later).
-export default function LayoutShots({ scanId, existing, design, onShot }: { scanId: string; existing: Existing; design: Design; onShot: (blob: Blob | null, painted: boolean) => void }) {
+export default function LayoutShots({ scanId, existing, design, onShot }: { scanId: string; existing: Existing; design: Design; onShot: (blob: Blob | null, labels: ShotLabel[], painted: boolean) => void }) {
   const { atlas, status } = useAtlas(scanId, existing);
   if (status === "loading") return null;
-  return <LayoutShotCanvas design={design} existing={existing} atlas={atlas} onShot={(blob) => onShot(blob, status !== "painting")} />;
+  return <LayoutShotCanvas design={design} existing={existing} atlas={atlas} onShot={(blob, labels) => onShot(blob, labels, status !== "painting")} />;
 }

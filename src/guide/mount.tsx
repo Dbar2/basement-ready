@@ -3,10 +3,11 @@
 // its kinds show a labelled stub, so the guide always has something in the pane.
 import type { ComponentType } from "react";
 import { BUILD_CARDS } from "./cards";
-import { VisualStub } from "./stubs";
 import type { CardRef, GuideAction, VisualRef } from "./types";
+import { BeforeAfterVisual } from "./visuals/BeforeAfter";
 import { BuildersVisual, MoneyVisual, PermitVisual } from "./visuals/BuildVisuals";
 import { Explain } from "./visuals/Explain";
+import { Layouts } from "./visuals/Layouts";
 import { PlanEdit } from "./visuals/PlanEdit";
 import { PlanMarked } from "./visuals/PlanMarked";
 import { VideoFinds } from "./visuals/VideoFinds";
@@ -29,8 +30,9 @@ const VISUALS: { [K in VisualKind]: ComponentType<VisualProps<K>> } = {
   plan: PlanMarked,
   explain: Explain,
   planEdit: PlanEdit, // track D: check the plan, editable
-  layouts: VisualStub,
-  beforeAfter: VisualStub,
+  // The Design milestone (track E).
+  layouts: Layouts,
+  beforeAfter: BeforeAfterVisual,
   // The Build milestone (track F).
   permit: PermitVisual,
   money: MoneyVisual,

@@ -41,7 +41,7 @@ export type Finish = {
   rug: string;
   swatch: [string, string];
 };
-export const FINISHES: Record<"light" | "warm" | "deep", Finish> = {
+export const FINISHES: Record<"light" | "warm" | "deep" | "plain", Finish> = {
   light: {
     label: "Light oak",
     floor: "laminate_floor_02",
@@ -74,6 +74,17 @@ export const FINISHES: Record<"light" | "warm" | "deep", Finish> = {
     cabinet: "#34473C",
     rug: "#BEB8AB",
     swatch: ["#34473C", "#A87A4F"],
+  },
+  plain: {
+    label: "Plain",
+    floor: "laminate_floor_02",
+    wall: "#F7F7F4",
+    sofa: "#C9CCC6",
+    bedding: "#F5F5F2",
+    throw: "#AEB3AC",
+    cabinet: "#F1F1EE",
+    rug: "#E3E3DE",
+    swatch: ["#F4F4F1", "#BFC3BE"],
   },
 };
 export type FinishKey = keyof typeof FINISHES;

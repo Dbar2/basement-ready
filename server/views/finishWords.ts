@@ -4,15 +4,31 @@
 import type { Finishes, FurnitureKind } from "../model/types";
 import { STYLES, type StyleId } from "../ideas/styles";
 
-// The studio's three finishes (src/three/StagedBasement.tsx FINISHES), which the 3D draws.
-export type FinishKey = "light" | "warm" | "deep";
+// The four looks (src/three/StagedBasement.tsx FINISHES), which the 3D draws and the guide offers.
+export type FinishKey = "light" | "warm" | "deep" | "plain";
 
 // The 3D finish for a design's floor and style.
 export function finishKeyFor(f: Partial<Pick<Finishes, "floor" | "style">>): FinishKey {
   const t = `${f.floor ?? ""} ${f.style ?? ""}`.toLowerCase();
   if (/green|deep|dark/.test(t)) return "deep";
+  if (/plain|bright/.test(t)) return "plain";
   if (/warm|walnut|wood floor|hardwood|brown/.test(t)) return "warm";
   return "light";
+}
+
+// Each look as a design's finishes: what the guide's "Light oak", "Warm wood", "Deep green" and "Plain"
+// put on the chosen design (the floor and walls in the words its pictures are asked for). Light oak is
+// the seed's own (server/model/seed.ts DEFAULT_FINISHES), so a design seeded in it keeps its pictures.
+export const LOOK_FINISHES: Record<FinishKey, Pick<Finishes, "style" | "floor" | "walls">> = {
+  light: { style: "light", floor: "Light oak laminate", walls: "Warm white" },
+  warm: { style: "warm", floor: "Warm wood plank", walls: "Cream" },
+  deep: { style: "deep", floor: "Warm wood plank", walls: "Warm white" },
+  plain: { style: "plain", floor: "Pale grey laminate", walls: "Bright white" },
+};
+
+// A design in a look: its finishes swapped for the look's, everything else as it is.
+export function withLook<D extends { finishes: Finishes }>(design: D, look: FinishKey): D {
+  return { ...design, finishes: { ...design.finishes, ...LOOK_FINISHES[look] } };
 }
 
 // What each 3D finish looks like, in words: its floor, its feel, and the colour of a piece the
@@ -33,11 +49,16 @@ const KEY_WORDS: Record<FinishKey, { floor: string; feel: string; colours: Parti
     feel: "rich and calm: deep green cabinets, grey-green linen, oak and black metal",
     colours: { sofa: "grey-green linen", armchair: "grey-green linen", bed: "white linen", kitchen: "deep green flat-front", vanity: "deep green" },
   },
+  plain: {
+    floor: "pale grey oak laminate plank",
+    feel: "plain and bright: bright white walls, a pale grey floor, white cabinets and simple light grey fabrics",
+    colours: { sofa: "light grey linen", armchair: "light grey linen", bed: "white linen", kitchen: "white flat-front", vanity: "white" },
+  },
 };
 
 const lower = (s: string | undefined) => (s ?? "").trim().toLowerCase();
 
-const STUDIO = new Set<string>(["light", "warm", "deep"]);
+const STUDIO = new Set<string>(["light", "warm", "deep", "plain"]);
 
 // The words for a design's finishes. The floor is the one they picked: on their board, or in the
 // studio (whose finish brings its own floor, unless the one they have already goes with it).
@@ -72,6 +93,7 @@ const WALL_PAINT: [RegExp, string][] = [
   [/sage/, "#C9D2C1"],
   [/blue/, "#D3DDE4"],
   [/greige|beige/, "#DDD6CA"],
+  [/bright white/, "#F7F7F4"],
   [/cream/, "#EFE7D8"],
   [/warm grey|warm gray/, "#D2CFC9"],
   [/grey|gray/, "#DADCDB"],

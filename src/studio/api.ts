@@ -4,8 +4,10 @@
 import { ModelSchema } from "../../server/model/schema";
 import type { Design, Edit, Existing, Finishes, Model, Mood } from "../../server/model/types";
 import { authHeaders as headers } from "../api";
-import { SAMPLE_MOOD } from "../ideas/api";
 import { getWorkspace, saveWorkspace } from "../workspaceApi";
+
+// The example's board from the old swipe deck (retired), still read so one made before the guide keeps its finishes.
+const SAMPLE_MOOD = "br-sample-mood";
 
 export async function loadModel(scanId: string): Promise<{ model: Model; saved: boolean }> {
   if (scanId === "sample") {
