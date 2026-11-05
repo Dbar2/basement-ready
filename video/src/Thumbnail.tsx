@@ -4,28 +4,23 @@ import { C } from "./theme";
 import { SANS } from "./fonts";
 import { Mark } from "./components/kit";
 
-// The YouTube thumbnail: the example's real before/after from the app (its own "virtually staged"
-// label stays on), and the question in the brand's type. Frame: public/footage/thumb-frame.jpg,
-// cut from the looks recording (tools/record) at 30.6 s.
+// The YouTube thumbnail: David's real basement before and after, from his live run on the site (the
+// app's own "Before" and "After · virtually staged" labels stay on), and the question in the brand's type.
+// Image: public/david/thumb-pair.jpg, cropped from media/video-david-run/09-before-after.jpg.
 export const Thumbnail: React.FC = () => (
   <AbsoluteFill style={{ backgroundColor: C.bg, fontFamily: SANS, color: C.ink }}>
-    <div style={{ position: "absolute", left: 470, top: 40, width: 770, height: 434, borderRadius: 6, overflow: "hidden", border: `2px solid ${C.ink}` }}>
-      <Img src={staticFile("footage/thumb-frame.jpg")} style={{ width: 770, height: 434, display: "block" }} />
-    </div>
-    <div style={{ position: "absolute", left: 470, top: 486, fontSize: 19, color: C.muted }}>
-      The example basement, before and after · virtually staged
-    </div>
-    <div style={{ position: "absolute", left: 44, top: 40, width: 400, fontWeight: 900, fontSize: 82, letterSpacing: "-0.045em", lineHeight: 0.93 }}>
+    <div style={{ position: "absolute", left: 44, top: 44, width: 640, fontWeight: 900, fontSize: 104, letterSpacing: "-0.045em", lineHeight: 0.93 }}>
       Could your basement be a home?
     </div>
-    <div style={{ position: "absolute", left: 44, right: 44, top: 560, height: 2, background: C.ink }} />
-    <div style={{ position: "absolute", left: 44, top: 590, display: "flex", alignItems: "center", gap: 18 }}>
-      <Mark h={64} />
-      <span style={{ fontWeight: 800, fontSize: 52, letterSpacing: "-0.03em" }}>Basement Ready</span>
+    <div style={{ position: "absolute", left: 48, top: 470, fontSize: 30, fontWeight: 600, color: C.ink }}>Film it once. Get the answer, the plan and the permit set.</div>
+    <div style={{ position: "absolute", left: 44, right: 520, top: 560, height: 2, background: C.ink }} />
+    <div style={{ position: "absolute", left: 44, top: 600, display: "flex", alignItems: "center", gap: 16 }}>
+      <Mark h={60} />
+      <span style={{ fontWeight: 800, fontSize: 46, letterSpacing: "-0.03em" }}>Basement Ready</span>
     </div>
-    <div style={{ position: "absolute", right: 44, top: 600, display: "flex", alignItems: "center", gap: 22 }}>
-      <span style={{ fontSize: 26, fontWeight: 600 }}>Film it on your phone</span>
-      <span style={{ background: C.mint, color: C.ink, fontWeight: 700, fontSize: 26, padding: "12px 22px", borderRadius: 6 }}>basementready.com</span>
+    <span style={{ position: "absolute", left: 470, top: 604, background: C.mint, color: C.ink, fontWeight: 700, fontSize: 26, padding: "12px 20px", borderRadius: 6 }}>basementready.com</span>
+    <div style={{ position: "absolute", left: 862, top: 30, width: 374, height: 663, borderRadius: 6, overflow: "hidden", border: `2px solid ${C.ink}` }}>
+      <Img src={staticFile("david/thumb-pair.jpg")} style={{ width: 374, height: 663, display: "block" }} />
     </div>
   </AbsoluteFill>
 );
