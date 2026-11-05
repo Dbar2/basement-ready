@@ -377,12 +377,12 @@ const Breakthrough: React.FC<P> = ({ s }) => {
         <Run n="07-plan-wall-by-tape" cam={[[0, 1.3, 0.4, 0.3], [1.8, 2.0, 0.42, 0.22]]} />
       </Part>
       <Part from={upd - 4} to={one - 4}>
-        <Run n="04-answer-plan" cam={[[0, 1.3, 1, 0.6], [3, 1.6, 1, 0.62]]} />
+        <Rec shot={SHOTS.plan!} from={11.4} cam={[[0, 1.2, 0.35, 0.55], [3, 1.4, 0.35, 0.6]]} />
         <Punch text="Drag a wall. Everything updates." at={6} x={140} y={720} size={72} width={1100} mark={3} />
       </Part>
       <Part from={one - 4} to={L}>
-        <Clip3D file="example-03-plan-to-3d.mp4" rate={Math.max(1, 8 / Math.max(1, (L - one) / FPS))} />
-        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>The example basement: its measured plan, rising into a layout in 3D</div>
+        <Clip3D file="example-03-plan-to-3d.mp4" rate={Math.min(1, 3.6 / Math.max(1, (L - one) / FPS))} />
+        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>The example basement: its measured plan, drawn from the scan</div>
         <Punch text="One model, scan to drawings." at={10} x={200} y={70} size={60} width={1500} />
       </Part>
     </>
@@ -428,13 +428,11 @@ const Build: React.FC<P> = ({ s }) => {
           </>
         )}
       </Part>
-      <Part from={honest - 4} to={even - 4}>
+      <Part from={honest - 4} to={L}>
         <Run n="10-build-permit-2of17" cam={[[0, 1.5, 0.25, 0.5], [2, 2.1, 0.2, 0.62]]} />
         <Punch text="Honest about what's left." at={8} x={790} y={826} size={62} width={940} mark={3} />
       </Part>
-      <Part from={even - 4} to={L}>
-        <Run n="10-build-permit-2of17" cam={[[0, 1.4, 1, 0.75], [3, 1.7, 1, 0.8]]} />
-      </Part>
+      <div style={{ display: "none" }}>{even}</div>
     </>
   );
 };
@@ -450,8 +448,9 @@ const Close: React.FC<P> = ({ s }) => {
   return (
     <>
       {take.howClip ? (
-        <Part from={0} to={screens - 4}>
-          <Clip3D file="how-it-works.mp4" rate={Math.max(1, take.howClip / Math.max(1, (screens - 4) / FPS))} />
+        <Part from={0} to={turns - 4}>
+          <Clip3D file="how-it-works.mp4" rate={Math.max(1, take.howClip / Math.max(1, (turns - 4) / FPS))} />
+          <Punch text="It screens. The city decides." at={screens} x={200} y={760} size={68} width={1200} />
         </Part>
       ) : null}
       <Part from={take.howClip ? -999 : 0} to={take.howClip ? -990 : plain - 4}>
@@ -461,7 +460,7 @@ const Close: React.FC<P> = ({ s }) => {
         <LogPanel dur={70} />
         <Pipeline frame={frame} enter={4} rise={34} leave={plain + 100} active={frame > 40 ? (["sam", "map", "wonder", "spark", "image"][Math.floor((frame - 40) / 22) % 5]) : ""} />
       </Part>
-      <Part from={take.howClip ? screens - 4 : plain - 4} to={turns - 4}>
+      <Part from={take.howClip ? -999 : plain - 4} to={take.howClip ? -990 : turns - 4}>
         <Run n="04-answer-plan" cam={[[0, 1.3, 0.2, 0.5], [6, 1.4, 0.2, 0.5]]} />
         <div style={{ position: "absolute", left: 1080, top: 200, width: 640, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "24px 30px", fontFamily: SANS }}>
           <div style={{ fontWeight: 900, fontSize: 46, letterSpacing: "-0.035em", lineHeight: 1 }}>Checked in code</div>
@@ -480,14 +479,24 @@ const Close: React.FC<P> = ({ s }) => {
         </div>
         <Punch text="It screens. The city decides." at={screens - (take.howClip ? screens - 4 : plain - 4)} x={140} y={740} size={72} width={1200} />
       </Part>
-      <Part from={turns - 4} to={tryIt + 40}>
+      <Part from={turns - 4} to={tryIt + 14}>
         <Browser x={180} y={46} w={1560} src="footage/desktop-home.mp4" start={0.4} rate={0.4} url="basementready.com" cam={[[0, 1.0, 0.5, 0.5], [4, 1.3, 0, 0.5]]} tilt />
       </Part>
-      <Sequence from={tryIt + 30}>
-        <EndCard />
+      <Sequence from={tryIt + 16}>
+        <EndHold />
       </Sequence>
       <div style={{ display: "none" }}>{L}</div>
     </>
+  );
+};
+
+/** The end card on its own sheet, fading up once and held to the end. */
+const EndHold: React.FC = () => {
+  const frame = useCurrentFrame();
+  return (
+    <AbsoluteFill style={{ backgroundColor: C.bg, opacity: prog(frame, 0, 10) }}>
+      <EndCard />
+    </AbsoluteFill>
   );
 };
 
