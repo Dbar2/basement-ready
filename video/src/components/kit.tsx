@@ -249,9 +249,13 @@ export const Browser: React.FC<{
   const c = camAt(cam, frame / 30);
   const c0 = camAt(cam, (frame - 1) / 30);
   const blur = Math.min(3.5, Math.abs(c.z - c0.z) * 140 + (Math.abs(c.fx - c0.fx) + Math.abs(c.fy - c0.fy)) * 180);
-  const rotY = tilt ? 3.2 * Math.sin(frame / 95 + x / 400) : 0;
-  const rotX = tilt ? 1.6 + 1.1 * Math.sin(frame / 130) : 0;
+  const dir = src.length % 2 ? 1 : -1;
+  const k = easeOut(Math.min(1, Math.max(0, frame / 150)));
+  const rotY = tilt ? dir * (-15 + 23 * k) + 1.2 * Math.sin(frame / 70) : 0;
+  const rotX = tilt ? 7 - 4 * k : 0;
+  const dolly = tilt ? -150 + 190 * easeOut(Math.min(1, Math.max(0, frame / 120))) : 0;
   const floatY = tilt ? 5 * Math.sin(frame / 55) : 0;
+  const glare = Math.min(1, Math.max(0, (frame - 6) / 34));
   // keep the zoomed picture inside the frame: translate so the focus point moves toward the centre
   const tx = (0.5 - c.fx) * w * (c.z - 1);
   const ty = (0.5 - c.fy) * h * (c.z - 1);
@@ -271,8 +275,8 @@ export const Browser: React.FC<{
         background: C.card,
         overflow: "hidden",
         opacity: p,
-        transform: tilt ? `perspective(2600px) rotateY(${rotY}deg) rotateX(${rotX}deg) translateY(${floatY}px)` : undefined,
-        boxShadow: tilt ? "0 28px 64px -30px rgb(15 42 30 / 0.5)" : undefined,
+        transform: tilt ? `perspective(1800px) translateZ(${dolly}px) rotateY(${rotY}deg) rotateX(${rotX}deg) translateY(${floatY}px)` : undefined,
+        boxShadow: tilt ? "0 50px 90px -40px rgb(15 42 30 / 0.55), 0 12px 24px -12px rgb(15 42 30 / 0.25)" : undefined,
       }}
     >
       <div style={{ height: bar, display: "flex", alignItems: "center", gap: 8, padding: "0 16px", borderBottom: `1px solid ${C.border}` }}>
@@ -302,6 +306,9 @@ export const Browser: React.FC<{
             <OffthreadVideo src={staticFile(src)} startFrom={Math.round(start * 30)} playbackRate={rate} muted style={{ width: w, height: h, display: "block" }} />
           )}
         </div>
+        {tilt && glare > 0 && glare < 1 && (
+          <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "linear-gradient(105deg, rgba(255,255,255,0) 40%, rgba(255,255,255,0.28) 50%, rgba(255,255,255,0) 60%)", transform: `translateX(${(glare * 2 - 1) * 110}%)` }} />
+        )}
       </div>
     </div>
   );
@@ -311,6 +318,7 @@ export const Browser: React.FC<{
 export const Phone: React.FC<{
   x: number; y: number; h: number; src?: string; start?: number; p?: number; rate?: number; children?: React.ReactNode;
 }> = ({ x, y, h, src, start = 0, p = 1, rate = 1, children }) => {
+  const frame = useCurrentFrame();
   const sw = (h - 28) * (390 / 844);
   const w = sw + 28;
   return (
@@ -327,6 +335,8 @@ export const Phone: React.FC<{
         padding: 11,
         opacity: p,
         boxSizing: "border-box",
+        transform: `perspective(1800px) rotateY(${-18 + 24 * easeOut(Math.min(1, frame / 150))}deg) rotateX(5deg)`,
+        boxShadow: "0 50px 90px -40px rgb(15 42 30 / 0.55)",
       }}
     >
       <div style={{ width: "100%", height: "100%", borderRadius: 42, overflow: "hidden", background: C.card, position: "relative" }}>

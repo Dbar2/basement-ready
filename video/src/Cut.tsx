@@ -126,7 +126,7 @@ const Clip3D: React.FC<{ file: string; from?: number; rate?: number; x?: number;
   const push = 1 + frame * 0.0006;
   const h = (w * 9) / 16;
   return (
-    <div style={{ position: "absolute", left: x, top: y, width: w, height: h, borderRadius: 6, overflow: "hidden", boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)", transform: `perspective(2600px) rotateY(${1.6 * Math.sin(frame / 90)}deg)` }}>
+    <div style={{ position: "absolute", left: x, top: y, width: w, height: h, borderRadius: 6, overflow: "hidden", boxShadow: "0 50px 90px -40px rgb(15 42 30 / 0.55)", transform: `perspective(1800px) translateZ(${-120 + 160 * easeOut(Math.min(1, frame / 120))}px) rotateY(${-12 + 20 * easeOut(Math.min(1, frame / 160))}deg) rotateX(${6 - 4 * easeOut(Math.min(1, frame / 160))}deg)` }}>
       <OffthreadVideo src={staticFile(`clips/${file}`)} startFrom={Math.round(from * FPS)} playbackRate={rate} muted style={{ width: w, height: h, transform: `scale(${push})` }} />
     </div>
   );
@@ -140,9 +140,10 @@ const Part: React.FC<{ from: number; to: number; children: React.ReactNode }> = 
 );
 const PartIn: React.FC<{ dur: number; children: React.ReactNode }> = ({ dur, children }) => {
   const frame = useCurrentFrame();
-  const i = prog(frame, 0, 9, easeOut);
+  const i = prog(frame, 0, 10, easeOut);
   const o = 1 - prog(frame, dur - 8, 8, easeDraw);
-  return <AbsoluteFill style={{ opacity: Math.min(i, o), transform: `translateX(${(1 - i) * 90 - (1 - o) * 90}px)`, filter: i < 1 || o < 1 ? `blur(${((1 - i) + (1 - o)) * 6}px)` : undefined }}>{children}</AbsoluteFill>;
+  const scale = (0.88 + 0.12 * i) * (1 + 0.16 * (1 - o));
+  return <AbsoluteFill style={{ opacity: Math.min(i, o), transform: `scale(${scale})`, filter: i < 1 || o < 1 ? `blur(${((1 - i) * 6 + (1 - o) * 9).toFixed(2)}px)` : undefined }}>{children}</AbsoluteFill>;
 };
 
 // ---- sections (each gets local frames: 0 = its visual start)
@@ -538,6 +539,7 @@ export const Cut: React.FC = () => {
   const cur = SECS.find((s) => frame / FPS >= s.v0 && frame / FPS < s.v1) ?? SECS[SECS.length - 1];
   return (
     <Sheet name={VIEWS[cur.id].name} index={SECS.indexOf(cur) + 1} of={SECS.length}>
+      <AbsoluteFill style={{ backgroundImage: `linear-gradient(${C.border} 1px, transparent 1px), linear-gradient(90deg, ${C.border} 1px, transparent 1px)`, backgroundSize: "80px 80px", backgroundPosition: `${-(frame * 0.35) % 80}px ${-(frame * 0.12) % 80}px`, opacity: 0.45, filter: "blur(0.6px)" }} />
       {SECS.map((s, i) => {
         const V = VIEWS[s.id].C;
         const from = Math.round(s.v0 * FPS);
