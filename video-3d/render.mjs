@@ -31,7 +31,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: scale });
   page.on("console", (m) => console.log("[page]", m.text()));
   page.on("pageerror", (e) => console.log("[page error]", e.message));
-  await page.goto(`http://localhost:5199/?shot=${shot}`);
+  await page.goto(`http://localhost:5199/?shot=${shot}${process.env.SCAN_DIR ? "&src=private" : ""}`);
   await page.waitForFunction(() => typeof window.__frame === "function", null, { timeout: 60000 });
   // Warm up until the scan, textures and models are in and the first frame has drawn.
   for (let i = 0; i < 600; i++) {

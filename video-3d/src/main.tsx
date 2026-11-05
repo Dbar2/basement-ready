@@ -10,6 +10,7 @@ import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import { createRoot } from "react-dom/client";
 import * as THREE from "three";
 import { frames as poses } from "../../public/samples/sample/3d/scan.json";
+import type { Layout, Plan } from "../../src/api";
 import { EXAMPLE } from "../../src/marketing/example";
 import type { Existing } from "../../server/model/types";
 import existingJson from "../../src/marketing/example-existing.json";
@@ -49,9 +50,20 @@ const C = {
   mechanical: "#C2417A",
 };
 
-const PLAN = EXAMPLE.plan;
+// ---------- which basement: the example, or a private scan served by vite.config.ts ----------
+type Placement = { x: number; z: number; turn: number };
+type Data = { plan: Plan; layout: Layout; placement: Placement; existing: Existing; mesh: string; atlas: string };
+async function loadData(): Promise<Data> {
+  if (new URLSearchParams(location.search).get("src") !== "private")
+    return { plan: EXAMPLE.plan, layout: EXAMPLE.layout, placement: EXAMPLE.placement, existing: existingJson as unknown as Existing, mesh: "/samples/sample/3d/mesh.bin", atlas: "/samples/sample/3d/asbuilt/" };
+  const [result, existing] = await Promise.all([fetch("/private-scan/result.json").then((r) => r.json()), fetch("/private-existing.json").then((r) => r.json())]);
+  return { plan: result.plan, layout: result.layout, placement: result.rooms[0].placement, existing, mesh: "/private-scan/3d/basement/mesh.bin", atlas: "/private-scan/3d/asbuilt/" };
+}
+const DATA = await loadData();
+
+const PLAN = DATA.plan;
 const BOX = PLAN.box;
-const CEIL = EXAMPLE.ceilingM;
+const CEIL = DATA.existing.ceilingM ?? PLAN.ceilingHeightM ?? 2.3;
 const LID = CEIL - 0.12;
 const MID = new THREE.Vector3((BOX.minX + BOX.maxX) / 2, 0, (BOX.minZ + BOX.maxZ) / 2);
 
@@ -100,7 +112,7 @@ function orbit(camera: THREE.Camera, look: THREE.Vector3, az: number, el: number
 function useSolid() {
   const [solid, setSolid] = useState<Solid | null>(null);
   useEffect(() => {
-    fetch("/samples/sample/3d/mesh.bin")
+    fetch(DATA.mesh)
       .then((r) => r.arrayBuffer())
       .then((b) => setSolid(parseMesh(b)));
   }, []);
@@ -250,9 +262,13 @@ function Seg3({ a, b, color, k = 0.035 }: { a: V3; b: V3; color: string; k?: num
 // The as-built model the app shows (src/three/AsBuilt.tsx): straight walls, a level floor, the stairs,
 // furnace, water heater and duct, painted with the example's video. It sits where the room was filmed,
 // which is the plan's box moved by the placement.
-const EXISTING = existingJson as unknown as Existing;
-const P = EXAMPLE.placement;
-const ROOM = { minX: BOX.minX + P.x, maxX: BOX.maxX + P.x, minZ: BOX.minZ + P.z, maxZ: BOX.maxZ + P.z };
+const EXISTING = DATA.existing;
+const P = DATA.placement;
+// Every room's walls, so a basement of several rooms is framed whole.
+const ROOM = (() => {
+  const xs = EXISTING.walls.flatMap((w) => [w.a[0], w.b[0]]), zs = EXISTING.walls.flatMap((w) => [w.a[1], w.b[1]]);
+  return { minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs) };
+})();
 const RMID = new THREE.Vector3((ROOM.minX + ROOM.maxX) / 2, CEIL * 0.35, (ROOM.minZ + ROOM.maxZ) / 2);
 const FOV = 40;
 
@@ -278,6 +294,16 @@ function fitDistance(dir: THREE.Vector3, look: THREE.Vector3, pts: THREE.Vector3
   }
   return d;
 }
+// The floor's corners and the tops of the two far walls (the near ones are cut away), seen from the
+// +x/−z corner.
+function standingFit(pad: number) {
+  return [
+    ...fitPoints(pad, 0).slice(0, 4),
+    new THREE.Vector3(ROOM.minX, CEIL, ROOM.minZ),
+    new THREE.Vector3(ROOM.minX, CEIL, ROOM.maxZ),
+    new THREE.Vector3(ROOM.maxX, CEIL, ROOM.maxZ),
+  ];
+}
 // `az`: degrees round from +z towards +x; `el`: up from level. The camera looks at `look` from as far
 // back as it takes for the room to fill `margin` of the frame.
 const fdir = new THREE.Vector3();
@@ -292,9 +318,9 @@ function frameRoom(camera: THREE.Camera, look: THREE.Vector3, azDeg: number, elD
 function useAtlas() {
   const [atlas, setAtlas] = useState<Atlas | null>(null);
   useEffect(() => {
-    fetch("/samples/sample/3d/asbuilt/index.json")
+    fetch(DATA.atlas + "index.json")
       .then((r) => r.json())
-      .then((index: AtlasIndex) => setAtlas({ index, base: "/samples/sample/3d/asbuilt/" }));
+      .then((index: AtlasIndex) => setAtlas({ index, base: DATA.atlas }));
   }, []);
   return atlas;
 }
@@ -361,7 +387,7 @@ function Assemble({ solid, atlas }: { solid: Solid; atlas: Atlas }) {
   const night = useMemo(() => new THREE.Color(C.night), []);
   const day = useMemo(() => new THREE.Color(C.sheet), []);
   const pts = useMemo(() => fitPoints(0.3), []);
-  const near = useMemo(() => fitPoints(0.15, CEIL, ROOM.maxX - 2.2), []);
+  const near = useMemo(() => standingFit(0.05), []);
   const look = useMemo(() => new THREE.Vector3(), []);
   useEffect(() => {
     gl.localClippingEnabled = true;
@@ -370,14 +396,14 @@ function Assemble({ solid, atlas }: { solid: Solid; atlas: Atlas }) {
     return () => void (gl.clippingPlanes = []);
   }, [gl, scene, bg, cut]);
 
-  const W = ROOM.maxX - 0.14 - ROOM.minX, D = ROOM.maxZ - ROOM.minZ;
+  const W = ROOM.maxX - 0.14 - ROOM.minX, D = ROOM.maxZ - 0.14 - ROOM.minZ;
 
   useFrame(() => {
     const t = clock.t;
     const k = easeInOut(t / 7);
     // A slow orbit and push-in that settles on a lower, longer view down the room.
-    look.copy(RMID).setX(lerp(RMID.x, RMID.x - 0.9, k));
-    frameRoom(camera, look, lerp(138, 100, k), lerp(52, 31, k), lerp(1.5, 0.8, k), pts, near, ease(span(t, 2.5, 6.5)));
+    look.copy(RMID);
+    frameRoom(camera, look, lerp(156, 130, k), lerp(54, 31, k), lerp(1.45, 0.93, k), pts, near, ease(span(t, 2.5, 6.5)));
 
     const fill = ease(span(t, 2.9, 5.0));
     const height = -0.05 + (CEIL + 0.45) * fill;
@@ -408,9 +434,9 @@ function Assemble({ solid, atlas }: { solid: Solid; atlas: Atlas }) {
     <>
       <points ref={pointsRef} geometry={points} material={dots} frustumCulled={false} />
       <group ref={builtRef} visible={false}>
-        <Built atlas={atlas} />
+        <Built atlas={atlas} section={SECTION2} />
       </group>
-      <group ref={planeRef} position={[(ROOM.minX + ROOM.maxX - 0.14) / 2, 0, (ROOM.minZ + ROOM.maxZ) / 2]}>
+      <group ref={planeRef} position={[(ROOM.minX + ROOM.maxX - 0.14) / 2, 0, (ROOM.minZ + 0.14 + ROOM.maxZ) / 2]}>
         <mesh rotation-x={-Math.PI / 2} material={sheetMat}>
           <planeGeometry args={[W, D]} />
         </mesh>
@@ -435,32 +461,56 @@ function Assemble({ solid, atlas }: { solid: Solid; atlas: Atlas }) {
 // ---------- shot 2: what it found ----------
 type Find = { id: string; text: string; value?: string; color: string; t0: number; center: V3; size?: V3; label: V3; stem?: number; wedge?: { x0: number; x1: number; z0: number; z1: number; top: number } };
 
-// Every find where the as-built model has it (src/marketing/example-existing.json, the example's plan).
+// Every find where the as-built model has it: its windows and doors on their walls, then its fixtures.
+type Fixture = { id: string; kind: string; at: [number, number]; sizeM: [number, number]; heightM?: number | null; bottom?: [number, number] };
+const FIXTURE_NAME: Record<string, string> = { furnace: "Furnace", water_heater: "Water heater", duct: "Duct", beam: "Beam", bulkhead: "Bulkhead", stairs: "Stairs" };
 function useFinds(): Find[] {
   return useMemo(() => {
-    const wall = (id: string) => EXISTING.walls.find((w) => w.id === id)!;
-    const along = (wallId: string, off: number): [number, number] => {
-      const w = wall(wallId);
+    const walls = new Map(EXISTING.walls.map((w) => [w.id, w]));
+    const items: Omit<Find, "t0">[] = [];
+    for (const o of EXISTING.openings) {
+      const w = walls.get(o.wallId);
+      if (!w) continue;
       const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
-      return [w.a[0] + ((w.b[0] - w.a[0]) * off) / len, w.a[1] + ((w.b[1] - w.a[1]) * off) / len];
-    };
-    const op = (kind: string) => EXISTING.openings.find((o) => o.kind === kind)!;
-    const fx = (kind: string) => EXISTING.fixtures.find((f) => f.kind === kind) as unknown as { at: [number, number]; sizeM: [number, number]; heightM?: number; bottom?: [number, number] };
-    const win = op("window"), door = op("door");
-    const wAt = along(win.wallId, win.offsetM + win.widthM / 2), dAt = along(door.wallId, door.offsetM + door.widthM / 2);
-    const st = fx("stairs"), furnace = fx("furnace"), heater = fx("water_heater"), duct = fx("duct");
-    const sx0 = st.at[0] - st.sizeM[0] / 2, sx1 = st.at[0] + st.sizeM[0] / 2, sz0 = st.at[1] - st.sizeM[1] / 2, sz1 = st.at[1] + st.sizeM[1] / 2;
-    const out: Find[] = [];
-    const inZ = (z: number) => (z > RMID.z ? -0.06 : 0.06);
-    out.push({ id: "window", text: "Window", value: `${win.widthM.toFixed(2)} m`, color: C.window, t0: 0.7, center: [wAt[0], CEIL - 0.38, wAt[1] + inZ(wAt[1])], size: [win.widthM, 0.42, 0.12], label: [wAt[0], CEIL - 0.1, wAt[1] + inZ(wAt[1])] });
-    out.push({ id: "stairs", text: "Stairs", color: C.stairs, t0: 1.55, center: [0, 0, 0], wedge: { x0: sx0, x1: sx1, z0: sz0, z1: sz1, top: CEIL }, label: [sx1 - 0.55, 0.62, (sz0 + sz1) / 2], stem: 30 });
-    const dTop = CEIL, dBot = duct.heightM ?? CEIL - 0.4;
-    const dx0 = Math.max(ROOM.minX + 0.05, duct.at[0] - duct.sizeM[0] / 2), dx1 = Math.min(ROOM.maxX - 0.16, duct.at[0] + duct.sizeM[0] / 2);
-    out.push({ id: "duct", text: "Duct", color: C.duct, t0: 2.45, center: [(dx0 + dx1) / 2, (dTop + dBot) / 2, duct.at[1]], size: [dx1 - dx0, dTop - dBot, duct.sizeM[1]], label: [duct.at[0] + 1.8, dTop, duct.at[1]], stem: 36 });
-    out.push({ id: "furnace", text: "Furnace", color: C.mechanical, t0: 3.35, center: [furnace.at[0], 0.72, furnace.at[1]], size: [furnace.sizeM[0], 1.44, furnace.sizeM[1]], label: [furnace.at[0], 1.44, furnace.at[1]], stem: 30 });
-    out.push({ id: "heater", text: "Water heater", color: C.mechanical, t0: 4.1, center: [heater.at[0], 0.76, heater.at[1]], size: [heater.sizeM[0], 1.52, heater.sizeM[1]], label: [heater.at[0], 1.52, heater.at[1]], stem: 40 });
-    out.push({ id: "door", text: "Door", value: `${door.widthM.toFixed(2)} m`, color: C.exit, t0: 4.85, center: [dAt[0], 1.0, dAt[1] + inZ(dAt[1])], size: [door.widthM, 2.0, 0.12], label: [dAt[0], 2.0, dAt[1] + inZ(dAt[1])], stem: 44 });
-    return out;
+      const ux = (w.b[0] - w.a[0]) / len, uz = (w.b[1] - w.a[1]) / len;
+      const m = o.offsetM + o.widthM / 2;
+      let x = w.a[0] + ux * m, z = w.a[1] + uz * m;
+      let nx = -uz, nz = ux;
+      if ((RMID.x - x) * nx + (RMID.z - z) * nz < 0) (nx = -nx), (nz = -nz);
+      (x += nx * 0.07), (z += nz * 0.07);
+      const win = o.kind === "window";
+      const h = win ? 0.45 : 2.0, yc = win ? CEIL - 0.45 : 1.0;
+      const along = Math.abs(ux) > Math.abs(uz);
+      items.push({ id: o.id, text: win ? "Window" : "Door", value: `${o.widthM.toFixed(2)} m`, color: win ? C.window : C.exit, center: [x, yc, z], size: along ? [o.widthM, h, 0.12] : [0.12, h, o.widthM], label: [x, yc + h / 2, z], stem: win ? 40 : 56 });
+    }
+    for (const f of EXISTING.fixtures as unknown as Fixture[]) {
+      const name = FIXTURE_NAME[f.kind];
+      if (!name) continue;
+      const [sx, sz] = f.sizeM;
+      let x0 = f.at[0] - sx / 2, x1 = f.at[0] + sx / 2;
+      const z0 = f.at[1] - sz / 2, z1 = f.at[1] + sz / 2;
+      if (f.kind === "stairs") {
+        if (f.bottom && sx >= sz) {
+          // The run, from the bottom step up to the floor above.
+          const low = Math.abs(f.bottom[0] - x1) < Math.abs(f.bottom[0] - x0) ? x1 : x0, high = low === x1 ? x0 : x1;
+          items.push({ id: f.id, text: name, color: C.stairs, center: [0, 0, 0], wedge: { x0: high, x1: low, z0, z1, top: CEIL }, label: [low + (high - low) * 0.2, 0.62, (z0 + z1) / 2], stem: 30 });
+        } else items.push({ id: f.id, text: name, color: C.stairs, center: [f.at[0], (CEIL - 0.05) / 2, f.at[1]], size: [sx, CEIL - 0.05, sz], label: [f.at[0], CEIL - 0.05, f.at[1]], stem: 30 });
+      } else if (f.kind === "furnace" || f.kind === "water_heater") {
+        const h = f.kind === "furnace" ? 1.44 : 1.52;
+        items.push({ id: f.id, text: name, color: C.mechanical, center: [f.at[0], h / 2, f.at[1]], size: [sx, h, sz], label: [f.at[0], h, f.at[1]], stem: f.kind === "furnace" ? 30 : 40 });
+      } else {
+        // Overhead: from its underside (or a typical drop) up to the ceiling, stopping at the cut-away wall.
+        x0 = Math.max(ROOM.minX + 0.05, x0);
+        x1 = Math.min(ROOM.maxX - 0.16, x1);
+        const bot = f.heightM ?? CEIL - 0.4;
+        const lx = x0 + (x1 - x0) * 0.72;
+        items.push({ id: f.id, text: name, color: f.kind === "beam" ? C.beam : C.duct, center: [(x0 + x1) / 2, (CEIL + bot) / 2, (z0 + z1) / 2], size: [x1 - x0, CEIL - bot, z1 - z0], label: [lx, CEIL, (z0 + z1) / 2], stem: 36 });
+      }
+    }
+    const rank = (f: Omit<Find, "t0">) => (f.text === "Window" ? 0 : f.text === "Stairs" ? 1 : f.color === C.duct || f.color === C.beam ? 2 : f.text === "Door" ? 4 : 3);
+    items.sort((p, q) => rank(p) - rank(q));
+    const step = Math.min(0.85, 4.6 / Math.max(1, items.length - 1));
+    return items.map((f, i) => ({ ...f, t0: 0.7 + i * step }));
   }, []);
 }
 
@@ -532,18 +582,18 @@ function Finds({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) => 
     [finds],
   );
   useEffect(() => setLabels(labels), [labels, setLabels]);
-  const pts = useMemo(() => fitPoints(0.2, CEIL + 0.5, ROOM.maxX - 2.0), []);
+  const pts = useMemo(() => [...standingFit(0.1), new THREE.Vector3(ROOM.minX, CEIL + 0.5, ROOM.maxZ)], []);
   const look = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const k = easeInOut(clock.t / 8);
-    look.copy(RMID).set(RMID.x - 0.9, lerp(0.85, 0.75, k), RMID.z);
-    frameRoom(camera, look, lerp(118, 96, k), lerp(44, 30, k), lerp(0.92, 0.84, k), pts);
+    look.copy(RMID).setY(lerp(0.85, 0.75, k));
+    frameRoom(camera, look, lerp(146, 124, k), lerp(50, 35, k), lerp(0.94, 0.88, k), pts);
     placeLabels(camera, labels);
   });
   return (
     <>
       <color attach="background" args={[C.sheet]} />
-      <Built atlas={atlas} />
+      <Built atlas={atlas} section={SECTION2} />
       {finds.map((f) => (
         <FindMark key={f.id} f={f} />
       ))}
@@ -576,41 +626,41 @@ function useTick() {
 function PlanLines() {
   useTick();
   const t = clock.t;
-  const { minX, maxX, minZ, maxZ } = BOX;
-  const corners: [number, number][] = [
-    [minX, minZ],
-    [maxX, minZ],
-    [maxX, maxZ],
-    [minX, maxZ],
-  ];
-  const draw = span(t, 0.25, 1.9) * 4;
+  const { minX, maxX, minZ, maxZ } = ROOM;
+  const walls = EXISTING.walls;
+  const draw = span(t, 0.25, 1.9) * walls.length;
   const inner = span(t, 1.5, 2.3);
   const dims = ease(span(t, 1.9, 2.7));
   const fadeDims = 1 - ease(span(t, 3.3, 3.9));
-  const win = EXAMPLE.openings.find((o) => o.kind === "window")!;
-  const door = EXAMPLE.openings.find((o) => o.kind === "door")!;
-  const st = PLAN.stairs[0];
-  const treads = 9;
+  const byId = new Map(walls.map((w) => [w.id, w]));
   const off = 0.62;
   const midX = (minX + maxX) / 2, midZ = (minZ + maxZ) / 2;
   const showDims = dims > 0 && fadeDims > 0;
   const dimDraw = dims * fadeDims;
+  const stairs = (EXISTING.fixtures as unknown as Fixture[]).filter((f) => f.kind === "stairs");
+  const treads = 9;
   return (
     <group>
-      {corners.map((c, k) => (
-        <Bar key={k} from={c} to={corners[(k + 1) % 4]} w={0.075} color={C.ink} draw={draw - k} y={0.014} />
+      {walls.map((w, k) => (
+        <Bar key={w.id} from={w.a as [number, number]} to={w.b as [number, number]} w={0.075} color={C.ink} draw={draw - k} y={0.014} />
       ))}
-      {EXAMPLE.layout.walls.map((w, i) => (
-        <Bar key={`w${i}`} from={[w.x0, w.z0]} to={[w.x1, w.z1]} w={0.05} color={C.ink} draw={inner * 1.4 - i * 0.2} y={0.014} />
+      {DATA.layout.walls.map((w, i) => (
+        <Bar key={`w${i}`} from={[w.x0 + P.x, w.z0 + P.z]} to={[w.x1 + P.x, w.z1 + P.z]} w={0.05} color={C.ink} draw={inner * 1.4 - i * 0.2} y={0.014} />
       ))}
-      <Bar from={[win.at[0] - win.widthM / 2, win.at[1]]} to={[win.at[0] + win.widthM / 2, win.at[1]]} w={0.12} color={C.window} draw={span(t, 1.9, 2.2)} y={0.02} />
-      <Bar from={[door.at[0] - door.widthM / 2, door.at[1]]} to={[door.at[0] + door.widthM / 2, door.at[1]]} w={0.12} color={C.exit} draw={span(t, 2.0, 2.3)} y={0.02} />
-      {Array.from({ length: treads }, (_, i) => {
-        const x = st.x0 + ((st.x1 - st.x0) * (i + 0.5)) / treads;
-        return <Bar key={`t${i}`} from={[x, st.z0]} to={[x, st.z1]} w={0.025} color={C.muted} draw={span(t, 2.0 + i * 0.04, 2.3 + i * 0.04)} y={0.016} />;
+      {EXISTING.openings.map((o, i) => {
+        const w = byId.get(o.wallId);
+        if (!w) return null;
+        const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+        const pt = (d: number): [number, number] => [w.a[0] + ((w.b[0] - w.a[0]) * d) / len, w.a[1] + ((w.b[1] - w.a[1]) * d) / len];
+        return <Bar key={o.id} from={pt(o.offsetM)} to={pt(o.offsetM + o.widthM)} w={0.12} color={o.kind === "window" ? C.window : C.exit} draw={span(t, 1.9 + i * 0.08, 2.2 + i * 0.08)} y={0.02} />;
       })}
-      <Bar from={[st.x0, st.z0]} to={[st.x1, st.z0]} w={0.03} color={C.muted} draw={span(t, 2.0, 2.4)} y={0.016} />
-      <Bar from={[st.x0, st.z1]} to={[st.x1, st.z1]} w={0.03} color={C.muted} draw={span(t, 2.0, 2.4)} y={0.016} />
+      {stairs.map((f) =>
+        Array.from({ length: treads }, (_, i) => {
+          const x0 = f.at[0] - f.sizeM[0] / 2, z0 = f.at[1] - f.sizeM[1] / 2, z1 = f.at[1] + f.sizeM[1] / 2;
+          const x = x0 + (f.sizeM[0] * (i + 0.5)) / treads;
+          return <Bar key={`${f.id}${i}`} from={[x, z0]} to={[x, z1]} w={0.025} color={C.muted} draw={span(t, 2.0 + i * 0.04, 2.3 + i * 0.04)} y={0.016} />;
+        }),
+      )}
       {showDims && (
         <>
           {/* width, below the plan; depth, to its right: lines draw out from the middle, with end ticks */}
@@ -678,19 +728,18 @@ function Shell({ rise, all = false }: { rise: number; all?: boolean }) {
 }
 
 function Staged({ rise }: { rise: number }) {
-  const P = EXAMPLE.placement;
   return (
     <group rotation-y={(-P.turn * Math.PI) / 2} position={[P.x, 0, P.z]} scale={[1, Math.max(0.001, rise), 1]} visible={rise > 0}>
-      <StagedFurniture plan={EXAMPLE.plan} layout={EXAMPLE.layout} />
+      <StagedFurniture plan={DATA.plan} layout={DATA.layout} />
     </group>
   );
 }
 
 function Floor({ opacity = 1 }: { opacity?: number }) {
-  const { minX, maxX, minZ, maxZ } = BOX;
+  const { minX, maxX, minZ, maxZ } = ROOM;
   return (
     <>
-      <mesh position={[MID.x, -0.02, MID.z]} rotation-x={-Math.PI / 2} receiveShadow>
+      <mesh position={[(minX + maxX) / 2, -0.02, (minZ + maxZ) / 2]} rotation-x={-Math.PI / 2} receiveShadow>
         <planeGeometry args={[maxX - minX + 3.4, maxZ - minZ + 3.0]} />
         <meshBasicMaterial color={C.card} toneMapped={false} transparent opacity={opacity} />
       </mesh>
@@ -698,7 +747,16 @@ function Floor({ opacity = 1 }: { opacity?: number }) {
   );
 }
 
-const ZONE_LABELS = EXAMPLE.zones.map((z) => ({ ...z }));
+// The layout's rooms (in the main room's frame), and any other scanned room by its name.
+const ZONE_LABELS = [
+  ...DATA.layout.zones.filter((z) => z.kind !== "stairs" && z.kind !== "kitchen").map((z) => ({ name: z.name, area: `${z.areaM2.toFixed(1)} m²`, x: P.x + (z.x0 + z.x1) / 2, z: P.z + (z.z0 + z.z1) / 2 })),
+  ...EXISTING.rooms.slice(1).map((r) => {
+    const pts = r.polygon;
+    let a = 0;
+    for (let i = 0; i < pts.length; i++) a += pts[i][0] * pts[(i + 1) % pts.length][1] - pts[(i + 1) % pts.length][0] * pts[i][1];
+    return { name: r.name, area: `${Math.abs(a / 2).toFixed(1)} m²`, x: pts.reduce((s, p) => s + p[0], 0) / pts.length, z: pts.reduce((s, p) => s + p[1], 0) / pts.length };
+  }),
+];
 
 function PlanTo3D({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) => void }) {
   const { camera, gl } = useThree();
@@ -709,11 +767,11 @@ function PlanTo3D({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) 
     const dimA = (t: number) => ease(span(t, 2.3, 2.8)) * (1 - ease(span(t, 3.3, 3.8)));
     const zoneA = (t: number) => ease(span(t, 2.5, 3.0)) * (1 - ease(span(t, 3.4, 3.9)));
     return [
-      { id: "w", at: [midX, 0.02, minZ - 0.62], text: EXAMPLE.width, cls: "dim", alpha: dimA },
-      { id: "d", at: [maxX + 0.62, 0.02, midZ], text: EXAMPLE.depth, cls: "dim", alpha: dimA },
-      ...ZONE_LABELS.map((z) => ({ id: z.name, at: [P.x + (z.x0 + z.x1) / 2, 0.02, P.z + (z.z0 + z.z1) / 2] as V3, text: `${z.name}`, value: z.area, cls: "flat", alpha: zoneA })),
+      { id: "w", at: [midX, 0.02, minZ - 0.62], text: `${(maxX - minX).toFixed(2)} m`, cls: "dim", alpha: dimA },
+      { id: "d", at: [maxX + 0.62, 0.02, midZ], text: `${(maxZ - minZ).toFixed(2)} m`, cls: "dim", alpha: dimA },
+      ...ZONE_LABELS.map((z) => ({ id: z.name, at: [z.x, 0.02, z.z] as V3, text: z.name, value: z.area, cls: "flat", alpha: zoneA })),
     ];
-  }, [midX, midZ, minZ, maxX]);
+  }, [midX, midZ, minZ, maxX, minX, maxZ]);
   useEffect(() => setLabels(labels), [labels, setLabels]);
   // The as-built basement rises from the floor up to this plane.
   const cut = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 99), []);
@@ -724,16 +782,7 @@ function PlanTo3D({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) 
   }, [gl, cut]);
   const look = useMemo(() => new THREE.Vector3(), []);
   const flat = useMemo(() => fitPoints(1.05, 0), []);
-  // The floor, and the tops of the two walls that stand (the near ones are cut away).
-  const solid = useMemo(
-    () => [
-      ...fitPoints(0.02, 0).slice(0, 4),
-      new THREE.Vector3(ROOM.minX, CEIL, ROOM.minZ),
-      new THREE.Vector3(ROOM.minX, CEIL, ROOM.maxZ),
-      new THREE.Vector3(ROOM.maxX, CEIL, ROOM.maxZ),
-    ],
-    [],
-  );
+  const solid = useMemo(() => standingFit(0.02), []);
   const dir = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const t = clock.t;
@@ -755,9 +804,7 @@ function PlanTo3D({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) 
     <>
       <color attach="background" args={[C.sheet]} />
       <Floor />
-      <group position={[P.x, 0, P.z]}>
-        <PlanLines />
-      </group>
+      <PlanLines />
       <group visible={rise.walls > 0}>
         <Built atlas={atlas} staged={rise.staged} section={SECTION2} />
       </group>

@@ -12,6 +12,15 @@ node video-3d/render.mjs 4                       # 04-flythrough: eye-level glid
 node video-3d/render.mjs 2 --stills 0,90 --scale 1 --out /tmp/s2.mp4   # quick JPEG stills instead
 ```
 
+A private scan instead of the example (read in place, never copied into the repo):
+
+```bash
+pnpm exec tsx video-3d/seed-existing.ts <scan>/result.json /tmp/existing.json   # its as-built plan, as the app seeds it
+SCAN_DIR=<scan folder> SCAN_EXISTING=/tmp/existing.json node video-3d/render.mjs 1
+```
+
+The scan folder is laid out like `public/samples/sample` (`result.json`, `3d/basement/mesh.bin`, `3d/asbuilt/`).
+
 Output: `media/video-clips/<name>.mp4` (git-ignored), 1920×1080, 30 fps, H.264 CRF 14, no audio. Frames are
 drawn at 3840×2160 in headless Chromium on the Mac's GPU (ANGLE Metal) and downscaled by ffmpeg. Each clip
 takes about 20 s. One browser, closed at the end.
