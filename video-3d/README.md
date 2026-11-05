@@ -16,7 +16,9 @@ Output: `media/video-clips/<name>.mp4` (git-ignored), 1920×1080, 30 fps, H.264 
 drawn at 3840×2160 in headless Chromium on the Mac's GPU (ANGLE Metal) and downscaled by ffmpeg. Each clip
 takes about 20 s. One browser, closed at the end.
 
-Where things come from: the surface is `public/samples/sample/3d/mesh.bin`; window, door, stairs, furnace
-and water heater sit where `result.json`'s plan puts them (the furnace and water heater boxes are sized by
-hand). The duct and the beam have no 3D position in the plan, so each is a ray from the camera pose of the
-video frame where SAM boxed it, through the box's centre, onto the mesh (assuming a 64° field of view).
+Where things come from: the points in shot 1 are the example's own scan (`public/samples/sample/3d/mesh.bin`,
+kept to inside the room). The solid basement in shots 1–3 is the app's clean as-built model (`AsBuiltScene`,
+from `src/marketing/example-existing.json`, painted with `public/samples/sample/3d/asbuilt/`), with the near
+end wall cut away (both near walls in shot 3) so its inside shows. The finds (window, stairs, duct, furnace,
+water heater, door) sit where that model has them; the furnace and water heater heights are set by hand.
+Shot 4 is the furnished layout on its own (`StagedFurniture`) with plain walls and the app's laminate.

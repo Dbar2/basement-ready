@@ -11,6 +11,9 @@ import { createRoot } from "react-dom/client";
 import * as THREE from "three";
 import { frames as poses } from "../../public/samples/sample/3d/scan.json";
 import { EXAMPLE } from "../../src/marketing/example";
+import type { Existing } from "../../server/model/types";
+import existingJson from "../../src/marketing/example-existing.json";
+import { AsBuiltScene, type Atlas, type AtlasIndex } from "../../src/three/AsBuilt";
 import { parseMesh, type Solid } from "../../src/three/RealScan";
 import { StagedFurniture, useMaps } from "../../src/three/StagedBasement";
 
@@ -243,57 +246,142 @@ function Seg3({ a, b, color, k = 0.035 }: { a: V3; b: V3; color: string; k?: num
   );
 }
 
-// ---------- shot 1: the scan assembles ----------
-function Assemble({ solid }: { solid: Solid }) {
-  const { camera, gl, scene, size } = useThree();
-  const geometry = useGeometry(solid);
-  const cut = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), -0.2), []);
-  const surface = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, clippingPlanes: [cut], toneMapped: false }), [cut]);
-  const dots = useMemo(pointsMaterial, []);
-  const band = useMemo(() => {
-    const m = bandMaterial();
-    m.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), LID)];
-    return m;
+// ---------- the clean as-built basement, and framing it ----------
+// The as-built model the app shows (src/three/AsBuilt.tsx): straight walls, a level floor, the stairs,
+// furnace, water heater and duct, painted with the example's video. It sits where the room was filmed,
+// which is the plan's box moved by the placement.
+const EXISTING = existingJson as unknown as Existing;
+const P = EXAMPLE.placement;
+const ROOM = { minX: BOX.minX + P.x, maxX: BOX.maxX + P.x, minZ: BOX.minZ + P.z, maxZ: BOX.maxZ + P.z };
+const RMID = new THREE.Vector3((ROOM.minX + ROOM.maxX) / 2, CEIL * 0.35, (ROOM.minZ + ROOM.maxZ) / 2);
+const FOV = 40;
+
+// `xMax`: how far toward the camera's end the frame must reach (the near floor may run off the bottom).
+function fitPoints(pad: number, top = CEIL, xMax = ROOM.maxX) {
+  return [
+    ...[ROOM.minX - pad, xMax + pad].flatMap((x) => [ROOM.minZ - pad, ROOM.maxZ + pad].map((z) => new THREE.Vector3(x, 0, z))),
+    ...[ROOM.minX, xMax].flatMap((x) => [ROOM.minZ, ROOM.maxZ].map((z) => new THREE.Vector3(x, top, z))),
+  ];
+}
+// How far back to stand, looking along -dir at `look`, for every point to sit inside `margin` of the frame.
+function fitDistance(dir: THREE.Vector3, look: THREE.Vector3, pts: THREE.Vector3[], margin: number) {
+  const fwd = dir.clone().negate();
+  const right = new THREE.Vector3().crossVectors(fwd, THREE.Object3D.DEFAULT_UP).normalize();
+  const up = new THREE.Vector3().crossVectors(right, fwd);
+  const tv = Math.tan(deg(FOV / 2)) * margin, th = tv * (1920 / 1080);
+  const rel = new THREE.Vector3();
+  let d = 0;
+  for (const p of pts) {
+    rel.copy(p).sub(look);
+    const along = rel.dot(dir);
+    d = Math.max(d, Math.abs(rel.dot(right)) / th + along, Math.abs(rel.dot(up)) / tv + along);
+  }
+  return d;
+}
+// `az`: degrees round from +z towards +x; `el`: up from level. The camera looks at `look` from as far
+// back as it takes for the room to fill `margin` of the frame.
+const fdir = new THREE.Vector3();
+function frameRoom(camera: THREE.Camera, look: THREE.Vector3, azDeg: number, elDeg: number, margin: number, pts: THREE.Vector3[], pts2?: THREE.Vector3[], w = 0) {
+  const az = deg(azDeg), el = deg(elDeg);
+  fdir.set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+  const d = fitDistance(fdir, look, pts, margin);
+  camera.position.copy(look).addScaledVector(fdir, pts2 ? lerp(d, fitDistance(fdir, look, pts2, margin), w) : d);
+  camera.lookAt(look);
+}
+
+function useAtlas() {
+  const [atlas, setAtlas] = useState<Atlas | null>(null);
+  useEffect(() => {
+    fetch("/samples/sample/3d/asbuilt/index.json")
+      .then((r) => r.json())
+      .then((index: AtlasIndex) => setAtlas({ index, base: "/samples/sample/3d/asbuilt/" }));
   }, []);
+  return atlas;
+}
+
+// The near end wall (+x, where the camera stands) is cut away like a dollhouse's, so the room's inside
+// shows from a low angle. Set on the model's own materials each frame: they're remade as the sharper
+// painting loads.
+const SECTION = [new THREE.Plane(new THREE.Vector3(-1, 0, 0), ROOM.maxX - 0.12)];
+// For a three-quarter view from the +x/−z corner: both near walls off.
+const SECTION2 = [...SECTION, new THREE.Plane(new THREE.Vector3(0, 0, 1), -(ROOM.minZ + 0.12))];
+function Built({ atlas, staged = 0, section = SECTION }: { atlas: Atlas; staged?: number; section?: THREE.Plane[] }) {
+  const group = useRef<THREE.Group>(null);
+  useFrame(() => {
+    group.current?.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.Material | THREE.Material[] | undefined;
+      for (const mat of Array.isArray(m) ? m : m ? [m] : []) if (mat.clippingPlanes !== section) (mat.clippingPlanes = section), (mat.needsUpdate = true);
+    });
+  });
+  return (
+    <group ref={group}>
+      {/* The plain parts are Lambert, which divides light by π; the painted ones keep the video's colours.
+          The scan's light steps back as the staged furniture, which brings its own, comes in. */}
+      <ambientLight intensity={2.4 - 0.5 * staged} />
+      <directionalLight position={[2, 6, -3]} intensity={1.1 - 0.8 * staged} />
+      <AsBuiltScene existing={EXISTING} atlas={atlas} overview reveal={false} lights={false} />
+    </group>
+  );
+}
+
+// The scan's own points inside the room, up to its ceiling, in the colours the camera saw.
+function useRoomPoints(solid: Solid) {
+  return useMemo(() => {
+    const pos: number[] = [], col: number[] = [];
+    const lin = new THREE.Color();
+    const m = 0.12;
+    for (let i = 0; i < solid.pos.length; i += 3) {
+      const x = solid.pos[i] / 1000, y = solid.pos[i + 1] / 1000, z = solid.pos[i + 2] / 1000;
+      if (x > ROOM.minX - m && x < ROOM.maxX + m && z > ROOM.minZ - m && z < ROOM.maxZ + m && y > -0.08 && y < CEIL + 0.08) {
+        pos.push(x, y, z);
+        lin.setRGB(solid.color[i] / 255, solid.color[i + 1] / 255, solid.color[i + 2] / 255, THREE.SRGBColorSpace);
+        col.push(lin.r, lin.g, lin.b);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.Float32BufferAttribute(col, 3));
+    return g;
+  }, [solid]);
+}
+
+// ---------- shot 1: the scan assembles ----------
+function Assemble({ solid, atlas }: { solid: Solid; atlas: Atlas }) {
+  const { camera, gl, scene, size } = useThree();
+  const points = useRoomPoints(solid);
+  const cut = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 99), []);
+  const dots = useMemo(pointsMaterial, []);
   const sheetMat = useMemo(() => new THREE.MeshBasicMaterial({ color: C.mint, transparent: true, opacity: 0.1, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }), []);
   const ringMat = useMemo(() => new THREE.MeshBasicMaterial({ color: new THREE.Color(C.mint).multiplyScalar(1.6), transparent: true, toneMapped: false, depthWrite: false }), []);
   const bloom = useRef<{ intensity: number } | null>(null);
-  const meshRef = useRef<THREE.Mesh>(null);
-  const bandRef = useRef<THREE.Mesh>(null);
+  const builtRef = useRef<THREE.Group>(null);
   const pointsRef = useRef<THREE.Points>(null);
   const planeRef = useRef<THREE.Group>(null);
   const bg = useMemo(() => new THREE.Color(), []);
   const night = useMemo(() => new THREE.Color(C.night), []);
   const day = useMemo(() => new THREE.Color(C.sheet), []);
+  const pts = useMemo(() => fitPoints(0.3), []);
+  const near = useMemo(() => fitPoints(0.15, CEIL, ROOM.maxX - 2.2), []);
   const look = useMemo(() => new THREE.Vector3(), []);
   useEffect(() => {
     gl.localClippingEnabled = true;
+    gl.clippingPlanes = [cut];
     scene.background = bg;
-  }, [gl, scene, bg]);
+    return () => void (gl.clippingPlanes = []);
+  }, [gl, scene, bg, cut]);
 
-  // The light sheet spans what the phone actually captured, a little wider.
-  const bb = useMemo(() => {
-    // 2nd to 98th percentile, so a few stray points don't stretch it
-    const p = geometry.getAttribute("position") as THREE.BufferAttribute;
-    const xs: number[] = [], zs: number[] = [];
-    for (let i = 0; i < p.count; i += 7) (xs.push(p.getX(i)), zs.push(p.getZ(i)));
-    xs.sort((a, b) => a - b);
-    zs.sort((a, b) => a - b);
-    const q = (a: number[], f: number) => a[Math.floor(a.length * f)];
-    return { min: { x: q(xs, 0.02), z: q(zs, 0.02) }, max: { x: q(xs, 0.98), z: q(zs, 0.98) } };
-  }, [geometry]);
-  const W = bb.max.x - bb.min.x + 0.5, D = bb.max.z - bb.min.z + 0.5;
-  const CX = (bb.max.x + bb.min.x) / 2, CZ = (bb.max.z + bb.min.z) / 2;
+  const W = ROOM.maxX - 0.14 - ROOM.minX, D = ROOM.maxZ - ROOM.minZ;
 
   useFrame(() => {
     const t = clock.t;
     const k = easeInOut(t / 7);
-    look.set(lerp(-0.1, -0.3, k), lerp(0.85, 0.6, k), 0.25);
-    orbit(camera, look, deg(lerp(-68, -37, k)), deg(lerp(41, 31, k)), lerp(13.0, 8.9, k));
+    // A slow orbit and push-in that settles on a lower, longer view down the room.
+    look.copy(RMID).setX(lerp(RMID.x, RMID.x - 0.9, k));
+    frameRoom(camera, look, lerp(138, 100, k), lerp(52, 31, k), lerp(1.5, 0.8, k), pts, near, ease(span(t, 2.5, 6.5)));
 
     const fill = ease(span(t, 2.9, 5.0));
-    const height = -0.15 + (CEIL + 0.55 + 0.15) * fill;
-    cut.constant = Math.min(height, LID);
+    const height = -0.05 + (CEIL + 0.45) * fill;
+    cut.constant = fill > 0 && fill < 1 ? height : 99;
     const u = dots.uniforms;
     u.uRise.value = span(t, 0.15, 2.7);
     u.uTrue.value = ease(span(t, 2.5, 3.7));
@@ -302,28 +390,27 @@ function Assemble({ solid }: { solid: Solid }) {
     const lightUp = ease(span(t, 4.5, 5.8));
     u.uGlow.value = 1 - lightUp;
     pointsRef.current!.visible = t > 0.15 && fill < 1;
-    meshRef.current!.visible = fill > 0;
+    builtRef.current!.visible = fill > 0;
     const sweeping = fill > 0 && fill < 1;
-    bandRef.current!.visible = sweeping;
-    band.uniforms.uH.value = height;
-    band.uniforms.uA.value = 1 - 0.5 * lightUp;
     planeRef.current!.visible = sweeping;
-    planeRef.current!.position.y = height;
-    sheetMat.opacity = 0.05 * (1 - 0.6 * lightUp) * Math.min(1, fill * 8, (1 - fill) * 8);
-    ringMat.opacity = Math.min(1, fill * 8, (1 - fill) * 8) * (1 - 0.3 * lightUp);
+    planeRef.current!.position.y = height - 0.01;
+    const edge = Math.min(1, fill * 8, (1 - fill) * 8);
+    sheetMat.opacity = 0.05 * (1 - 0.6 * lightUp) * edge;
+    ringMat.opacity = edge * (1 - 0.3 * lightUp);
     bg.lerpColors(night, day, lightUp);
     if (bloom.current) bloom.current.intensity = 1.25 * (1 - lightUp);
   });
 
-  const k = 0.03;
+  // The scan line: a glowing ring hugging the walls, and a faint sheet across the room, at the height the
+  // basement has risen to.
+  const k = 0.035;
   return (
     <>
-      <ambientLight intensity={2.6} />
-      <directionalLight position={[2, 6, 3]} intensity={1.2} />
-      <points ref={pointsRef} geometry={geometry} material={dots} frustumCulled={false} />
-      <mesh ref={meshRef} geometry={geometry} material={surface} frustumCulled={false} />
-      <mesh ref={bandRef} geometry={geometry} material={band} frustumCulled={false} renderOrder={5} />
-      <group ref={planeRef} position={[CX, 0, CZ]}>
+      <points ref={pointsRef} geometry={points} material={dots} frustumCulled={false} />
+      <group ref={builtRef} visible={false}>
+        <Built atlas={atlas} />
+      </group>
+      <group ref={planeRef} position={[(ROOM.minX + ROOM.maxX - 0.14) / 2, 0, (ROOM.minZ + ROOM.maxZ) / 2]}>
         <mesh rotation-x={-Math.PI / 2} material={sheetMat}>
           <planeGeometry args={[W, D]} />
         </mesh>
@@ -339,7 +426,7 @@ function Assemble({ solid }: { solid: Solid }) {
         ))}
       </group>
       <EffectComposer multisampling={8}>
-        <Bloom ref={bloom as never} intensity={1.6} luminanceThreshold={0.55} luminanceSmoothing={0.25} mipmapBlur radius={0.7} />
+        <Bloom ref={bloom as never} intensity={1.25} luminanceThreshold={0.72} luminanceSmoothing={0.2} mipmapBlur radius={0.7} />
       </EffectComposer>
     </>
   );
@@ -348,42 +435,33 @@ function Assemble({ solid }: { solid: Solid }) {
 // ---------- shot 2: what it found ----------
 type Find = { id: string; text: string; value?: string; color: string; t0: number; center: V3; size?: V3; label: V3; stem?: number; wedge?: { x0: number; x1: number; z0: number; z1: number; top: number } };
 
-// Where a box SAM drew in one video frame lands on the scan: a ray from that frame's camera pose
-// (MapAnything's, OpenCV axes) through the box's centre. The example's video is 1280×720; a phone's
-// main camera sees about 64° across in landscape video.
-function hitFrom(geometry: THREE.BufferGeometry, frameId: number, u: number, v: number) {
-  const fr = poses.reduce((best, f) => (Math.abs(f.frame - frameId) < Math.abs(best.frame - frameId) ? f : best));
-  const P = fr.pose;
-  const tx = Math.tan(deg(32)), ty = (tx * 720) / 1280;
-  const x = (u - 0.5) * 2 * tx, y = (v - 0.5) * 2 * ty;
-  const o = new THREE.Vector3(P[0][3], P[1][3], P[2][3]);
-  const dir = new THREE.Vector3(P[0][0] * x + P[0][1] * y + P[0][2], P[1][0] * x + P[1][1] * y + P[1][2], P[2][0] * x + P[2][1] * y + P[2][2]).normalize();
-  const ray = new THREE.Raycaster(o, dir, 0.2, 12);
-  const hit = ray.intersectObject(new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })))[0];
-  console.log(`hit frame ${frameId} (${u.toFixed(2)}, ${v.toFixed(2)}) ->`, hit ? hit.point.toArray().map((n) => n.toFixed(2)).join(", ") : "none");
-  return hit?.point;
-}
-
-function useFinds(geometry: THREE.BufferGeometry): Find[] {
+// Every find where the as-built model has it (src/marketing/example-existing.json, the example's plan).
+function useFinds(): Find[] {
   return useMemo(() => {
+    const wall = (id: string) => EXISTING.walls.find((w) => w.id === id)!;
+    const along = (wallId: string, off: number): [number, number] => {
+      const w = wall(wallId);
+      const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+      return [w.a[0] + ((w.b[0] - w.a[0]) * off) / len, w.a[1] + ((w.b[1] - w.a[1]) * off) / len];
+    };
+    const op = (kind: string) => EXISTING.openings.find((o) => o.kind === kind)!;
+    const fx = (kind: string) => EXISTING.fixtures.find((f) => f.kind === kind) as unknown as { at: [number, number]; sizeM: [number, number]; heightM?: number; bottom?: [number, number] };
+    const win = op("window"), door = op("door");
+    const wAt = along(win.wallId, win.offsetM + win.widthM / 2), dAt = along(door.wallId, door.offsetM + door.widthM / 2);
+    const st = fx("stairs"), furnace = fx("furnace"), heater = fx("water_heater"), duct = fx("duct");
+    const sx0 = st.at[0] - st.sizeM[0] / 2, sx1 = st.at[0] + st.sizeM[0] / 2, sz0 = st.at[1] - st.sizeM[1] / 2, sz1 = st.at[1] + st.sizeM[1] / 2;
     const out: Find[] = [];
-    const win = EXAMPLE.openings.find((o) => o.kind === "window")!;
-    const door = EXAMPLE.openings.find((o) => o.kind === "door")!;
-    const st = PLAN.stairs[0];
-    const furnace = PLAN.fixtures!.find((f) => f.kind === "furnace")!;
-    const heater = PLAN.fixtures!.find((f) => f.kind === "water_heater")!;
-    out.push({ id: "window", text: "Window", value: `${win.widthM.toFixed(2)} m`, color: C.window, t0: 0.7, center: [win.at[0], CEIL - 0.38, win.at[1] - 0.04], size: [win.widthM, 0.42, 0.12], label: [win.at[0], CEIL - 0.1, win.at[1] - 0.04] });
-    // The stairs as their run: from the bottom step (plan.stairs bottom, at x1) up to the floor above.
-    out.push({ id: "stairs", text: "Stairs", color: C.stairs, t0: 1.55, center: [0, 0, 0], wedge: { x0: st.x0, x1: st.x1, z0: st.z0, z1: st.z1, top: CEIL }, label: [st.x1 - 0.55, 0.62, (st.z0 + st.z1) / 2], stem: 30 });
-    const duct = hitFrom(geometry, 21, 0.843, 0.156);
-    if (duct) out.push({ id: "duct", text: "Duct", color: C.duct, t0: 2.4, center: duct.toArray() as V3, label: duct.toArray() as V3, stem: 120 });
-    const beam = hitFrom(geometry, 45, 0.823, 0.5);
-    if (beam) out.push({ id: "beam", text: "Beam", color: C.beam, t0: 3.25, center: beam.toArray() as V3, label: beam.toArray() as V3 });
-    out.push({ id: "furnace", text: "Furnace", color: C.mechanical, t0: 4.1, center: [furnace.x, 0.72, furnace.z], size: [0.62, 1.44, 0.72], label: [furnace.x, 1.44, furnace.z] });
-    out.push({ id: "heater", text: "Water heater", color: C.mechanical, t0: 4.75, center: [heater.x, 0.76, heater.z], size: [0.56, 1.52, 0.56], label: [heater.x, 1.52, heater.z], stem: 34 });
-    out.push({ id: "door", text: "Door", value: `${door.widthM.toFixed(2)} m`, color: C.exit, t0: 5.4, center: [door.at[0], 1.0, door.at[1] + 0.04], size: [door.widthM, 2.0, 0.12], label: [door.at[0], 2.0, door.at[1] + 0.04], stem: 70 });
+    const inZ = (z: number) => (z > RMID.z ? -0.06 : 0.06);
+    out.push({ id: "window", text: "Window", value: `${win.widthM.toFixed(2)} m`, color: C.window, t0: 0.7, center: [wAt[0], CEIL - 0.38, wAt[1] + inZ(wAt[1])], size: [win.widthM, 0.42, 0.12], label: [wAt[0], CEIL - 0.1, wAt[1] + inZ(wAt[1])] });
+    out.push({ id: "stairs", text: "Stairs", color: C.stairs, t0: 1.55, center: [0, 0, 0], wedge: { x0: sx0, x1: sx1, z0: sz0, z1: sz1, top: CEIL }, label: [sx1 - 0.55, 0.62, (sz0 + sz1) / 2], stem: 30 });
+    const dTop = CEIL, dBot = duct.heightM ?? CEIL - 0.4;
+    const dx0 = Math.max(ROOM.minX + 0.05, duct.at[0] - duct.sizeM[0] / 2), dx1 = Math.min(ROOM.maxX - 0.16, duct.at[0] + duct.sizeM[0] / 2);
+    out.push({ id: "duct", text: "Duct", color: C.duct, t0: 2.45, center: [(dx0 + dx1) / 2, (dTop + dBot) / 2, duct.at[1]], size: [dx1 - dx0, dTop - dBot, duct.sizeM[1]], label: [duct.at[0] + 1.8, dTop, duct.at[1]], stem: 36 });
+    out.push({ id: "furnace", text: "Furnace", color: C.mechanical, t0: 3.35, center: [furnace.at[0], 0.72, furnace.at[1]], size: [furnace.sizeM[0], 1.44, furnace.sizeM[1]], label: [furnace.at[0], 1.44, furnace.at[1]], stem: 30 });
+    out.push({ id: "heater", text: "Water heater", color: C.mechanical, t0: 4.1, center: [heater.at[0], 0.76, heater.at[1]], size: [heater.sizeM[0], 1.52, heater.sizeM[1]], label: [heater.at[0], 1.52, heater.at[1]], stem: 40 });
+    out.push({ id: "door", text: "Door", value: `${door.widthM.toFixed(2)} m`, color: C.exit, t0: 4.85, center: [dAt[0], 1.0, dAt[1] + inZ(dAt[1])], size: [door.widthM, 2.0, 0.12], label: [dAt[0], 2.0, dAt[1] + inZ(dAt[1])], stem: 44 });
     return out;
-  }, [geometry]);
+  }, []);
 }
 
 function FindMark({ f }: { f: Find }) {
@@ -446,33 +524,26 @@ function FindMark({ f }: { f: Find }) {
   );
 }
 
-function Finds({ solid, setLabels }: { solid: Solid; setLabels: (l: Label[]) => void }) {
-  const { camera, gl } = useThree();
-  const geometry = useGeometry(solid);
-  const finds = useFinds(geometry);
-  const cut = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), LID), []);
-  const surface = useMemo(() => new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide, clippingPlanes: [cut], toneMapped: false }), [cut]);
+function Finds({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) => void }) {
+  const { camera } = useThree();
+  const finds = useFinds();
   const labels = useMemo<Label[]>(
     () => finds.map((f) => ({ id: f.id, at: f.label, text: f.text, value: f.value, color: f.color, stem: f.stem, alpha: (t: number) => ease(span(t, f.t0 + 0.1, f.t0 + 0.5)) })),
     [finds],
   );
-  useEffect(() => {
-    gl.localClippingEnabled = true;
-    setLabels(labels);
-  }, [gl, labels, setLabels]);
+  useEffect(() => setLabels(labels), [labels, setLabels]);
+  const pts = useMemo(() => fitPoints(0.2, CEIL + 0.5, ROOM.maxX - 2.0), []);
   const look = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const k = easeInOut(clock.t / 8);
-    look.set(lerp(-1.3, -0.5, k), lerp(0.85, 0.7, k), lerp(-0.1, 0.25, k));
-    orbit(camera, look, deg(lerp(-70, -38, k)), deg(lerp(38, 32, k)), lerp(9.3, 8.4, k));
+    look.copy(RMID).set(RMID.x - 0.9, lerp(0.85, 0.75, k), RMID.z);
+    frameRoom(camera, look, lerp(118, 96, k), lerp(44, 30, k), lerp(0.92, 0.84, k), pts);
     placeLabels(camera, labels);
   });
   return (
     <>
       <color attach="background" args={[C.sheet]} />
-      <ambientLight intensity={2.6} />
-      <directionalLight position={[2, 6, 3]} intensity={1.2} />
-      <mesh geometry={geometry} material={surface} frustumCulled={false} />
+      <Built atlas={atlas} />
       {finds.map((f) => (
         <FindMark key={f.id} f={f} />
       ))}
@@ -629,12 +700,11 @@ function Floor({ opacity = 1 }: { opacity?: number }) {
 
 const ZONE_LABELS = EXAMPLE.zones.map((z) => ({ ...z }));
 
-function PlanTo3D({ setLabels }: { setLabels: (l: Label[]) => void }) {
-  const { camera } = useThree();
+function PlanTo3D({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) => void }) {
+  const { camera, gl } = useThree();
   const [rise, setRise] = useState({ walls: 0, staged: 0 });
-  const { minX, maxX, minZ, maxZ } = BOX;
+  const { minX, maxX, minZ, maxZ } = ROOM;
   const midX = (minX + maxX) / 2, midZ = (minZ + maxZ) / 2;
-  const P = EXAMPLE.placement;
   const labels = useMemo<Label[]>(() => {
     const dimA = (t: number) => ease(span(t, 2.3, 2.8)) * (1 - ease(span(t, 3.3, 3.8)));
     const zoneA = (t: number) => ease(span(t, 2.5, 3.0)) * (1 - ease(span(t, 3.4, 3.9)));
@@ -643,25 +713,54 @@ function PlanTo3D({ setLabels }: { setLabels: (l: Label[]) => void }) {
       { id: "d", at: [maxX + 0.62, 0.02, midZ], text: EXAMPLE.depth, cls: "dim", alpha: dimA },
       ...ZONE_LABELS.map((z) => ({ id: z.name, at: [P.x + (z.x0 + z.x1) / 2, 0.02, P.z + (z.z0 + z.z1) / 2] as V3, text: `${z.name}`, value: z.area, cls: "flat", alpha: zoneA })),
     ];
-  }, [midX, midZ, minZ, maxX, P]);
+  }, [midX, midZ, minZ, maxX]);
   useEffect(() => setLabels(labels), [labels, setLabels]);
+  // The as-built basement rises from the floor up to this plane.
+  const cut = useMemo(() => new THREE.Plane(new THREE.Vector3(0, -1, 0), 99), []);
+  useEffect(() => {
+    gl.localClippingEnabled = true;
+    gl.clippingPlanes = [cut];
+    return () => void (gl.clippingPlanes = []);
+  }, [gl, cut]);
   const look = useMemo(() => new THREE.Vector3(), []);
+  const flat = useMemo(() => fitPoints(1.05, 0), []);
+  // The floor, and the tops of the two walls that stand (the near ones are cut away).
+  const solid = useMemo(
+    () => [
+      ...fitPoints(0.02, 0).slice(0, 4),
+      new THREE.Vector3(ROOM.minX, CEIL, ROOM.minZ),
+      new THREE.Vector3(ROOM.minX, CEIL, ROOM.maxZ),
+      new THREE.Vector3(ROOM.maxX, CEIL, ROOM.maxZ),
+    ],
+    [],
+  );
+  const dir = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const t = clock.t;
     const turn = easeInOut(span(t, 2.6, 8.0));
     const tilt = easeInOut(span(t, 2.7, 6.0));
-    look.set(midX + 0.15, lerp(0, 0.4, tilt), midZ + lerp(0.25, 0.35, tilt));
-    orbit(camera, look, deg(lerp(-90, -32, turn)), deg(lerp(89, 35, tilt)), lerp(lerp(12.6, 11.9, span(t, 0, 2.7)), lerp(11.6, 12.6, span(t, 5.6, 8)), tilt));
+    look.set(midX, lerp(0, RMID.y, tilt), midZ);
+    const az = deg(lerp(180, 132, turn)), el = deg(lerp(89.5, 28, tilt));
+    dir.set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+    const d0 = fitDistance(dir, look, flat, lerp(0.95, 0.88, span(t, 0, 2.7)));
+    const d1 = fitDistance(dir, look, solid, 0.98);
+    camera.position.copy(look).addScaledVector(dir, lerp(d0, d1, tilt));
+    camera.lookAt(look);
     placeLabels(camera, labels);
     const walls = ease(span(t, 3.4, 4.9)), staged = ease(span(t, 3.9, 5.5));
+    cut.constant = walls > 0 && walls < 1 ? 0.025 + (CEIL + 0.45) * walls : 99;
     if (walls !== rise.walls || staged !== rise.staged) setRise({ walls, staged });
   });
   return (
     <>
       <color attach="background" args={[C.sheet]} />
       <Floor />
-      <PlanLines />
-      <Shell rise={rise.walls} />
+      <group position={[P.x, 0, P.z]}>
+        <PlanLines />
+      </group>
+      <group visible={rise.walls > 0}>
+        <Built atlas={atlas} staged={rise.staged} section={SECTION2} />
+      </group>
       <Suspense fallback={null}>
         <Staged rise={rise.staged} />
       </Suspense>
@@ -746,15 +845,16 @@ function Labels({ get }: { get: () => Label[] }) {
 
 function App() {
   const solid = useSolid();
+  const atlas = useAtlas();
   const [labels, setLabels] = useState<Label[]>([]);
   const labelsRef = useRef<Label[]>([]);
   labelsRef.current = labels;
-  const needsSolid = shot === 1 || shot === 2;
-  if (needsSolid && !solid) return null;
+  if (shot === 1 && !solid) return null;
+  if (shot <= 3 && !atlas) return null;
   let scene: ReactNode = null;
-  if (shot === 1) scene = <Assemble solid={solid!} />;
-  if (shot === 2) scene = <Finds solid={solid!} setLabels={setLabels} />;
-  if (shot === 3) scene = <PlanTo3D setLabels={setLabels} />;
+  if (shot === 1) scene = <Assemble solid={solid!} atlas={atlas!} />;
+  if (shot === 2) scene = <Finds atlas={atlas!} setLabels={setLabels} />;
+  if (shot === 3) scene = <PlanTo3D atlas={atlas!} setLabels={setLabels} />;
   if (shot === 4) scene = <Flythrough />;
   return (
     <>

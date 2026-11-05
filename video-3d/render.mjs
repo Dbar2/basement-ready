@@ -36,7 +36,10 @@ try {
   // Warm up until the scan, textures and models are in and the first frame has drawn.
   for (let i = 0; i < 600; i++) {
     await page.evaluate(() => window.__frame(0));
-    const ok = await page.evaluate(() => window.__mounted && !window.__loading() && document.fonts.status === "loaded");
+    const ok = await page.evaluate(
+      (needsAtlas) => window.__mounted && !window.__loading() && document.fonts.status === "loaded" && (!needsAtlas || document.querySelector("canvas")?.dataset.atlas === "2048"),
+      shot <= 3,
+    );
     if (ok && i > 8) break;
     await page.waitForTimeout(100);
   }
