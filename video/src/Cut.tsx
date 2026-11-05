@@ -234,8 +234,9 @@ const Input: React.FC<P> = ({ s }) => {
         <SamGrid />
       </Part>
       <Part from={map - 4} to={wonder - 4}>
-        <Run n="04-answer-plan" y={170} x={330} w={1260} cam={[[0, 1.25, 0.2, 0.5], [6, 1.45, 0.2, 0.5]]} />
-        <Sequence from={Math.round((wonder - map) * 0.4)}>
+        <Clip3D file="david-01-assemble.mp4" rate={Math.min(1.15, 7 / Math.max(1, (wonder - map) / FPS))} />
+        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>This basement's scan, from its phone video</div>
+        <Sequence from={Math.round((wonder - map) * 0.5)}>
           <MeasuredHis />
         </Sequence>
       </Part>
@@ -376,7 +377,7 @@ const Breakthrough: React.FC<P> = ({ s }) => {
         <Punch text="Drag a wall. Everything updates." at={6} x={140} y={720} size={72} width={1100} mark={3} />
       </Part>
       <Part from={one - 4} to={L}>
-        <Run n="08-layouts-3d" cam={[[0, 1.2, 0.25, 0.5], [6, 1.5, 0.25, 0.55]]} />
+        <Clip3D file="david-03-plan-to-3d.mp4" rate={Math.max(1, 8 / Math.max(1, (L - one) / FPS))} />
         <Punch text="One model, scan to drawings." at={10} x={200} y={70} size={60} width={1500} />
       </Part>
     </>
