@@ -396,13 +396,9 @@ const Design: React.FC<P> = ({ s }) => {
   const walk = local(s, cue("and walk around"));
   return (
     <>
-      <Part from={0} to={muse - 4}>
-        <Browser x={180} y={46} w={1560} src="footage/desktop-orbit.mp4" start={4.6} rate={1.45} url="basementready.com/scans/sample/guide" cam={[[0, 1.3, 0, 0.5], [6, 1.4, 0, 0.5]]} tilt tag="The example basement, replayed" />
-        <Punch text="Walk around it." at={walk + 4} x={140} y={760} size={76} width={900} mark={2} />
-      </Part>
-      <Part from={muse - 4} to={L}>
-        <Rec shot={SHOTS.looks!} from={19.8} cam={[[0, 1.32, 0, 0.5], [9, 1.4, 0, 0.5]]} />
-        <Punch text="Your basement, finished." at={fin - muse + 4} x={140} y={720} size={80} width={1200} mark={2} />
+      <Part from={0} to={L}>
+        <Rec shot={SHOTS.looks!} from={12.6} cam={[[0, 1.2, 0, 0.5], [14, 1.4, 0, 0.5]]} />
+        <Punch text="Your basement, finished." at={fin + 4} x={140} y={720} size={80} width={1200} mark={2} />
       </Part>
     </>
   );
