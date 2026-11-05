@@ -413,9 +413,18 @@ const Build: React.FC<P> = ({ s }) => {
   return (
     <>
       <Part from={0} to={honest - 4}>
-        <Run n="10-build-permit-2of17" cam={[[0, 1.2, 0.25, 0.5], [3, 1.5, 0.25, 0.5]]} />
-        <SheetStack at={30} />
-        <Punch text="Drafted. Filled." at={18} x={140} y={740} size={88} width={900} />
+        {take.permitClip ? (
+          <>
+            <Clip3D file="permit-set.mp4" rate={Math.max(1, take.permitClip / Math.max(1, (honest - 4) / FPS))} />
+            <Punch text="Drafted. Filled." at={18} x={200} y={780} size={80} width={900} />
+          </>
+        ) : (
+          <>
+            <Run n="10-build-permit-2of17" cam={[[0, 1.2, 0.25, 0.5], [3, 1.5, 0.25, 0.5]]} />
+            <SheetStack at={30} />
+            <Punch text="Drafted. Filled." at={18} x={140} y={740} size={88} width={900} />
+          </>
+        )}
       </Part>
       <Part from={honest - 4} to={even - 4}>
         <Run n="10-build-permit-2of17" cam={[[0, 1.5, 0.25, 0.5], [2, 2.1, 0.2, 0.62]]} />
@@ -438,14 +447,19 @@ const Close: React.FC<P> = ({ s }) => {
   const rows = ["Every rule", "Every dimension", "Every dollar"];
   return (
     <>
-      <Part from={0} to={plain - 4}>
+      {take.howClip ? (
+        <Part from={0} to={screens - 4}>
+          <Clip3D file="how-it-works.mp4" rate={Math.max(1, take.howClip / Math.max(1, (screens - 4) / FPS))} />
+        </Part>
+      ) : null}
+      <Part from={take.howClip ? -999 : 0} to={take.howClip ? -990 : plain - 4}>
         <div style={{ position: "absolute", left: 180, top: 260, width: 760, borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}` }}>
           <Img src={staticFile("david/03-wait-sam-doors.jpg")} style={{ width: 760, display: "block", transform: `scale(${1 + frame * 0.0008})` }} />
         </div>
         <LogPanel dur={70} />
         <Pipeline frame={frame} enter={4} rise={34} leave={plain + 100} active={frame > 40 ? (["sam", "map", "wonder", "spark", "image"][Math.floor((frame - 40) / 22) % 5]) : ""} />
       </Part>
-      <Part from={plain - 4} to={turns - 4}>
+      <Part from={take.howClip ? screens - 4 : plain - 4} to={turns - 4}>
         <Run n="04-answer-plan" cam={[[0, 1.3, 0.2, 0.5], [6, 1.4, 0.2, 0.5]]} />
         <div style={{ position: "absolute", left: 1080, top: 200, width: 640, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "24px 30px", fontFamily: SANS }}>
           <div style={{ fontWeight: 900, fontSize: 46, letterSpacing: "-0.035em", lineHeight: 1 }}>Checked in code</div>
@@ -462,7 +476,7 @@ const Close: React.FC<P> = ({ s }) => {
           </div>
           <div style={{ fontSize: 22, color: C.muted, marginTop: 14, opacity: prog(frame, plain + 50, 10) }}>The models describe; the rules, sizes and costs are worked out in code.</div>
         </div>
-        <Punch text="It screens. The city decides." at={screens - plain + 4} x={140} y={740} size={72} width={1200} />
+        <Punch text="It screens. The city decides." at={screens - (take.howClip ? screens - 4 : plain - 4)} x={140} y={740} size={72} width={1200} />
       </Part>
       <Part from={turns - 4} to={tryIt + 40}>
         <Browser x={180} y={46} w={1560} src="footage/desktop-home.mp4" start={0.4} rate={0.4} url="basementready.com" cam={[[0, 1.0, 0.5, 0.5], [4, 1.3, 0, 0.5]]} tilt />
