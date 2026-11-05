@@ -16,6 +16,8 @@ git clone https://github.com/Dbar2/basement-ready.git && cd basement-ready && pn
 
 Then open http://localhost:5173 and tap **Try the example**. To scan your own basement, copy `.env.example` to `.env` and put your Meta Model API key in `MODEL_API_KEY`. Full steps and fixes: [Run it yourself](#run-it-yourself).
 
+**Watch the Meta models run live.** On the live site, tap **Check my basement**, choose **Use a demo house in Waterloo** (no address needed), and upload a phone video of any basement, or the example's own video, [`public/samples/sample-basement.mp4`](public/samples/sample-basement.mp4). The answer comes back in about two minutes, and the server logs one `[meta]` line per model call. The example basement is a real unfinished basement filmed on a phone: no 3D modelling and no generated images.
+
 <p>
   <img src="docs/screens/wait.jpg" width="200" alt="While it measures: the example's video with SAM's finds (ducts, a beam, the door, the stairs), and one question with why it's asked">
   <img src="docs/screens/answer.png" width="200" alt="The answer: yes after 2 fixes, with the fix marked on the measured plan, the rough cost and the money">
