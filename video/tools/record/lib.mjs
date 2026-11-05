@@ -42,7 +42,7 @@ export const DEVICES = {
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 export async function launch(device, storageState) {
-  const browser = await chromium.launch({ channel: "chromium", args: ["--use-angle=metal", "--enable-gpu", "--hide-scrollbars"] });
+  const browser = await chromium.launch({ ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : { channel: "chromium" }), args: ["--use-angle=metal", "--enable-gpu", "--hide-scrollbars"] });
   const d = DEVICES[device];
   const context = await browser.newContext({ ...d, storageState, reducedMotion: "no-preference", colorScheme: "light", locale: "en-CA" });
   const page = await context.newPage();

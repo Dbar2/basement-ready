@@ -121,12 +121,13 @@ const Rec: React.FC<{ shot: Shot; from?: number; cam?: CamKey[]; rate?: number; 
 );
 
 /** One of the 3D clips (public/clips), framed on the sheet with a slow push-in. */
-const Clip3D: React.FC<{ file: string; from?: number; rate?: number }> = ({ file, from = 0, rate = 1 }) => {
+const Clip3D: React.FC<{ file: string; from?: number; rate?: number; x?: number; y?: number; w?: number }> = ({ file, from = 0, rate = 1, x = 160, y = 40, w = 1600 }) => {
   const frame = useCurrentFrame();
   const push = 1 + frame * 0.0006;
+  const h = (w * 9) / 16;
   return (
-    <div style={{ position: "absolute", left: 160, top: 40, width: 1600, height: 900, borderRadius: 6, overflow: "hidden", boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)", transform: `perspective(2600px) rotateY(${1.6 * Math.sin(frame / 90)}deg)` }}>
-      <OffthreadVideo src={staticFile(`clips/${file}`)} startFrom={Math.round(from * FPS)} playbackRate={rate} muted style={{ width: 1600, height: 900, transform: `scale(${push})` }} />
+    <div style={{ position: "absolute", left: x, top: y, width: w, height: h, borderRadius: 6, overflow: "hidden", boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)", transform: `perspective(2600px) rotateY(${1.6 * Math.sin(frame / 90)}deg)` }}>
+      <OffthreadVideo src={staticFile(`clips/${file}`)} startFrom={Math.round(from * FPS)} playbackRate={rate} muted style={{ width: w, height: h, transform: `scale(${push})` }} />
     </div>
   );
 };
@@ -163,8 +164,8 @@ const Hook: React.FC<P> = ({ s }) => {
   const rental = local(s, cue("Or a rental"));
   return (
     <Part from={0} to={len(s)}>
-      <Run n="09-before-after" x={780} y={150} w={1040} cam={[[0, 1.35, 0.3, 0.5], [3.2, 1.9, 0.3, 0.5], [9, 2.0, 0.3, 0.5]]} />
-      <div style={{ position: "absolute", left: 780, top: 150 + 1040 * DAVID + 54, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1040 }}>This basement, filmed on a phone, and the same photo virtually staged by Muse Image</div>
+      <Clip3D file="david-03-plan-to-3d.mp4" x={760} y={150} w={1080} rate={0.85} />
+      <div style={{ position: "absolute", left: 760, top: 150 + 1080 * 9 / 16 + 18, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1080 }}>This basement's measured plan, from its phone video, rising into a layout in 3D</div>
       <div style={{ position: "absolute", left: 120, top: 72, fontFamily: SANS, fontSize: 20, color: C.muted, opacity: Math.min(prog(frame, 4, 10), 1 - prog(frame, 220, 12)) }}>
         Built during the Meta AI Developer Hackathon, from an empty repo on <span style={{ fontFamily: MONO, color: C.ink }}>Oct 28, 2026</span>.
       </div>
@@ -192,7 +193,7 @@ const Problem: React.FC<P> = ({ s }) => {
 };
 
 /** SAM's finds on his video, from the live wait screen: four frames popping in with a scan line. */
-const FINDS = [["00-wait-finding", "Measuring"], ["01-wait-sam-window", "Window"], ["02-wait-sam-beam", "Beam"], ["03-wait-sam-doors", "Doors"]];
+const FINDS = [["00-wait-finding", "Finding"], ["01-wait-sam-window", "Window"], ["03-wait-sam-doors", "Doors"]];
 const SamGrid: React.FC = () => {
   const frame = useCurrentFrame();
   return (
@@ -200,11 +201,10 @@ const SamGrid: React.FC = () => {
       {FINDS.map(([n, label], i) => {
         const p = prog(frame, 6 + i * 16, 14, easeOut);
         const sweep = prog(frame, 10 + i * 16, 22, easeDraw);
-        const col = i % 2, row = Math.floor(i / 2);
-        const x = 300 + col * 680, y = 180 + row * 410;
+        const x = 120 + i * 570, y = 330;
         return (
-          <div key={n} style={{ position: "absolute", left: x, top: y + (1 - p) * 30, width: 640, opacity: p, fontFamily: SANS }}>
-            <div style={{ position: "relative", width: 640, height: 640 * (362 / 600), borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}`, boxShadow: "0 20px 48px -28px rgb(15 42 30 / 0.5)" }}>
+          <div key={n} style={{ position: "absolute", left: x, top: y + (1 - p) * 30, width: 540, opacity: p, fontFamily: SANS }}>
+            <div style={{ position: "relative", width: 540, height: 540 * (362 / 600), borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}`, boxShadow: "0 20px 48px -28px rgb(15 42 30 / 0.5)" }}>
               <Img src={staticFile(`david/${n}.jpg`)} style={{ position: "absolute", left: 0, top: "-12%", width: "158%", transform: `scale(${1 + Math.max(0, frame - (6 + i * 16)) * 0.0012})`, transformOrigin: "30% 50%" }} />
               <div style={{ position: "absolute", left: 0, right: 0, top: `${sweep * 100}%`, height: 3, background: C.mint, opacity: sweep > 0 && sweep < 1 ? 0.9 : 0 }} />
             </div>
@@ -319,14 +319,14 @@ const Answer: React.FC<P> = ({ s }) => {
     <>
       <Part from={0} to={drop - 2}>
         <div style={{ position: "absolute", left: 180, top: 260, width: 760, borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}` }}>
-          <Img src={staticFile("david/02-wait-sam-beam.jpg")} style={{ width: 760, display: "block", transform: `scale(${1 + frame * 0.0008})` }} />
+          <Img src={staticFile("david/01-wait-sam-window.jpg")} style={{ width: 760, display: "block", transform: `scale(${1 + frame * 0.0008})` }} />
         </div>
         <Sequence from={-130}>
           <LogPanel dur={drop + 130} />
         </Sequence>
         <Pipeline frame={frame + 400} enter={0} rise={0} leave={drop + 400 - 6} active="spark" />
       </Part>
-      <Part from={drop - 2} to={grants - 4}>
+      <Part from={drop - 2} to={every - 4}>
         <AbsoluteFill style={{ transform: `translate(${Math.sin(frame * 2.3) * shake}px, ${Math.cos(frame * 2.9) * shake}px)` }}>
           <Run n="04-answer-plan" cam={cam} />
           <div style={{ position: "absolute", left: 300, top: 330, opacity: Math.min(1, sp * 1.2) * (1 - prog(frame, yes + 4, 8)), transform: `rotate(-3deg) scale(${1.4 - 0.4 * sp})`, background: C.card, border: `7px solid ${C.ink}`, borderRadius: 6, padding: "20px 40px 26px", fontFamily: SANS, fontWeight: 900, fontSize: 96, letterSpacing: "-0.045em" }}>
@@ -341,12 +341,16 @@ const Answer: React.FC<P> = ({ s }) => {
               </div>
             );
           })}
-          <CostHis at={every + 40} out={grants + 30} />
         </AbsoluteFill>
+      </Part>
+      <Part from={every - 4} to={grants - 4}>
+        <Browser x={180} y={46} w={1560} src="footage/desktop-ask.mp4" start={0.6} rate={2.0} url="basementready.com/scans/sample/guide" cam={[[0, 1.55, 1, 0.97], [1.7, 1.55, 1, 0.97], [2.7, 1.25, 0.28, 0.45]]} tilt tag="The example basement, replayed" />
+        <Punch text="Ask anything." at={8} x={140} y={760} size={76} width={900} mark={1} />
       </Part>
       <Part from={grants - 4} to={L}>
         <Run n="04-answer-plan" cam={[[0, 1.2, 0.2, 0.5], [6, 1.3, 0.2, 0.5]]} />
         <Money />
+        <CostHis at={6} out={L + 60} />
       </Part>
     </>
   );
@@ -366,7 +370,7 @@ const Breakthrough: React.FC<P> = ({ s }) => {
         <Punch text="Yours to check." at={yours} x={1080} y={760} size={76} width={760} mark={2} />
       </Part>
       <Part from={drag - 4} to={type - 4}>
-        <Run n="06-plan-add-wall" cam={[[0, 1.2, 0.3, 0.45], [2.5, 1.5, 0.3, 0.45]]} />
+        <Rec shot={SHOTS.plan!} from={7.0} rate={1.3} cam={[[0, 1.34, 0, 0.6], [2, 1.6, 0.1, 0.85]]} />
       </Part>
       <Part from={type - 4} to={upd - 4}>
         <Run n="07-plan-wall-by-tape" cam={[[0, 1.3, 0.4, 0.3], [1.8, 2.0, 0.42, 0.22]]} />
@@ -390,14 +394,12 @@ const Design: React.FC<P> = ({ s }) => {
   const walk = local(s, cue("and walk around"));
   return (
     <>
-      <Part from={0} to={walk - 4}>
-        <Run n="08-layouts-3d" cam={[[0, 1.0, 0.5, 0.5], [3, 1.45, 0.2, 0.5], [8, 1.7, 0.25, 0.6]]} />
-      </Part>
-      <Part from={walk - 4} to={muse - 4}>
-        <Clip3D file="david-03-plan-to-3d.mp4" from={4.2} />
+      <Part from={0} to={muse - 4}>
+        <Browser x={180} y={46} w={1560} src="footage/desktop-orbit.mp4" start={4.6} rate={1.45} url="basementready.com/scans/sample/guide" cam={[[0, 1.3, 0, 0.5], [6, 1.4, 0, 0.5]]} tilt tag="The example basement, replayed" />
+        <Punch text="Walk around it." at={walk + 4} x={140} y={760} size={76} width={900} mark={2} />
       </Part>
       <Part from={muse - 4} to={L}>
-        <Run n="09-before-after" cam={[[0, 1.3, 0.32, 0.5], [4, 1.75, 0.32, 0.5]]} />
+        <Rec shot={SHOTS.looks!} from={19.8} cam={[[0, 1.32, 0, 0.5], [9, 1.4, 0, 0.5]]} />
         <Punch text="Your basement, finished." at={fin - muse + 4} x={140} y={720} size={80} width={1200} mark={2} />
       </Part>
     </>
