@@ -820,7 +820,7 @@ function PlanTo3D({ atlas, setLabels }: { atlas: Atlas; setLabels: (l: Label[]) 
 function Laminate() {
   const maps = useMaps();
   const mat = useMemo(() => {
-    const { minX, maxX, minZ, maxZ } = BOX;
+    const { minX, maxX, minZ, maxZ } = ROOM;
     const rep = (tex: THREE.Texture) => {
       const t = tex.clone();
       t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -830,23 +830,69 @@ function Laminate() {
     };
     return new THREE.MeshStandardMaterial({ map: rep(maps.lightFloor), normalMap: rep(maps.lightFloorN), roughnessMap: rep(maps.lightFloorR), roughness: 0.85 });
   }, [maps]);
-  const { minX, maxX, minZ, maxZ } = BOX;
+  const { minX, maxX, minZ, maxZ } = ROOM;
   return (
-    <mesh position={[MID.x, -0.005, MID.z]} rotation-x={-Math.PI / 2} material={mat} receiveShadow>
+    <mesh position={[(minX + maxX) / 2, -0.005, (minZ + maxZ) / 2]} rotation-x={-Math.PI / 2} material={mat} receiveShadow>
       <planeGeometry args={[maxX - minX, maxZ - minZ]} />
     </mesh>
   );
 }
 
+// Every wall of the as-built plan, finished plain, with its doors and windows left open where they are.
+function PlainWalls() {
+  const wallMat = useMemo(() => new THREE.MeshStandardMaterial({ color: "#F1F0EB", roughness: 0.93 }), []);
+  const glass = useMemo(() => new THREE.MeshStandardMaterial({ color: "#BFD3E6", roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.55 }), []);
+  const parts = useMemo(() => {
+    const out: { c: V3; s: V3; rot: number; glass?: boolean }[] = [];
+    const T = 0.12, sill = CEIL - 0.6, head = CEIL - 0.15, DOOR = 2.03;
+    for (const w of EXISTING.walls) {
+      const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]);
+      const rot = -Math.atan2(w.b[1] - w.a[1], w.b[0] - w.a[0]);
+      const ops = EXISTING.openings.filter((o) => o.wallId === w.id).sort((p, q) => p.offsetM - q.offsetM);
+      const seg = (d0: number, d1: number, y0: number, y1: number, g = false) => {
+        if (d1 - d0 < 0.01 || y1 - y0 < 0.01) return;
+        const m = (d0 + d1) / 2;
+        out.push({ c: [w.a[0] + ((w.b[0] - w.a[0]) * m) / len, (y0 + y1) / 2, w.a[1] + ((w.b[1] - w.a[1]) * m) / len], s: [d1 - d0 + (g ? 0 : 0.001), y1 - y0, g ? 0.02 : T], rot, glass: g });
+      };
+      let d = -T / 2;
+      for (const o of ops) {
+        const o0 = o.offsetM, o1 = o.offsetM + o.widthM;
+        seg(d, o0, 0, CEIL);
+        if (o.kind === "window") {
+          seg(o0, o1, 0, sill);
+          seg(o0, o1, head, CEIL);
+          seg(o0, o1, sill, head, true);
+        } else seg(o0, o1, DOOR, CEIL);
+        d = o1;
+      }
+      seg(d, len + T / 2, 0, CEIL);
+    }
+    return out;
+  }, []);
+  return (
+    <>
+      {parts.map((q, i) => (
+        <mesh key={i} position={q.c} rotation-y={q.rot} material={q.glass ? glass : wallMat} castShadow receiveShadow>
+          <boxGeometry args={q.s} />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
+// A slow eye-level push through the furnished layout, from the living area's far corner toward the
+// sleeping area: set from the main room's box (the plan's frame), moved to where the room was filmed.
 function Flythrough() {
   const { camera } = useThree();
+  const { minX, maxX, minZ, maxZ } = BOX;
+  const W = (x: number, y: number, z: number) => new THREE.Vector3(x + P.x, y, z + P.z);
   const path = useMemo(
-    () => new THREE.CatmullRomCurve3([new THREE.Vector3(3.45, 1.55, -1.8), new THREE.Vector3(2.7, 1.52, -1.55), new THREE.Vector3(2.15, 1.52, -1.4)], false, "centripetal"),
-    [],
+    () => new THREE.CatmullRomCurve3([W(maxX - 0.75, 1.55, minZ + 0.45), W(maxX - 1.4, 1.52, minZ + 0.62), W(maxX - 2.05, 1.5, minZ + 0.8)], false, "centripetal"),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const looks = useMemo(
-    () => new THREE.CatmullRomCurve3([new THREE.Vector3(-1.3, 0.85, 0.7), new THREE.Vector3(-0.9, 0.82, 1.1), new THREE.Vector3(-0.3, 0.8, 1.5)], false, "centripetal"),
-    [],
+    () => new THREE.CatmullRomCurve3([W((minX + maxX) / 2 - 0.2, 0.85, (minZ + maxZ) / 2 - 0.3), W(minX + 3.1, 0.82, maxZ - 1.8), W(minX + 2.6, 0.8, maxZ - 1.3)], false, "centripetal"),
+    [], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const p = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
@@ -855,15 +901,14 @@ function Flythrough() {
     camera.position.copy(p);
     camera.lookAt(looks.getPointAt(k));
   });
-  const { minX, maxX, minZ, maxZ } = BOX;
   return (
     <>
       <color attach="background" args={[C.sheet]} />
-      <mesh position={[MID.x, CEIL, MID.z]} rotation-x={Math.PI / 2}>
-        <planeGeometry args={[maxX - minX + 0.3, maxZ - minZ + 0.3]} />
+      <mesh position={[(ROOM.minX + ROOM.maxX) / 2, CEIL, (ROOM.minZ + ROOM.maxZ) / 2]} rotation-x={Math.PI / 2}>
+        <planeGeometry args={[ROOM.maxX - ROOM.minX + 0.3, ROOM.maxZ - ROOM.minZ + 0.3]} />
         <meshBasicMaterial color="#E4E3DD" toneMapped={false} />
       </mesh>
-      <Shell rise={1} all />
+      <PlainWalls />
       <Suspense fallback={null}>
         <Laminate />
         <Staged rise={1} />
