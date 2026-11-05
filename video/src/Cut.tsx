@@ -126,7 +126,7 @@ const Clip3D: React.FC<{ file: string; from?: number; rate?: number; x?: number;
   const push = 1 + frame * 0.0006;
   const h = (w * 9) / 16;
   return (
-    <div style={{ position: "absolute", left: x, top: y, width: w, height: h, borderRadius: 6, overflow: "hidden", boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)", transform: `perspective(2600px) rotateY(${1.6 * Math.sin(frame / 90)}deg)` }}>
+    <div style={{ position: "absolute", left: x, top: y, width: w, height: h, borderRadius: 6, overflow: "hidden", boxShadow: "0 50px 90px -40px rgb(15 42 30 / 0.55)", transform: `perspective(1800px) translateZ(${-120 + 160 * easeOut(Math.min(1, frame / 120))}px) rotateY(${-12 + 20 * easeOut(Math.min(1, frame / 160))}deg) rotateX(${6 - 4 * easeOut(Math.min(1, frame / 160))}deg)` }}>
       <OffthreadVideo src={staticFile(`clips/${file}`)} startFrom={Math.round(from * FPS)} playbackRate={rate} muted style={{ width: w, height: h, transform: `scale(${push})` }} />
     </div>
   );
@@ -140,9 +140,10 @@ const Part: React.FC<{ from: number; to: number; children: React.ReactNode }> = 
 );
 const PartIn: React.FC<{ dur: number; children: React.ReactNode }> = ({ dur, children }) => {
   const frame = useCurrentFrame();
-  const i = prog(frame, 0, 9, easeOut);
+  const i = prog(frame, 0, 10, easeOut);
   const o = 1 - prog(frame, dur - 8, 8, easeDraw);
-  return <AbsoluteFill style={{ opacity: Math.min(i, o), transform: `translateX(${(1 - i) * 90 - (1 - o) * 90}px)`, filter: i < 1 || o < 1 ? `blur(${((1 - i) + (1 - o)) * 6}px)` : undefined }}>{children}</AbsoluteFill>;
+  const scale = (0.88 + 0.12 * i) * (1 + 0.16 * (1 - o));
+  return <AbsoluteFill style={{ opacity: Math.min(i, o), transform: `scale(${scale})`, filter: i < 1 || o < 1 ? `blur(${((1 - i) * 6 + (1 - o) * 9).toFixed(2)}px)` : undefined }}>{children}</AbsoluteFill>;
 };
 
 // ---- sections (each gets local frames: 0 = its visual start)
@@ -164,8 +165,8 @@ const Hook: React.FC<P> = ({ s }) => {
   const rental = local(s, cue("Or a rental"));
   return (
     <Part from={0} to={len(s)}>
-      <Clip3D file="david-03-plan-to-3d.mp4" x={760} y={150} w={1080} rate={0.85} />
-      <div style={{ position: "absolute", left: 760, top: 150 + 1080 * 9 / 16 + 18, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1080 }}>This basement's measured plan, from its phone video, rising into a layout in 3D</div>
+      <Run n="04-answer-plan" x={780} y={150} w={1040} cam={[[0, 1.0, 0.5, 0.5], [3.5, 1.35, 0.3, 0.35], [10, 1.55, 0.3, 0.35]]} />
+      <div style={{ position: "absolute", left: 780, top: 150 + 1040 * DAVID + 54, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1040 }}>This basement's measured plan and its answer, from a live run on the site</div>
       <div style={{ position: "absolute", left: 120, top: 72, fontFamily: SANS, fontSize: 20, color: C.muted, opacity: Math.min(prog(frame, 4, 10), 1 - prog(frame, 220, 12)) }}>
         Built during the Meta AI Developer Hackathon, from an empty repo on <span style={{ fontFamily: MONO, color: C.ink }}>Oct 28, 2026</span>.
       </div>
@@ -234,7 +235,7 @@ const Input: React.FC<P> = ({ s }) => {
         <SamGrid />
       </Part>
       <Part from={map - 4} to={wonder - 4}>
-        <Run n="08-layouts-3d" cam={[[0, 1.15, 0.2, 0.5], [7, 1.55, 0.22, 0.55]]} />
+        <Run n="04-answer-plan" cam={[[0, 1.15, 0.22, 0.5], [7, 1.5, 0.22, 0.5]]} />
         <Sequence from={Math.round((wonder - map) * 0.5)}>
           <MeasuredHis />
         </Sequence>
@@ -376,11 +377,12 @@ const Breakthrough: React.FC<P> = ({ s }) => {
         <Run n="07-plan-wall-by-tape" cam={[[0, 1.3, 0.4, 0.3], [1.8, 2.0, 0.42, 0.22]]} />
       </Part>
       <Part from={upd - 4} to={one - 4}>
-        <Run n="04-answer-plan" cam={[[0, 1.3, 1, 0.6], [3, 1.6, 1, 0.62]]} />
+        <Rec shot={SHOTS.plan!} from={11.4} cam={[[0, 1.2, 0.35, 0.55], [3, 1.4, 0.35, 0.6]]} />
         <Punch text="Drag a wall. Everything updates." at={6} x={140} y={720} size={72} width={1100} mark={3} />
       </Part>
       <Part from={one - 4} to={L}>
-        <Clip3D file="david-03-plan-to-3d.mp4" rate={Math.max(1, 8 / Math.max(1, (L - one) / FPS))} />
+        <Clip3D file="example-03-plan-to-3d.mp4" rate={Math.min(1, 3.6 / Math.max(1, (L - one) / FPS))} />
+        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>The example basement: its measured plan, drawn from the scan</div>
         <Punch text="One model, scan to drawings." at={10} x={200} y={70} size={60} width={1500} />
       </Part>
     </>
@@ -394,13 +396,9 @@ const Design: React.FC<P> = ({ s }) => {
   const walk = local(s, cue("and walk around"));
   return (
     <>
-      <Part from={0} to={muse - 4}>
-        <Browser x={180} y={46} w={1560} src="footage/desktop-orbit.mp4" start={4.6} rate={1.45} url="basementready.com/scans/sample/guide" cam={[[0, 1.3, 0, 0.5], [6, 1.4, 0, 0.5]]} tilt tag="The example basement, replayed" />
-        <Punch text="Walk around it." at={walk + 4} x={140} y={760} size={76} width={900} mark={2} />
-      </Part>
-      <Part from={muse - 4} to={L}>
-        <Rec shot={SHOTS.looks!} from={19.8} cam={[[0, 1.32, 0, 0.5], [9, 1.4, 0, 0.5]]} />
-        <Punch text="Your basement, finished." at={fin - muse + 4} x={140} y={720} size={80} width={1200} mark={2} />
+      <Part from={0} to={L}>
+        <Rec shot={SHOTS.looks!} from={12.6} cam={[[0, 1.2, 0, 0.5], [14, 1.4, 0, 0.5]]} />
+        <Punch text="Your basement, finished." at={fin + 4} x={140} y={720} size={80} width={1200} mark={2} />
       </Part>
     </>
   );
@@ -426,13 +424,11 @@ const Build: React.FC<P> = ({ s }) => {
           </>
         )}
       </Part>
-      <Part from={honest - 4} to={even - 4}>
+      <Part from={honest - 4} to={L}>
         <Run n="10-build-permit-2of17" cam={[[0, 1.5, 0.25, 0.5], [2, 2.1, 0.2, 0.62]]} />
         <Punch text="Honest about what's left." at={8} x={790} y={826} size={62} width={940} mark={3} />
       </Part>
-      <Part from={even - 4} to={L}>
-        <Run n="10-build-permit-2of17" cam={[[0, 1.4, 1, 0.75], [3, 1.7, 1, 0.8]]} />
-      </Part>
+      <div style={{ display: "none" }}>{even}</div>
     </>
   );
 };
@@ -448,8 +444,9 @@ const Close: React.FC<P> = ({ s }) => {
   return (
     <>
       {take.howClip ? (
-        <Part from={0} to={screens - 4}>
-          <Clip3D file="how-it-works.mp4" rate={Math.max(1, take.howClip / Math.max(1, (screens - 4) / FPS))} />
+        <Part from={0} to={turns - 4}>
+          <Clip3D file="how-it-works.mp4" rate={Math.max(1, take.howClip / Math.max(1, (turns - 4) / FPS))} />
+          <Punch text="It screens. The city decides." at={screens} x={200} y={760} size={68} width={1200} />
         </Part>
       ) : null}
       <Part from={take.howClip ? -999 : 0} to={take.howClip ? -990 : plain - 4}>
@@ -459,7 +456,7 @@ const Close: React.FC<P> = ({ s }) => {
         <LogPanel dur={70} />
         <Pipeline frame={frame} enter={4} rise={34} leave={plain + 100} active={frame > 40 ? (["sam", "map", "wonder", "spark", "image"][Math.floor((frame - 40) / 22) % 5]) : ""} />
       </Part>
-      <Part from={take.howClip ? screens - 4 : plain - 4} to={turns - 4}>
+      <Part from={take.howClip ? -999 : plain - 4} to={take.howClip ? -990 : turns - 4}>
         <Run n="04-answer-plan" cam={[[0, 1.3, 0.2, 0.5], [6, 1.4, 0.2, 0.5]]} />
         <div style={{ position: "absolute", left: 1080, top: 200, width: 640, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "24px 30px", fontFamily: SANS }}>
           <div style={{ fontWeight: 900, fontSize: 46, letterSpacing: "-0.035em", lineHeight: 1 }}>Checked in code</div>
@@ -478,14 +475,24 @@ const Close: React.FC<P> = ({ s }) => {
         </div>
         <Punch text="It screens. The city decides." at={screens - (take.howClip ? screens - 4 : plain - 4)} x={140} y={740} size={72} width={1200} />
       </Part>
-      <Part from={turns - 4} to={tryIt + 40}>
+      <Part from={turns - 4} to={tryIt + 14}>
         <Browser x={180} y={46} w={1560} src="footage/desktop-home.mp4" start={0.4} rate={0.4} url="basementready.com" cam={[[0, 1.0, 0.5, 0.5], [4, 1.3, 0, 0.5]]} tilt />
       </Part>
-      <Sequence from={tryIt + 30}>
-        <EndCard />
+      <Sequence from={tryIt + 16}>
+        <EndHold />
       </Sequence>
       <div style={{ display: "none" }}>{L}</div>
     </>
+  );
+};
+
+/** The end card on its own sheet, fading up once and held to the end. */
+const EndHold: React.FC = () => {
+  const frame = useCurrentFrame();
+  return (
+    <AbsoluteFill style={{ backgroundColor: C.bg, opacity: prog(frame, 0, 10) }}>
+      <EndCard />
+    </AbsoluteFill>
   );
 };
 
@@ -537,6 +544,7 @@ export const Cut: React.FC = () => {
   const cur = SECS.find((s) => frame / FPS >= s.v0 && frame / FPS < s.v1) ?? SECS[SECS.length - 1];
   return (
     <Sheet name={VIEWS[cur.id].name} index={SECS.indexOf(cur) + 1} of={SECS.length}>
+      <AbsoluteFill style={{ backgroundImage: `linear-gradient(${C.border} 1px, transparent 1px), linear-gradient(90deg, ${C.border} 1px, transparent 1px)`, backgroundSize: "80px 80px", backgroundPosition: `${-(frame * 0.35) % 80}px ${-(frame * 0.12) % 80}px`, opacity: 0.45, filter: "blur(0.6px)" }} />
       {SECS.map((s, i) => {
         const V = VIEWS[s.id].C;
         const from = Math.round(s.v0 * FPS);

@@ -4,8 +4,8 @@ import { C } from "./theme";
 import { SANS } from "./fonts";
 import { Mark } from "./components/kit";
 
-// The YouTube thumbnail: David's basement as its measured plan built out in 3D (the last frame of the
-// 3D session's plan-to-3D clip of his scan), and the question in the brand's type.
+// The YouTube thumbnail: David's basement's measured plan with its "Yes, after 2 fixes" answer, from his
+// live run on the site (public/david/thumb-plan.jpg, cropped from 04-answer-plan.jpg), and the question.
 export const Thumbnail: React.FC = () => (
   <AbsoluteFill style={{ backgroundColor: C.bg, fontFamily: SANS, color: C.ink }}>
     <div style={{ position: "absolute", left: 44, top: 44, width: 620, fontWeight: 900, fontSize: 100, letterSpacing: "-0.045em", lineHeight: 0.93 }}>
@@ -18,8 +18,8 @@ export const Thumbnail: React.FC = () => (
       <span style={{ fontWeight: 800, fontSize: 46, letterSpacing: "-0.03em" }}>Basement Ready</span>
     </div>
     <span style={{ position: "absolute", left: 470, top: 604, background: C.mint, color: C.ink, fontWeight: 700, fontSize: 26, padding: "12px 20px", borderRadius: 6 }}>basementready.com</span>
-    <div style={{ position: "absolute", left: 700, top: 36, width: 540, height: 510, borderRadius: 6, overflow: "hidden", border: `2px solid ${C.ink}` }}>
-      <Img src={staticFile("david/thumb-3d.jpg")} style={{ position: "absolute", left: -330, top: -40, width: 1200, height: 675 }} />
+    <div style={{ position: "absolute", left: 700, top: 36, width: 540, height: 510, borderRadius: 6, overflow: "hidden", border: `2px solid ${C.ink}`, background: C.card }}>
+      <Img src={staticFile("david/thumb-plan.jpg")} style={{ width: 540, height: 510, objectFit: "contain", display: "block" }} />
     </div>
   </AbsoluteFill>
 );
