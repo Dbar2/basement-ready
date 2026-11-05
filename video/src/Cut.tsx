@@ -234,8 +234,7 @@ const Input: React.FC<P> = ({ s }) => {
         <SamGrid />
       </Part>
       <Part from={map - 4} to={wonder - 4}>
-        <Clip3D file="david-01-assemble.mp4" rate={Math.min(1.15, 7 / Math.max(1, (wonder - map) / FPS))} />
-        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>This basement's scan, from its phone video</div>
+        <Run n="08-layouts-3d" cam={[[0, 1.15, 0.2, 0.5], [7, 1.55, 0.22, 0.55]]} />
         <Sequence from={Math.round((wonder - map) * 0.5)}>
           <MeasuredHis />
         </Sequence>
@@ -395,14 +394,7 @@ const Design: React.FC<P> = ({ s }) => {
         <Run n="08-layouts-3d" cam={[[0, 1.0, 0.5, 0.5], [3, 1.45, 0.2, 0.5], [8, 1.7, 0.25, 0.6]]} />
       </Part>
       <Part from={walk - 4} to={muse - 4}>
-        {take.flythrough ? (
-          <>
-            <Clip3D file="david-04-flythrough.mp4" />
-            <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>This basement's layout, in 3D</div>
-          </>
-        ) : (
-          <Run n="08-layouts-3d" cam={[[0, 1.6, 0.3, 0.55], [2.5, 2.0, 0.25, 0.6]]} />
-        )}
+        <Clip3D file="david-03-plan-to-3d.mp4" from={4.2} />
       </Part>
       <Part from={muse - 4} to={L}>
         <Run n="09-before-after" cam={[[0, 1.3, 0.32, 0.5], [4, 1.75, 0.32, 0.5]]} />
@@ -445,8 +437,10 @@ const Close: React.FC<P> = ({ s }) => {
   return (
     <>
       <Part from={0} to={plain - 4}>
-        <Clip3D file="david-02-finds.mp4" rate={Math.max(1, 8 / Math.max(1, plain / FPS))} />
-        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>This basement's scan, with SAM's finds</div>
+        <div style={{ position: "absolute", left: 180, top: 260, width: 760, borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}` }}>
+          <Img src={staticFile("david/03-wait-sam-doors.jpg")} style={{ width: 760, display: "block", transform: `scale(${1 + frame * 0.0008})` }} />
+        </div>
+        <LogPanel dur={70} />
         <Pipeline frame={frame} enter={4} rise={34} leave={plain + 100} active={frame > 40 ? (["sam", "map", "wonder", "spark", "image"][Math.floor((frame - 40) / 22) % 5]) : ""} />
       </Part>
       <Part from={plain - 4} to={turns - 4}>
