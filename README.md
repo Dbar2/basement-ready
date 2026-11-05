@@ -6,7 +6,7 @@ Everything here was built during the Meta AI Developer Hackathon. The first comm
 
 - **Live:** https://www.basementready.com
 - **Example basement:** https://www.basementready.com/scans/sample (no account, no keys, nothing sent)
-- **Demo video (2 min):** https://youtu.be/7prCIGqc_30
+- **Demo video (2 min):** https://youtu.be/mFCAcvSXj48
 
 **Try it with no login.** Open the example on the live site (link above), or run it yourself with no keys (Node 22.12+ and pnpm 10):
 
