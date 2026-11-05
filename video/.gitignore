@@ -1,0 +1,14 @@
+node_modules/
+out/
+# generated media: rendered locally, never committed (re-make with the scripts in tools/)
+public/footage/
+public/voice/
+public/*.wav
+public/*.mp3
+public/*.mp4
+public/*.webm
+*.webm
+public/live-run-*.jpg
+public/audio/
+public/clips/
+public/david/
