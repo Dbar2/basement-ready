@@ -11,6 +11,7 @@ import { prog, easeDraw } from "./anim";
 import media from "./data/media.json";
 import { Thumbnail } from "./Thumbnail";
 import { Cut, TOTAL } from "./Cut";
+import { HowItWorks, HIW_DURATION, HIW_FPS } from "./HowItWorks";
 
 const SCENE_VIEW: Record<SceneId, { name: string; C: React.FC<{ scene: SceneTiming }> }> = {
   question: { name: "The question", C: Question },
@@ -89,6 +90,7 @@ export const Root: React.FC = () => (
   <>
     <Composition id="Demo" component={Cut} durationInFrames={TOTAL} fps={FPS} width={1920} height={1080} />
     <Composition id="DemoExample" component={Demo} durationInFrames={TIMELINE.total} fps={FPS} width={1920} height={1080} />
+    <Composition id="HowItWorks" component={HowItWorks} durationInFrames={HIW_DURATION} fps={HIW_FPS} width={1920} height={1080} />
     <Composition id="Thumbnail" component={Thumbnail} durationInFrames={1} fps={FPS} width={1280} height={720} />
   </>
 );
