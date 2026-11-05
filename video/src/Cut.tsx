@@ -388,10 +388,21 @@ const Design: React.FC<P> = ({ s }) => {
   const L = len(s);
   const muse = local(s, cue("Muse Image"));
   const fin = local(s, cue("so you see"));
+  const walk = local(s, cue("and walk around"));
   return (
     <>
-      <Part from={0} to={muse - 4}>
+      <Part from={0} to={walk - 4}>
         <Run n="08-layouts-3d" cam={[[0, 1.0, 0.5, 0.5], [3, 1.45, 0.2, 0.5], [8, 1.7, 0.25, 0.6]]} />
+      </Part>
+      <Part from={walk - 4} to={muse - 4}>
+        {take.flythrough ? (
+          <>
+            <Clip3D file="david-04-flythrough.mp4" />
+            <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>This basement's layout, in 3D</div>
+          </>
+        ) : (
+          <Run n="08-layouts-3d" cam={[[0, 1.6, 0.3, 0.55], [2.5, 2.0, 0.25, 0.6]]} />
+        )}
       </Part>
       <Part from={muse - 4} to={L}>
         <Run n="09-before-after" cam={[[0, 1.3, 0.32, 0.5], [4, 1.75, 0.32, 0.5]]} />
@@ -434,8 +445,8 @@ const Close: React.FC<P> = ({ s }) => {
   return (
     <>
       <Part from={0} to={plain - 4}>
-        <Clip3D file="02-finds.mp4" rate={Math.max(1, 8 / Math.max(1, plain / FPS))} />
-        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>A 3D render of the example basement's scan</div>
+        <Clip3D file="david-02-finds.mp4" rate={Math.max(1, 8 / Math.max(1, plain / FPS))} />
+        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>This basement's scan, with SAM's finds</div>
         <Pipeline frame={frame} enter={4} rise={34} leave={plain + 100} active={frame > 40 ? (["sam", "map", "wonder", "spark", "image"][Math.floor((frame - 40) / 22) % 5]) : ""} />
       </Part>
       <Part from={plain - 4} to={turns - 4}>
