@@ -1,9 +1,10 @@
 # Demo video credits
 
-Everything in the video is either real footage of the live app, the example basement's own data, or drawn in code. No AI-generated imagery is used anywhere, apart from the app's own "Virtually staged" before/after pictures (Muse Image restyling the example's real frame), which appear inside the app footage with their label.
+Everything in the video is either real footage of the live app, the example basement's own data, or drawn in code. No AI-generated imagery is used anywhere, apart from the app's own "Virtually staged" before/after pictures (Muse Image restyling a real frame), which appear inside the app screens with their label.
 
 | What | Source | Licence |
 |---|---|---|
+| David's live run | Screenshots of a live run of David's own basement video on basementready.com (Nov 4, 2026, 6:51 PM ET, scan by the director session with David's approval), and that run's Railway `[meta]` log lines (`media/video-david-run/`, private, git-ignored in `public/david/`). His raw phone video (`media/private/david/basement.mov`) for the filming shot | David's own |
 | Footage | Screen recordings of https://www.basementready.com walking the public example basement, made with Playwright (`tools/record/record.mjs`) | Ours |
 | Live Meta call log and its answer | Railway server log lines from a live run on basementready.com (Nov 4, 2026, 5:27 PM ET: the public example video uploaded as a new scan), shown exactly as logged (`src/data/logs.json`), and a screenshot of that run's answer (`public/live-run-answer.jpg`, git-ignored). Both relayed by the director session | Ours |
 | Example basement | `public/samples` in this repo: the example video, SAM 3.1's tracks, the measured plan (MapAnything) | Ours |
