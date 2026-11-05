@@ -370,7 +370,7 @@ const Breakthrough: React.FC<P> = ({ s }) => {
         <Punch text="Yours to check." at={yours} x={1080} y={760} size={76} width={760} mark={2} />
       </Part>
       <Part from={drag - 4} to={type - 4}>
-        <Rec shot={SHOTS.plan!} from={7.0} rate={1.3} cam={[[0, 1.34, 0, 0.6], [2, 1.6, 0.1, 0.85]]} />
+        <Rec shot={SHOTS.plan!} from={7.0} rate={1.3} cam={[[0, 1.4, 0.42, 0.72], [2.2, 1.65, 0.46, 0.8]]} />
       </Part>
       <Part from={type - 4} to={upd - 4}>
         <Run n="07-plan-wall-by-tape" cam={[[0, 1.3, 0.4, 0.3], [1.8, 2.0, 0.42, 0.22]]} />
