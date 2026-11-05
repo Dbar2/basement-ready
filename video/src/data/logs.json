@@ -1,77 +1,87 @@
 {
- "title": "Server log · a live run on basementready.com · Nov 4, 2026, 5:27 PM ET",
- "note": "Railway logs, times in ET: one line per Meta call, exactly as logged.",
- "source": "Live run on the public example video, uploaded as a new scan (relayed by the director session, Nov 4, 5:27 PM ET).",
+ "title": "Server log · a live run of this basement on basementready.com · Nov 4, 2026, 6:51 PM ET",
+ "note": "Railway logs, times in ET, sped up: one line per Meta call, exactly as logged.",
+ "source": "media/video-david-run/meta-log.txt",
  "lines": [
   {
-   "at": "17:27:40",
+   "at": "18:51:01",
    "secs": 0,
-   "text": "[meta] sam-3.1 · video · \"water heater\" · 3.5 s"
+   "text": "[meta] muse-voice-transcribe-1.0 · 102 s of audio · 12.7 s"
   },
   {
-   "at": "17:27:40",
-   "secs": 0,
-   "text": "[meta] muse-voice-transcribe-1.0 · 7 s of audio · 4.6 s"
+   "at": "18:51:04",
+   "secs": 3,
+   "text": "[meta] sam-3.1 · video · \"floor drain\" · 15.1 s"
   },
   {
-   "at": "17:27:41",
-   "secs": 1,
-   "text": "[meta] sam-3.1 · video · \"support beam\" · 4.0 s"
+   "at": "18:51:06",
+   "secs": 5,
+   "text": "[meta] sam-3.1 · video · \"metal duct\" · 16.7 s"
   },
   {
-   "at": "17:27:41",
-   "secs": 1,
-   "text": "[meta] sam-3.1 · video · \"staircase\" · 4.1 s"
+   "at": "18:51:06",
+   "secs": 5,
+   "text": "[meta] sam-3.1 · video · \"water heater\" · 17.3 s"
   },
   {
-   "at": "17:27:41",
-   "secs": 1,
-   "text": "[meta] sam-3.1 · video · \"door\" · 4.2 s"
+   "at": "18:51:07",
+   "secs": 6,
+   "text": "[meta] sam-3.1 · video · \"electrical panel\" · 17.8 s"
   },
   {
-   "at": "17:27:41",
-   "secs": 1,
-   "text": "[meta] sam-3.1 · video · \"basement window\" · 4.5 s"
+   "at": "18:51:07",
+   "secs": 6,
+   "text": "[meta] sam-3.1 · video · \"support beam\" · 18.1 s"
   },
   {
-   "at": "17:27:42",
-   "secs": 2,
-   "text": "[meta] sam-3.1 · video · \"metal duct\" · 5.2 s"
+   "at": "18:51:10",
+   "secs": 9,
+   "text": "[meta] muse-wonder-1.0 · video · 21402 in / 2192 out tokens · 21.2 s"
   },
   {
-   "at": "17:27:47",
-   "secs": 7,
-   "text": "[meta] muse-wonder-1.0 · video · 3294 in / 1526 out tokens · 12.5 s"
+   "at": "18:51:10",
+   "secs": 9,
+   "text": "[meta] sam-3.1 · video · \"basement window\" · 20.8 s"
   },
   {
-   "at": "17:27:56",
-   "secs": 16,
-   "text": "[meta] muse-image-1.0 · edit 1 image · \"Renovate this unfinished basement photo \" · 13.3 s"
+   "at": "18:51:11",
+   "secs": 10,
+   "text": "[meta] sam-3.1 · video · \"staircase\" · 22.2 s"
   },
   {
-   "at": "17:27:57",
+   "at": "18:51:11",
+   "secs": 10,
+   "text": "[meta] sam-3.1 · video · \"door\" · 22.4 s"
+  },
+  {
+   "at": "18:51:18",
    "secs": 17,
-   "text": "[meta] sam-3.1 · 1 image · \"basement window\" · 0.7 s"
+   "text": "[meta] muse-spark-1.3 · 3 images · 3790 in / 661 out tokens · 7.1 s"
   },
   {
-   "at": "17:27:57",
-   "secs": 17,
-   "text": "[meta] sam-3.1 · 1 image · \"staircase\" · 0.8 s"
+   "at": "18:51:23",
+   "secs": 22,
+   "text": "[meta] muse-image-1.0 · edit 1 image · \"Renovate this unfinished basement photo \" · 11.4 s"
   },
   {
-   "at": "17:28:07",
-   "secs": 27,
-   "text": "[meta] muse-spark-1.3 · 3 images · 3792 in / 1518 out tokens · 19.6 s"
+   "at": "18:51:24",
+   "secs": 23,
+   "text": "[meta] sam-3.1 · 1 image · \"staircase\" · 1.1 s"
   },
   {
-   "at": "17:28:37",
-   "secs": 57,
-   "text": "[meta] muse-spark-1.3 · 3 images · 3805 in / 3219 out tokens · 41.5 s"
+   "at": "18:51:24",
+   "secs": 23,
+   "text": "[meta] sam-3.1 · 1 image · \"basement window\" · 1.3 s"
   },
   {
-   "at": "17:28:39",
-   "secs": 59,
-   "text": "[meta] muse-spark-1.3 · 4 images · 5709 in / 6519 out tokens · 56.9 s"
+   "at": "18:51:46",
+   "secs": 45,
+   "text": "[meta] muse-spark-1.3 · 8 images · 13971 in / 5287 out tokens · 33.8 s"
+  },
+  {
+   "at": "18:53:16",
+   "secs": 135,
+   "text": "[meta] muse-wonder-1.0 · video · 22226 in / 3109 out tokens · 34.1 s"
   }
  ]
 }

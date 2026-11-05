@@ -1,5 +1,5 @@
 import React from "react";
-import { AbsoluteFill, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
+import { AbsoluteFill, Img, OffthreadVideo, staticFile, useCurrentFrame } from "remotion";
 import { getLength } from "@remotion/paths";
 import { C } from "../theme";
 import { MONO, SANS } from "../fonts";
@@ -240,10 +240,11 @@ const camAt = (keys: CamKey[] | undefined, t: number) => {
 
 /** A drawn browser window holding a desktop recording, with an easing camera to make small text readable. */
 export const Browser: React.FC<{
-  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number; cam?: CamKey[]; tilt?: boolean; tag?: string;
-}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1, cam, tilt = false, tag }) => {
+  x: number; y: number; w: number; src: string; start: number; url?: string; p?: number; rate?: number; cam?: CamKey[]; tilt?: boolean; tag?: string; aspect?: number;
+}> = ({ x, y, w, src, start, url = "basementready.com", p = 1, rate = 1, cam, tilt = false, tag, aspect = 1080 / 1920 }) => {
   const frame = useCurrentFrame();
-  const h = (w * 1080) / 1920;
+  const h = w * aspect;
+  const still = /\.(png|jpe?g)$/i.test(src);
   const bar = 40;
   const c = camAt(cam, frame / 30);
   const c0 = camAt(cam, (frame - 1) / 30);
@@ -295,7 +296,11 @@ export const Browser: React.FC<{
       </div>
       <div style={{ width: w, height: h, overflow: "hidden", position: "relative" }}>
         <div style={{ width: w, height: h, transform: `translate(${cx}px, ${cy}px) scale(${c.z})`, transformOrigin: "50% 50%", filter: blur > 0.3 ? `blur(${blur.toFixed(2)}px)` : undefined }}>
-          <OffthreadVideo src={staticFile(src)} startFrom={Math.round(start * 30)} playbackRate={rate} muted style={{ width: w, height: h, display: "block" }} />
+          {still ? (
+            <Img src={staticFile(src)} style={{ width: w, height: h, display: "block" }} />
+          ) : (
+            <OffthreadVideo src={staticFile(src)} startFrom={Math.round(start * 30)} playbackRate={rate} muted style={{ width: w, height: h, display: "block" }} />
+          )}
         </div>
       </div>
     </div>

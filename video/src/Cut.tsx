@@ -149,36 +149,31 @@ type P = { s: Sec };
 const local = (s: Sec, globalFrame: number) => globalFrame - Math.round(s.v0 * FPS);
 const len = (s: Sec) => Math.round((s.v1 - s.v0) * FPS);
 
+// David's live run (media/video-david-run): screenshots of the live site, 1200 × 723.
+const DAVID = 723 / 1200;
+const Run: React.FC<{ n: string; cam?: CamKey[]; x?: number; y?: number; w?: number; tag?: string }> = ({ n, cam, x = 240, y = 44, w = 1440, tag = "A live run of this basement, Nov 4" }) => (
+  <Browser x={x} y={y} w={w} src={`david/${n}.jpg`} start={0} aspect={DAVID} url="basementready.com/scans/…/guide" cam={cam} tilt tag={tag} />
+);
+
 const Hook: React.FC<P> = ({ s }) => {
   const frame = useCurrentFrame();
-  const wipe = prog(frame, 40, 34, easeDraw);
-  const push = interpolate(frame, [0, len(s)], [1, 1.07]);
   const could = local(s, cue("Could it become"));
   const parent = local(s, cue("For a parent"));
   const kid = local(s, cue("For a grown kid"));
   const rental = local(s, cue("Or a rental"));
-  const w = 1040, h = (w * 720) / 1280;
   return (
     <Part from={0} to={len(s)}>
-      <div style={{ position: "absolute", left: 800, top: 120, width: w, height: h, borderRadius: 4, overflow: "hidden", transform: `perspective(2600px) rotateY(${-3 + 1.5 * Math.sin(frame / 80)}deg)`, boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)" }}>
-        <div style={{ position: "absolute", inset: 0, transform: `scale(${push})` }}>
-          <Img src={staticFile("sample/sample/frames/0000.jpg")} style={{ position: "absolute", width: w, height: h }} />
-          <div style={{ position: "absolute", inset: 0, clipPath: `inset(0 ${(1 - wipe) * 100}% 0 0)` }}>
-            <Img src={staticFile("sample/sample/looks/warm/1.jpg")} style={{ position: "absolute", width: w, height: h }} />
-          </div>
-        </div>
-        <div style={{ position: "absolute", top: 0, bottom: 0, left: wipe * w - 2, width: 4, background: C.mint, opacity: wipe > 0.02 && wipe < 0.98 ? 1 : 0 }} />
-      </div>
-      <div style={{ position: "absolute", left: 800, top: 120 + h + 14, fontSize: 21, color: C.muted, fontFamily: SANS }}>The example basement in Ontario, and the same frame virtually staged by Muse Image</div>
-      <div style={{ position: "absolute", left: 120, top: 70, fontFamily: SANS, fontSize: 20, color: C.muted, opacity: Math.min(prog(frame, 4, 10), 1 - prog(frame, 200, 12)) }}>
+      <Run n="09-before-after" x={780} y={150} w={1040} cam={[[0, 1.35, 0.32, 0.5], [3.2, 1.75, 0.32, 0.5], [9, 1.85, 0.32, 0.5]]} />
+      <div style={{ position: "absolute", left: 780, top: 150 + 1040 * DAVID + 54, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1040 }}>This basement, filmed on a phone, and the same photo virtually staged by Muse Image</div>
+      <div style={{ position: "absolute", left: 120, top: 72, fontFamily: SANS, fontSize: 20, color: C.muted, opacity: Math.min(prog(frame, 4, 10), 1 - prog(frame, 220, 12)) }}>
         Built during the Meta AI Developer Hackathon, from an empty repo on <span style={{ fontFamily: MONO, color: C.ink }}>Oct 28, 2026</span>.
       </div>
-      <Punch text="A real basement." at={6} out={could - 6} x={120} y={300} size={104} width={640} />
-      <Punch text="Could it become a second home?" at={could} x={120} y={260} size={104} width={660} mark={4} />
+      <Punch text="A real basement." at={6} out={could - 6} x={120} y={300} size={104} width={620} />
+      <Punch text="Could it become a second home?" at={could} x={120} y={260} size={100} width={640} mark={4} />
       {[["For a parent", parent], ["For a grown kid", kid], ["A rental", rental]].map(([t, at], i) => {
         const p = prog(frame, at as number, 10, easeOut);
         return (
-          <span key={i} style={{ position: "absolute", left: 124 + [0, 200, 440][i], top: 760, padding: "10px 18px", border: `1.5px solid ${C.ink}`, borderRadius: 4, fontFamily: SANS, fontWeight: 600, fontSize: 26, opacity: p, transform: `translateY(${(1 - p) * 14}px)` }}>
+          <span key={i} style={{ position: "absolute", left: 124 + [0, 200, 0][i], top: 780 + [0, 0, 64][i], padding: "10px 18px", background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 4, fontFamily: SANS, fontWeight: 600, fontSize: 26, opacity: p, transform: `translateY(${(1 - p) * 14}px)` }}>
             {t as string}
           </span>
         );
@@ -196,6 +191,31 @@ const Problem: React.FC<P> = ({ s }) => {
   );
 };
 
+/** SAM's finds on his video, from the live wait screen: four frames popping in with a scan line. */
+const FINDS = [["00-wait-finding", "Measuring"], ["01-wait-sam-window", "Window"], ["02-wait-sam-beam", "Beam"], ["03-wait-sam-doors", "Doors"]];
+const SamGrid: React.FC = () => {
+  const frame = useCurrentFrame();
+  return (
+    <>
+      {FINDS.map(([n, label], i) => {
+        const p = prog(frame, 6 + i * 16, 14, easeOut);
+        const sweep = prog(frame, 10 + i * 16, 22, easeDraw);
+        const col = i % 2, row = Math.floor(i / 2);
+        const x = 300 + col * 680, y = 180 + row * 410;
+        return (
+          <div key={n} style={{ position: "absolute", left: x, top: y + (1 - p) * 30, width: 640, opacity: p, fontFamily: SANS }}>
+            <div style={{ position: "relative", width: 640, height: 640 * (362 / 600), borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}`, boxShadow: "0 20px 48px -28px rgb(15 42 30 / 0.5)" }}>
+              <Img src={staticFile(`david/${n}.jpg`)} style={{ width: "100%", height: "100%" }} />
+              <div style={{ position: "absolute", left: 0, right: 0, top: `${sweep * 100}%`, height: 3, background: C.mint, opacity: sweep > 0 && sweep < 1 ? 0.9 : 0 }} />
+            </div>
+            <div style={{ fontWeight: 700, fontSize: 24, marginTop: 8 }}>{label}</div>
+          </div>
+        );
+      })}
+    </>
+  );
+};
+
 const Input: React.FC<P> = ({ s }) => {
   const frame = useCurrentFrame();
   const L = len(s);
@@ -205,28 +225,25 @@ const Input: React.FC<P> = ({ s }) => {
   const active = frame >= wonder ? "wonder" : frame >= map ? "map" : frame >= sam ? "sam" : "video";
   return (
     <>
-      {/* film it once: a real basement, on a phone */}
       <Part from={0} to={sam - 4}>
-        <Phone x={1120} y={40} h={900} src="footage/david-phone.mp4" start={2} />
+        <Phone x={1120} y={40} h={900} src="footage/david-phone.mp4" start={0} />
         <Punch text="Film it once." at={8} x={120} y={330} size={120} width={900} mark={2} />
         <div style={{ position: "absolute", left: 124, top: 500, fontFamily: SANS, fontSize: 28, color: C.muted, width: 700, opacity: prog(frame, 30, 12) }}>One slow walk through, on your phone. No special gear.</div>
       </Part>
-      {/* SAM 3.1 on the example video: its real tracks, drawn */}
       <Part from={sam - 4} to={map - 4}>
-        <div style={{ position: "absolute", left: 240, top: 210, width: 1440, height: 810, transform: `perspective(2600px) rotateY(${2.5 * Math.sin(frame / 90)}deg)`, boxShadow: "0 28px 64px -30px rgb(15 42 30 / 0.5)" }}>
-          <SamVideo w={1440} />
-        </div>
+        <SamGrid />
       </Part>
-      {/* MapAnything: the points and the solid model, from the live site's own story */}
       <Part from={map - 4} to={wonder - 4}>
-        <Clip3D file="01-assemble.mp4" rate={Math.min(1.15, 7 / Math.max(1, (wonder - map) / FPS))} />
-        <Sequence from={Math.round((wonder - map) * 0.55)}>
-          <Measured />
+        <Run n="04-answer-plan" y={170} x={330} w={1260} cam={[[0, 1.25, 0.2, 0.5], [6, 1.45, 0.2, 0.5]]} />
+        <Sequence from={Math.round((wonder - map) * 0.4)}>
+          <MeasuredHis />
         </Sequence>
       </Part>
-      {/* Wonder, and the live log of Meta calls (continues into the answer section) */}
       <Part from={wonder - 4} to={L + 4}>
-        <Rec shot={SHOTS.wait!} from={1.0} x={180} y={170} w={770} cam={[[0, 1.32, 0, 0.5]]} />
+        <div style={{ position: "absolute", left: 180, top: 260, width: 760, borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}` }}>
+          <Img src={staticFile("david/01-wait-sam-window.jpg")} style={{ width: 760, display: "block", transform: `scale(${1 + frame * 0.0008})` }} />
+        </div>
+        <div style={{ position: "absolute", left: 180, top: 260 + 760 * (362 / 600) + 12, fontFamily: SANS, fontSize: 20, color: C.muted, width: 760 }}>This basement on the live site's wait screen, with SAM's find</div>
         <LogPanel dur={L - wonder + 130} />
       </Part>
       <Pipeline frame={frame} enter={sam - 40} rise={sam - 40} leave={L + 200} active={active} />
@@ -234,53 +251,101 @@ const Input: React.FC<P> = ({ s }) => {
   );
 };
 
+/** What MapAnything measured in his basement (the live plan's figures), counting up. */
+const MeasuredHis: React.FC = () => {
+  const frame = useCurrentFrame();
+  const n = (v: number, d: number) => interpolate(frame, [8 + d, 34 + d], [0, v], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw });
+  const rows: [string, string][] = [
+    ["Floor", `${n(8.48, 0).toFixed(2)} × ${n(9.15, 0).toFixed(2)} m`],
+    ["Rec room", `${n(42.6, 6).toFixed(1)} m²`],
+    ["Storage", `${n(25.6, 10).toFixed(1)} m²`],
+    ["Ceiling", `${n(2.64, 14).toFixed(2)} m`],
+  ];
+  const p = prog(frame, 2, 12);
+  return (
+    <div style={{ position: "absolute", left: 1220, top: 300, width: 520, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "22px 28px", fontFamily: SANS, opacity: p, transform: `translateY(${(1 - p) * 14}px)` }}>
+      <div style={{ fontWeight: 800, fontSize: 28, letterSpacing: "-0.02em", paddingBottom: 12 }}>Measured from the video</div>
+      <div style={{ borderTop: `1.5px solid ${C.ink}` }}>
+        {rows.map(([k, v]) => (
+          <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+            <span style={{ fontWeight: 600, fontSize: 24 }}>{k}</span>
+            <span style={{ fontFamily: MONO, fontSize: 22 }}>{v}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 21, color: C.muted, marginTop: 14 }}>Estimates from an ordinary phone video. No LiDAR.</div>
+    </div>
+  );
+};
+
+/** His rough cost and money back, counting up. */
+const CostHis: React.FC<{ at: number; out: number }> = ({ at, out }) => {
+  const frame = useCurrentFrame();
+  const p = Math.min(prog(frame, at, 14), 1 - prog(frame, out, 10, easeDraw));
+  if (p <= 0) return null;
+  const n = (v: number) => Math.round(interpolate(frame, [at + 4, at + 34], [0, v], { extrapolateLeft: "clamp", extrapolateRight: "clamp", easing: easeDraw }));
+  return (
+    <div style={{ position: "absolute", left: 280, top: 690, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "18px 26px", fontFamily: SANS, opacity: p, transform: `translateY(${(1 - p) * 14}px)`, display: "flex", gap: 44 }}>
+      <div>
+        <div style={{ fontSize: 21, color: C.muted }}>The first fix: its own way in</div>
+        <div style={{ fontWeight: 900, fontSize: 50, letterSpacing: "-0.04em" }}>${n(12)}k–${n(30)}k</div>
+      </div>
+      <div>
+        <div style={{ fontSize: 21, color: C.muted }}>All in, hired out</div>
+        <div style={{ fontWeight: 900, fontSize: 50, letterSpacing: "-0.04em" }}>${n(69)}k–${n(132)}k</div>
+      </div>
+      <div>
+        <div style={{ fontSize: 21, color: C.muted }}>Money back</div>
+        <div style={{ fontWeight: 900, fontSize: 50, letterSpacing: "-0.04em" }}>up to ${n(7)},000</div>
+      </div>
+    </div>
+  );
+};
+
 const Answer: React.FC<P> = ({ s }) => {
   const frame = useCurrentFrame();
   const drop = local(s, cue("And the answer"));
-  const yes = local(s, cue("Yes. Not"));
-  const not = local(s, cue("Not as it"));
-  const after = local(s, cue("Or, yes"));
+  const yes = local(s, cue("Yes, not"));
+  const not = local(s, cue("not as it"));
+  const after = local(s, cue("or yes, after"));
   const every = local(s, cue("Every fix"));
   const grants = local(s, cue("and the grants"));
   const L = len(s);
-  const t0 = drop / FPS;
-  // the stamp lands on the drop with a spring and a small shake
   const sp = spring({ frame: frame - drop, fps: FPS, config: { damping: 11, stiffness: 180, mass: 0.6 } });
   const shake = frame >= drop && frame < drop + 12 ? (1 - (frame - drop) / 12) * 4 : 0;
-  const cam: CamKey[] = [[0, 1, 0.5, 0.5], [(yes + 6) / FPS - 0, 1, 0.5, 0.5], [(every - 4) / FPS, 1.3, 0.3, 0.42], [(every + 70) / FPS, 1.45, 0.28, 0.32]];
+  const t = (f: number) => (f - (drop - 2)) / FPS;
+  const cam: CamKey[] = [[0, 1, 0.5, 0.5], [t(yes + 6), 1, 0.5, 0.5], [t(every - 4), 1.55, 1, 0.62], [t(every + 80), 1.55, 1, 0.62], [t(every + 110), 1.3, 0.25, 0.5]];
   return (
     <>
-      {/* the log keeps going while Spark checks, then the answer lands on the drop */}
       <Part from={0} to={drop - 2}>
-        <Rec shot={SHOTS.wait!} from={2.6} x={180} y={170} w={770} cam={[[0, 1.32, 0, 0.5]]} />
+        <div style={{ position: "absolute", left: 180, top: 260, width: 760, borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}` }}>
+          <Img src={staticFile("david/02-wait-sam-beam.jpg")} style={{ width: 760, display: "block", transform: `scale(${1 + frame * 0.0008})` }} />
+        </div>
         <Sequence from={-130}>
           <LogPanel dur={drop + 130} />
-          <LiveAnswer from={drop + 130 - 78} />
         </Sequence>
         <Pipeline frame={frame + 400} enter={0} rise={0} leave={drop + 400 - 6} active="spark" />
       </Part>
       <Part from={drop - 2} to={grants - 4}>
         <AbsoluteFill style={{ transform: `translate(${Math.sin(frame * 2.3) * shake}px, ${Math.cos(frame * 2.9) * shake}px)` }}>
-          <Rec shot={SHOTS.answer!} from={2.2} cam={cam.map(([t, ...r]) => [t - (drop - 2) / FPS, ...r] as CamKey)} rate={0.8} />
+          <Run n="04-answer-plan" cam={cam} />
           <div style={{ position: "absolute", left: 300, top: 330, opacity: Math.min(1, sp * 1.2) * (1 - prog(frame, yes + 4, 8)), transform: `rotate(-3deg) scale(${1.4 - 0.4 * sp})`, background: C.card, border: `7px solid ${C.ink}`, borderRadius: 6, padding: "20px 40px 26px", fontFamily: SANS, fontWeight: 900, fontSize: 96, letterSpacing: "-0.045em" }}>
             The answer comes first.
           </div>
-          {/* the three answers it can give, in their verdict colours */}
-          {[["Yes.", C.ok, yes], ["Not as it is.", C.stop, not], ["Yes, after a few fixes.", C.fix, after]].map(([t, col, at], i) => {
+          {[["Yes.", C.ok, yes], ["Not as it is.", C.stop, not], ["Yes, after a few fixes.", C.fix, after]].map(([tx, col, at], i) => {
             const p = spring({ frame: frame - (at as number), fps: FPS, config: { damping: 12, stiffness: 200, mass: 0.5 } });
             const gone = prog(frame, every - 6, 8);
             return (
-              <div key={i} style={{ position: "absolute", left: 300 + i * 0, top: 300 + i * 120, opacity: Math.min(1, p) * (1 - gone), transform: `rotate(-2deg) scale(${1.25 - 0.25 * Math.min(1, p)})`, transformOrigin: "left center", background: C.card, border: `6px solid ${col}`, color: col as string, borderRadius: 6, padding: "12px 30px 16px", fontFamily: SANS, fontWeight: 900, fontSize: 72, letterSpacing: "-0.04em" }}>
-                {t as string}
+              <div key={i} style={{ position: "absolute", left: 300, top: 300 + i * 120, opacity: Math.min(1, p) * (1 - gone), transform: `rotate(-2deg) scale(${1.25 - 0.25 * Math.min(1, p)})`, transformOrigin: "left center", background: C.card, border: `6px solid ${col}`, color: col as string, borderRadius: 6, padding: "12px 30px 16px", fontFamily: SANS, fontWeight: 900, fontSize: 72, letterSpacing: "-0.04em" }}>
+                {tx as string}
               </div>
             );
           })}
-          <FixPulse at={every + 66} />
-          <CostCard at={every + 30} out={grants + 40} />
+          <CostHis at={every + 40} out={grants + 30} />
         </AbsoluteFill>
       </Part>
       <Part from={grants - 4} to={L}>
-        <Rec shot={SHOTS.homebase!} cam={[[0, 1.45, 0.78, 0.18], [9, 1.5, 0.78, 0.18]]} />
+        <Run n="04-answer-plan" cam={[[0, 1.2, 0.2, 0.5], [6, 1.3, 0.2, 0.5]]} />
         <Money />
       </Part>
     </>
@@ -288,29 +353,30 @@ const Answer: React.FC<P> = ({ s }) => {
 };
 
 const Breakthrough: React.FC<P> = ({ s }) => {
-  const frame = useCurrentFrame();
   const L = len(s);
-  const drag = local(s, cue("drag it"));
+  const yours = local(s, cue("so the plan"));
+  const drag = local(s, cue("If a wall"));
   const type = local(s, cue("or just type"));
   const upd = local(s, cue("The plan updates"));
   const one = local(s, cue("It's one model"));
-  // line the window drag in the recording (7.9 s into the clip) up with "drag it"
-  const planFrom = Math.max(0.5, 7.6 - drag / FPS);
   return (
     <>
-      <Part from={0} to={type - 4}>
-        <Rec shot={SHOTS.plan!} from={planFrom} cam={[[0, 1.1, 0.2, 0.55], [(drag - 30) / FPS, 1.34, 0, 0.55], [(drag + 60) / FPS, 1.6, 0.12, 0.85]]} />
-        <Punch text="Yours to check." at={14} out={drag - 10} x={1060} y={150} size={84} width={700} mark={2} />
+      <Part from={0} to={drag - 4}>
+        <Run n="05-plan-check-checked-against-video" cam={[[0, 1.1, 0.3, 0.4], [(yours) / FPS, 1.9, 0.12, 0.22]]} />
+        <Punch text="Yours to check." at={yours} x={1080} y={760} size={76} width={760} mark={2} />
+      </Part>
+      <Part from={drag - 4} to={type - 4}>
+        <Run n="06-plan-add-wall" cam={[[0, 1.2, 0.3, 0.45], [2.5, 1.5, 0.3, 0.45]]} />
       </Part>
       <Part from={type - 4} to={upd - 4}>
-        <Rec shot={SHOTS.tape!} from={11.0} cam={[[0, 1.2, 1, 0.75], [2.5, 1.7, 1, 0.75]]} />
+        <Run n="07-plan-wall-by-tape" cam={[[0, 1.3, 0.4, 0.3], [1.8, 2.0, 0.42, 0.22]]} />
       </Part>
       <Part from={upd - 4} to={one - 4}>
-        <Rec shot={SHOTS.answer!} from={6.5} cam={[[0, 1.25, 0.25, 0.4], [3, 1.5, 1, 0.82]]} />
-        <Punch text="Drag a wall. Everything updates." at={6} x={140} y={640} size={76} width={1100} mark={3} />
+        <Run n="04-answer-plan" cam={[[0, 1.3, 1, 0.6], [3, 1.6, 1, 0.62]]} />
+        <Punch text="Drag a wall. Everything updates." at={6} x={140} y={720} size={72} width={1100} mark={3} />
       </Part>
       <Part from={one - 4} to={L}>
-        <Clip3D file="03-plan-to-3d.mp4" rate={Math.max(1, 8 / Math.max(1, (L - one) / FPS))} />
+        <Run n="08-layouts-3d" cam={[[0, 1.2, 0.25, 0.5], [6, 1.5, 0.25, 0.55]]} />
         <Punch text="One model, scan to drawings." at={10} x={200} y={70} size={60} width={1500} />
       </Part>
     </>
@@ -321,18 +387,14 @@ const Design: React.FC<P> = ({ s }) => {
   const L = len(s);
   const muse = local(s, cue("Muse Image"));
   const fin = local(s, cue("so you see"));
-  const walk = local(s, cue("and walk around"));
   return (
     <>
-      <Part from={0} to={walk - 4}>
-        <Rec shot={SHOTS.layouts!} from={3.4} cam={[[0, 1.05, 0.2, 0.5], [3, 1.32, 0, 0.5], [7, 1.42, 0, 0.55]]} />
-      </Part>
-      <Part from={walk - 4} to={muse - 4}>
-        <Clip3D file="04-flythrough.mp4" />
+      <Part from={0} to={muse - 4}>
+        <Run n="08-layouts-3d" cam={[[0, 1.0, 0.5, 0.5], [3, 1.45, 0.2, 0.5], [8, 1.7, 0.25, 0.6]]} />
       </Part>
       <Part from={muse - 4} to={L}>
-        <Rec shot={SHOTS.looks!} from={19.6} cam={[[0, 1.32, 0, 0.5], [9, 1.4, 0, 0.5]]} />
-        <Punch text="Your basement, finished." at={fin - muse + 4} x={140} y={700} size={80} width={1200} mark={2} />
+        <Run n="09-before-after" cam={[[0, 1.3, 0.32, 0.5], [4, 1.75, 0.32, 0.5]]} />
+        <Punch text="Your basement, finished." at={fin - muse + 4} x={140} y={720} size={80} width={1200} mark={2} />
       </Part>
     </>
   );
@@ -345,16 +407,16 @@ const Build: React.FC<P> = ({ s }) => {
   return (
     <>
       <Part from={0} to={honest - 4}>
-        <Rec shot={SHOTS.build!} from={4.2} cam={[[0, 1.2, 0.3, 0.5], [3, 1.6, 0.3, 0.5]]} />
+        <Run n="10-build-permit-2of17" cam={[[0, 1.2, 0.25, 0.5], [3, 1.5, 0.25, 0.5]]} />
         <SheetStack at={30} />
-        <Punch text="Drafted. Filled." at={18} x={140} y={720} size={88} width={900} />
+        <Punch text="Drafted. Filled." at={18} x={140} y={740} size={88} width={900} />
       </Part>
       <Part from={honest - 4} to={even - 4}>
-        <Rec shot={SHOTS.build!} from={7.0} cam={[[0, 1.6, 0.3, 0.5], [2, 2.1, 0.36, 0.62]]} />
+        <Run n="10-build-permit-2of17" cam={[[0, 1.5, 0.25, 0.5], [2, 2.1, 0.2, 0.62]]} />
         <Punch text="Honest about what's left." at={8} x={140} y={130} size={80} width={1300} mark={3} />
       </Part>
       <Part from={even - 4} to={L}>
-        <Rec shot={SHOTS.homebase!} cam={[[0, 1.3, 0.5, 0.2], [3, 1.7, 0.5, 0.3]]} />
+        <Run n="10-build-permit-2of17" cam={[[0, 1.4, 1, 0.75], [3, 1.7, 1, 0.8]]} />
       </Part>
     </>
   );
@@ -363,7 +425,7 @@ const Build: React.FC<P> = ({ s }) => {
 const Close: React.FC<P> = ({ s }) => {
   const frame = useCurrentFrame();
   const L = len(s);
-  const plain = local(s, cue("And plain code"));
+  const plain = local(s, cue("and plain code"));
   const screens = local(s, cue("It screens"));
   const turns = local(s, cue("Basement Ready turns"));
   const tryIt = local(s, cue("Try it"));
@@ -372,10 +434,11 @@ const Close: React.FC<P> = ({ s }) => {
     <>
       <Part from={0} to={plain - 4}>
         <Clip3D file="02-finds.mp4" rate={Math.max(1, 8 / Math.max(1, plain / FPS))} />
+        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>A 3D render of the example basement's scan</div>
         <Pipeline frame={frame} enter={4} rise={34} leave={plain + 100} active={frame > 40 ? (["sam", "map", "wonder", "spark", "image"][Math.floor((frame - 40) / 22) % 5]) : ""} />
       </Part>
       <Part from={plain - 4} to={turns - 4}>
-        <Rec shot={SHOTS.answer!} from={8.5} cam={[[0, 1.4, 0.28, 0.35], [6, 1.5, 0.28, 0.35]]} />
+        <Run n="04-answer-plan" cam={[[0, 1.3, 0.2, 0.5], [6, 1.4, 0.2, 0.5]]} />
         <div style={{ position: "absolute", left: 1080, top: 200, width: 640, background: C.card, border: `1.5px solid ${C.ink}`, borderRadius: 6, padding: "24px 30px", fontFamily: SANS }}>
           <div style={{ fontWeight: 900, fontSize: 46, letterSpacing: "-0.035em", lineHeight: 1 }}>Checked in code</div>
           <div style={{ borderTop: `1.5px solid ${C.ink}`, marginTop: 20 }}>
@@ -391,10 +454,10 @@ const Close: React.FC<P> = ({ s }) => {
           </div>
           <div style={{ fontSize: 22, color: C.muted, marginTop: 14, opacity: prog(frame, plain + 50, 10) }}>The models describe; the rules, sizes and costs are worked out in code.</div>
         </div>
-        <Punch text="It screens. The city decides." at={screens - plain + 4} x={140} y={720} size={72} width={1200} />
+        <Punch text="It screens. The city decides." at={screens - plain + 4} x={140} y={740} size={72} width={1200} />
       </Part>
       <Part from={turns - 4} to={tryIt + 40}>
-        <Rec shot={SHOTS.home!} from={0.4} rate={0.4} cam={[[0, 1.0, 0.5, 0.5], [4, 1.3, 0, 0.5]]} />
+        <Browser x={180} y={46} w={1560} src="footage/desktop-home.mp4" start={0.4} rate={0.4} url="basementready.com" cam={[[0, 1.0, 0.5, 0.5], [4, 1.3, 0, 0.5]]} tilt />
       </Part>
       <Sequence from={tryIt + 30}>
         <EndCard />
