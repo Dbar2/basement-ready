@@ -163,7 +163,7 @@ const Hook: React.FC<P> = ({ s }) => {
   const rental = local(s, cue("Or a rental"));
   return (
     <Part from={0} to={len(s)}>
-      <Run n="09-before-after" x={780} y={150} w={1040} cam={[[0, 1.35, 0.32, 0.5], [3.2, 1.75, 0.32, 0.5], [9, 1.85, 0.32, 0.5]]} />
+      <Run n="09-before-after" x={780} y={150} w={1040} cam={[[0, 1.35, 0.3, 0.5], [3.2, 1.9, 0.3, 0.5], [9, 2.0, 0.3, 0.5]]} />
       <div style={{ position: "absolute", left: 780, top: 150 + 1040 * DAVID + 54, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1040 }}>This basement, filmed on a phone, and the same photo virtually staged by Muse Image</div>
       <div style={{ position: "absolute", left: 120, top: 72, fontFamily: SANS, fontSize: 20, color: C.muted, opacity: Math.min(prog(frame, 4, 10), 1 - prog(frame, 220, 12)) }}>
         Built during the Meta AI Developer Hackathon, from an empty repo on <span style={{ fontFamily: MONO, color: C.ink }}>Oct 28, 2026</span>.
@@ -205,7 +205,7 @@ const SamGrid: React.FC = () => {
         return (
           <div key={n} style={{ position: "absolute", left: x, top: y + (1 - p) * 30, width: 640, opacity: p, fontFamily: SANS }}>
             <div style={{ position: "relative", width: 640, height: 640 * (362 / 600), borderRadius: 4, overflow: "hidden", border: `1.5px solid ${C.ink}`, boxShadow: "0 20px 48px -28px rgb(15 42 30 / 0.5)" }}>
-              <Img src={staticFile(`david/${n}.jpg`)} style={{ width: "100%", height: "100%" }} />
+              <Img src={staticFile(`david/${n}.jpg`)} style={{ position: "absolute", left: 0, top: "-12%", width: "158%", transform: `scale(${1 + Math.max(0, frame - (6 + i * 16)) * 0.0012})`, transformOrigin: "30% 50%" }} />
               <div style={{ position: "absolute", left: 0, right: 0, top: `${sweep * 100}%`, height: 3, background: C.mint, opacity: sweep > 0 && sweep < 1 ? 0.9 : 0 }} />
             </div>
             <div style={{ fontWeight: 700, fontSize: 24, marginTop: 8 }}>{label}</div>
