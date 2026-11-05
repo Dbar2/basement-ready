@@ -164,8 +164,8 @@ const Hook: React.FC<P> = ({ s }) => {
   const rental = local(s, cue("Or a rental"));
   return (
     <Part from={0} to={len(s)}>
-      <Clip3D file="david-03-plan-to-3d.mp4" x={760} y={150} w={1080} rate={0.85} />
-      <div style={{ position: "absolute", left: 760, top: 150 + 1080 * 9 / 16 + 18, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1080 }}>This basement's measured plan, from its phone video, rising into a layout in 3D</div>
+      <Run n="04-answer-plan" x={780} y={150} w={1040} cam={[[0, 1.0, 0.5, 0.5], [3.5, 1.35, 0.3, 0.35], [10, 1.55, 0.3, 0.35]]} />
+      <div style={{ position: "absolute", left: 780, top: 150 + 1040 * DAVID + 54, fontSize: 21, color: C.muted, fontFamily: SANS, width: 1040 }}>This basement's measured plan and its answer, from a live run on the site</div>
       <div style={{ position: "absolute", left: 120, top: 72, fontFamily: SANS, fontSize: 20, color: C.muted, opacity: Math.min(prog(frame, 4, 10), 1 - prog(frame, 220, 12)) }}>
         Built during the Meta AI Developer Hackathon, from an empty repo on <span style={{ fontFamily: MONO, color: C.ink }}>Oct 28, 2026</span>.
       </div>
@@ -234,7 +234,7 @@ const Input: React.FC<P> = ({ s }) => {
         <SamGrid />
       </Part>
       <Part from={map - 4} to={wonder - 4}>
-        <Run n="08-layouts-3d" cam={[[0, 1.15, 0.2, 0.5], [7, 1.55, 0.22, 0.55]]} />
+        <Run n="04-answer-plan" cam={[[0, 1.15, 0.22, 0.5], [7, 1.5, 0.22, 0.5]]} />
         <Sequence from={Math.round((wonder - map) * 0.5)}>
           <MeasuredHis />
         </Sequence>
@@ -380,7 +380,8 @@ const Breakthrough: React.FC<P> = ({ s }) => {
         <Punch text="Drag a wall. Everything updates." at={6} x={140} y={720} size={72} width={1100} mark={3} />
       </Part>
       <Part from={one - 4} to={L}>
-        <Clip3D file="david-03-plan-to-3d.mp4" rate={Math.max(1, 8 / Math.max(1, (L - one) / FPS))} />
+        <Clip3D file="example-03-plan-to-3d.mp4" rate={Math.max(1, 8 / Math.max(1, (L - one) / FPS))} />
+        <div style={{ position: "absolute", left: 180, top: 900, fontFamily: SANS, fontSize: 20, color: C.muted }}>The example basement: its measured plan, rising into a layout in 3D</div>
         <Punch text="One model, scan to drawings." at={10} x={200} y={70} size={60} width={1500} />
       </Part>
     </>
