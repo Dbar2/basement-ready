@@ -425,7 +425,7 @@ const Build: React.FC<P> = ({ s }) => {
       </Part>
       <Part from={honest - 4} to={even - 4}>
         <Run n="10-build-permit-2of17" cam={[[0, 1.5, 0.25, 0.5], [2, 2.1, 0.2, 0.62]]} />
-        <Punch text="Honest about what's left." at={8} x={140} y={760} size={76} width={1300} mark={3} />
+        <Punch text="Honest about what's left." at={8} x={1000} y={150} size={70} width={820} mark={3} />
       </Part>
       <Part from={even - 4} to={L}>
         <Run n="10-build-permit-2of17" cam={[[0, 1.4, 1, 0.75], [3, 1.7, 1, 0.8]]} />
